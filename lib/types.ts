@@ -79,6 +79,41 @@ export type BookingReport = BookingReportInput & {
   updatedAt: string;
 };
 
+export type SalesReportInput = {
+  bookingReportId: string;
+  customerName: string;
+  phone: string;
+  idCard: string;
+  address: string;
+  bookingPrice: string;
+  plate: string;
+  brand: string;
+  model: string;
+  year: string;
+  color: string;
+  salePrice: string;
+  centralDiscount: string;
+  finalPrice: string;
+  paymentType: string;
+  source: string;
+  ownership: string;
+  project: string;
+  paymentDetail: string;
+  saleConditions: string;
+  saleName: string;
+  teamName: string;
+  branch: string;
+  deliveryDate: string;
+  reportText: string;
+  status: "draft" | "staging_preview";
+};
+
+export type SalesReport = SalesReportInput & {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type StockVehicle = {
   plate: string;
   brand: string;
