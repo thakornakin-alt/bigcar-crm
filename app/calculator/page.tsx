@@ -62,6 +62,12 @@ function formatMoney(value: number) {
   }).format(value);
 }
 
+function formatWholeMoney(value: number) {
+  return new Intl.NumberFormat("th-TH", {
+    maximumFractionDigits: 0
+  }).format(Math.round(value));
+}
+
 function calculatePayment(financeAmount: number, rate: number | null, months: number, years: number) {
   if (!rate || financeAmount <= 0) return null;
   return roundCurrency(((financeAmount * rate * years + financeAmount) / months) * 1.07);
@@ -72,6 +78,8 @@ export default function CalculatorPage() {
   const [rateSource, setRateSource] = useState<"default" | "sheet">("default");
   const [vehicleType, setVehicleType] = useState(vehicleTypes[0]);
   const [yearRange, setYearRange] = useState("2022-2026");
+  const [carModel, setCarModel] = useState("");
+  const [actualYear, setActualYear] = useState("");
   const [carPrice, setCarPrice] = useState("684000");
   const [specialDownPayment, setSpecialDownPayment] = useState("");
   const [loading, setLoading] = useState(true);
@@ -145,8 +153,8 @@ export default function CalculatorPage() {
 
     try {
       await exportInstallmentImage({
-        vehicleType,
-        yearRange,
+        carModel,
+        actualYear,
         carPrice: price,
         rate: selectedRate,
         rows
@@ -176,6 +184,8 @@ export default function CalculatorPage() {
 
       <section className="mb-4 rounded-lg border border-line bg-panel p-4 shadow-glow">
         <div className="grid gap-3 md:grid-cols-2">
+          <TextField label="รุ่นรถจริง" value={carModel} onChange={setCarModel} placeholder="Toyota Revo 2020" />
+          <TextField label="ปีรถจริง" value={actualYear} onChange={setActualYear} placeholder="2020" inputMode="numeric" />
           <SelectField label="ประเภทรถ" value={vehicleType} onChange={setVehicleType} options={vehicleTypes} />
           <SelectField label="ช่วงปีรถ" value={yearRange} onChange={setYearRange} options={yearOptions} />
           <NumberField label="ราคารถ" value={carPrice} onChange={setCarPrice} placeholder="684000" />
@@ -242,12 +252,7 @@ export default function CalculatorPage() {
           )}
         </div>
 
-        {loading ? (
-          <div className="flex min-h-36 items-center justify-center text-soft">
-            <Loader2 size={22} className="mr-2 animate-spin" />
-            Loading
-          </div>
-        ) : rows.length ? (
+        {rows.length ? (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] border-collapse text-sm">
               <thead>
@@ -255,10 +260,10 @@ export default function CalculatorPage() {
                   <th className="px-4 py-3 font-semibold">เรทดาวน์</th>
                   <th className="px-4 py-3 text-right font-semibold">เงินดาวน์</th>
                   <th className="px-4 py-3 text-right font-semibold">ยอดจัด</th>
-                  <th className="px-4 py-3 text-right font-semibold">48 งวด</th>
-                  <th className="px-4 py-3 text-right font-semibold">60 งวด</th>
-                  <th className="px-4 py-3 text-right font-semibold">72 งวด</th>
-                  <th className="px-4 py-3 text-right font-semibold">84 งวด</th>
+                  <PaymentHeader label="48 งวด" rate={selectedRate?.months48 || null} />
+                  <PaymentHeader label="60 งวด" rate={selectedRate?.months60 || null} />
+                  <PaymentHeader label="72 งวด" rate={selectedRate?.months72 || null} />
+                  <PaymentHeader label="84 งวด" rate={selectedRate?.months84 || null} />
                 </tr>
               </thead>
               <tbody>
@@ -275,6 +280,11 @@ export default function CalculatorPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        ) : loading ? (
+          <div className="flex min-h-36 items-center justify-center text-soft">
+            <Loader2 size={22} className="mr-2 animate-spin" />
+            Loading
           </div>
         ) : (
           <div className="px-4 py-8 text-center text-soft">กรอกราคารถและเลือกตารางดอกเบี้ย</div>
@@ -361,23 +371,59 @@ function NumberField({
   );
 }
 
+function TextField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  inputMode
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  inputMode?: "text" | "numeric";
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">{label}</span>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        inputMode={inputMode}
+        className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
+      />
+    </label>
+  );
+}
+
+function PaymentHeader({ label, rate }: { label: string; rate: number | null }) {
+  return (
+    <th className="px-4 py-3 text-right font-semibold">
+      <span className="block text-[#dce2eb]">{label}</span>
+      <span className="mt-1 block text-xs text-brand">{formatPercent(rate)}</span>
+    </th>
+  );
+}
+
 function PaymentCell({ value }: { value: number }) {
   return (
     <td className="px-4 py-3 text-right font-bold text-brand">
-      {value ? formatMoney(value) : "-"}
+      {value ? formatWholeMoney(value) : "-"}
     </td>
   );
 }
 
 async function exportInstallmentImage({
-  vehicleType,
-  yearRange,
+  carModel,
+  actualYear,
   carPrice,
   rate,
   rows
 }: {
-  vehicleType: string;
-  yearRange: string;
+  carModel: string;
+  actualYear: string;
   carPrice: number;
   rate: InterestRate;
   rows: InstallmentRow[];
@@ -385,10 +431,11 @@ async function exportInstallmentImage({
   const canvas = document.createElement("canvas");
   const scale = Math.max(window.devicePixelRatio || 1, 2);
   const width = 1100;
-  const rowHeight = 58;
-  const headerHeight = 238;
+  const rowHeight = 60;
+  const tableHeaderHeight = 74;
+  const headerHeight = 258;
   const footerHeight = 42;
-  const height = headerHeight + rowHeight * (rows.length + 1) + footerHeight;
+  const height = headerHeight + tableHeaderHeight + rowHeight * rows.length + footerHeight;
   canvas.width = width * scale;
   canvas.height = height * scale;
   canvas.style.width = `${width}px`;
@@ -414,37 +461,40 @@ async function exportInstallmentImage({
 
   ctx.fillStyle = "#aeb5c2";
   ctx.font = "24px Arial, sans-serif";
-  ctx.fillText(`${vehicleType} / ปี ${yearRange}`, 56, 166);
-  ctx.fillText(`ราคารถ ${formatMoney(carPrice)} บาท`, 56, 204);
-  ctx.fillText(
-    `ดอกเบี้ย 48/60/72/84: ${formatPercent(rate.months48)} / ${formatPercent(rate.months60)} / ${formatPercent(
-      rate.months72
-    )} / ${formatPercent(rate.months84)}`,
-    420,
-    204
-  );
+  ctx.fillText(`รุ่นรถ: ${carModel.trim() || "-"}`, 56, 166);
+  ctx.fillText(`ปีรถ: ${actualYear.trim() || "-"}`, 56, 204);
+  ctx.fillText(`ราคารถ ${formatWholeMoney(carPrice)} บาท`, 420, 204);
 
   const columns = [
-    { label: "เรทดาวน์", x: 56, width: 128, align: "left" },
-    { label: "เงินดาวน์", x: 190, width: 142, align: "right" },
-    { label: "ยอดจัด", x: 346, width: 142, align: "right" },
-    { label: "48 งวด", x: 518, width: 118, align: "right" },
-    { label: "60 งวด", x: 650, width: 118, align: "right" },
-    { label: "72 งวด", x: 782, width: 118, align: "right" },
-    { label: "84 งวด", x: 914, width: 118, align: "right" }
+    { label: "เรทดาวน์", rate: "", x: 56, width: 128, align: "left" },
+    { label: "เงินดาวน์", rate: "", x: 190, width: 142, align: "right" },
+    { label: "ยอดจัด", rate: "", x: 346, width: 142, align: "right" },
+    { label: "48 งวด", rate: formatPercent(rate.months48), x: 518, width: 118, align: "right" },
+    { label: "60 งวด", rate: formatPercent(rate.months60), x: 650, width: 118, align: "right" },
+    { label: "72 งวด", rate: formatPercent(rate.months72), x: 782, width: 118, align: "right" },
+    { label: "84 งวด", rate: formatPercent(rate.months84), x: 914, width: 118, align: "right" }
   ] as const;
 
-  const tableTop = 238;
+  const tableTop = 258;
   ctx.fillStyle = "#1b2028";
-  roundRect(ctx, 44, tableTop - 10, width - 88, rowHeight, 10);
+  roundRect(ctx, 44, tableTop - 10, width - 88, tableHeaderHeight, 10);
   ctx.fill();
 
   ctx.font = "700 22px Arial, sans-serif";
   ctx.fillStyle = "#dce2eb";
-  columns.forEach((column) => drawCellText(ctx, column.label, column.x, tableTop + 26, column.width, column.align));
+  columns.forEach((column) => {
+    drawCellText(ctx, column.label, column.x, tableTop + 24, column.width, column.align);
+    if (column.rate) {
+      ctx.font = "700 18px Arial, sans-serif";
+      ctx.fillStyle = "#22c55e";
+      drawCellText(ctx, column.rate, column.x, tableTop + 50, column.width, column.align);
+      ctx.font = "700 22px Arial, sans-serif";
+      ctx.fillStyle = "#dce2eb";
+    }
+  });
 
   rows.forEach((row, index) => {
-    const y = tableTop + rowHeight * (index + 1);
+    const y = tableTop + tableHeaderHeight + rowHeight * index;
     ctx.fillStyle = index % 2 === 0 ? "#111318" : "#0d0f13";
     ctx.fillRect(44, y - 10, width - 88, rowHeight);
     ctx.fillStyle = "#252932";
@@ -456,8 +506,8 @@ async function exportInstallmentImage({
 
     ctx.font = "22px Arial, sans-serif";
     ctx.fillStyle = "#dce2eb";
-    drawCellText(ctx, formatMoney(row.downPayment), columns[1].x, y + 26, columns[1].width, "right");
-    drawCellText(ctx, formatMoney(row.financeAmount), columns[2].x, y + 26, columns[2].width, "right");
+    drawCellText(ctx, formatWholeMoney(row.downPayment), columns[1].x, y + 26, columns[1].width, "right");
+    drawCellText(ctx, formatWholeMoney(row.financeAmount), columns[2].x, y + 26, columns[2].width, "right");
 
     ctx.font = "700 22px Arial, sans-serif";
     ctx.fillStyle = "#22c55e";
@@ -469,7 +519,7 @@ async function exportInstallmentImage({
 
   ctx.fillStyle = "#6f7785";
   ctx.font = "18px Arial, sans-serif";
-  ctx.fillText("คำนวณด้วยสูตร Flat Rate รวม VAT 7% / ข้อมูลดอกเบี้ยจาก Google Sheet", 56, height - 56);
+  ctx.fillText("คำนวณด้วยสูตร Flat Rate รวม VAT 7%", 56, height - 56);
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
   if (!blob) throw new Error("ไม่สามารถสร้างไฟล์รูปได้");
@@ -530,5 +580,5 @@ function formatPercent(value: number | null) {
 }
 
 function formatPayment(value: number) {
-  return value ? formatMoney(value) : "-";
+  return value ? formatWholeMoney(value) : "-";
 }
