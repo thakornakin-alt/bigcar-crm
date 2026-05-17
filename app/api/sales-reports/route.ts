@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { saveSalesReport } from "@/lib/apps-script";
-import { renderSalesReport } from "@/lib/sales-report";
+import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
 import type { SalesReportInput } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +25,12 @@ function clean(body: Partial<SalesReportInput>): SalesReportInput {
     source: String(body.source || "").trim(),
     ownership: String(body.ownership || "").trim(),
     project: String(body.project || "").trim(),
+    carPrice: String(body.carPrice || "").trim(),
+    bookingDeduction: String(body.bookingDeduction || "").trim(),
+    transferFee: String(body.transferFee || "").trim(),
+    netPayment: String(body.netPayment || "").trim(),
+    downPayment: String(body.downPayment || "").trim(),
+    insuranceFee: String(body.insuranceFee || "").trim(),
     paymentDetail: String(body.paymentDetail || "").trim(),
     saleConditions: String(body.saleConditions || "").trim(),
     saleName: String(body.saleName || "").trim(),
@@ -35,7 +41,11 @@ function clean(body: Partial<SalesReportInput>): SalesReportInput {
     status: "draft"
   };
 
-  return { ...report, reportText: renderSalesReport(report) };
+  return {
+    ...report,
+    paymentDetail: buildSalesPaymentDetail(report),
+    reportText: renderSalesReport(report)
+  };
 }
 
 export async function POST(request: Request) {

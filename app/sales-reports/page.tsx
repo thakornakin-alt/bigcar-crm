@@ -3,7 +3,7 @@
 import { FormEvent, ReactNode, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, Clipboard, FileText, Loader2, Save, Search } from "lucide-react";
-import { renderSalesReport } from "@/lib/sales-report";
+import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
 import type { BookingReport, SalesReportInput } from "@/lib/types";
 
 const blankForm: SalesReportInput = {
@@ -25,6 +25,12 @@ const blankForm: SalesReportInput = {
   source: "",
   ownership: "",
   project: "",
+  carPrice: "",
+  bookingDeduction: "",
+  transferFee: "",
+  netPayment: "",
+  downPayment: "",
+  insuranceFee: "",
   paymentDetail: "",
   saleConditions: "",
   saleName: "ฐากร",
@@ -68,6 +74,8 @@ function fromBooking(report: BookingReport): SalesReportInput {
     color: report.color,
     salePrice: report.salePrice,
     finalPrice: report.finalPrice,
+    carPrice: report.finalPrice,
+    bookingDeduction: report.bookingPrice,
     paymentType: report.paymentType,
     source: report.source,
     ownership: report.ownership,
@@ -88,6 +96,11 @@ export default function SalesReportsPage() {
   const [error, setError] = useState("");
 
   const reportText = useMemo(() => renderSalesReport({ ...form, reportText: "" }), [form]);
+  const paymentMode = form.paymentType.includes("สด")
+    ? "cash"
+    : form.paymentType.includes("ไฟแนนซ์") || form.paymentType.toLowerCase().includes("finance")
+      ? "finance"
+      : "other";
 
   function update(field: keyof SalesReportInput, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -117,11 +130,11 @@ export default function SalesReportsPage() {
     try {
       await api("/api/sales-reports", {
         method: "POST",
-        body: JSON.stringify({ ...form, reportText })
+        body: JSON.stringify({ ...form, paymentDetail: buildSalesPaymentDetail(form), reportText })
       });
       setMessage("บันทึก Draft รายงานขายลง Google Sheets แล้ว");
     } catch (err) {
-      window.localStorage.setItem("bigcar-sales-draft-fallback", JSON.stringify({ ...form, reportText }));
+      window.localStorage.setItem("bigcar-sales-draft-fallback", JSON.stringify({ ...form, paymentDetail: buildSalesPaymentDetail(form), reportText }));
       setError(err instanceof Error ? `${err.message} - บันทึกสำรองในเครื่องแล้ว` : "บันทึกไม่สำเร็จ");
     } finally {
       setSaving(false);
@@ -216,7 +229,47 @@ export default function SalesReportsPage() {
                 <Field label="Sale" value={form.saleName} onChange={(value) => update("saleName", value)} required />
                 <Field label="ทีม" value={form.teamName} onChange={(value) => update("teamName", value)} />
               </div>
-              <TextArea label="รายละเอียดการชำระเงิน" value={form.paymentDetail} onChange={(value) => update("paymentDetail", value)} rows={4} />
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => update("paymentType", "ซื้อสด")}
+                  className={`min-h-11 rounded-lg border px-3 font-semibold ${paymentMode === "cash" ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-white"}`}
+                >
+                  ซื้อสด
+                </button>
+                <button
+                  type="button"
+                  onClick={() => update("paymentType", "ไฟแนนซ์")}
+                  className={`min-h-11 rounded-lg border px-3 font-semibold ${paymentMode === "finance" ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-white"}`}
+                >
+                  ไฟแนนซ์
+                </button>
+              </div>
+              {paymentMode === "cash" && (
+                <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
+                  <p className="mb-3 text-sm font-bold text-white">รายละเอียดการชำระเงิน: ซื้อสด</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="ราคารถ" value={form.carPrice} onChange={(value) => update("carPrice", numericOnly(value))} />
+                    <Field label="หักเงินจอง" value={form.bookingDeduction} onChange={(value) => update("bookingDeduction", numericOnly(value))} />
+                    <Field label="ค่าโอน" value={form.transferFee} onChange={(value) => update("transferFee", numericOnly(value))} />
+                    <Field label="จ่ายสุทธิ" value={form.netPayment} onChange={(value) => update("netPayment", numericOnly(value))} />
+                  </div>
+                </div>
+              )}
+              {paymentMode === "finance" && (
+                <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
+                  <p className="mb-3 text-sm font-bold text-white">รายละเอียดการชำระเงิน: ไฟแนนซ์</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="เงินดาวน์" value={form.downPayment} onChange={(value) => update("downPayment", numericOnly(value))} />
+                    <Field label="ค่าเบี้ยประกันรถ" value={form.insuranceFee} onChange={(value) => update("insuranceFee", numericOnly(value))} />
+                    <Field label="หักเงินจอง" value={form.bookingDeduction} onChange={(value) => update("bookingDeduction", numericOnly(value))} />
+                    <Field label="จ่ายสุทธิ" value={form.netPayment} onChange={(value) => update("netPayment", numericOnly(value))} />
+                  </div>
+                </div>
+              )}
+              {paymentMode === "other" && (
+                <TextArea label="รายละเอียดการชำระเงิน" value={form.paymentDetail} onChange={(value) => update("paymentDetail", value)} rows={4} />
+              )}
               <TextArea label="เงื่อนไขการขาย" value={form.saleConditions} onChange={(value) => update("saleConditions", value)} rows={4} />
               <button type="submit" disabled={saving} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink">
                 {saving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}

@@ -98,6 +98,12 @@ export type SalesReportInput = {
   source: string;
   ownership: string;
   project: string;
+  carPrice: string;
+  bookingDeduction: string;
+  transferFee: string;
+  netPayment: string;
+  downPayment: string;
+  insuranceFee: string;
   paymentDetail: string;
   saleConditions: string;
   saleName: string;
