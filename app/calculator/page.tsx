@@ -7,6 +7,28 @@ import type { InstallmentRow, InterestRate } from "@/lib/types";
 
 const vehicleTypes = ["รถเก๋ง/กระบะ 4 ประตู", "รถกระบะ/รถตู้"];
 const downRates = [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5];
+const defaultInterestRates: InterestRate[] = [
+  { vehicleType: "รถเก๋ง/กระบะ 4 ประตู", yearRange: "2022-2026", months48: 0.0279, months60: 0.0309, months72: 0.0399, months84: 0.0449, commission: 0.08 },
+  { vehicleType: "รถเก๋ง/กระบะ 4 ประตู", yearRange: "2020-2021", months48: 0.0299, months60: 0.0319, months72: 0.0419, months84: 0.0449, commission: 0.08 },
+  { vehicleType: "รถเก๋ง/กระบะ 4 ประตู", yearRange: "2019", months48: 0.0299, months60: 0.0349, months72: 0.0429, months84: 0.0499, commission: 0.08 },
+  { vehicleType: "รถเก๋ง/กระบะ 4 ประตู", yearRange: "2017-2018", months48: 0.0339, months60: 0.0379, months72: 0.0459, months84: 0.0539, commission: 0.08 },
+  { vehicleType: "รถเก๋ง/กระบะ 4 ประตู", yearRange: "2016", months48: 0.058, months60: 0.0635, months72: 0.0745, months84: 0.0795, commission: 0.08 },
+  { vehicleType: "รถเก๋ง/กระบะ 4 ประตู", yearRange: "2015", months48: 0.061, months60: 0.071, months72: 0.077, months84: 0.0795, commission: 0.08 },
+  { vehicleType: "รถเก๋ง/กระบะ 4 ประตู", yearRange: "2014", months48: 0.071, months60: 0.0735, months72: 0.0795, months84: null, commission: 0.08 },
+  { vehicleType: "รถเก๋ง/กระบะ 4 ประตู", yearRange: "2013", months48: 0.0735, months60: 0.076, months72: 0.0795, months84: null, commission: 0.08 },
+  { vehicleType: "รถเก๋ง/กระบะ 4 ประตู", yearRange: "2012", months48: 0.076, months60: 0.0785, months72: null, months84: null, commission: 0.08 },
+  { vehicleType: "รถเก๋ง/กระบะ 4 ประตู", yearRange: "2011", months48: 0.0785, months60: 0.081, months72: null, months84: null, commission: 0.08 },
+  { vehicleType: "รถกระบะ/รถตู้", yearRange: "2022-2026", months48: 0.0369, months60: 0.0389, months72: 0.0479, months84: 0.0524, commission: 0.08 },
+  { vehicleType: "รถกระบะ/รถตู้", yearRange: "2020-2021", months48: 0.0374, months60: 0.0394, months72: 0.0494, months84: 0.0524, commission: 0.08 },
+  { vehicleType: "รถกระบะ/รถตู้", yearRange: "2019", months48: 0.0399, months60: 0.0449, months72: 0.0529, months84: 0.0599, commission: 0.08 },
+  { vehicleType: "รถกระบะ/รถตู้", yearRange: "2017-2018", months48: 0.0459, months60: 0.0529, months72: 0.0599, months84: 0.0699, commission: 0.08 },
+  { vehicleType: "รถกระบะ/รถตู้", yearRange: "2016", months48: 0.065, months60: 0.0735, months72: 0.0795, months84: 0.0795, commission: 0.08 },
+  { vehicleType: "รถกระบะ/รถตู้", yearRange: "2015", months48: 0.068, months60: 0.076, months72: 0.0795, months84: 0.0795, commission: 0.08 },
+  { vehicleType: "รถกระบะ/รถตู้", yearRange: "2014", months48: 0.072, months60: 0.0785, months72: 0.0795, months84: null, commission: 0.08 },
+  { vehicleType: "รถกระบะ/รถตู้", yearRange: "2013", months48: 0.077, months60: 0.0785, months72: 0.0795, months84: null, commission: 0.08 },
+  { vehicleType: "รถกระบะ/รถตู้", yearRange: "2012", months48: 0.0785, months60: 0.0785, months72: null, months84: null, commission: 0.08 },
+  { vehicleType: "รถกระบะ/รถตู้", yearRange: "2011", months48: 0.0835, months60: 0.0835, months72: null, months84: null, commission: 0.08 }
+];
 const terms = [
   { key: "months48", months: 48, years: 4, label: "48" },
   { key: "months60", months: 60, years: 5, label: "60" },
@@ -46,7 +68,8 @@ function calculatePayment(financeAmount: number, rate: number | null, months: nu
 }
 
 export default function CalculatorPage() {
-  const [rates, setRates] = useState<InterestRate[]>([]);
+  const [rates, setRates] = useState<InterestRate[]>(defaultInterestRates);
+  const [rateSource, setRateSource] = useState<"default" | "sheet">("default");
   const [vehicleType, setVehicleType] = useState(vehicleTypes[0]);
   const [yearRange, setYearRange] = useState("2022-2026");
   const [carPrice, setCarPrice] = useState("684000");
@@ -58,12 +81,23 @@ export default function CalculatorPage() {
   async function loadRates() {
     setError("");
     const data = await api<{ rates: InterestRate[] }>("/api/finance/rates");
+    if (!data.rates.length) {
+      setRates(defaultInterestRates);
+      setRateSource("default");
+      setError("ยังไม่พบแท็บ InterestRates ใน Google Sheet จึงใช้ดอกเบี้ยตั้งต้นจาก Excel");
+      return;
+    }
     setRates(data.rates);
+    setRateSource("sheet");
   }
 
   useEffect(() => {
     loadRates()
-      .catch((err) => setError(err.message))
+      .catch(() => {
+        setRates(defaultInterestRates);
+        setRateSource("default");
+        setError("โหลดดอกเบี้ยจาก Google Sheet ไม่ได้ จึงใช้ดอกเบี้ยตั้งต้นจาก Excel");
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -155,14 +189,22 @@ export default function CalculatorPage() {
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-soft">
           <span className="flex items-center gap-2">
             <Car size={16} className="text-brand" aria-hidden="true" />
-            {selectedRate ? "ใช้ดอกเบี้ยจาก Google Sheet" : "ไม่พบตารางดอกเบี้ยสำหรับตัวเลือกนี้"}
+            {selectedRate
+              ? rateSource === "sheet"
+                ? "ใช้ดอกเบี้ยจาก Google Sheet"
+                : "ใช้ดอกเบี้ยตั้งต้นจาก Excel"
+              : "ไม่พบตารางดอกเบี้ยสำหรับตัวเลือกนี้"}
           </span>
           <button
             type="button"
             onClick={() => {
               setLoading(true);
               loadRates()
-                .catch((err) => setError(err.message))
+                .catch(() => {
+                  setRates(defaultInterestRates);
+                  setRateSource("default");
+                  setError("โหลดดอกเบี้ยจาก Google Sheet ไม่ได้ จึงใช้ดอกเบี้ยตั้งต้นจาก Excel");
+                })
                 .finally(() => setLoading(false));
             }}
             className="flex min-h-10 items-center gap-2 rounded-lg border border-line px-3 font-semibold text-white"
