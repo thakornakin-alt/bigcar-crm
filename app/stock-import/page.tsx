@@ -9,6 +9,7 @@ import type { StockImportResult, StockImportStatus, StockVehicle } from "@/lib/t
 type RawRow = Record<string, unknown>;
 
 const chunkSize = 300;
+const defaultHeaderRow = 5;
 const fieldLabels: Array<{ key: keyof StockVehicle; label: string; aliases: string[] }> = [
   { key: "plate", label: "ทะเบียนรถ", aliases: ["ทะเบียนรถ", "ทะเบียน", "plate", "licenseplate", "regno", "เลขทะเบียน"] },
   { key: "brand", label: "ยี่ห้อรถ", aliases: ["ยี่ห้อรถ", "ยี่ห้อ", "brand", "make"] },
@@ -75,13 +76,23 @@ function mapRows(rows: RawRow[], mapping: Record<keyof StockVehicle, string>) {
     .filter((row) => row.plate);
 }
 
+function readSheetRows(sheet: XLSX.WorkSheet | undefined, headerRow: number) {
+  if (!sheet) return [];
+  return XLSX.utils.sheet_to_json<RawRow>(sheet, {
+    defval: "",
+    range: Math.max(headerRow - 1, 0)
+  });
+}
+
 export default function StockImportPage() {
   const [fileName, setFileName] = useState("");
   const [sheetNames, setSheetNames] = useState<string[]>([]);
   const [activeSheet, setActiveSheet] = useState("");
+  const [workbookSheets, setWorkbookSheets] = useState<Record<string, XLSX.WorkSheet>>({});
   const [workbookRows, setWorkbookRows] = useState<Record<string, RawRow[]>>({});
   const [headers, setHeaders] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Record<keyof StockVehicle, string>>(detectMapping([]));
+  const [headerRow, setHeaderRow] = useState(defaultHeaderRow);
   const [status, setStatus] = useState<StockImportStatus>({ total: 0, latestImportedAt: "", latestUpdatedAt: "" });
   const [clearExisting, setClearExisting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -111,11 +122,13 @@ export default function StockImportPage() {
     try {
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array", cellDates: false });
+      const nextSheets: Record<string, XLSX.WorkSheet> = {};
       const nextRows: Record<string, RawRow[]> = {};
 
       workbook.SheetNames.forEach((name) => {
         const sheet = workbook.Sheets[name];
-        nextRows[name] = XLSX.utils.sheet_to_json<RawRow>(sheet, { defval: "" });
+        nextSheets[name] = sheet;
+        nextRows[name] = readSheetRows(sheet, headerRow);
       });
 
       const firstSheet = workbook.SheetNames[0] || "";
@@ -124,6 +137,7 @@ export default function StockImportPage() {
 
       setSheetNames(workbook.SheetNames);
       setActiveSheet(firstSheet);
+      setWorkbookSheets(nextSheets);
       setWorkbookRows(nextRows);
       setHeaders(nextHeaders);
       setMapping(detectMapping(nextHeaders));
@@ -136,12 +150,27 @@ export default function StockImportPage() {
   }
 
   function changeSheet(name: string) {
-    const rows = workbookRows[name] || [];
+    const rows = readSheetRows(workbookSheets[name], headerRow);
+    setWorkbookRows((current) => ({ ...current, [name]: rows }));
     const nextHeaders = Object.keys(rows[0] || {});
     setActiveSheet(name);
     setHeaders(nextHeaders);
     setMapping(detectMapping(nextHeaders));
     setMessage(`เลือกชีต ${name}: ${rows.length.toLocaleString("th-TH")} แถว`);
+  }
+
+  function changeHeaderRow(value: string) {
+    const nextHeaderRow = Math.max(Number(value) || defaultHeaderRow, 1);
+    const nextRows = readSheetRows(workbookSheets[activeSheet], nextHeaderRow);
+    const nextHeaders = Object.keys(nextRows[0] || {});
+
+    setHeaderRow(nextHeaderRow);
+    setWorkbookRows((current) => ({ ...current, [activeSheet]: nextRows }));
+    setHeaders(nextHeaders);
+    setMapping(detectMapping(nextHeaders));
+    if (activeSheet) {
+      setMessage(`อ่านหัวตารางจากแถว ${nextHeaderRow}: ${nextRows.length.toLocaleString("th-TH")} แถว`);
+    }
   }
 
   async function importRows() {
@@ -249,6 +278,16 @@ export default function StockImportPage() {
 
           {sheetNames.length > 0 && (
             <div className="rounded-lg border border-line bg-panel p-4 shadow-glow">
+              <label className="mb-3 block">
+                <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">แถวหัวตาราง</span>
+                <input
+                  value={headerRow}
+                  onChange={(event) => changeHeaderRow(event.target.value)}
+                  inputMode="numeric"
+                  className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none focus:border-brand"
+                />
+                <span className="mt-1 block text-xs text-soft">ไฟล์ Big Car ใช้แถว 5 เพราะคำว่า ทะเบียน อยู่ที่ I5</span>
+              </label>
               <label className="block">
                 <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">Sheet</span>
                 <select
