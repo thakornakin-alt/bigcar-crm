@@ -194,7 +194,7 @@ function doPost(e) {
     if (action === "importStock") {
       return jsonResponse({
         ok: true,
-        result: importStock(body.rows || [], body.sourceName || "")
+        result: importStock(body.rows || [], body.sourceName || "", body.clearExisting === true)
       });
     }
 
@@ -658,8 +658,13 @@ function lookupCustomerById(idCard) {
   return null;
 }
 
-function importStock(rows, sourceName) {
+function importStock(rows, sourceName, clearExisting) {
   var sheet = getStockSheet();
+
+  if (clearExisting === true && sheet.getLastRow() > 1) {
+    sheet.getRange(2, 1, sheet.getLastRow() - 1, STOCK_HEADERS.length).clearContent();
+  }
+
   var now = new Date();
   var nowText = Utilities.formatDate(now, TIME_ZONE, "yyyy-MM-dd HH:mm:ss");
   var lastRow = sheet.getLastRow();

@@ -95,6 +95,7 @@ export type StockVehicle = {
 export type StockImportInput = {
   rows: StockVehicle[];
   sourceName: string;
+  clearExisting?: boolean;
 };
 
 export type StockImportResult = {

@@ -83,6 +83,7 @@ export default function StockImportPage() {
   const [headers, setHeaders] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Record<keyof StockVehicle, string>>(detectMapping([]));
   const [status, setStatus] = useState<StockImportStatus>({ total: 0, latestImportedAt: "", latestUpdatedAt: "" });
+  const [clearExisting, setClearExisting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [importing, setImporting] = useState(false);
   const [message, setMessage] = useState("");
@@ -157,11 +158,19 @@ export default function StockImportPage() {
     let importedAt = "";
 
     try {
+      if (clearExisting) {
+        const confirmed = window.confirm("ล้าง StockInventory เดิมทั้งหมด แล้ว import ไฟล์นี้ใหม่ใช่ไหม?");
+        if (!confirmed) {
+          setImporting(false);
+          return;
+        }
+      }
+
       for (let start = 0; start < parsedRows.length; start += chunkSize) {
         const chunk = parsedRows.slice(start, start + chunkSize);
         const data = await api<{ result: StockImportResult }>("/api/stock/import", {
           method: "POST",
-          body: JSON.stringify({ rows: chunk, sourceName: fileName })
+          body: JSON.stringify({ rows: chunk, sourceName: fileName, clearExisting: clearExisting && start === 0 })
         });
         imported += data.result.imported;
         updated += data.result.updated;
@@ -172,7 +181,7 @@ export default function StockImportPage() {
 
       setMessage(`Import สำเร็จ: เพิ่ม ${imported} / อัปเดต ${updated} / ข้าม ${skipped}`);
       setStatus((current) => ({
-        total: current.total + imported,
+        total: clearExisting ? imported : current.total + imported,
         latestImportedAt: importedAt,
         latestUpdatedAt: importedAt
       }));
@@ -253,6 +262,25 @@ export default function StockImportPage() {
                     </option>
                   ))}
                 </select>
+              </label>
+            </div>
+          )}
+
+          {headers.length > 0 && (
+            <div className="rounded-lg border border-amber-400/30 bg-amber-950/20 p-4 shadow-glow">
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={clearExisting}
+                  onChange={(event) => setClearExisting(event.target.checked)}
+                  className="mt-1 h-5 w-5 accent-brand"
+                />
+                <span>
+                  <span className="block font-bold text-amber-100">ล้าง StockInventory เดิมก่อน Import</span>
+                  <span className="mt-1 block text-sm leading-6 text-amber-100/80">
+                    ใช้เมื่อไฟล์นี้เป็นสต๊อกล่าสุดครบทั้งร้าน ระบบจะล้างเฉพาะแท็บ StockInventory ไม่กระทบลูกค้าและรายงานจอง
+                  </span>
+                </span>
               </label>
             </div>
           )}

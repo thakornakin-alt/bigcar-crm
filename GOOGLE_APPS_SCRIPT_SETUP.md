@@ -162,6 +162,8 @@ Plate | Brand | Model | Year | Color | SalePrice | Source | Ownership | Project 
 
 หน้า `/stock-import` ใช้อัปโหลด Excel/CSV เข้าแท็บนี้ ระบบจะอ่านไฟล์ครั้งเดียวใน browser แล้วส่งข้อมูลเข้า Apps Script เป็นชุด ๆ ถ้าทะเบียนซ้ำจะอัปเดตข้อมูลเดิม ไม่สร้างแถวซ้ำ
 
+ถ้าไฟล์ stock ที่อัปโหลดเป็นข้อมูลล่าสุดครบทั้งร้าน ให้ติ๊ก `ล้าง StockInventory เดิมก่อน Import` ระบบจะล้างเฉพาะแท็บ `StockInventory` แล้วนำเข้าใหม่ทั้งหมด ไม่กระทบแท็บ `Customers`, `BookingReports` หรือ `InterestRates`
+
 ## 8. วิธี Deploy Apps Script หลังอัปเดตเฟส 1
 
 ต้อง deploy ใหม่ทุกครั้งหลังแก้ไฟล์ `google-apps-script/Code.gs`

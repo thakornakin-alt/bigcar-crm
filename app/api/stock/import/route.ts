@@ -26,12 +26,13 @@ export async function POST(request: Request) {
       ? body.rows.map((row: Partial<StockVehicle>) => cleanRow(row)).filter((row: StockVehicle) => row.plate)
       : [];
     const sourceName = String(body.sourceName || "").trim();
+    const clearExisting = body.clearExisting === true;
 
     if (!rows.length) {
       return NextResponse.json({ error: "No stock rows to import" }, { status: 400 });
     }
 
-    const result = await importStock({ rows, sourceName });
+    const result = await importStock({ rows, sourceName, clearExisting });
     return NextResponse.json({ result });
   } catch (error) {
     return NextResponse.json(
