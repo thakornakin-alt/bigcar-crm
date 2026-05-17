@@ -62,6 +62,7 @@ http://localhost:3000
 ## Features
 
 - เพิ่มลูกค้า: Car, Name, Phone, Note
+- คำนวณค่างวดรถมือสองจากตารางดอกเบี้ยใน Google Sheet
 - สร้าง Running Number อัตโนมัติ
 - ใส่วันที่อัตโนมัติ
 - บันทึกลง Google Sheet

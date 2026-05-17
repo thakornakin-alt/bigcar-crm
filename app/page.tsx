@@ -1,7 +1,9 @@
 "use client";
 
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
+  Calculator,
   Car,
   Check,
   Loader2,
@@ -166,9 +168,13 @@ export default function Home() {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
           <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">บันทึกลูกค้า</h1>
         </div>
-        <div className="flex h-12 w-12 items-center justify-center rounded-full border border-line bg-panel">
-          <Car size={24} className="text-brand" aria-hidden="true" />
-        </div>
+        <Link
+          href="/calculator"
+          className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
+        >
+          <Calculator size={18} className="text-brand" aria-hidden="true" />
+          ค่างวด
+        </Link>
       </header>
 
       <section className="mb-4 rounded-lg border border-line bg-panel p-4 shadow-glow">

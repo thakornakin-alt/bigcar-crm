@@ -1,6 +1,6 @@
-import type { Customer, CustomerInput } from "@/lib/types";
+import type { Customer, CustomerInput, InterestRate } from "@/lib/types";
 
-type AppsScriptAction = "list" | "add" | "update" | "delete";
+type AppsScriptAction = "list" | "add" | "update" | "delete" | "listInterestRates";
 
 type AppsScriptResponse<T> =
   | ({ ok: true } & T)
@@ -65,4 +65,9 @@ export async function updateCustomer(rowIndex: number, input: CustomerInput) {
 export async function deleteCustomer(rowIndex: number) {
   await callAppsScript<{ ok: true }>("delete", { rowIndex });
   return { ok: true };
+}
+
+export async function listInterestRates() {
+  const data = await callAppsScript<{ rates: InterestRate[] }>("listInterestRates");
+  return data.rates;
 }
