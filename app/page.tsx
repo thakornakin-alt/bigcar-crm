@@ -6,6 +6,7 @@ import {
   Calculator,
   Car,
   Check,
+  FileText,
   Loader2,
   Pencil,
   Phone,
@@ -168,13 +169,22 @@ export default function Home() {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
           <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">บันทึกลูกค้า</h1>
         </div>
-        <Link
-          href="/calculator"
-          className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
-        >
-          <Calculator size={18} className="text-brand" aria-hidden="true" />
-          ค่างวด
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/booking-reports"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
+          >
+            <FileText size={18} className="text-brand" aria-hidden="true" />
+            รายงานจอง
+          </Link>
+          <Link
+            href="/calculator"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
+          >
+            <Calculator size={18} className="text-brand" aria-hidden="true" />
+            ค่างวด
+          </Link>
+        </div>
       </header>
 
       <section className="mb-4 rounded-lg border border-line bg-panel p-4 shadow-glow">

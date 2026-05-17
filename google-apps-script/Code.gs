@@ -3,8 +3,62 @@ var SHEET_NAME = "Customers";
 var HEADERS = ["No", "Date", "Car", "Name", "Phone", "Note"];
 var RATE_SHEET_NAME = "InterestRates";
 var RATE_HEADERS = ["VehicleType", "YearRange", "Months48", "Months60", "Months72", "Months84", "Commission"];
+var BOOKING_SHEET_NAME = "BookingReports";
+var BOOKING_HEADERS = [
+  "Id",
+  "CreatedAt",
+  "UpdatedAt",
+  "Status",
+  "BuyerType",
+  "CustomerName",
+  "IdCard",
+  "Phone",
+  "Address",
+  "BookingPrice",
+  "Plate",
+  "Brand",
+  "Model",
+  "Year",
+  "Color",
+  "SalePrice",
+  "FinalPrice",
+  "FinalPriceNote",
+  "Discount",
+  "PaymentType",
+  "Source",
+  "Ownership",
+  "Project",
+  "Campaign",
+  "SaleName",
+  "TeamName",
+  "Conditions",
+  "EmailSubject",
+  "EmailTo",
+  "EmailCc",
+  "EmailBcc",
+  "ReportText",
+  "AttachmentsJson",
+  "EmailStatus",
+  "LineStatus",
+  "OcrStatus"
+];
+var STOCK_SHEET_NAME = "StockInventory";
+var STOCK_HEADERS = [
+  "Plate",
+  "Brand",
+  "Model",
+  "Year",
+  "Color",
+  "SalePrice",
+  "Source",
+  "Ownership",
+  "Project",
+  "Campaign",
+  "ImportedAt",
+  "UpdatedAt"
+];
 var TIME_ZONE = "Asia/Bangkok";
-var API_VERSION = "2026-05-18-01";
+var API_VERSION = "2026-05-18-02";
 var DEFAULT_INTEREST_RATES = [
   ["รถเก๋ง/กระบะ 4 ประตู", "2022-2026", 0.0279, 0.0309, 0.0399, 0.0449, 0.08],
   ["รถเก๋ง/กระบะ 4 ประตู", "2020-2021", 0.0299, 0.0319, 0.0419, 0.0449, 0.08],
@@ -39,7 +93,10 @@ function doGet() {
       addCustomer: typeof addCustomer,
       listInterestRates: typeof listInterestRates,
       updateCustomer: typeof updateCustomer,
-      deleteCustomer: typeof deleteCustomer
+      deleteCustomer: typeof deleteCustomer,
+      saveBookingReport: typeof saveBookingReport,
+      lookupStockByPlate: typeof lookupStockByPlate,
+      lookupCustomerById: typeof lookupCustomerById
     }
   });
 }
@@ -111,6 +168,27 @@ function doPost(e) {
       });
     }
 
+    if (action === "saveBookingReport") {
+      return jsonResponse({
+        ok: true,
+        report: saveBookingReport(body.report || {})
+      });
+    }
+
+    if (action === "lookupStockByPlate") {
+      return jsonResponse({
+        ok: true,
+        vehicle: lookupStockByPlate(body.plate || "")
+      });
+    }
+
+    if (action === "lookupCustomerById") {
+      return jsonResponse({
+        ok: true,
+        customer: lookupCustomerById(body.idCard || "")
+      });
+    }
+
     throw new Error("Unknown action: " + action);
   } catch (error) {
     return jsonResponse({
@@ -177,6 +255,30 @@ function getInterestRateSheet() {
   return sheet;
 }
 
+function getBookingSheet() {
+  var spreadsheet = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = spreadsheet.getSheetByName(BOOKING_SHEET_NAME);
+
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(BOOKING_SHEET_NAME);
+  }
+
+  ensureSheetHeader(sheet, BOOKING_HEADERS);
+  return sheet;
+}
+
+function getStockSheet() {
+  var spreadsheet = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = spreadsheet.getSheetByName(STOCK_SHEET_NAME);
+
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(STOCK_SHEET_NAME);
+  }
+
+  ensureSheetHeader(sheet, STOCK_HEADERS);
+  return sheet;
+}
+
 function ensureInterestRateHeader(sheet) {
   var range = sheet.getRange(1, 1, 1, RATE_HEADERS.length);
   var values = range.getValues()[0];
@@ -208,6 +310,23 @@ function ensureHeader(sheet) {
 
   if (!hasHeader) {
     range.setValues([HEADERS]);
+  }
+}
+
+function ensureSheetHeader(sheet, headers) {
+  var range = sheet.getRange(1, 1, 1, headers.length);
+  var values = range.getValues()[0];
+  var hasHeader = true;
+
+  for (var index = 0; index < headers.length; index += 1) {
+    if (values[index] !== headers[index]) {
+      hasHeader = false;
+      break;
+    }
+  }
+
+  if (!hasHeader) {
+    range.setValues([headers]);
   }
 }
 
@@ -335,6 +454,181 @@ function deleteCustomer(rowIndex) {
   }
 
   sheet.deleteRow(rowIndex);
+}
+
+function saveBookingReport(input) {
+  var report = cleanBookingReport(input || {});
+  var sheet = getBookingSheet();
+  var now = new Date();
+  var nowText = Utilities.formatDate(now, TIME_ZONE, "yyyy-MM-dd HH:mm:ss");
+  var id = "BR-" + Utilities.formatDate(now, TIME_ZONE, "yyyyMMdd-HHmmss") + "-" + Math.floor(Math.random() * 1000);
+
+  sheet.appendRow([
+    id,
+    nowText,
+    nowText,
+    report.status,
+    report.buyerType,
+    report.customerName,
+    report.idCard,
+    report.phone,
+    report.address,
+    report.bookingPrice,
+    report.plate,
+    report.brand,
+    report.model,
+    report.year,
+    report.color,
+    report.salePrice,
+    report.finalPrice,
+    report.finalPriceNote,
+    report.discount,
+    report.paymentType,
+    report.source,
+    report.ownership,
+    report.project,
+    report.campaign,
+    report.saleName,
+    report.teamName,
+    report.conditions,
+    report.emailSubject,
+    report.emailTo,
+    report.emailCc,
+    report.emailBcc,
+    report.reportText,
+    JSON.stringify(report.attachments || []),
+    "draft_only",
+    "draft_only",
+    "not_run"
+  ]);
+
+  return {
+    id: id,
+    createdAt: nowText,
+    updatedAt: nowText,
+    status: report.status,
+    buyerType: report.buyerType,
+    customerName: report.customerName,
+    idCard: report.idCard,
+    phone: report.phone,
+    address: report.address,
+    bookingPrice: report.bookingPrice,
+    plate: report.plate,
+    brand: report.brand,
+    model: report.model,
+    year: report.year,
+    color: report.color,
+    salePrice: report.salePrice,
+    finalPrice: report.finalPrice,
+    finalPriceNote: report.finalPriceNote,
+    discount: report.discount,
+    paymentType: report.paymentType,
+    source: report.source,
+    ownership: report.ownership,
+    project: report.project,
+    campaign: report.campaign,
+    saleName: report.saleName,
+    teamName: report.teamName,
+    conditions: report.conditions,
+    emailSubject: report.emailSubject,
+    emailTo: report.emailTo,
+    emailCc: report.emailCc,
+    emailBcc: report.emailBcc,
+    reportText: report.reportText,
+    attachments: report.attachments || []
+  };
+}
+
+function cleanBookingReport(input) {
+  var report = {
+    status: "draft",
+    buyerType: String(input.buyerType || "individual") === "company" ? "company" : "individual",
+    customerName: String(input.customerName || "").trim(),
+    idCard: String(input.idCard || "").trim(),
+    phone: String(input.phone || "").trim(),
+    address: String(input.address || "").trim(),
+    bookingPrice: String(input.bookingPrice || "").trim(),
+    plate: String(input.plate || "").trim(),
+    brand: String(input.brand || "").trim(),
+    model: String(input.model || "").trim(),
+    year: String(input.year || "").trim(),
+    color: String(input.color || "").trim(),
+    salePrice: String(input.salePrice || "").trim(),
+    finalPrice: String(input.finalPrice || "").trim(),
+    finalPriceNote: String(input.finalPriceNote || "").trim(),
+    discount: String(input.discount || "").trim(),
+    paymentType: String(input.paymentType || "").trim(),
+    source: String(input.source || "").trim(),
+    ownership: String(input.ownership || "").trim(),
+    project: String(input.project || "").trim(),
+    campaign: String(input.campaign || "").trim(),
+    saleName: String(input.saleName || "").trim(),
+    teamName: String(input.teamName || "").trim(),
+    conditions: String(input.conditions || "").trim(),
+    emailSubject: String(input.emailSubject || "").trim(),
+    emailTo: String(input.emailTo || "").trim(),
+    emailCc: String(input.emailCc || "").trim(),
+    emailBcc: String(input.emailBcc || "").trim(),
+    reportText: String(input.reportText || "").trim(),
+    attachments: Array.isArray(input.attachments) ? input.attachments : []
+  };
+
+  if (!report.customerName || !report.plate || !report.saleName) {
+    throw new Error("Customer name, plate and sale are required");
+  }
+
+  return report;
+}
+
+function lookupStockByPlate(plate) {
+  var normalizedPlate = normalizePlate(plate);
+
+  if (!normalizedPlate) {
+    return null;
+  }
+
+  var sheet = getStockSheet();
+  var lastRow = sheet.getLastRow();
+
+  if (lastRow <= 1) {
+    return null;
+  }
+
+  var rows = sheet.getRange(2, 1, lastRow - 1, STOCK_HEADERS.length).getValues();
+
+  for (var index = 0; index < rows.length; index += 1) {
+    var row = rows[index];
+    if (normalizePlate(row[0]) === normalizedPlate) {
+      return {
+        plate: String(row[0] || ""),
+        brand: String(row[1] || ""),
+        model: String(row[2] || ""),
+        year: String(row[3] || ""),
+        color: String(row[4] || ""),
+        salePrice: String(row[5] || ""),
+        source: String(row[6] || ""),
+        ownership: String(row[7] || ""),
+        project: String(row[8] || ""),
+        campaign: String(row[9] || "")
+      };
+    }
+  }
+
+  return null;
+}
+
+function lookupCustomerById(idCard) {
+  var normalizedIdCard = String(idCard || "").replace(/\D/g, "");
+
+  if (!normalizedIdCard) {
+    return null;
+  }
+
+  return null;
+}
+
+function normalizePlate(value) {
+  return String(value || "").replace(/\s+/g, "").toUpperCase();
 }
 
 function cleanCustomer(input) {

@@ -120,3 +120,64 @@ VehicleType | YearRange | Months48 | Months60 | Months72 | Months84 | Commission
 ```
 
 ถ้าต้องแก้ดอกเบี้ย ให้แก้ตัวเลขในแท็บ `InterestRates` แล้ว refresh หน้า `/calculator`
+
+## 7. เฟส 1: รายงานจอง Draft / Preview
+
+หลังอัปเดต `Code.gs` เวอร์ชันนี้ Apps Script จะรองรับ action ใหม่:
+
+```text
+saveBookingReport
+lookupStockByPlate
+lookupCustomerById
+```
+
+ระบบจะสร้างแท็บใหม่เท่านั้น:
+
+```text
+BookingReports
+StockInventory
+```
+
+แท็บ `Customers` และ `InterestRates` เดิมจะไม่ถูกลบหรือเปลี่ยน flow เดิม
+
+### BookingReports
+
+หน้า `/booking-reports` จะบันทึก Draft ลงแท็บ `BookingReports` พร้อมข้อความรายงาน, email staging fields และ metadata ไฟล์แนบ
+
+เฟสนี้ยังไม่ส่ง Email จริง, ยังไม่ส่ง LINE จริง และ OCR ยังเป็นสถานะ `not_run`
+
+### StockInventory
+
+แท็บ `StockInventory` ใช้เป็น cache สำหรับค้นหาทะเบียนรถเร็วบนมือถือ
+
+หัวตารางคือ:
+
+```text
+Plate | Brand | Model | Year | Color | SalePrice | Source | Ownership | Project | Campaign | ImportedAt | UpdatedAt
+```
+
+ถ้ามีข้อมูลในแท็บนี้แล้ว ผู้ใช้กรอกทะเบียนในหน้า `/booking-reports` ระบบจะดึงข้อมูลรถมาเติมช่องที่ว่างให้อัตโนมัติ
+
+## 8. วิธี Deploy Apps Script หลังอัปเดตเฟส 1
+
+ต้อง deploy ใหม่ทุกครั้งหลังแก้ไฟล์ `google-apps-script/Code.gs`
+
+1. เปิดโปรเจกต์ Apps Script เดิม
+2. เปิดไฟล์ `Code.gs`
+3. ลบโค้ดเดิมทั้งหมด
+4. คัดลอกโค้ดล่าสุดจาก `google-apps-script/Code.gs` ไปวางแทน
+5. กด Save
+6. กด `Deploy` > `Manage deployments`
+7. กดไอคอนดินสอของ Web App เดิม
+8. ช่อง `Version` เลือก `New version`
+9. Description ใส่ เช่น `Booking reports phase 1`
+10. กด `Deploy`
+11. ใช้ Web app URL เดิมต่อได้ ไม่ต้องเปลี่ยน `.env.local` หรือ Vercel env ถ้า URL เดิมไม่เปลี่ยน
+
+หลัง deploy ให้ทดสอบ:
+
+1. เปิด `https://script.google.com/macros/s/.../exec` ใน browser
+2. ต้องเห็น `version` เป็น `2026-05-18-02`
+3. เปิดเว็บ `/booking-reports`
+4. กรอกชื่อผู้ซื้อ, ทะเบียน, Sale แล้วกด `บันทึก Draft`
+5. กลับไปดู Google Sheet ต้องมีแท็บ `BookingReports` และมีข้อมูลแถวใหม่
