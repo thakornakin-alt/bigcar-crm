@@ -235,7 +235,10 @@ export default function CalculatorPage() {
         <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
           <div>
             <h2 className="text-lg font-bold text-white">ตารางผ่อน</h2>
-            <p className="mt-1 text-sm text-soft">รวม VAT 7% ตามสูตรใน Excel</p>
+            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-soft">
+              <span>รุ่นรถ: {carModel.trim()}</span>
+              <span>ปีรถ: {actualYear.trim()}</span>
+            </div>
           </div>
           {rows.length ? (
             <button
