@@ -1,4 +1,15 @@
-import type { BookingReport, BookingReportInput, Customer, CustomerInput, CustomerLookup, InterestRate, StockVehicle } from "@/lib/types";
+import type {
+  BookingReport,
+  BookingReportInput,
+  Customer,
+  CustomerInput,
+  CustomerLookup,
+  InterestRate,
+  StockImportInput,
+  StockImportResult,
+  StockImportStatus,
+  StockVehicle
+} from "@/lib/types";
 
 type AppsScriptAction =
   | "list"
@@ -8,7 +19,9 @@ type AppsScriptAction =
   | "listInterestRates"
   | "saveBookingReport"
   | "lookupStockByPlate"
-  | "lookupCustomerById";
+  | "lookupCustomerById"
+  | "importStock"
+  | "getStockImportStatus";
 
 type AppsScriptResponse<T> =
   | ({ ok: true } & T)
@@ -93,4 +106,14 @@ export async function lookupStockByPlate(plate: string) {
 export async function lookupCustomerById(idCard: string) {
   const data = await callAppsScript<{ customer: CustomerLookup }>("lookupCustomerById", { idCard });
   return data.customer;
+}
+
+export async function importStock(input: StockImportInput) {
+  const data = await callAppsScript<{ result: StockImportResult }>("importStock", input);
+  return data.result;
+}
+
+export async function getStockImportStatus() {
+  const data = await callAppsScript<{ status: StockImportStatus }>("getStockImportStatus");
+  return data.status;
 }

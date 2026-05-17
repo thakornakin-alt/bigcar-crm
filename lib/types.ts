@@ -92,6 +92,26 @@ export type StockVehicle = {
   campaign: string;
 };
 
+export type StockImportInput = {
+  rows: StockVehicle[];
+  sourceName: string;
+  clearExisting?: boolean;
+};
+
+export type StockImportResult = {
+  imported: number;
+  updated: number;
+  skipped: number;
+  total: number;
+  importedAt: string;
+};
+
+export type StockImportStatus = {
+  total: number;
+  latestImportedAt: string;
+  latestUpdatedAt: string;
+};
+
 export type CustomerLookup = {
   customerName: string;
   phone: string;

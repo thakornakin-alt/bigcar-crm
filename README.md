@@ -65,6 +65,8 @@ http://localhost:3000
 - คำนวณค่างวดรถมือสองจากตารางดอกเบี้ยใน Google Sheet
 - สร้างรายงานจองแบบ Draft / Preview ที่ `/booking-reports`
 - บันทึกรายงานจองลงแท็บ `BookingReports` โดยไม่กระทบแท็บลูกค้าเดิม
+- Import stock จาก Excel/CSV ที่ `/stock-import` ลงแท็บ `StockInventory`
+- ค้นทะเบียนจาก stock เพื่อเติมข้อมูลรถในรายงานจอง
 - สร้าง Running Number อัตโนมัติ
 - ใส่วันที่อัตโนมัติ
 - บันทึกลง Google Sheet

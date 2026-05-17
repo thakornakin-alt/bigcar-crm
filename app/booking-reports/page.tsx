@@ -7,13 +7,15 @@ import {
   ArrowLeft,
   Camera,
   CheckCircle2,
+  Clipboard,
   ClipboardList,
   FileText,
   Loader2,
   Mail,
   Paperclip,
   Save,
-  Search
+  Search,
+  Upload
 } from "lucide-react";
 import { buildDefaultBookingSubject, renderBookingReport } from "@/lib/booking-report";
 import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, StockVehicle } from "@/lib/types";
@@ -110,6 +112,7 @@ export default function BookingReportsPage() {
     companyCertificate: []
   });
   const [lookupStatus, setLookupStatus] = useState("");
+  const [copying, setCopying] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -270,6 +273,21 @@ export default function BookingReportsPage() {
     }
   }
 
+  async function copyReport() {
+    setCopying(true);
+    setError("");
+    setMessage("");
+
+    try {
+      await navigator.clipboard.writeText(reportText);
+      setMessage("คัดลอก Preview รายงานแล้ว");
+    } catch {
+      setError("คัดลอกไม่สำเร็จ กรุณาเลือกข้อความใน Preview แล้ว copy เอง");
+    } finally {
+      window.setTimeout(() => setCopying(false), 500);
+    }
+  }
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-5xl px-4 pb-24 pt-5 sm:px-6">
       <header className="mb-5 flex items-center justify-between gap-3">
@@ -278,13 +296,22 @@ export default function BookingReportsPage() {
           <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">รายงานจอง</h1>
           <p className="mt-1 text-sm text-soft">Staging / Draft / Preview เท่านั้น ยังไม่ส่ง Email หรือ LINE จริง</p>
         </div>
-        <Link
-          href="/"
-          className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
-        >
-          <ArrowLeft size={18} className="text-brand" aria-hidden="true" />
-          ลูกค้า
-        </Link>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href="/stock-import"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
+          >
+            <Upload size={18} className="text-brand" aria-hidden="true" />
+            Stock
+          </Link>
+          <Link
+            href="/"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
+          >
+            <ArrowLeft size={18} className="text-brand" aria-hidden="true" />
+            ลูกค้า
+          </Link>
+        </div>
       </header>
 
       {(message || error || companyWarning) && (
@@ -397,7 +424,15 @@ export default function BookingReportsPage() {
                 <h2 className="text-lg font-bold text-white">Preview รายงาน</h2>
                 <p className="text-xs text-soft">ข้อความคงรูปแบบตาม template</p>
               </div>
-              <span className="rounded-full border border-brand/40 px-3 py-1 text-xs font-semibold text-brand">Draft</span>
+              <button
+                type="button"
+                onClick={copyReport}
+                disabled={copying}
+                className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-brand/50 px-3 text-sm font-semibold text-brand transition hover:border-brand"
+              >
+                {copying ? <Loader2 size={17} className="animate-spin" /> : <Clipboard size={17} />}
+                Copy
+              </button>
             </div>
             <pre className="max-h-[56vh] overflow-auto whitespace-pre-wrap rounded-lg border border-line bg-[#0b0d11] p-3 text-sm leading-7 text-white">
               {reportText}
