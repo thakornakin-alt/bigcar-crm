@@ -13,7 +13,8 @@ import {
   Mail,
   Paperclip,
   Save,
-  Search
+  Search,
+  Upload
 } from "lucide-react";
 import { buildDefaultBookingSubject, renderBookingReport } from "@/lib/booking-report";
 import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, StockVehicle } from "@/lib/types";
@@ -278,13 +279,22 @@ export default function BookingReportsPage() {
           <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">รายงานจอง</h1>
           <p className="mt-1 text-sm text-soft">Staging / Draft / Preview เท่านั้น ยังไม่ส่ง Email หรือ LINE จริง</p>
         </div>
-        <Link
-          href="/"
-          className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
-        >
-          <ArrowLeft size={18} className="text-brand" aria-hidden="true" />
-          ลูกค้า
-        </Link>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href="/stock-import"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
+          >
+            <Upload size={18} className="text-brand" aria-hidden="true" />
+            Stock
+          </Link>
+          <Link
+            href="/"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
+          >
+            <ArrowLeft size={18} className="text-brand" aria-hidden="true" />
+            ลูกค้า
+          </Link>
+        </div>
       </header>
 
       {(message || error || companyWarning) && (

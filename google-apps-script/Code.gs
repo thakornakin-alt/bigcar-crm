@@ -58,7 +58,7 @@ var STOCK_HEADERS = [
   "UpdatedAt"
 ];
 var TIME_ZONE = "Asia/Bangkok";
-var API_VERSION = "2026-05-18-02";
+var API_VERSION = "2026-05-18-03";
 var DEFAULT_INTEREST_RATES = [
   ["รถเก๋ง/กระบะ 4 ประตู", "2022-2026", 0.0279, 0.0309, 0.0399, 0.0449, 0.08],
   ["รถเก๋ง/กระบะ 4 ประตู", "2020-2021", 0.0299, 0.0319, 0.0419, 0.0449, 0.08],
@@ -96,7 +96,9 @@ function doGet() {
       deleteCustomer: typeof deleteCustomer,
       saveBookingReport: typeof saveBookingReport,
       lookupStockByPlate: typeof lookupStockByPlate,
-      lookupCustomerById: typeof lookupCustomerById
+      lookupCustomerById: typeof lookupCustomerById,
+      importStock: typeof importStock,
+      getStockImportStatus: typeof getStockImportStatus
     }
   });
 }
@@ -186,6 +188,20 @@ function doPost(e) {
       return jsonResponse({
         ok: true,
         customer: lookupCustomerById(body.idCard || "")
+      });
+    }
+
+    if (action === "importStock") {
+      return jsonResponse({
+        ok: true,
+        result: importStock(body.rows || [], body.sourceName || "")
+      });
+    }
+
+    if (action === "getStockImportStatus") {
+      return jsonResponse({
+        ok: true,
+        status: getStockImportStatus()
       });
     }
 
@@ -580,6 +596,21 @@ function cleanBookingReport(input) {
   return report;
 }
 
+function cleanStockRow(input) {
+  return {
+    plate: String(input.plate || "").trim(),
+    brand: String(input.brand || "").trim(),
+    model: String(input.model || "").trim(),
+    year: String(input.year || "").trim(),
+    color: String(input.color || "").trim(),
+    salePrice: String(input.salePrice || "").trim(),
+    source: String(input.source || "").trim(),
+    ownership: String(input.ownership || "").trim(),
+    project: String(input.project || "").trim(),
+    campaign: String(input.campaign || "").trim()
+  };
+}
+
 function lookupStockByPlate(plate) {
   var normalizedPlate = normalizePlate(plate);
 
@@ -627,6 +658,97 @@ function lookupCustomerById(idCard) {
   return null;
 }
 
+function importStock(rows, sourceName) {
+  var sheet = getStockSheet();
+  var now = new Date();
+  var nowText = Utilities.formatDate(now, TIME_ZONE, "yyyy-MM-dd HH:mm:ss");
+  var lastRow = sheet.getLastRow();
+  var plateIndex = {};
+  var imported = 0;
+  var updated = 0;
+  var skipped = 0;
+
+  if (lastRow > 1) {
+    var existingRows = sheet.getRange(2, 1, lastRow - 1, STOCK_HEADERS.length).getValues();
+    for (var existingIndex = 0; existingIndex < existingRows.length; existingIndex += 1) {
+      var existingPlate = normalizePlate(existingRows[existingIndex][0]);
+      if (existingPlate) {
+        plateIndex[existingPlate] = existingIndex + 2;
+      }
+    }
+  }
+
+  var appendRows = [];
+
+  for (var rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    var row = cleanStockRow(rows[rowIndex] || {});
+    var normalizedPlate = normalizePlate(row.plate);
+
+    if (!normalizedPlate) {
+      skipped += 1;
+      continue;
+    }
+
+    var values = [
+      row.plate,
+      row.brand,
+      row.model,
+      row.year,
+      row.color,
+      row.salePrice,
+      row.source,
+      row.ownership,
+      row.project,
+      row.campaign,
+      nowText,
+      nowText
+    ];
+
+    if (plateIndex[normalizedPlate]) {
+      sheet.getRange(plateIndex[normalizedPlate], 1, 1, STOCK_HEADERS.length).setValues([values]);
+      updated += 1;
+    } else {
+      appendRows.push(values);
+      plateIndex[normalizedPlate] = true;
+      imported += 1;
+    }
+  }
+
+  if (appendRows.length) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, appendRows.length, STOCK_HEADERS.length).setValues(appendRows);
+  }
+
+  return {
+    imported: imported,
+    updated: updated,
+    skipped: skipped,
+    total: rows.length,
+    importedAt: nowText
+  };
+}
+
+function getStockImportStatus() {
+  var sheet = getStockSheet();
+  var lastRow = sheet.getLastRow();
+  var total = Math.max(lastRow - 1, 0);
+  var latestImportedAt = "";
+  var latestUpdatedAt = "";
+
+  if (lastRow > 1) {
+    var rows = sheet.getRange(2, 11, lastRow - 1, 2).getValues();
+    for (var index = 0; index < rows.length; index += 1) {
+      latestImportedAt = maxText(latestImportedAt, formatDateTime(rows[index][0]));
+      latestUpdatedAt = maxText(latestUpdatedAt, formatDateTime(rows[index][1]));
+    }
+  }
+
+  return {
+    total: total,
+    latestImportedAt: latestImportedAt,
+    latestUpdatedAt: latestUpdatedAt
+  };
+}
+
 function normalizePlate(value) {
   return String(value || "").replace(/\s+/g, "").toUpperCase();
 }
@@ -656,6 +778,22 @@ function formatDate(value) {
   }
 
   return String(value || "");
+}
+
+function formatDateTime(value) {
+  if (Object.prototype.toString.call(value) === "[object Date]") {
+    return Utilities.formatDate(value, TIME_ZONE, "yyyy-MM-dd HH:mm:ss");
+  }
+
+  return String(value || "");
+}
+
+function maxText(currentValue, nextValue) {
+  if (String(nextValue || "") > String(currentValue || "")) {
+    return String(nextValue || "");
+  }
+
+  return String(currentValue || "");
 }
 
 function toNumberOrNull(value) {

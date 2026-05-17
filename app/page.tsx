@@ -14,6 +14,7 @@ import {
   Save,
   Search,
   Trash2,
+  Upload,
   User,
   X
 } from "lucide-react";
@@ -164,18 +165,25 @@ export default function Home() {
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-3xl px-4 pb-24 pt-5 sm:px-6">
-      <header className="mb-5 flex items-center justify-between gap-4">
+      <header className="mb-5 flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
           <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">บันทึกลูกค้า</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/booking-reports"
             className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
           >
             <FileText size={18} className="text-brand" aria-hidden="true" />
             รายงานจอง
+          </Link>
+          <Link
+            href="/stock-import"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
+          >
+            <Upload size={18} className="text-brand" aria-hidden="true" />
+            Stock
           </Link>
           <Link
             href="/calculator"

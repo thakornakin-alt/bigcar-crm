@@ -129,6 +129,8 @@ VehicleType | YearRange | Months48 | Months60 | Months72 | Months84 | Commission
 saveBookingReport
 lookupStockByPlate
 lookupCustomerById
+importStock
+getStockImportStatus
 ```
 
 ระบบจะสร้างแท็บใหม่เท่านั้น:
@@ -158,6 +160,8 @@ Plate | Brand | Model | Year | Color | SalePrice | Source | Ownership | Project 
 
 ถ้ามีข้อมูลในแท็บนี้แล้ว ผู้ใช้กรอกทะเบียนในหน้า `/booking-reports` ระบบจะดึงข้อมูลรถมาเติมช่องที่ว่างให้อัตโนมัติ
 
+หน้า `/stock-import` ใช้อัปโหลด Excel/CSV เข้าแท็บนี้ ระบบจะอ่านไฟล์ครั้งเดียวใน browser แล้วส่งข้อมูลเข้า Apps Script เป็นชุด ๆ ถ้าทะเบียนซ้ำจะอัปเดตข้อมูลเดิม ไม่สร้างแถวซ้ำ
+
 ## 8. วิธี Deploy Apps Script หลังอัปเดตเฟส 1
 
 ต้อง deploy ใหม่ทุกครั้งหลังแก้ไฟล์ `google-apps-script/Code.gs`
@@ -170,14 +174,15 @@ Plate | Brand | Model | Year | Color | SalePrice | Source | Ownership | Project 
 6. กด `Deploy` > `Manage deployments`
 7. กดไอคอนดินสอของ Web App เดิม
 8. ช่อง `Version` เลือก `New version`
-9. Description ใส่ เช่น `Booking reports phase 1`
+9. Description ใส่ เช่น `Stock import phase 2`
 10. กด `Deploy`
 11. ใช้ Web app URL เดิมต่อได้ ไม่ต้องเปลี่ยน `.env.local` หรือ Vercel env ถ้า URL เดิมไม่เปลี่ยน
 
 หลัง deploy ให้ทดสอบ:
 
 1. เปิด `https://script.google.com/macros/s/.../exec` ใน browser
-2. ต้องเห็น `version` เป็น `2026-05-18-02`
+2. ต้องเห็น `version` เป็น `2026-05-18-03`
 3. เปิดเว็บ `/booking-reports`
 4. กรอกชื่อผู้ซื้อ, ทะเบียน, Sale แล้วกด `บันทึก Draft`
 5. กลับไปดู Google Sheet ต้องมีแท็บ `BookingReports` และมีข้อมูลแถวใหม่
+6. เปิดเว็บ `/stock-import` แล้วลองอัปโหลดไฟล์ stock เพื่อเติมแท็บ `StockInventory`
