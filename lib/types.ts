@@ -37,3 +37,77 @@ export type InstallmentRow = {
     months84: number;
   };
 };
+
+export type BuyerType = "individual" | "company";
+
+export type BookingReportInput = {
+  customerName: string;
+  idCard: string;
+  phone: string;
+  address: string;
+  buyerType: BuyerType;
+  bookingPrice: string;
+  plate: string;
+  brand: string;
+  model: string;
+  year: string;
+  color: string;
+  salePrice: string;
+  finalPrice: string;
+  finalPriceNote: string;
+  discount: string;
+  paymentType: string;
+  source: string;
+  ownership: string;
+  project: string;
+  campaign: string;
+  saleName: string;
+  teamName: string;
+  conditions: string;
+  emailSubject: string;
+  emailTo: string;
+  emailCc: string;
+  emailBcc: string;
+  attachments?: BookingAttachment[];
+  reportText: string;
+  status: "draft" | "send_cancelled" | "staging_preview";
+};
+
+export type BookingReport = BookingReportInput & {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type StockVehicle = {
+  plate: string;
+  brand: string;
+  model: string;
+  year: string;
+  color: string;
+  salePrice: string;
+  source: string;
+  ownership: string;
+  project: string;
+  campaign: string;
+};
+
+export type CustomerLookup = {
+  customerName: string;
+  phone: string;
+  address: string;
+} | null;
+
+export type BookingAttachmentCategory =
+  | "bookingSlip"
+  | "bookingCondition"
+  | "carPhoto"
+  | "idCard"
+  | "companyCertificate";
+
+export type BookingAttachment = {
+  category: BookingAttachmentCategory;
+  name: string;
+  type: string;
+  size: number;
+};

@@ -1,6 +1,14 @@
-import type { Customer, CustomerInput, InterestRate } from "@/lib/types";
+import type { BookingReport, BookingReportInput, Customer, CustomerInput, CustomerLookup, InterestRate, StockVehicle } from "@/lib/types";
 
-type AppsScriptAction = "list" | "add" | "update" | "delete" | "listInterestRates";
+type AppsScriptAction =
+  | "list"
+  | "add"
+  | "update"
+  | "delete"
+  | "listInterestRates"
+  | "saveBookingReport"
+  | "lookupStockByPlate"
+  | "lookupCustomerById";
 
 type AppsScriptResponse<T> =
   | ({ ok: true } & T)
@@ -70,4 +78,19 @@ export async function deleteCustomer(rowIndex: number) {
 export async function listInterestRates() {
   const data = await callAppsScript<{ rates: InterestRate[] }>("listInterestRates");
   return data.rates;
+}
+
+export async function saveBookingReport(input: BookingReportInput) {
+  const data = await callAppsScript<{ report: BookingReport }>("saveBookingReport", { report: input });
+  return data.report;
+}
+
+export async function lookupStockByPlate(plate: string) {
+  const data = await callAppsScript<{ vehicle: StockVehicle | null }>("lookupStockByPlate", { plate });
+  return data.vehicle;
+}
+
+export async function lookupCustomerById(idCard: string) {
+  const data = await callAppsScript<{ customer: CustomerLookup }>("lookupCustomerById", { idCard });
+  return data.customer;
 }
