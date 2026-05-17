@@ -49,6 +49,12 @@ function cell(value: unknown) {
   return String(value).trim();
 }
 
+function yearOnly(value: unknown) {
+  const text = cell(value);
+  const match = text.match(/\b(19|20)\d{2}\b/);
+  return match ? match[0] : text.replace(/[^\d]/g, "").slice(-4);
+}
+
 function detectMapping(headers: string[]) {
   const normalized = headers.map((header) => ({ header, normalized: normalizeHeader(header) }));
 
@@ -65,7 +71,7 @@ function mapRows(rows: RawRow[], mapping: Record<keyof StockVehicle, string>) {
       plate: cell(row[mapping.plate]),
       brand: cell(row[mapping.brand]),
       model: cell(row[mapping.model]),
-      year: cell(row[mapping.year]),
+      year: yearOnly(row[mapping.year]),
       color: cell(row[mapping.color]),
       salePrice: cell(row[mapping.salePrice]).replace(/[^\d.]/g, ""),
       source: cell(row[mapping.source]),
