@@ -12,10 +12,10 @@ const chunkSize = 300;
 const fieldLabels: Array<{ key: keyof StockVehicle; label: string; aliases: string[] }> = [
   { key: "plate", label: "ทะเบียนรถ", aliases: ["ทะเบียนรถ", "ทะเบียน", "plate", "licenseplate", "regno", "เลขทะเบียน"] },
   { key: "brand", label: "ยี่ห้อรถ", aliases: ["ยี่ห้อรถ", "ยี่ห้อ", "brand", "make"] },
-  { key: "model", label: "รุ่นรถ", aliases: ["รุ่นรถ", "รุ่น", "model"] },
-  { key: "year", label: "ปีรถ", aliases: ["ปีรถ", "ปี", "year", "modelyear"] },
+  { key: "model", label: "รุ่นรถ", aliases: ["รุ่นรถ", "รุ่นรถยนต์", "รุ่น", "model"] },
+  { key: "year", label: "ปีรถ", aliases: ["ปีรถ", "ปีจด", "ปี", "year", "modelyear"] },
   { key: "color", label: "สีรถ", aliases: ["สีรถ", "สี", "color", "colour"] },
-  { key: "salePrice", label: "ราคาตั้งขาย", aliases: ["ราคาตั้งขาย", "ราคา", "price", "saleprice", "sellingprice"] },
+  { key: "salePrice", label: "ราคาตั้งขาย", aliases: ["ราคาตั้งขาย", "ราคาเสนอขายRT", "ราคาเสนอขาย", "ราคา", "price", "saleprice", "sellingprice"] },
   { key: "source", label: "แหล่งที่มา", aliases: ["แหล่งที่มา", "source"] },
   { key: "ownership", label: "กรรมสิทธิ์", aliases: ["กรรมสิทธิ์", "ownership"] },
   { key: "project", label: "Project", aliases: ["project", "โปรเจกต์"] },
