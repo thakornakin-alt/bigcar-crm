@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Calculator, Car, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Calculator, Car, ImageDown, Loader2, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { InstallmentRow, InterestRate } from "@/lib/types";
 
@@ -52,6 +52,7 @@ export default function CalculatorPage() {
   const [carPrice, setCarPrice] = useState("684000");
   const [specialDownPayment, setSpecialDownPayment] = useState("");
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
 
   async function loadRates() {
@@ -101,6 +102,27 @@ export default function CalculatorPage() {
 
     return baseRows;
   }, [customDown, price, selectedRate]);
+
+  async function handleSaveImage() {
+    if (!rows.length || !selectedRate) return;
+
+    setExporting(true);
+    setError("");
+
+    try {
+      await exportInstallmentImage({
+        vehicleType,
+        yearRange,
+        carPrice: price,
+        rate: selectedRate,
+        rows
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "บันทึกรูปไม่สำเร็จ");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-5xl px-4 pb-24 pt-5 sm:px-6">
@@ -163,7 +185,19 @@ export default function CalculatorPage() {
             <h2 className="text-lg font-bold text-white">ตารางผ่อน</h2>
             <p className="mt-1 text-sm text-soft">รวม VAT 7% ตามสูตรใน Excel</p>
           </div>
-          <Calculator size={24} className="shrink-0 text-brand" aria-hidden="true" />
+          {rows.length ? (
+            <button
+              type="button"
+              disabled={exporting}
+              onClick={handleSaveImage}
+              className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand px-3 text-sm font-bold text-ink"
+            >
+              {exporting ? <Loader2 size={18} className="animate-spin" /> : <ImageDown size={18} />}
+              บันทึกรูป
+            </button>
+          ) : (
+            <Calculator size={24} className="shrink-0 text-brand" aria-hidden="true" />
+          )}
         </div>
 
         {loading ? (
@@ -291,4 +325,168 @@ function PaymentCell({ value }: { value: number }) {
       {value ? formatMoney(value) : "-"}
     </td>
   );
+}
+
+async function exportInstallmentImage({
+  vehicleType,
+  yearRange,
+  carPrice,
+  rate,
+  rows
+}: {
+  vehicleType: string;
+  yearRange: string;
+  carPrice: number;
+  rate: InterestRate;
+  rows: InstallmentRow[];
+}) {
+  const canvas = document.createElement("canvas");
+  const scale = Math.max(window.devicePixelRatio || 1, 2);
+  const width = 1100;
+  const rowHeight = 58;
+  const headerHeight = 238;
+  const footerHeight = 42;
+  const height = headerHeight + rowHeight * (rows.length + 1) + footerHeight;
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("ไม่สามารถสร้างรูปได้บนอุปกรณ์นี้");
+
+  ctx.scale(scale, scale);
+  ctx.fillStyle = "#08090b";
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "#111318";
+  roundRect(ctx, 28, 28, width - 56, height - 56, 18);
+  ctx.fill();
+
+  ctx.fillStyle = "#22c55e";
+  ctx.font = "700 24px Arial, sans-serif";
+  ctx.fillText("Big Car CRM", 56, 74);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "700 42px Arial, sans-serif";
+  ctx.fillText("ตารางค่างวดรถมือสอง", 56, 124);
+
+  ctx.fillStyle = "#aeb5c2";
+  ctx.font = "24px Arial, sans-serif";
+  ctx.fillText(`${vehicleType} / ปี ${yearRange}`, 56, 166);
+  ctx.fillText(`ราคารถ ${formatMoney(carPrice)} บาท`, 56, 204);
+  ctx.fillText(
+    `ดอกเบี้ย 48/60/72/84: ${formatPercent(rate.months48)} / ${formatPercent(rate.months60)} / ${formatPercent(
+      rate.months72
+    )} / ${formatPercent(rate.months84)}`,
+    420,
+    204
+  );
+
+  const columns = [
+    { label: "เรทดาวน์", x: 56, width: 128, align: "left" },
+    { label: "เงินดาวน์", x: 190, width: 142, align: "right" },
+    { label: "ยอดจัด", x: 346, width: 142, align: "right" },
+    { label: "48 งวด", x: 518, width: 118, align: "right" },
+    { label: "60 งวด", x: 650, width: 118, align: "right" },
+    { label: "72 งวด", x: 782, width: 118, align: "right" },
+    { label: "84 งวด", x: 914, width: 118, align: "right" }
+  ] as const;
+
+  const tableTop = 238;
+  ctx.fillStyle = "#1b2028";
+  roundRect(ctx, 44, tableTop - 10, width - 88, rowHeight, 10);
+  ctx.fill();
+
+  ctx.font = "700 22px Arial, sans-serif";
+  ctx.fillStyle = "#dce2eb";
+  columns.forEach((column) => drawCellText(ctx, column.label, column.x, tableTop + 26, column.width, column.align));
+
+  rows.forEach((row, index) => {
+    const y = tableTop + rowHeight * (index + 1);
+    ctx.fillStyle = index % 2 === 0 ? "#111318" : "#0d0f13";
+    ctx.fillRect(44, y - 10, width - 88, rowHeight);
+    ctx.fillStyle = "#252932";
+    ctx.fillRect(44, y + rowHeight - 11, width - 88, 1);
+
+    ctx.font = "700 22px Arial, sans-serif";
+    ctx.fillStyle = "#ffffff";
+    drawCellText(ctx, row.label, columns[0].x, y + 26, columns[0].width, "left");
+
+    ctx.font = "22px Arial, sans-serif";
+    ctx.fillStyle = "#dce2eb";
+    drawCellText(ctx, formatMoney(row.downPayment), columns[1].x, y + 26, columns[1].width, "right");
+    drawCellText(ctx, formatMoney(row.financeAmount), columns[2].x, y + 26, columns[2].width, "right");
+
+    ctx.font = "700 22px Arial, sans-serif";
+    ctx.fillStyle = "#22c55e";
+    drawCellText(ctx, formatPayment(row.payments.months48), columns[3].x, y + 26, columns[3].width, "right");
+    drawCellText(ctx, formatPayment(row.payments.months60), columns[4].x, y + 26, columns[4].width, "right");
+    drawCellText(ctx, formatPayment(row.payments.months72), columns[5].x, y + 26, columns[5].width, "right");
+    drawCellText(ctx, formatPayment(row.payments.months84), columns[6].x, y + 26, columns[6].width, "right");
+  });
+
+  ctx.fillStyle = "#6f7785";
+  ctx.font = "18px Arial, sans-serif";
+  ctx.fillText("คำนวณด้วยสูตร Flat Rate รวม VAT 7% / ข้อมูลดอกเบี้ยจาก Google Sheet", 56, height - 56);
+
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+  if (!blob) throw new Error("ไม่สามารถสร้างไฟล์รูปได้");
+
+  const fileName = `bigcar-installment-${Date.now()}.png`;
+  const file = new File([blob], fileName, { type: "image/png" });
+  const shareData = {
+    title: "ตารางค่างวดรถมือสอง",
+    text: "ตารางค่างวดจาก Big Car CRM",
+    files: [file]
+  };
+
+  if (navigator.canShare?.(shareData)) {
+    await navigator.share(shareData);
+    return;
+  }
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function drawCellText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  width: number,
+  align: "left" | "right"
+) {
+  ctx.textAlign = align;
+  ctx.fillText(text, align === "right" ? x + width : x, y);
+  ctx.textAlign = "left";
+}
+
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+}
+
+function formatPercent(value: number | null) {
+  if (!value) return "-";
+  return `${(value * 100).toFixed(2)}%`;
+}
+
+function formatPayment(value: number) {
+  return value ? formatMoney(value) : "-";
 }
