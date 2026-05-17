@@ -431,12 +431,13 @@ async function exportInstallmentImage({
   rate: InterestRate;
   rows: InstallmentRow[];
 }) {
+  const profileImage = await loadCanvasImage("/big-profile.png").catch(() => null);
   const canvas = document.createElement("canvas");
   const scale = Math.max(window.devicePixelRatio || 1, 2);
   const width = 1100;
   const rowHeight = 60;
   const tableHeaderHeight = 74;
-  const headerHeight = 258;
+  const headerHeight = 300;
   const footerHeight = 42;
   const height = headerHeight + tableHeaderHeight + rowHeight * rows.length + footerHeight;
   canvas.width = width * scale;
@@ -454,19 +455,41 @@ async function exportInstallmentImage({
   roundRect(ctx, 28, 28, width - 56, height - 56, 18);
   ctx.fill();
 
-  ctx.fillStyle = "#22c55e";
-  ctx.font = "700 24px Arial, sans-serif";
-  ctx.fillText("Big Car CRM", 56, 74);
+  if (profileImage) {
+    const sourceHeight = profileImage.height * 0.72;
+    const imageHeight = 258;
+    const imageWidth = Math.round((profileImage.width / sourceHeight) * imageHeight);
+    ctx.drawImage(
+      profileImage,
+      0,
+      0,
+      profileImage.width,
+      sourceHeight,
+      width - imageWidth - 52,
+      28,
+      imageWidth,
+      imageHeight
+    );
+  }
 
   ctx.fillStyle = "#ffffff";
-  ctx.font = "700 42px Arial, sans-serif";
-  ctx.fillText("ตารางค่างวดรถมือสอง", 56, 124);
+  ctx.font = "700 46px Arial, sans-serif";
+  ctx.fillText("Big Car RDD", 56, 82);
+
+  ctx.fillStyle = "#22c55e";
+  ctx.font = "700 28px Arial, sans-serif";
+  ctx.fillText("บิ๊ก 091-778-5117", 56, 124);
+  ctx.fillText("Line: @bigcars", 56, 162);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "700 34px Arial, sans-serif";
+  ctx.fillText("ตารางค่างวดรถมือสอง", 56, 214);
 
   ctx.fillStyle = "#aeb5c2";
   ctx.font = "24px Arial, sans-serif";
-  ctx.fillText(`รุ่นรถ: ${carModel.trim() || "-"}`, 56, 166);
-  ctx.fillText(`ปีรถ: ${actualYear.trim() || "-"}`, 56, 204);
-  ctx.fillText(`ราคารถ ${formatWholeMoney(carPrice)} บาท`, 420, 204);
+  ctx.fillText(`รุ่นรถ: ${carModel.trim() || "-"}`, 56, 254);
+  ctx.fillText(`ปีรถ: ${actualYear.trim() || "-"}`, 360, 254);
+  ctx.fillText(`ราคารถ ${formatWholeMoney(carPrice)} บาท`, 560, 254);
 
   const columns = [
     { label: "เรทดาวน์", rate: "", x: 56, width: 128, align: "left" },
@@ -478,7 +501,7 @@ async function exportInstallmentImage({
     { label: "84 งวด", rate: formatPercent(rate.months84), x: 914, width: 118, align: "right" }
   ] as const;
 
-  const tableTop = 258;
+  const tableTop = 300;
   ctx.fillStyle = "#1b2028";
   roundRect(ctx, 44, tableTop - 10, width - 88, tableHeaderHeight, 10);
   ctx.fill();
@@ -584,4 +607,13 @@ function formatPercent(value: number | null) {
 
 function formatPayment(value: number) {
   return value ? formatWholeMoney(value) : "-";
+}
+
+function loadCanvasImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("โหลดรูปโปรไฟล์ไม่สำเร็จ"));
+    image.src = src;
+  });
 }
