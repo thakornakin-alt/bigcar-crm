@@ -184,8 +184,8 @@ export default function CalculatorPage() {
 
       <section className="mb-4 rounded-lg border border-line bg-panel p-4 shadow-glow">
         <div className="grid gap-3 md:grid-cols-2">
-          <TextField label="รุ่นรถจริง" value={carModel} onChange={setCarModel} placeholder="Toyota Revo 2020" />
-          <TextField label="ปีรถจริง" value={actualYear} onChange={setActualYear} placeholder="2020" inputMode="numeric" />
+          <TextField label="รุ่นรถ" value={carModel} onChange={setCarModel} placeholder="Toyota Revo 2020" />
+          <TextField label="ปีรถ" value={actualYear} onChange={setActualYear} placeholder="2020" inputMode="numeric" />
           <SelectField label="ประเภทรถ" value={vehicleType} onChange={setVehicleType} options={vehicleTypes} />
           <SelectField label="ช่วงปีรถ" value={yearRange} onChange={setYearRange} options={yearOptions} />
           <NumberField label="ราคารถ" value={carPrice} onChange={setCarPrice} placeholder="684000" />
