@@ -15,7 +15,11 @@ function cleanRow(row: Partial<StockVehicle>): StockVehicle {
     source: String(row.source || "").trim(),
     ownership: String(row.ownership || "").trim(),
     project: String(row.project || "").trim(),
-    campaign: String(row.campaign || "").trim()
+    campaign: String(row.campaign || "").trim(),
+    vin: String(row.vin || "").trim(),
+    finalGrade: String(row.finalGrade || "").trim(),
+    program: String(row.program || "").trim(),
+    parkingLocation: String(row.parkingLocation || "").trim()
   };
 }
 
