@@ -64,6 +64,7 @@ http://localhost:3000
 - เพิ่มลูกค้า: Car, Name, Phone, Note
 - คำนวณค่างวดรถมือสองจากตารางดอกเบี้ยใน Google Sheet
 - สร้างรายงานจองแบบ Draft / Preview ที่ `/booking-reports`
+- สร้างรายงานขายจากรายงานจองเดิมที่ `/sales-reports`
 - บันทึกรายงานจองลงแท็บ `BookingReports` โดยไม่กระทบแท็บลูกค้าเดิม
 - Import stock จาก Excel/CSV ที่ `/stock-import` ลงแท็บ `StockInventory`
 - ค้นทะเบียนจาก stock เพื่อเติมข้อมูลรถในรายงานจอง

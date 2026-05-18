@@ -131,6 +131,8 @@ lookupStockByPlate
 lookupCustomerById
 importStock
 getStockImportStatus
+searchBookingReports
+saveSalesReport
 ```
 
 ระบบจะสร้างแท็บใหม่เท่านั้น:
@@ -164,6 +166,8 @@ Plate | Brand | Model | Year | Color | SalePrice | Source | Ownership | Project 
 
 ถ้าไฟล์ stock ที่อัปโหลดเป็นข้อมูลล่าสุดครบทั้งร้าน ให้ติ๊ก `ล้าง StockInventory เดิมก่อน Import` ระบบจะล้างเฉพาะแท็บ `StockInventory` แล้วนำเข้าใหม่ทั้งหมด ไม่กระทบแท็บ `Customers`, `BookingReports` หรือ `InterestRates`
 
+เฟสรายงานขายจะสร้างแท็บ `SalesReports` เพิ่มอีกแท็บ ใช้สำหรับบันทึก Draft รายงานขายที่ดึงข้อมูลตั้งต้นจาก `BookingReports`
+
 ## 8. วิธี Deploy Apps Script หลังอัปเดตเฟส 1
 
 ต้อง deploy ใหม่ทุกครั้งหลังแก้ไฟล์ `google-apps-script/Code.gs`
@@ -183,7 +187,7 @@ Plate | Brand | Model | Year | Color | SalePrice | Source | Ownership | Project 
 หลัง deploy ให้ทดสอบ:
 
 1. เปิด `https://script.google.com/macros/s/.../exec` ใน browser
-2. ต้องเห็น `version` เป็น `2026-05-18-03`
+2. ต้องเห็น `version` เป็น `2026-05-18-04`
 3. เปิดเว็บ `/booking-reports`
 4. กรอกชื่อผู้ซื้อ, ทะเบียน, Sale แล้วกด `บันทึก Draft`
 5. กลับไปดู Google Sheet ต้องมีแท็บ `BookingReports` และมีข้อมูลแถวใหม่

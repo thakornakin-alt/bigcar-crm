@@ -5,6 +5,8 @@ import type {
   CustomerInput,
   CustomerLookup,
   InterestRate,
+  SalesReport,
+  SalesReportInput,
   StockImportInput,
   StockImportResult,
   StockImportStatus,
@@ -21,7 +23,9 @@ type AppsScriptAction =
   | "lookupStockByPlate"
   | "lookupCustomerById"
   | "importStock"
-  | "getStockImportStatus";
+  | "getStockImportStatus"
+  | "searchBookingReports"
+  | "saveSalesReport";
 
 type AppsScriptResponse<T> =
   | ({ ok: true } & T)
@@ -116,4 +120,14 @@ export async function importStock(input: StockImportInput) {
 export async function getStockImportStatus() {
   const data = await callAppsScript<{ status: StockImportStatus }>("getStockImportStatus");
   return data.status;
+}
+
+export async function searchBookingReports(query: string) {
+  const data = await callAppsScript<{ reports: BookingReport[] }>("searchBookingReports", { query });
+  return data.reports;
+}
+
+export async function saveSalesReport(input: SalesReportInput) {
+  const data = await callAppsScript<{ report: SalesReport }>("saveSalesReport", { report: input });
+  return data.report;
 }
