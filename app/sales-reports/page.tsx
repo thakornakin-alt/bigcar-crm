@@ -17,6 +17,8 @@ type SalesAttachmentCategory =
   | "vanSeatFront"
   | "vanSeatRear"
   | "odometer"
+  | "decalPhoto"
+  | "kycPhoto"
   | "temporaryReceipt"
   | "bookingTransferSlip"
   | "additionalSlip1"
@@ -41,6 +43,8 @@ const salesAttachmentLabels: Record<SalesAttachmentCategory, string> = {
   vanSeatFront: "รถตู้: รูปเบาะ 1",
   vanSeatRear: "รถตู้: รูปเบาะ 2",
   odometer: "รถตู้: รูปเลขไมล์",
+  decalPhoto: "รูปลอกลาย",
+  kycPhoto: "รูป KYC",
   temporaryReceipt: "รายละเอียดการชำระเงิน/ใบเสร็จชั่วคราว",
   bookingTransferSlip: "ใบสลิปโอนจอง",
   additionalSlip1: "ใบสลิปเพิ่มเติม 1",
@@ -431,7 +435,7 @@ export default function SalesReportsPage() {
                   <p className="mt-1 text-xs text-soft">พื้นฐานแสดง 2 ใบสลิปเพิ่มเติม และกดแสดงเมนูเพิ่มเติมได้</p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {(["temporaryReceipt", "bookingTransferSlip", "additionalSlip1", "additionalSlip2"] as SalesAttachmentCategory[]).map((category) => (
+                  {(["decalPhoto", "kycPhoto", "temporaryReceipt", "bookingTransferSlip", "additionalSlip1", "additionalSlip2"] as SalesAttachmentCategory[]).map((category) => (
                     <SalesAttachmentBox
                       key={category}
                       category={category}
