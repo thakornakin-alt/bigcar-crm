@@ -139,6 +139,10 @@ export type StockVehicle = {
   ownership: string;
   project: string;
   campaign: string;
+  vin?: string;
+  finalGrade?: string;
+  program?: string;
+  parkingLocation?: string;
 };
 
 export type StockImportInput = {

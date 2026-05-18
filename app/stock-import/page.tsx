@@ -20,7 +20,11 @@ const fieldLabels: Array<{ key: keyof StockVehicle; label: string; aliases: stri
   { key: "source", label: "แหล่งที่มา", aliases: ["แหล่งที่มา", "source"] },
   { key: "ownership", label: "กรรมสิทธิ์", aliases: ["กรรมสิทธิ์", "ownership"] },
   { key: "project", label: "Project", aliases: ["project", "โปรเจกต์"] },
-  { key: "campaign", label: "Campaign", aliases: ["campaign", "แคมเปญ"] }
+  { key: "campaign", label: "Campaign", aliases: ["campaign", "แคมเปญ"] },
+  { key: "vin", label: "เลขตัวรถ", aliases: ["เลขตัวรถ", "เลขตัวถัง", "vin", "chassis"] },
+  { key: "finalGrade", label: "เกรด Final", aliases: ["เกรด final", "เกรดfinal", "finalgrade", "grade"] },
+  { key: "program", label: "Program", aliases: ["program", "PROGRAM"] },
+  { key: "parkingLocation", label: "สถานที่จอด", aliases: ["สถานที่จอด", "parking", "location"] }
 ];
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
@@ -94,7 +98,11 @@ function mapRows(rows: RawRow[], mapping: Record<keyof StockVehicle, string>) {
       source: cell(row[mapping.source]),
       ownership: cell(row[mapping.ownership]),
       project: cell(row[mapping.project]),
-      campaign: cell(row[mapping.campaign])
+      campaign: cell(row[mapping.campaign]),
+      vin: cell(row[mapping.vin]),
+      finalGrade: cell(row[mapping.finalGrade]),
+      program: cell(row[mapping.program]),
+      parkingLocation: cell(row[mapping.parkingLocation])
     }))
     .filter((row) => row.plate);
 }
@@ -401,7 +409,7 @@ export default function StockImportPage() {
                 <table className="w-full min-w-[760px] border-collapse text-left text-sm">
                   <thead className="bg-[#0b0d11] text-soft">
                     <tr>
-                      {fieldLabels.slice(0, 10).map((field) => (
+                      {fieldLabels.map((field) => (
                         <th key={field.key} className="px-3 py-2 font-semibold">
                           {field.label}
                         </th>
@@ -421,6 +429,10 @@ export default function StockImportPage() {
                         <td className="px-3 py-2">{row.ownership}</td>
                         <td className="px-3 py-2">{row.project}</td>
                         <td className="px-3 py-2">{row.campaign}</td>
+                        <td className="px-3 py-2">{row.vin}</td>
+                        <td className="px-3 py-2">{row.finalGrade}</td>
+                        <td className="px-3 py-2">{row.program}</td>
+                        <td className="px-3 py-2">{row.parkingLocation}</td>
                       </tr>
                     ))}
                   </tbody>
