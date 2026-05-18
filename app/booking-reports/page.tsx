@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { buildDefaultBookingSubject, renderBookingReport } from "@/lib/booking-report";
 import { normalizeCarYear } from "@/lib/format";
-import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, DriveUploadResult, StockVehicle } from "@/lib/types";
+import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, DriveAttachment, DriveUploadResult, StockVehicle } from "@/lib/types";
 
 const saleEmails: Record<string, string> = {
   "ฐากร": "thakornakin@gmail.com",
@@ -160,9 +160,13 @@ export default function BookingReportsPage() {
   const [uploadProgress, setUploadProgress] = useState("");
   const [copying, setCopying] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [drafting, setDrafting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [savedReportId, setSavedReportId] = useState("");
+  const [draftUrl, setDraftUrl] = useState("");
+  const [uploadedAttachments, setUploadedAttachments] = useState<DriveAttachment[]>([]);
 
   const reportText = useMemo(() => renderBookingReport({ ...form, reportText: "" }), [form]);
   const senderEmail = saleEmails[form.saleName] || "";
@@ -255,6 +259,8 @@ export default function BookingReportsPage() {
 
   function handleFiles(category: BookingAttachmentCategory, event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files || []);
+    setUploadedAttachments([]);
+    setDraftUrl("");
     setAttachmentFiles((current) => ({
       ...current,
       [category]: [...current[category], ...files]
@@ -263,6 +269,8 @@ export default function BookingReportsPage() {
   }
 
   function removeFile(category: BookingAttachmentCategory, index: number) {
+    setUploadedAttachments([]);
+    setDraftUrl("");
     setAttachmentFiles((current) => ({
       ...current,
       [category]: current[category].filter((_, fileIndex) => fileIndex !== index)
@@ -330,6 +338,7 @@ export default function BookingReportsPage() {
     setError("");
     setMessage("");
     setUploadProgress("");
+    setDraftUrl("");
 
     let uploadResult: DriveUploadResult = { folderUrl: driveFolderUrl, attachments: [] };
     let uploadWarning = "";
@@ -364,10 +373,12 @@ export default function BookingReportsPage() {
     );
 
     try {
-      await readJson("/api/booking-reports", {
+      const data = await readJson<{ report: { id: string } }>("/api/booking-reports", {
         method: "POST",
         body: JSON.stringify(payload)
       });
+      setSavedReportId(data.report.id);
+      setUploadedAttachments(uploadResult.attachments);
       if (uploadWarning) {
         setError(`${uploadWarning} - บันทึก Draft ลง Google Sheets แบบไม่มีไฟล์ Drive แล้ว`);
       } else {
@@ -383,6 +394,57 @@ export default function BookingReportsPage() {
     } finally {
       setUploading(false);
       setSaving(false);
+    }
+  }
+
+  async function createEmailDraft() {
+    setDrafting(true);
+    setError("");
+    setMessage("");
+    setDraftUrl("");
+    setUploadProgress("");
+
+    try {
+      if (!form.emailTo.trim()) throw new Error("กรุณากรอก To ก่อนสร้าง Gmail Draft");
+
+      let attachments = uploadedAttachments;
+      if (!attachments.length && Object.values(attachmentFiles).some((files) => files.length > 0)) {
+        const uploadResult = await uploadBookingFiles();
+        attachments = uploadResult.attachments;
+        setUploadedAttachments(uploadResult.attachments);
+      }
+
+      window.localStorage.setItem(
+        "bigcar-booking-email",
+        JSON.stringify({
+          emailTo: form.emailTo,
+          emailCc: form.emailCc,
+          emailBcc: form.emailBcc
+        })
+      );
+
+      const data = await readJson<{ result: { draftUrl: string } }>("/api/email/booking-draft", {
+        method: "POST",
+        body: JSON.stringify({
+          reportId: savedReportId,
+          subject: form.emailSubject || buildDefaultBookingSubject(form),
+          to: form.emailTo,
+          cc: form.emailCc,
+          bcc: form.emailBcc,
+          body: reportText,
+          attachments: attachments
+            .filter((attachment) => attachment.fileId)
+            .map((attachment) => ({ fileId: attachment.fileId, name: attachment.name }))
+        })
+      });
+
+      setDraftUrl(data.result.draftUrl);
+      setMessage("สร้าง Gmail Draft รายงานจองแล้ว ยังไม่ได้ส่งจริง");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "สร้าง Gmail Draft รายงานจองไม่สำเร็จ");
+    } finally {
+      setDrafting(false);
+      setUploading(false);
     }
   }
 
@@ -512,14 +574,29 @@ export default function BookingReportsPage() {
             <TextArea label="เงื่อนไข" value={form.conditions} onChange={(value) => update("conditions", value)} rows={5} />
           </Panel>
 
-          <Panel title="Email Staging" icon={<Mail size={18} />}>
+          <Panel title="Gmail Draft" icon={<Mail size={18} />}>
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs text-soft">
-              ผู้ส่งตาม Sale: {senderEmail || "ยังไม่พบ mapping"} - เฟสนี้เป็น Preview เท่านั้น
+              ผู้ส่งตาม Sale: {senderEmail || "ยังไม่พบ mapping"} - สร้างเป็น Draft เท่านั้น ยังไม่ส่งจริง
             </p>
             <Field label="หัวข้ออีเมล" value={form.emailSubject} onChange={(value) => update("emailSubject", value)} />
             <Field label="To" value={form.emailTo} onChange={(value) => update("emailTo", value)} placeholder="email1@example.com, email2@example.com" />
             <Field label="CC" value={form.emailCc} onChange={(value) => update("emailCc", value)} />
             <Field label="BCC" value={form.emailBcc} onChange={(value) => update("emailBcc", value)} />
+            <button
+              type="button"
+              onClick={createEmailDraft}
+              disabled={drafting || uploading}
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-brand/50 bg-[#0b0d11] px-4 font-bold text-brand disabled:opacity-70"
+            >
+              {drafting || uploading ? <Loader2 size={20} className="animate-spin" /> : <Mail size={20} />}
+              {drafting ? "กำลังสร้าง Gmail Draft..." : "สร้าง Gmail Draft"}
+            </button>
+            {draftUrl && (
+              <a href={draftUrl} target="_blank" rel="noreferrer" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink">
+                <Mail size={20} />
+                เปิด Gmail Draft
+              </a>
+            )}
           </Panel>
 
           <Panel title="ไฟล์แนบ Draft" icon={<Paperclip size={18} />}>

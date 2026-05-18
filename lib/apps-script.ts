@@ -31,7 +31,8 @@ type AppsScriptAction =
   | "searchBookingReports"
   | "saveSalesReport"
   | "uploadDriveFiles"
-  | "createSalesEmailDraft";
+  | "createSalesEmailDraft"
+  | "createBookingEmailDraft";
 
 type AppsScriptResponse<T> =
   | ({ ok: true } & T)
@@ -145,5 +146,10 @@ export async function uploadDriveFiles(input: DriveUploadInput) {
 
 export async function createSalesEmailDraft(input: EmailDraftInput) {
   const data = await callAppsScript<{ result: EmailDraftResult }>("createSalesEmailDraft", input);
+  return data.result;
+}
+
+export async function createBookingEmailDraft(input: EmailDraftInput) {
+  const data = await callAppsScript<{ result: EmailDraftResult }>("createBookingEmailDraft", input);
   return data.result;
 }
