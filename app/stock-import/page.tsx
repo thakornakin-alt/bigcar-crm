@@ -10,6 +10,7 @@ type RawRow = Record<string, unknown>;
 
 const chunkSize = 300;
 const defaultHeaderRow = 5;
+const vinFallbackKey = "__BIGCAR_COL_U";
 const fieldLabels: Array<{ key: keyof StockVehicle; label: string; aliases: string[] }> = [
   { key: "plate", label: "ทะเบียนรถ", aliases: ["ทะเบียนรถ", "ทะเบียน", "plate", "licenseplate", "regno", "เลขทะเบียน"] },
   { key: "brand", label: "ยี่ห้อรถ", aliases: ["ยี่ห้อรถ", "ยี่ห้อ", "brand", "make"] },
@@ -99,7 +100,7 @@ function mapRows(rows: RawRow[], mapping: Record<keyof StockVehicle, string>) {
       ownership: cell(row[mapping.ownership]),
       project: cell(row[mapping.project]),
       campaign: cell(row[mapping.campaign]),
-      vin: cell(row[mapping.vin]),
+      vin: cell(row[mapping.vin]) || cell(row[vinFallbackKey]),
       finalGrade: cell(row[mapping.finalGrade]),
       program: cell(row[mapping.program]),
       parkingLocation: cell(row[mapping.parkingLocation])
@@ -109,10 +110,15 @@ function mapRows(rows: RawRow[], mapping: Record<keyof StockVehicle, string>) {
 
 function readSheetRows(sheet: XLSX.WorkSheet | undefined, headerRow: number) {
   if (!sheet) return [];
-  return XLSX.utils.sheet_to_json<RawRow>(sheet, {
+  const rows = XLSX.utils.sheet_to_json<RawRow>(sheet, {
     defval: "",
     range: Math.max(headerRow - 1, 0)
   });
+
+  return rows.map((row, index) => ({
+    ...row,
+    [vinFallbackKey]: cell(sheet[XLSX.utils.encode_cell({ c: 20, r: headerRow + index })]?.v)
+  }));
 }
 
 export default function StockImportPage() {
