@@ -661,6 +661,21 @@ export default function SalesReportsPage() {
                 {saving || uploading ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
                 {uploading ? "กำลังอัปโหลดรูป..." : "บันทึก Draft รายงานขาย"}
               </button>
+              {driveFolderUrl ? (
+                <a
+                  href={driveFolderUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-brand/50 bg-[#0b0d11] px-4 font-bold text-brand"
+                >
+                  <Cloud size={20} />
+                  เปิดโฟลเดอร์ Google Drive
+                </a>
+              ) : (
+                <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs text-soft">
+                  หลังบันทึกสำเร็จ ถ้ามีการแนบรูป ระบบจะแสดงปุ่มเปิดโฟลเดอร์ Google Drive ตรงนี้
+                </p>
+              )}
             </Panel>
           </form>
         </div>
