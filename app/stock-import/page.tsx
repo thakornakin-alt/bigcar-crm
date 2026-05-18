@@ -11,6 +11,7 @@ type RawRow = Record<string, unknown>;
 const chunkSize = 300;
 const defaultHeaderRow = 5;
 const vinFallbackKey = "__BIGCAR_COL_U";
+const vinFallbackLabel = "คอลัมน์ U (ล็อกอัตโนมัติ)";
 const fieldLabels: Array<{ key: keyof StockVehicle; label: string; aliases: string[] }> = [
   { key: "plate", label: "ทะเบียนรถ", aliases: ["ทะเบียนรถ", "ทะเบียน", "plate", "licenseplate", "regno", "เลขทะเบียน"] },
   { key: "brand", label: "ยี่ห้อรถ", aliases: ["ยี่ห้อรถ", "ยี่ห้อ", "brand", "make"] },
@@ -82,7 +83,7 @@ function detectMapping(headers: string[]) {
 
   return fieldLabels.reduce<Record<keyof StockVehicle, string>>((mapping, field) => {
     const found = normalized.find((item) => field.aliases.some((alias) => item.normalized === normalizeHeader(alias)));
-    mapping[field.key] = found?.header || "";
+    mapping[field.key] = found?.header || (field.key === "vin" ? vinFallbackKey : "");
     return mapping;
   }, {} as Record<keyof StockVehicle, string>);
 }
@@ -115,10 +116,13 @@ function readSheetRows(sheet: XLSX.WorkSheet | undefined, headerRow: number) {
     range: Math.max(headerRow - 1, 0)
   });
 
-  return rows.map((row, index) => ({
-    ...row,
-    [vinFallbackKey]: cell(sheet[XLSX.utils.encode_cell({ c: 20, r: headerRow + index })]?.v)
-  }));
+  return rows.map((row, index) => {
+    const rowNumber = typeof row.__rowNum__ === "number" ? row.__rowNum__ : headerRow + index;
+    return {
+      ...row,
+      [vinFallbackKey]: cell(sheet[XLSX.utils.encode_cell({ c: 20, r: rowNumber })]?.v)
+    };
+  });
 }
 
 export default function StockImportPage() {
@@ -376,6 +380,7 @@ export default function StockImportPage() {
                       className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none focus:border-brand"
                     >
                       <option value="">ไม่ใช้</option>
+                      {field.key === "vin" && <option value={vinFallbackKey}>{vinFallbackLabel}</option>}
                       {headers.map((header) => (
                         <option key={header} value={header}>
                           {header}
@@ -395,6 +400,9 @@ export default function StockImportPage() {
                 <div>
                   <h2 className="text-lg font-bold text-white">Preview</h2>
                   <p className="text-xs text-soft">พบข้อมูลพร้อม import {parsedRows.length.toLocaleString("th-TH")} แถว</p>
+                  <p className="mt-1 text-xs text-soft">
+                    เลขตัวรถที่อ่านได้ {parsedRows.filter((row) => row.vin).length.toLocaleString("th-TH")} แถว
+                  </p>
                 </div>
                 <button
                   type="button"
