@@ -1,11 +1,63 @@
 "use client";
 
-import { FormEvent, ReactNode, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Clipboard, FileText, Loader2, Save, Search } from "lucide-react";
+import { ArrowLeft, Camera, CheckCircle2, ChevronDown, Clipboard, Eye, FileText, ImagePlus, Loader2, Save, Search, X } from "lucide-react";
 import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
 import { normalizeCarYear } from "@/lib/format";
-import type { BookingReport, SalesReportInput } from "@/lib/types";
+import type { BookingAttachment, BookingReport, SalesReportInput } from "@/lib/types";
+
+type VehiclePhotoMode = "standard" | "van";
+
+type SalesAttachmentCategory =
+  | "carFrontLeft"
+  | "carFrontRight"
+  | "carRearLeft"
+  | "carRearRight"
+  | "vanSeatFront"
+  | "vanSeatRear"
+  | "odometer"
+  | "temporaryReceipt"
+  | "bookingTransferSlip"
+  | "additionalSlip1"
+  | "additionalSlip2"
+  | "additionalSlip3"
+  | "additionalSlip4"
+  | "additionalSlip5"
+  | "additionalSlip6";
+
+type LocalAttachment = {
+  id: string;
+  name: string;
+  type: string;
+  url: string;
+};
+
+const salesAttachmentLabels: Record<SalesAttachmentCategory, string> = {
+  carFrontLeft: "รูปรถ 4 มุม: หน้าซ้าย",
+  carFrontRight: "รูปรถ 4 มุม: หน้าขวา",
+  carRearLeft: "รูปรถ 4 มุม: หลังซ้าย",
+  carRearRight: "รูปรถ 4 มุม: หลังขวา",
+  vanSeatFront: "รถตู้: รูปเบาะ 1",
+  vanSeatRear: "รถตู้: รูปเบาะ 2",
+  odometer: "รถตู้: รูปเลขไมล์",
+  temporaryReceipt: "รายละเอียดการชำระเงิน/ใบเสร็จชั่วคราว",
+  bookingTransferSlip: "ใบสลิปโอนจอง",
+  additionalSlip1: "ใบสลิปเพิ่มเติม 1",
+  additionalSlip2: "ใบสลิปเพิ่มเติม 2",
+  additionalSlip3: "ใบสลิปเพิ่มเติม 3",
+  additionalSlip4: "ใบสลิปเพิ่มเติม 4",
+  additionalSlip5: "ใบสลิปเพิ่มเติม 5",
+  additionalSlip6: "ใบสลิปเพิ่มเติม 6"
+};
+
+const bookingAttachmentLabels: Record<BookingAttachment["category"], string> = {
+  bookingSlip: "รูปใบจอง",
+  bookingCondition: "รูปเงื่อนไขการจอง",
+  carPhoto: "รูปรถจากรายงานจอง",
+  idCard: "รูปบัตรประชาชน",
+  companyCertificate: "รูปหนังสือรับรองบริษัท"
+};
 
 const blankForm: SalesReportInput = {
   bookingReportId: "",
@@ -91,6 +143,11 @@ export default function SalesReportsPage() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<BookingReport[]>([]);
   const [form, setForm] = useState<SalesReportInput>(blankForm);
+  const [selectedBooking, setSelectedBooking] = useState<BookingReport | null>(null);
+  const [vehiclePhotoMode, setVehiclePhotoMode] = useState<VehiclePhotoMode>("standard");
+  const [showMoreSlips, setShowMoreSlips] = useState(false);
+  const [salesFiles, setSalesFiles] = useState<Partial<Record<SalesAttachmentCategory, LocalAttachment[]>>>({});
+  const salesFilesRef = useRef(salesFiles);
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -103,8 +160,53 @@ export default function SalesReportsPage() {
       ? "finance"
       : "other";
 
+  useEffect(() => {
+    salesFilesRef.current = salesFiles;
+  }, [salesFiles]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(salesFilesRef.current).flat().forEach((file) => {
+        if (file) URL.revokeObjectURL(file.url);
+      });
+    };
+  }, []);
+
   function update(field: keyof SalesReportInput, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function selectBooking(report: BookingReport) {
+    setSelectedBooking(report);
+    setForm(fromBooking(report));
+  }
+
+  function addSalesFiles(category: SalesAttachmentCategory, event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+
+    const nextFiles = files.map((file) => ({
+      id: `${category}-${file.name}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
+      name: file.name,
+      type: file.type,
+      url: URL.createObjectURL(file)
+    }));
+
+    setSalesFiles((current) => ({
+      ...current,
+      [category]: [...(current[category] || []), ...nextFiles]
+    }));
+    event.target.value = "";
+  }
+
+  function removeSalesFile(category: SalesAttachmentCategory, id: string) {
+    setSalesFiles((current) => {
+      const remaining = (current[category] || []).filter((file) => {
+        if (file.id === id) URL.revokeObjectURL(file.url);
+        return file.id !== id;
+      });
+      return { ...current, [category]: remaining };
+    });
   }
 
   async function searchReports(event: FormEvent<HTMLFormElement>) {
@@ -189,7 +291,7 @@ export default function SalesReportsPage() {
                   <button
                     key={report.id}
                     type="button"
-                    onClick={() => setForm(fromBooking(report))}
+                    onClick={() => selectBooking(report)}
                     className="w-full rounded-lg border border-line bg-[#0b0d11] p-3 text-left hover:border-brand/60"
                   >
                     <p className="font-bold text-white">{report.customerName || "-"}</p>
@@ -272,6 +374,92 @@ export default function SalesReportsPage() {
                 <TextArea label="รายละเอียดการชำระเงิน" value={form.paymentDetail} onChange={(value) => update("paymentDetail", value)} rows={4} />
               )}
               <TextArea label="เงื่อนไขการขาย" value={form.saleConditions} onChange={(value) => update("saleConditions", value)} rows={4} />
+            </Panel>
+
+            <Panel title="ไฟล์แนบ Draft รายงานขาย">
+              <BookingAttachmentSummary attachments={selectedBooking?.attachments || []} />
+
+              <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="font-bold text-white">รูปรถใหม่สำหรับรายงานขาย</p>
+                    <p className="mt-1 text-xs text-soft">ไม่ใช้รูปรถจากรายงานจอง ให้ถ่าย/เพิ่มรูปใหม่ตามเคสขาย</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setVehiclePhotoMode("standard")}
+                      className={`min-h-10 rounded-lg border px-3 text-sm font-semibold ${vehiclePhotoMode === "standard" ? "border-brand bg-brand text-ink" : "border-line bg-panel text-white"}`}
+                    >
+                      รถทั่วไป
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVehiclePhotoMode("van")}
+                      className={`min-h-10 rounded-lg border px-3 text-sm font-semibold ${vehiclePhotoMode === "van" ? "border-brand bg-brand text-ink" : "border-line bg-panel text-white"}`}
+                    >
+                      รถตู้
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {(["carFrontLeft", "carFrontRight", "carRearLeft", "carRearRight"] as SalesAttachmentCategory[]).map((category) => (
+                    <SalesAttachmentBox
+                      key={category}
+                      category={category}
+                      files={salesFiles[category] || []}
+                      onAdd={addSalesFiles}
+                      onRemove={removeSalesFile}
+                    />
+                  ))}
+                  {vehiclePhotoMode === "van" && (["vanSeatFront", "vanSeatRear", "odometer"] as SalesAttachmentCategory[]).map((category) => (
+                    <SalesAttachmentBox
+                      key={category}
+                      category={category}
+                      files={salesFiles[category] || []}
+                      onAdd={addSalesFiles}
+                      onRemove={removeSalesFile}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
+                <div className="mb-3">
+                  <p className="font-bold text-white">รูปชำระเงิน / ใบเสร็จ / สลิป</p>
+                  <p className="mt-1 text-xs text-soft">พื้นฐานแสดง 2 ใบสลิปเพิ่มเติม และกดแสดงเมนูเพิ่มเติมได้</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {(["temporaryReceipt", "bookingTransferSlip", "additionalSlip1", "additionalSlip2"] as SalesAttachmentCategory[]).map((category) => (
+                    <SalesAttachmentBox
+                      key={category}
+                      category={category}
+                      files={salesFiles[category] || []}
+                      onAdd={addSalesFiles}
+                      onRemove={removeSalesFile}
+                    />
+                  ))}
+                  {showMoreSlips && (["additionalSlip3", "additionalSlip4", "additionalSlip5", "additionalSlip6"] as SalesAttachmentCategory[]).map((category) => (
+                    <SalesAttachmentBox
+                      key={category}
+                      category={category}
+                      files={salesFiles[category] || []}
+                      onAdd={addSalesFiles}
+                      onRemove={removeSalesFile}
+                    />
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowMoreSlips((current) => !current)}
+                  className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white"
+                >
+                  <ChevronDown size={17} className={showMoreSlips ? "rotate-180 text-brand" : "text-brand"} />
+                  {showMoreSlips ? "ซ่อนสลิปเพิ่มเติม" : "แสดงเมนูเพิ่มเติม"}
+                </button>
+              </div>
+
               <button type="submit" disabled={saving} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink">
                 {saving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
                 บันทึก Draft รายงานขาย
@@ -311,6 +499,106 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
       </h2>
       <div className="space-y-3">{children}</div>
     </section>
+  );
+}
+
+function BookingAttachmentSummary({ attachments }: { attachments: BookingAttachment[] }) {
+  const visibleAttachments = attachments.filter((attachment) => attachment.category !== "carPhoto");
+
+  return (
+    <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-bold text-white">รูปจากรายงานจองเดิม</p>
+          <p className="mt-1 text-xs text-soft">แสดงเฉพาะหมวดเอกสารเดิม ส่วนรูปรถให้เพิ่มใหม่ในรายงานขาย</p>
+        </div>
+        <span className="rounded-lg border border-line bg-panel px-2 py-1 text-xs font-semibold text-brand">{visibleAttachments.length} ไฟล์</span>
+      </div>
+      {visibleAttachments.length > 0 ? (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {visibleAttachments.map((attachment, index) => (
+            <div key={`${attachment.category}-${attachment.name}-${index}`} className="rounded-lg border border-line bg-panel p-3">
+              <p className="text-sm font-semibold text-white">{bookingAttachmentLabels[attachment.category]}</p>
+              <p className="mt-1 truncate text-xs text-soft">{attachment.name}</p>
+              <p className="mt-2 text-xs text-amber-100">เปิดรูปจริงได้หลังเปิดระบบ Google Drive upload</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-soft">ยังไม่มีไฟล์จากรายงานจองที่ดึงมาได้</p>
+      )}
+    </div>
+  );
+}
+
+function SalesAttachmentBox({
+  category,
+  files,
+  onAdd,
+  onRemove
+}: {
+  category: SalesAttachmentCategory;
+  files: LocalAttachment[];
+  onAdd: (category: SalesAttachmentCategory, event: ChangeEvent<HTMLInputElement>) => void;
+  onRemove: (category: SalesAttachmentCategory, id: string) => void;
+}) {
+  const addId = `${category}-add`;
+  const cameraId = `${category}-camera`;
+
+  return (
+    <div className="rounded-lg border border-line bg-panel p-3">
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div>
+          <p className="text-sm font-bold text-white">{salesAttachmentLabels[category]}</p>
+          <p className="mt-1 text-xs text-soft">{files.length ? `${files.length} ไฟล์` : "ยังไม่ได้เพิ่มรูป"}</p>
+        </div>
+        <ImagePlus size={18} className="shrink-0 text-brand" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <label htmlFor={addId} className="flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-semibold text-white">
+          <ImagePlus size={16} className="text-brand" />
+          เพิ่มรูป
+        </label>
+        <input id={addId} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={(event) => onAdd(category, event)} />
+
+        <label htmlFor={cameraId} className="flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-semibold text-white">
+          <Camera size={16} className="text-brand" />
+          ถ่าย
+        </label>
+        <input id={cameraId} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(event) => onAdd(category, event)} />
+      </div>
+
+      {files.length > 0 && (
+        <div className="mt-3 grid gap-2">
+          {files.map((file) => (
+            <div key={file.id} className="flex items-center gap-2 rounded-lg border border-line bg-[#0b0d11] p-2">
+              {file.type.startsWith("image/") ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={file.url} alt={file.name} className="h-14 w-14 shrink-0 rounded-md object-cover" />
+              ) : (
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md bg-panel">
+                  <FileText size={20} className="text-brand" />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold text-white">{file.name}</p>
+                <div className="mt-1 flex gap-2">
+                  <a href={file.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-brand">
+                    <Eye size={14} />
+                    เปิดดู
+                  </a>
+                  <button type="button" onClick={() => onRemove(category, file.id)} className="inline-flex items-center gap-1 text-xs font-semibold text-red-200">
+                    <X size={14} />
+                    ลบ
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
