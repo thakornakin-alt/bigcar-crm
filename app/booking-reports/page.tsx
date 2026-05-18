@@ -26,6 +26,8 @@ const saleEmails: Record<string, string> = {
   "ฐากร": "thakornakin@gmail.com",
   "กันตา": "kanta.deepal@gmail.com"
 };
+const defaultEmailTo = "RDDUsedcarBooked@segroup.co.th";
+const defaultEmailCc = "rongsarit.s@tgh.co.th";
 
 const blankForm: BookingReportInput = {
   customerName: "",
@@ -52,8 +54,8 @@ const blankForm: BookingReportInput = {
   teamName: "",
   conditions: "",
   emailSubject: "",
-  emailTo: "",
-  emailCc: "",
+  emailTo: defaultEmailTo,
+  emailCc: defaultEmailCc,
   emailBcc: "",
   attachments: [],
   reportText: "",
@@ -177,7 +179,12 @@ export default function BookingReportsPage() {
     if (latest) {
       try {
         const parsed = JSON.parse(latest) as Pick<BookingReportInput, "emailTo" | "emailCc" | "emailBcc">;
-        setForm((current) => ({ ...current, ...parsed }));
+        setForm((current) => ({
+          ...current,
+          ...parsed,
+          emailTo: parsed.emailTo?.trim() || defaultEmailTo,
+          emailCc: parsed.emailCc?.trim() || defaultEmailCc
+        }));
       } catch {
         window.localStorage.removeItem("bigcar-booking-email");
       }

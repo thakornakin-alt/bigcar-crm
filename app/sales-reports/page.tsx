@@ -47,6 +47,8 @@ const saleEmails: Record<string, string> = {
   "ฐากร": "thakornakin@gmail.com",
   "กันตา": "kanta.deepal@gmail.com"
 };
+const defaultEmailTo = "RDDUsedcarBooked@segroup.co.th";
+const defaultEmailCc = "rongsarit.s@tgh.co.th";
 
 const blankForm: SalesReportInput = {
   bookingReportId: "",
@@ -204,8 +206,8 @@ export default function SalesReportsPage() {
   const [draftUrl, setDraftUrl] = useState("");
   const [emailFields, setEmailFields] = useState({
     subject: "",
-    to: "",
-    cc: "",
+    to: defaultEmailTo,
+    cc: defaultEmailCc,
     bcc: ""
   });
   const [message, setMessage] = useState("");
@@ -239,7 +241,12 @@ export default function SalesReportsPage() {
     if (latest) {
       try {
         const parsed = JSON.parse(latest) as typeof emailFields;
-        setEmailFields((current) => ({ ...current, ...parsed }));
+        setEmailFields((current) => ({
+          ...current,
+          ...parsed,
+          to: parsed.to?.trim() || defaultEmailTo,
+          cc: parsed.cc?.trim() || defaultEmailCc
+        }));
       } catch {
         window.localStorage.removeItem("bigcar-sales-email");
       }
