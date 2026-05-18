@@ -9,6 +9,7 @@ import type {
   EmailDraftInput,
   EmailDraftResult,
   InterestRate,
+  ReportHistoryItem,
   SalesReport,
   SalesReportInput,
   StockImportInput,
@@ -28,6 +29,7 @@ type AppsScriptAction =
   | "lookupCustomerById"
   | "importStock"
   | "getStockImportStatus"
+  | "listReportHistory"
   | "searchBookingReports"
   | "saveSalesReport"
   | "uploadDriveFiles"
@@ -127,6 +129,11 @@ export async function importStock(input: StockImportInput) {
 export async function getStockImportStatus() {
   const data = await callAppsScript<{ status: StockImportStatus }>("getStockImportStatus");
   return data.status;
+}
+
+export async function listReportHistory(query: string, type: string) {
+  const data = await callAppsScript<{ reports: ReportHistoryItem[] }>("listReportHistory", { query, type });
+  return data.reports;
 }
 
 export async function searchBookingReports(query: string) {

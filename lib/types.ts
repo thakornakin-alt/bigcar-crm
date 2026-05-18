@@ -238,3 +238,33 @@ export type EmailDraftResult = {
   draftUrl: string;
   status: string;
 };
+
+export type ReportHistoryType = "booking" | "sales";
+
+export type ReportHistoryItem = {
+  id: string;
+  type: ReportHistoryType;
+  createdAt: string;
+  updatedAt: string;
+  status: string;
+  customerName: string;
+  phone: string;
+  idCard: string;
+  plate: string;
+  brand: string;
+  model: string;
+  year: string;
+  color: string;
+  saleName: string;
+  teamName: string;
+  emailSubject: string;
+  emailTo: string;
+  emailCc: string;
+  emailStatus: string;
+  lineStatus: string;
+  ocrStatus: string;
+  emailDraftId: string;
+  driveFolderUrl: string;
+  attachments: Array<BookingAttachment | DriveAttachment>;
+  reportText: string;
+};

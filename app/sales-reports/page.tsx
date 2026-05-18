@@ -2,7 +2,7 @@
 
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Camera, CheckCircle2, Clipboard, Cloud, Eye, FileText, ImagePlus, Loader2, Mail, Save, Search, X } from "lucide-react";
+import { ArrowLeft, Camera, CheckCircle2, Clipboard, Cloud, Eye, FileText, History, ImagePlus, Loader2, Mail, Save, Search, X } from "lucide-react";
 import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
 import { normalizeCarYear } from "@/lib/format";
 import type { BookingAttachment, BookingReport, DriveAttachment, DriveUploadResult, SalesReportInput } from "@/lib/types";
@@ -512,10 +512,16 @@ export default function SalesReportsPage() {
           <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">รายงานขาย</h1>
           <p className="mt-1 text-sm text-soft">ค้นรายงานจองเดิม แล้วสร้างรายงานขายแบบ Draft / Preview</p>
         </div>
-        <Link href="/booking-reports" className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white">
-          <ArrowLeft size={18} className="text-brand" />
-          รายงานจอง
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/booking-reports" className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white">
+            <ArrowLeft size={18} className="text-brand" />
+            รายงานจอง
+          </Link>
+          <Link href="/report-history" className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white">
+            <History size={18} className="text-brand" />
+            ประวัติ
+          </Link>
+        </div>
       </header>
 
       {(message || error) && (

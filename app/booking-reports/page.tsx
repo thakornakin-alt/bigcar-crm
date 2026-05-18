@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Cloud,
   FileText,
+  History,
   Loader2,
   Mail,
   Paperclip,
@@ -492,6 +493,13 @@ export default function BookingReportsPage() {
           >
             <FileText size={18} className="text-brand" aria-hidden="true" />
             ขาย
+          </Link>
+          <Link
+            href="/report-history"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
+          >
+            <History size={18} className="text-brand" aria-hidden="true" />
+            ประวัติ
           </Link>
           <Link
             href="/"
