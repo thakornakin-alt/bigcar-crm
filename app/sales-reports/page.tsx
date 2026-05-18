@@ -2,31 +2,15 @@
 
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Camera, CheckCircle2, ChevronDown, Clipboard, Cloud, Eye, FileText, ImagePlus, Loader2, Save, Search, X } from "lucide-react";
+import { ArrowLeft, Camera, CheckCircle2, Clipboard, Cloud, Eye, FileText, ImagePlus, Loader2, Save, Search, X } from "lucide-react";
 import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
 import { normalizeCarYear } from "@/lib/format";
 import type { BookingAttachment, BookingReport, DriveAttachment, DriveUploadResult, SalesReportInput } from "@/lib/types";
 
-type VehiclePhotoMode = "standard" | "van";
-
 type SalesAttachmentCategory =
-  | "carFrontLeft"
-  | "carFrontRight"
-  | "carRearLeft"
-  | "carRearRight"
-  | "vanSeatFront"
-  | "vanSeatRear"
-  | "odometer"
-  | "decalPhoto"
-  | "kycPhoto"
-  | "temporaryReceipt"
-  | "bookingTransferSlip"
-  | "additionalSlip1"
-  | "additionalSlip2"
-  | "additionalSlip3"
-  | "additionalSlip4"
-  | "additionalSlip5"
-  | "additionalSlip6";
+  | "vehiclePhotos"
+  | "paymentSlips"
+  | "salesDocuments";
 
 type LocalAttachment = {
   id: string;
@@ -42,23 +26,9 @@ type LocalAttachment = {
 };
 
 const salesAttachmentLabels: Record<SalesAttachmentCategory, string> = {
-  carFrontLeft: "รูปรถ 4 มุม: หน้าซ้าย",
-  carFrontRight: "รูปรถ 4 มุม: หน้าขวา",
-  carRearLeft: "รูปรถ 4 มุม: หลังซ้าย",
-  carRearRight: "รูปรถ 4 มุม: หลังขวา",
-  vanSeatFront: "รถตู้: รูปเบาะ 1",
-  vanSeatRear: "รถตู้: รูปเบาะ 2",
-  odometer: "รถตู้: รูปเลขไมล์",
-  decalPhoto: "รูปลอกลาย",
-  kycPhoto: "รูป KYC",
-  temporaryReceipt: "รายละเอียดการชำระเงิน/ใบเสร็จชั่วคราว",
-  bookingTransferSlip: "ใบสลิปโอนจอง",
-  additionalSlip1: "ใบสลิปเพิ่มเติม 1",
-  additionalSlip2: "ใบสลิปเพิ่มเติม 2",
-  additionalSlip3: "ใบสลิปเพิ่มเติม 3",
-  additionalSlip4: "ใบสลิปเพิ่มเติม 4",
-  additionalSlip5: "ใบสลิปเพิ่มเติม 5",
-  additionalSlip6: "ใบสลิปเพิ่มเติม 6"
+  vehiclePhotos: "รูปรถ 4 มุม",
+  paymentSlips: "เงินจอง / สลิปตัดยอด",
+  salesDocuments: "เอกสารขาย"
 };
 
 const bookingAttachmentLabels: Record<BookingAttachment["category"], string> = {
@@ -70,13 +40,7 @@ const bookingAttachmentLabels: Record<BookingAttachment["category"], string> = {
 };
 
 const vehiclePhotoCategories = new Set<SalesAttachmentCategory>([
-  "carFrontLeft",
-  "carFrontRight",
-  "carRearLeft",
-  "carRearRight",
-  "vanSeatFront",
-  "vanSeatRear",
-  "odometer"
+  "vehiclePhotos"
 ]);
 
 const blankForm: SalesReportInput = {
@@ -219,8 +183,6 @@ export default function SalesReportsPage() {
   const [results, setResults] = useState<BookingReport[]>([]);
   const [form, setForm] = useState<SalesReportInput>(blankForm);
   const [selectedBooking, setSelectedBooking] = useState<BookingReport | null>(null);
-  const [vehiclePhotoMode, setVehiclePhotoMode] = useState<VehiclePhotoMode>("standard");
-  const [showMoreSlips, setShowMoreSlips] = useState(false);
   const [salesFiles, setSalesFiles] = useState<Partial<Record<SalesAttachmentCategory, LocalAttachment[]>>>({});
   const salesFilesRef = useRef(salesFiles);
   const [searching, setSearching] = useState(false);
@@ -579,82 +541,43 @@ export default function SalesReportsPage() {
               <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="font-bold text-white">รูปรถใหม่สำหรับรายงานขาย</p>
-                    <p className="mt-1 text-xs text-soft">ไม่ใช้รูปรถจากรายงานจอง ให้ถ่าย/เพิ่มรูปใหม่ตามเคสขาย</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setVehiclePhotoMode("standard")}
-                      className={`min-h-10 rounded-lg border px-3 text-sm font-semibold ${vehiclePhotoMode === "standard" ? "border-brand bg-brand text-ink" : "border-line bg-panel text-white"}`}
-                    >
-                      รถทั่วไป
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setVehiclePhotoMode("van")}
-                      className={`min-h-10 rounded-lg border px-3 text-sm font-semibold ${vehiclePhotoMode === "van" ? "border-brand bg-brand text-ink" : "border-line bg-panel text-white"}`}
-                    >
-                      รถตู้
-                    </button>
+                    <p className="font-bold text-white">รูปรถรายงานขาย</p>
+                    <p className="mt-1 text-xs text-soft">รวมซ้ายหน้า ขวาหน้า ซ้ายหลัง ขวาหลังไว้เมนูเดียว และเพิ่มได้หลายรูป</p>
                   </div>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {(["carFrontLeft", "carFrontRight", "carRearLeft", "carRearRight"] as SalesAttachmentCategory[]).map((category) => (
-                    <SalesAttachmentBox
-                      key={category}
-                      category={category}
-                      files={salesFiles[category] || []}
-                      onAdd={addSalesFiles}
-                      onRemove={removeSalesFile}
-                    />
-                  ))}
-                  {vehiclePhotoMode === "van" && (["vanSeatFront", "vanSeatRear", "odometer"] as SalesAttachmentCategory[]).map((category) => (
-                    <SalesAttachmentBox
-                      key={category}
-                      category={category}
-                      files={salesFiles[category] || []}
-                      onAdd={addSalesFiles}
-                      onRemove={removeSalesFile}
-                    />
-                  ))}
+                  <SalesAttachmentBox
+                    category="vehiclePhotos"
+                    helperText="ใส่รูป 4 มุมหลัก และเพิ่มรูปอื่นของรถได้ในเมนูนี้"
+                    files={salesFiles.vehiclePhotos || []}
+                    onAdd={addSalesFiles}
+                    onRemove={removeSalesFile}
+                  />
                 </div>
               </div>
 
               <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
                 <div className="mb-3">
-                  <p className="font-bold text-white">รูปชำระเงิน / ใบเสร็จ / สลิป</p>
-                  <p className="mt-1 text-xs text-soft">พื้นฐานแสดง 2 ใบสลิปเพิ่มเติม และกดแสดงเมนูเพิ่มเติมได้</p>
+                  <p className="font-bold text-white">สลิปและเอกสารขาย</p>
+                  <p className="mt-1 text-xs text-soft">รวมเมนูให้สั้นขึ้น เพิ่มได้หลายรูปต่อหมวด</p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {(["decalPhoto", "kycPhoto", "temporaryReceipt", "bookingTransferSlip", "additionalSlip1", "additionalSlip2"] as SalesAttachmentCategory[]).map((category) => (
-                    <SalesAttachmentBox
-                      key={category}
-                      category={category}
-                      files={salesFiles[category] || []}
-                      onAdd={addSalesFiles}
-                      onRemove={removeSalesFile}
-                    />
-                  ))}
-                  {showMoreSlips && (["additionalSlip3", "additionalSlip4", "additionalSlip5", "additionalSlip6"] as SalesAttachmentCategory[]).map((category) => (
-                    <SalesAttachmentBox
-                      key={category}
-                      category={category}
-                      files={salesFiles[category] || []}
-                      onAdd={addSalesFiles}
-                      onRemove={removeSalesFile}
-                    />
-                  ))}
+                  <SalesAttachmentBox
+                    category="paymentSlips"
+                    helperText="ใส่รูปเงินจองและสลิปตัดยอดได้หลายรูป"
+                    files={salesFiles.paymentSlips || []}
+                    onAdd={addSalesFiles}
+                    onRemove={removeSalesFile}
+                  />
+                  <SalesAttachmentBox
+                    category="salesDocuments"
+                    helperText="รวมลอกลาย ใบรายละเอียดการชำระเงิน/ใบเสร็จชั่วคราว และใบ KYC"
+                    files={salesFiles.salesDocuments || []}
+                    onAdd={addSalesFiles}
+                    onRemove={removeSalesFile}
+                  />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowMoreSlips((current) => !current)}
-                  className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white"
-                >
-                  <ChevronDown size={17} className={showMoreSlips ? "rotate-180 text-brand" : "text-brand"} />
-                  {showMoreSlips ? "ซ่อนสลิปเพิ่มเติม" : "แสดงเมนูเพิ่มเติม"}
-                </button>
               </div>
 
               <button type="submit" disabled={saving || uploading} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink disabled:opacity-70">
@@ -745,11 +668,13 @@ function BookingAttachmentSummary({ attachments }: { attachments: BookingAttachm
 
 function SalesAttachmentBox({
   category,
+  helperText,
   files,
   onAdd,
   onRemove
 }: {
   category: SalesAttachmentCategory;
+  helperText?: string;
   files: LocalAttachment[];
   onAdd: (category: SalesAttachmentCategory, event: ChangeEvent<HTMLInputElement>) => void | Promise<void>;
   onRemove: (category: SalesAttachmentCategory, id: string) => void;
@@ -762,7 +687,7 @@ function SalesAttachmentBox({
       <div className="mb-3 flex items-start justify-between gap-2">
         <div>
           <p className="text-sm font-bold text-white">{salesAttachmentLabels[category]}</p>
-          <p className="mt-1 text-xs text-soft">{files.length ? `${files.length} ไฟล์` : "ยังไม่ได้เพิ่มรูป"}</p>
+          <p className="mt-1 text-xs text-soft">{files.length ? `${files.length} ไฟล์` : helperText || "ยังไม่ได้เพิ่มรูป"}</p>
         </div>
         <ImagePlus size={18} className="shrink-0 text-brand" />
       </div>
