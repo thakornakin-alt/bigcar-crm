@@ -244,7 +244,7 @@ export default function SalesReportsPage() {
         setEmailFields((current) => ({
           ...current,
           ...parsed,
-          to: parsed.to?.trim() || defaultEmailTo,
+          to: defaultEmailTo,
           cc: parsed.cc?.trim() || defaultEmailCc
         }));
       } catch {

@@ -182,7 +182,7 @@ export default function BookingReportsPage() {
         setForm((current) => ({
           ...current,
           ...parsed,
-          emailTo: parsed.emailTo?.trim() || defaultEmailTo,
+          emailTo: defaultEmailTo,
           emailCc: parsed.emailCc?.trim() || defaultEmailCc
         }));
       } catch {
