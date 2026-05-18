@@ -1,4 +1,5 @@
 import type { BookingReportInput } from "@/lib/types";
+import { normalizeCarYear } from "@/lib/format";
 
 function money(value: string) {
   const numeric = Number(String(value || "").replace(/,/g, ""));
@@ -24,7 +25,7 @@ export function renderBookingReport(input: BookingReportInput) {
     `*จองรถยนต์ : ${money(input.bookingPrice)} บาท`,
     `ยี่ห้อรถยนต์ : ${input.brand}`,
     `รุ่น : ${input.model}`,
-    `ปี : ${input.year}`,
+    `ปี : ${normalizeCarYear(input.year)}`,
     `สี : ${input.color}`,
     "",
     `ทะเบียน : ${input.plate}`,

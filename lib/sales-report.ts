@@ -1,4 +1,5 @@
 import type { SalesReportInput } from "@/lib/types";
+import { normalizeCarYear } from "@/lib/format";
 
 function money(value: string) {
   const numeric = Number(String(value || "").replace(/,/g, ""));
@@ -48,7 +49,7 @@ export function renderSalesReport(input: SalesReportInput) {
     `ทะเบียนรถ : ${input.plate}`,
     `ยี่ห้อรถยนต์ : ${input.brand}`,
     `รุ่น : ${input.model}`,
-    `ปีรถ : ${input.year}`,
+    `ปีรถ : ${normalizeCarYear(input.year)}`,
     `สี : ${input.color}`,
     "",
     `ราคาที่ตั้งขาย : ${money(input.salePrice)}`,

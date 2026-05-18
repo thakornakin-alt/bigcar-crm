@@ -4,6 +4,7 @@ import { FormEvent, ReactNode, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, Clipboard, FileText, Loader2, Save, Search } from "lucide-react";
 import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
+import { normalizeCarYear } from "@/lib/format";
 import type { BookingReport, SalesReportInput } from "@/lib/types";
 
 const blankForm: SalesReportInput = {
@@ -70,7 +71,7 @@ function fromBooking(report: BookingReport): SalesReportInput {
     plate: report.plate,
     brand: report.brand,
     model: report.model,
-    year: report.year,
+    year: normalizeCarYear(report.year),
     color: report.color,
     salePrice: report.salePrice,
     finalPrice: report.finalPrice,

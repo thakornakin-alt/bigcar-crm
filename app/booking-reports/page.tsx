@@ -571,6 +571,8 @@ function AttachmentBox({
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onRemove: (index: number) => void;
 }) {
+  const canUseCamera = item.key === "carPhoto" || item.key === "idCard" || item.key === "bookingSlip";
+
   return (
     <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
       <div className="flex items-start justify-between gap-3">
@@ -578,18 +580,19 @@ function AttachmentBox({
           <p className="font-semibold text-white">{item.label}</p>
           <p className="mt-1 text-xs text-soft">{item.hint}</p>
         </div>
-        <label className="flex min-h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border border-brand/50 px-3 text-sm font-semibold text-brand">
-          <Camera size={17} />
-          เพิ่ม
-          <input
-            type="file"
-            multiple
-            accept="image/*,.pdf"
-            capture={item.key === "carPhoto" || item.key === "idCard" ? "environment" : undefined}
-            onChange={onChange}
-            className="sr-only"
-          />
-        </label>
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <label className="flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-brand/50 px-3 text-sm font-semibold text-brand">
+            เพิ่มรูป
+            <input type="file" multiple accept="image/*,.pdf" onChange={onChange} className="sr-only" />
+          </label>
+          {canUseCamera && (
+            <label className="flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line px-3 text-sm font-semibold text-white">
+              <Camera size={17} />
+              ถ่าย
+              <input type="file" multiple accept="image/*" capture="environment" onChange={onChange} className="sr-only" />
+            </label>
+          )}
+        </div>
       </div>
       {files.length > 0 && (
         <div className="mt-3 space-y-2">
