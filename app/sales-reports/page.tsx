@@ -2,10 +2,10 @@
 
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Camera, CheckCircle2, ChevronDown, Clipboard, Eye, FileText, ImagePlus, Loader2, Save, Search, X } from "lucide-react";
+import { ArrowLeft, Camera, CheckCircle2, ChevronDown, Clipboard, Cloud, Eye, FileText, ImagePlus, Loader2, Save, Search, X } from "lucide-react";
 import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
 import { normalizeCarYear } from "@/lib/format";
-import type { BookingAttachment, BookingReport, SalesReportInput } from "@/lib/types";
+import type { BookingAttachment, BookingReport, DriveAttachment, DriveUploadResult, SalesReportInput } from "@/lib/types";
 
 type VehiclePhotoMode = "standard" | "van";
 
@@ -35,6 +35,10 @@ type LocalAttachment = {
   size: number;
   originalSize: number;
   url: string;
+  file: File;
+  driveUrl?: string;
+  fileId?: string;
+  uploadedAt?: string;
 };
 
 const salesAttachmentLabels: Record<SalesAttachmentCategory, string> = {
@@ -132,6 +136,15 @@ function formatFileSize(size: number) {
   return `${Math.max(1, Math.round(size / 1024))} KB`;
 }
 
+function fileToBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+    reader.onerror = () => reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
+    reader.readAsDataURL(file);
+  });
+}
+
 function getCompressionProfile(category: SalesAttachmentCategory) {
   return vehiclePhotoCategories.has(category)
     ? { maxWidth: 1600, quality: 0.8 }
@@ -212,6 +225,9 @@ export default function SalesReportsPage() {
   const salesFilesRef = useRef(salesFiles);
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
+  const [driveFolderUrl, setDriveFolderUrl] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -256,7 +272,8 @@ export default function SalesReportsPage() {
         type: compressedFile.type,
         size: compressedFile.size,
         originalSize: file.size,
-        url: URL.createObjectURL(compressedFile)
+        url: URL.createObjectURL(compressedFile),
+        file: compressedFile
       };
     }));
 
@@ -274,6 +291,84 @@ export default function SalesReportsPage() {
       });
       return { ...current, [category]: remaining };
     });
+  }
+
+  function getAllSalesFiles() {
+    return Object.entries(salesFiles).flatMap(([category, files]) =>
+      (files || []).map((file) => ({ ...file, category: category as SalesAttachmentCategory }))
+    );
+  }
+
+  async function uploadPendingFiles() {
+    const allFiles = getAllSalesFiles();
+    const existingAttachments: DriveAttachment[] = allFiles
+      .filter((file) => file.driveUrl && file.fileId)
+      .map((file) => ({
+        clientId: file.id,
+        category: file.category,
+        label: salesAttachmentLabels[file.category],
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        url: file.driveUrl || "",
+        fileId: file.fileId || "",
+        folderUrl: driveFolderUrl,
+        uploadedAt: file.uploadedAt || ""
+      }));
+    const pendingFiles = allFiles.filter((file) => !file.driveUrl);
+    if (!pendingFiles.length) {
+      return {
+        folderUrl: driveFolderUrl,
+        attachments: existingAttachments
+      };
+    }
+
+    setUploading(true);
+    setUploadProgress(`กำลังเตรียมไฟล์ ${pendingFiles.length} ไฟล์`);
+    const payloadFiles = [];
+
+    for (let index = 0; index < pendingFiles.length; index += 1) {
+      const file = pendingFiles[index];
+      setUploadProgress(`กำลังอ่านไฟล์ ${index + 1}/${pendingFiles.length}: ${salesAttachmentLabels[file.category]}`);
+      payloadFiles.push({
+        clientId: file.id,
+        category: file.category,
+        label: salesAttachmentLabels[file.category],
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        base64: await fileToBase64(file.file)
+      });
+    }
+
+    setUploadProgress("กำลังอัปโหลดเข้า Google Drive");
+    const data = await api<{ result: DriveUploadResult }>("/api/drive/upload", {
+      method: "POST",
+      body: JSON.stringify({
+        reportType: "sales",
+        customerName: form.customerName,
+        plate: form.plate,
+        saleName: form.saleName,
+        files: payloadFiles
+      })
+    });
+
+    const uploadedById = new Map(data.result.attachments.map((attachment) => [attachment.clientId, attachment]));
+    setSalesFiles((current) => {
+      const next: Partial<Record<SalesAttachmentCategory, LocalAttachment[]>> = {};
+      (Object.entries(current) as [SalesAttachmentCategory, LocalAttachment[]][]).forEach(([category, files]) => {
+        next[category] = files.map((file) => {
+          const uploaded = uploadedById.get(file.id);
+          return uploaded ? { ...file, driveUrl: uploaded.url, fileId: uploaded.fileId, uploadedAt: uploaded.uploadedAt } : file;
+        });
+      });
+      return next;
+    });
+    setDriveFolderUrl(data.result.folderUrl);
+    setUploadProgress("อัปโหลด Google Drive สำเร็จ");
+    setUploading(false);
+
+    return { folderUrl: data.result.folderUrl, attachments: [...existingAttachments, ...data.result.attachments] };
   }
 
   async function searchReports(event: FormEvent<HTMLFormElement>) {
@@ -297,16 +392,36 @@ export default function SalesReportsPage() {
     setSaving(true);
     setError("");
     setMessage("");
+    setUploadProgress("");
     try {
+      let uploadResult: DriveUploadResult = { folderUrl: driveFolderUrl, attachments: [] };
+      let uploadWarning = "";
+      try {
+        uploadResult = await uploadPendingFiles();
+      } catch (uploadError) {
+        uploadWarning = uploadError instanceof Error ? uploadError.message : "อัปโหลด Google Drive ไม่สำเร็จ";
+        setUploadProgress("");
+      }
       await api("/api/sales-reports", {
         method: "POST",
-        body: JSON.stringify({ ...form, paymentDetail: buildSalesPaymentDetail(form), reportText })
+        body: JSON.stringify({
+          ...form,
+          attachments: uploadResult.attachments,
+          driveFolderUrl: uploadResult.folderUrl,
+          paymentDetail: buildSalesPaymentDetail(form),
+          reportText
+        })
       });
-      setMessage("บันทึก Draft รายงานขายลง Google Sheets แล้ว");
+      if (uploadWarning) {
+        setError(`${uploadWarning} - บันทึก Draft รายงานขายลง Google Sheets แบบไม่มีไฟล์แนบ Drive แล้ว`);
+      } else {
+        setMessage(uploadResult.attachments.length ? "อัปโหลดรูปเข้า Google Drive และบันทึก Draft รายงานขายแล้ว" : "บันทึก Draft รายงานขายลง Google Sheets แล้ว");
+      }
     } catch (err) {
       window.localStorage.setItem("bigcar-sales-draft-fallback", JSON.stringify({ ...form, paymentDetail: buildSalesPaymentDetail(form), reportText }));
       setError(err instanceof Error ? `${err.message} - บันทึกสำรองในเครื่องแล้ว` : "บันทึกไม่สำเร็จ");
     } finally {
+      setUploading(false);
       setSaving(false);
     }
   }
@@ -445,6 +560,21 @@ export default function SalesReportsPage() {
 
             <Panel title="ไฟล์แนบ Draft รายงานขาย">
               <BookingAttachmentSummary attachments={selectedBooking?.attachments || []} />
+              {(uploadProgress || driveFolderUrl) && (
+                <div className="rounded-lg border border-brand/40 bg-green-950/20 p-3 text-sm text-green-100">
+                  <div className="flex items-start gap-2">
+                    {uploading ? <Loader2 size={18} className="mt-0.5 shrink-0 animate-spin text-brand" /> : <Cloud size={18} className="mt-0.5 shrink-0 text-brand" />}
+                    <div className="min-w-0">
+                      <p className="font-semibold">{uploadProgress || "Google Drive พร้อมใช้งาน"}</p>
+                      {driveFolderUrl && (
+                        <a href={driveFolderUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block truncate text-brand underline">
+                          เปิดโฟลเดอร์ Google Drive
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -527,9 +657,9 @@ export default function SalesReportsPage() {
                 </button>
               </div>
 
-              <button type="submit" disabled={saving} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink">
-                {saving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
-                บันทึก Draft รายงานขาย
+              <button type="submit" disabled={saving || uploading} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink disabled:opacity-70">
+                {saving || uploading ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
+                {uploading ? "กำลังอัปโหลดรูป..." : "บันทึก Draft รายงานขาย"}
               </button>
             </Panel>
           </form>
@@ -659,6 +789,12 @@ function SalesAttachmentBox({
                     <Eye size={14} />
                     เปิดดู
                   </a>
+                  {file.driveUrl && (
+                    <a href={file.driveUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-green-200">
+                      <Cloud size={14} />
+                      Drive
+                    </a>
+                  )}
                   <button type="button" onClick={() => onRemove(category, file.id)} className="inline-flex items-center gap-1 text-xs font-semibold text-red-200">
                     <X size={14} />
                     ลบ

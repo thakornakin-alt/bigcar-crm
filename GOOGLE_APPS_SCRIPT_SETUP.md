@@ -133,6 +133,7 @@ importStock
 getStockImportStatus
 searchBookingReports
 saveSalesReport
+uploadDriveFiles
 ```
 
 ระบบจะสร้างแท็บใหม่เท่านั้น:
@@ -187,8 +188,30 @@ Plate | Brand | Model | Year | Color | SalePrice | Source | Ownership | Project 
 หลัง deploy ให้ทดสอบ:
 
 1. เปิด `https://script.google.com/macros/s/.../exec` ใน browser
-2. ต้องเห็น `version` เป็น `2026-05-18-04`
+2. ต้องเห็น `version` เป็น `2026-05-18-05`
 3. เปิดเว็บ `/booking-reports`
 4. กรอกชื่อผู้ซื้อ, ทะเบียน, Sale แล้วกด `บันทึก Draft`
 5. กลับไปดู Google Sheet ต้องมีแท็บ `BookingReports` และมีข้อมูลแถวใหม่
 6. เปิดเว็บ `/stock-import` แล้วลองอัปโหลดไฟล์ stock เพื่อเติมแท็บ `StockInventory`
+
+## 9. Google Drive Upload สำหรับรายงานขาย
+
+เวอร์ชัน `2026-05-18-05` เพิ่ม action:
+
+```text
+uploadDriveFiles
+```
+
+ระบบจะสร้างโฟลเดอร์ใน Google Drive อัตโนมัติ:
+
+```text
+My Drive / Big Car CRM Uploads / SalesReports / YYYYMMDD-ทะเบียน-ชื่อลูกค้า
+```
+
+แล้วบันทึก URL ไฟล์แนบลงแท็บ `SalesReports` ในคอลัมน์ท้าย:
+
+```text
+AttachmentsJson | DriveFolderUrl
+```
+
+หมายเหตุ: ตอน Deploy Apps Script เวอร์ชันนี้ Google จะขอสิทธิ์ Google Drive เพิ่ม ให้กดอนุญาตด้วยบัญชีที่ต้องการเก็บรูป

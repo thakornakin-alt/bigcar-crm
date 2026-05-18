@@ -37,6 +37,8 @@ function clean(body: Partial<SalesReportInput>): SalesReportInput {
     teamName: String(body.teamName || "").trim(),
     branch: String(body.branch || "").trim(),
     deliveryDate: String(body.deliveryDate || "").trim(),
+    attachments: Array.isArray(body.attachments) ? body.attachments : [],
+    driveFolderUrl: String(body.driveFolderUrl || "").trim(),
     reportText: "",
     status: "draft"
   };

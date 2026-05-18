@@ -110,6 +110,8 @@ export type SalesReportInput = {
   teamName: string;
   branch: string;
   deliveryDate: string;
+  attachments?: DriveAttachment[];
+  driveFolderUrl?: string;
   reportText: string;
   status: "draft" | "staging_preview";
 };
@@ -171,4 +173,40 @@ export type BookingAttachment = {
   name: string;
   type: string;
   size: number;
+};
+
+export type DriveAttachment = {
+  clientId?: string;
+  category: string;
+  label: string;
+  name: string;
+  type: string;
+  size: number;
+  url: string;
+  fileId: string;
+  folderUrl: string;
+  uploadedAt: string;
+};
+
+export type DriveUploadFile = {
+  clientId: string;
+  category: string;
+  label: string;
+  name: string;
+  type: string;
+  size: number;
+  base64: string;
+};
+
+export type DriveUploadInput = {
+  reportType: "sales" | "booking";
+  customerName: string;
+  plate: string;
+  saleName: string;
+  files: DriveUploadFile[];
+};
+
+export type DriveUploadResult = {
+  folderUrl: string;
+  attachments: DriveAttachment[];
 };
