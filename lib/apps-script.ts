@@ -6,6 +6,8 @@ import type {
   CustomerLookup,
   DriveUploadInput,
   DriveUploadResult,
+  EmailDraftInput,
+  EmailDraftResult,
   InterestRate,
   SalesReport,
   SalesReportInput,
@@ -28,7 +30,8 @@ type AppsScriptAction =
   | "getStockImportStatus"
   | "searchBookingReports"
   | "saveSalesReport"
-  | "uploadDriveFiles";
+  | "uploadDriveFiles"
+  | "createSalesEmailDraft";
 
 type AppsScriptResponse<T> =
   | ({ ok: true } & T)
@@ -137,5 +140,10 @@ export async function saveSalesReport(input: SalesReportInput) {
 
 export async function uploadDriveFiles(input: DriveUploadInput) {
   const data = await callAppsScript<{ result: DriveUploadResult }>("uploadDriveFiles", input);
+  return data.result;
+}
+
+export async function createSalesEmailDraft(input: EmailDraftInput) {
+  const data = await callAppsScript<{ result: EmailDraftResult }>("createSalesEmailDraft", input);
   return data.result;
 }

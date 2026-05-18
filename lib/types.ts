@@ -110,6 +110,12 @@ export type SalesReportInput = {
   teamName: string;
   branch: string;
   deliveryDate: string;
+  emailSubject?: string;
+  emailTo?: string;
+  emailCc?: string;
+  emailBcc?: string;
+  emailStatus?: string;
+  emailDraftId?: string;
   attachments?: DriveAttachment[];
   driveFolderUrl?: string;
   reportText: string;
@@ -215,4 +221,20 @@ export type DriveUploadInput = {
 export type DriveUploadResult = {
   folderUrl: string;
   attachments: DriveAttachment[];
+};
+
+export type EmailDraftInput = {
+  reportId?: string;
+  subject: string;
+  to: string;
+  cc?: string;
+  bcc?: string;
+  body: string;
+  attachments?: Array<Pick<DriveAttachment, "fileId" | "name">>;
+};
+
+export type EmailDraftResult = {
+  draftId: string;
+  draftUrl: string;
+  status: string;
 };

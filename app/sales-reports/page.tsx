@@ -2,7 +2,7 @@
 
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Camera, CheckCircle2, Clipboard, Cloud, Eye, FileText, ImagePlus, Loader2, Save, Search, X } from "lucide-react";
+import { ArrowLeft, Camera, CheckCircle2, Clipboard, Cloud, Eye, FileText, ImagePlus, Loader2, Mail, Save, Search, X } from "lucide-react";
 import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
 import { normalizeCarYear } from "@/lib/format";
 import type { BookingAttachment, BookingReport, DriveAttachment, DriveUploadResult, SalesReportInput } from "@/lib/types";
@@ -42,6 +42,11 @@ const bookingAttachmentLabels: Record<BookingAttachment["category"], string> = {
 const vehiclePhotoCategories = new Set<SalesAttachmentCategory>([
   "vehiclePhotos"
 ]);
+
+const saleEmails: Record<string, string> = {
+  "ฐากร": "thakornakin@gmail.com",
+  "กันตา": "kanta.deepal@gmail.com"
+};
 
 const blankForm: SalesReportInput = {
   bookingReportId: "",
@@ -178,6 +183,10 @@ function fromBooking(report: BookingReport): SalesReportInput {
   };
 }
 
+function defaultSalesEmailSubject(input: SalesReportInput) {
+  return ["รายงานขาย", input.customerName, input.model, input.plate].filter(Boolean).join(" - ");
+}
+
 export default function SalesReportsPage() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<BookingReport[]>([]);
@@ -188,12 +197,25 @@ export default function SalesReportsPage() {
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [drafting, setDrafting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
   const [driveFolderUrl, setDriveFolderUrl] = useState("");
+  const [savedReportId, setSavedReportId] = useState("");
+  const [draftUrl, setDraftUrl] = useState("");
+  const [emailFields, setEmailFields] = useState({
+    subject: "",
+    to: "",
+    cc: "",
+    bcc: ""
+  });
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   const reportText = useMemo(() => renderSalesReport({ ...form, reportText: "" }), [form]);
+  const suggestedEmailSubject = useMemo(
+    () => ["รายงานขาย", form.customerName, form.model, form.plate].filter(Boolean).join(" - "),
+    [form.customerName, form.model, form.plate]
+  );
   const paymentMode = form.paymentType.includes("สด")
     ? "cash"
     : form.paymentType.includes("ไฟแนนซ์") || form.paymentType.toLowerCase().includes("finance")
@@ -212,8 +234,28 @@ export default function SalesReportsPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const latest = window.localStorage.getItem("bigcar-sales-email");
+    if (latest) {
+      try {
+        const parsed = JSON.parse(latest) as typeof emailFields;
+        setEmailFields((current) => ({ ...current, ...parsed }));
+      } catch {
+        window.localStorage.removeItem("bigcar-sales-email");
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    setEmailFields((current) => current.subject.trim() ? current : { ...current, subject: suggestedEmailSubject });
+  }, [suggestedEmailSubject]);
+
   function update(field: keyof SalesReportInput, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateEmail(field: keyof typeof emailFields, value: string) {
+    setEmailFields((current) => ({ ...current, [field]: value }));
   }
 
   function selectBooking(report: BookingReport) {
@@ -364,16 +406,21 @@ export default function SalesReportsPage() {
         uploadWarning = uploadError instanceof Error ? uploadError.message : "อัปโหลด Google Drive ไม่สำเร็จ";
         setUploadProgress("");
       }
-      await api("/api/sales-reports", {
+      const data = await api<{ report: { id: string } }>("/api/sales-reports", {
         method: "POST",
         body: JSON.stringify({
           ...form,
+          emailSubject: emailFields.subject,
+          emailTo: emailFields.to,
+          emailCc: emailFields.cc,
+          emailBcc: emailFields.bcc,
           attachments: uploadResult.attachments,
           driveFolderUrl: uploadResult.folderUrl,
           paymentDetail: buildSalesPaymentDetail(form),
           reportText
         })
       });
+      setSavedReportId(data.report.id);
       if (uploadWarning) {
         setError(`${uploadWarning} - บันทึก Draft รายงานขายลง Google Sheets แบบไม่มีไฟล์แนบ Drive แล้ว`);
       } else {
@@ -395,6 +442,58 @@ export default function SalesReportsPage() {
       setError("");
     } catch {
       setError("คัดลอกไม่สำเร็จ กรุณาเลือกข้อความแล้ว copy เอง");
+    }
+  }
+
+  async function createEmailDraft() {
+    setDrafting(true);
+    setError("");
+    setMessage("");
+    setDraftUrl("");
+    try {
+      if (!emailFields.to.trim()) throw new Error("กรุณากรอก To ก่อนสร้าง Gmail Draft");
+
+      let uploadResult: DriveUploadResult = { folderUrl: driveFolderUrl, attachments: [] };
+      try {
+        uploadResult = await uploadPendingFiles();
+      } catch {
+        uploadResult = { folderUrl: driveFolderUrl, attachments: [] };
+      }
+
+      const bookingAttachments = (selectedBooking?.attachments || [])
+        .filter((attachment) => attachment.fileId)
+        .map((attachment) => ({ fileId: attachment.fileId || "", name: attachment.name }));
+      const salesAttachments = uploadResult.attachments
+        .filter((attachment) => attachment.fileId)
+        .map((attachment) => ({ fileId: attachment.fileId, name: attachment.name }));
+
+      window.localStorage.setItem("bigcar-sales-email", JSON.stringify({
+        subject: emailFields.subject,
+        to: emailFields.to,
+        cc: emailFields.cc,
+        bcc: emailFields.bcc
+      }));
+
+      const data = await api<{ result: { draftUrl: string } }>("/api/email/sales-draft", {
+        method: "POST",
+        body: JSON.stringify({
+          reportId: savedReportId,
+          subject: emailFields.subject || defaultSalesEmailSubject(form),
+          to: emailFields.to,
+          cc: emailFields.cc,
+          bcc: emailFields.bcc,
+          body: reportText,
+          attachments: [...bookingAttachments, ...salesAttachments]
+        })
+      });
+
+      setDraftUrl(data.result.draftUrl);
+      setMessage("สร้าง Gmail Draft แล้ว ยังไม่ได้ส่งจริง");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "สร้าง Gmail Draft ไม่สำเร็จ");
+    } finally {
+      setDrafting(false);
+      setUploading(false);
     }
   }
 
@@ -518,6 +617,31 @@ export default function SalesReportsPage() {
                 <TextArea label="รายละเอียดการชำระเงิน" value={form.paymentDetail} onChange={(value) => update("paymentDetail", value)} rows={4} />
               )}
               <TextArea label="เงื่อนไขการขาย" value={form.saleConditions} onChange={(value) => update("saleConditions", value)} rows={4} />
+            </Panel>
+
+            <Panel title="Gmail Draft">
+              <div className="rounded-lg border border-line bg-[#0b0d11] p-3 text-sm text-soft">
+                ผู้ส่งตาม Sale: <span className="font-semibold text-white">{saleEmails[form.saleName] || "ยังไม่พบ mapping"}</span> - สร้างเป็น Draft เท่านั้น ยังไม่ส่งจริง
+              </div>
+              <Field label="หัวข้ออีเมล" value={emailFields.subject} onChange={(value) => updateEmail("subject", value)} />
+              <Field label="To" value={emailFields.to} onChange={(value) => updateEmail("to", value)} placeholder="email1@example.com, email2@example.com" />
+              <Field label="CC" value={emailFields.cc} onChange={(value) => updateEmail("cc", value)} />
+              <Field label="BCC" value={emailFields.bcc} onChange={(value) => updateEmail("bcc", value)} />
+              <button
+                type="button"
+                onClick={createEmailDraft}
+                disabled={drafting || uploading}
+                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-brand/50 bg-[#0b0d11] px-4 font-bold text-brand disabled:opacity-70"
+              >
+                {drafting || uploading ? <Loader2 size={20} className="animate-spin" /> : <Mail size={20} />}
+                {drafting ? "กำลังสร้าง Gmail Draft..." : "สร้าง Gmail Draft"}
+              </button>
+              {draftUrl && (
+                <a href={draftUrl} target="_blank" rel="noreferrer" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink">
+                  <Mail size={20} />
+                  เปิด Gmail Draft
+                </a>
+              )}
             </Panel>
 
             <Panel title="ไฟล์แนบ Draft รายงานขาย">
