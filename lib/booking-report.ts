@@ -49,6 +49,6 @@ export function renderBookingReport(input: BookingReportInput) {
   ].join("\n");
 }
 
-export function buildDefaultBookingSubject(input: Pick<BookingReportInput, "customerName" | "model" | "plate">) {
-  return ["รายงานการจอง", input.customerName, input.model, input.plate].filter(Boolean).join(" - ");
+export function buildDefaultBookingSubject(input: Pick<BookingReportInput, "plate">) {
+  return `จองรถยนต์ทะเบียน ${input.plate || ""}`.trim();
 }

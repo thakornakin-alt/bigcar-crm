@@ -193,13 +193,14 @@ export default function BookingReportsPage() {
 
   useEffect(() => {
     setForm((current) => {
-      if (current.emailSubject.trim()) return current;
+      const subject = current.emailSubject.trim();
+      if (subject && !subject.startsWith("จองรถยนต์ทะเบียน") && !subject.startsWith("รายงานการจอง")) return current;
       return {
         ...current,
         emailSubject: buildDefaultBookingSubject(current)
       };
     });
-  }, [form.customerName, form.model, form.plate]);
+  }, [form.plate]);
 
   useEffect(() => {
     const plate = form.plate.trim();
