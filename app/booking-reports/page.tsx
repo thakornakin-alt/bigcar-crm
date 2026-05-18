@@ -193,8 +193,6 @@ export default function BookingReportsPage() {
 
   useEffect(() => {
     setForm((current) => {
-      const subject = current.emailSubject.trim();
-      if (subject && !subject.startsWith("จองรถยนต์ทะเบียน") && !subject.startsWith("รายงานการจอง")) return current;
       return {
         ...current,
         emailSubject: buildDefaultBookingSubject(current)
@@ -361,6 +359,7 @@ export default function BookingReportsPage() {
 
     const payload: BookingReportInput = {
       ...form,
+      emailSubject: buildDefaultBookingSubject(form),
       year: normalizeCarYear(form.year),
       attachments: uploadResult.attachments.length
         ? uploadResult.attachments
@@ -435,7 +434,7 @@ export default function BookingReportsPage() {
         method: "POST",
         body: JSON.stringify({
           reportId: savedReportId,
-          subject: form.emailSubject || buildDefaultBookingSubject(form),
+          subject: buildDefaultBookingSubject(form),
           to: form.emailTo,
           cc: form.emailCc,
           bcc: form.emailBcc,
@@ -586,7 +585,7 @@ export default function BookingReportsPage() {
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs text-soft">
               ผู้ส่งตาม Sale: {senderEmail || "ยังไม่พบ mapping"} - สร้างเป็น Draft เท่านั้น ยังไม่ส่งจริง
             </p>
-            <Field label="หัวข้ออีเมล" value={form.emailSubject} onChange={(value) => update("emailSubject", value)} />
+            <Field label="หัวข้ออีเมล" value={buildDefaultBookingSubject(form)} onChange={() => undefined} />
             <Field label="To" value={form.emailTo} onChange={(value) => update("emailTo", value)} placeholder="email1@example.com, email2@example.com" />
             <Field label="CC" value={form.emailCc} onChange={(value) => update("emailCc", value)} />
             <Field label="BCC" value={form.emailBcc} onChange={(value) => update("emailBcc", value)} />
