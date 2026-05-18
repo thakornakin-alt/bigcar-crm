@@ -32,6 +32,8 @@ type LocalAttachment = {
   id: string;
   name: string;
   type: string;
+  size: number;
+  originalSize: number;
   url: string;
 };
 
@@ -62,6 +64,16 @@ const bookingAttachmentLabels: Record<BookingAttachment["category"], string> = {
   idCard: "รูปบัตรประชาชน",
   companyCertificate: "รูปหนังสือรับรองบริษัท"
 };
+
+const vehiclePhotoCategories = new Set<SalesAttachmentCategory>([
+  "carFrontLeft",
+  "carFrontRight",
+  "carRearLeft",
+  "carRearRight",
+  "vanSeatFront",
+  "vanSeatRear",
+  "odometer"
+]);
 
 const blankForm: SalesReportInput = {
   bookingReportId: "",
@@ -113,6 +125,52 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
 
 function numericOnly(value: string) {
   return value.replace(/[^\d]/g, "");
+}
+
+function formatFileSize(size: number) {
+  if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(size / 1024))} KB`;
+}
+
+function getCompressionProfile(category: SalesAttachmentCategory) {
+  return vehiclePhotoCategories.has(category)
+    ? { maxWidth: 1600, quality: 0.8 }
+    : { maxWidth: 2000, quality: 0.86 };
+}
+
+async function compressImageFile(file: File, category: SalesAttachmentCategory): Promise<File> {
+  if (!file.type.startsWith("image/") || file.type === "image/gif" || file.type === "image/svg+xml") return file;
+
+  const image = new Image();
+  const sourceUrl = URL.createObjectURL(file);
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("โหลดรูปไม่สำเร็จ"));
+      image.src = sourceUrl;
+    });
+
+    const { maxWidth, quality } = getCompressionProfile(category);
+    const scale = Math.min(1, maxWidth / image.width);
+    const width = Math.max(1, Math.round(image.width * scale));
+    const height = Math.max(1, Math.round(image.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+    context.drawImage(image, 0, 0, width, height);
+
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+    if (!blob || blob.size >= file.size) return file;
+
+    const safeName = file.name.replace(/\.[^.]+$/, "") || "photo";
+    return new File([blob], `${safeName}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
 }
 
 function fromBooking(report: BookingReport): SalesReportInput {
@@ -185,22 +243,27 @@ export default function SalesReportsPage() {
     setForm(fromBooking(report));
   }
 
-  function addSalesFiles(category: SalesAttachmentCategory, event: ChangeEvent<HTMLInputElement>) {
+  async function addSalesFiles(category: SalesAttachmentCategory, event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files || []);
+    event.target.value = "";
     if (!files.length) return;
 
-    const nextFiles = files.map((file) => ({
-      id: `${category}-${file.name}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
-      name: file.name,
-      type: file.type,
-      url: URL.createObjectURL(file)
+    const nextFiles = await Promise.all(files.map(async (file) => {
+      const compressedFile = await compressImageFile(file, category);
+      return {
+        id: `${category}-${compressedFile.name}-${compressedFile.lastModified}-${Math.random().toString(36).slice(2)}`,
+        name: compressedFile.name,
+        type: compressedFile.type,
+        size: compressedFile.size,
+        originalSize: file.size,
+        url: URL.createObjectURL(compressedFile)
+      };
     }));
 
     setSalesFiles((current) => ({
       ...current,
       [category]: [...(current[category] || []), ...nextFiles]
     }));
-    event.target.value = "";
   }
 
   function removeSalesFile(category: SalesAttachmentCategory, id: string) {
@@ -543,7 +606,7 @@ function SalesAttachmentBox({
 }: {
   category: SalesAttachmentCategory;
   files: LocalAttachment[];
-  onAdd: (category: SalesAttachmentCategory, event: ChangeEvent<HTMLInputElement>) => void;
+  onAdd: (category: SalesAttachmentCategory, event: ChangeEvent<HTMLInputElement>) => void | Promise<void>;
   onRemove: (category: SalesAttachmentCategory, id: string) => void;
 }) {
   const addId = `${category}-add`;
@@ -587,6 +650,10 @@ function SalesAttachmentBox({
               )}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold text-white">{file.name}</p>
+                <p className="mt-1 text-[11px] text-soft">
+                  {formatFileSize(file.size)}
+                  {file.originalSize > file.size ? ` จาก ${formatFileSize(file.originalSize)}` : ""}
+                </p>
                 <div className="mt-1 flex gap-2">
                   <a href={file.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-brand">
                     <Eye size={14} />
