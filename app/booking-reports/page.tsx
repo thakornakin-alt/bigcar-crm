@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Clipboard,
   ClipboardList,
+  Cloud,
   FileText,
   Loader2,
   Mail,
@@ -18,7 +19,7 @@ import {
   Upload
 } from "lucide-react";
 import { buildDefaultBookingSubject, renderBookingReport } from "@/lib/booking-report";
-import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, StockVehicle } from "@/lib/types";
+import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, DriveUploadResult, StockVehicle } from "@/lib/types";
 
 const saleEmails: Record<string, string> = {
   "ฐากร": "thakornakin@gmail.com",
@@ -87,6 +88,48 @@ function numericOnly(value: string) {
   return value.replace(/[^\d]/g, "");
 }
 
+function isBookingAttachmentCategory(value: string): value is BookingAttachmentCategory {
+  return attachmentLabels.some((item) => item.key === value);
+}
+
+function fileToBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+    reader.onerror = () => reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function compressBookingImage(file: File): Promise<File> {
+  if (!file.type.startsWith("image/") || file.type === "image/gif" || file.type === "image/svg+xml") return file;
+  const image = new Image();
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("โหลดรูปไม่สำเร็จ"));
+      image.src = sourceUrl;
+    });
+    const maxWidth = 2000;
+    const scale = Math.min(1, maxWidth / image.width);
+    const width = Math.max(1, Math.round(image.width * scale));
+    const height = Math.max(1, Math.round(image.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+    context.drawImage(image, 0, 0, width, height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.86));
+    if (!blob || blob.size >= file.size) return file;
+    const safeName = file.name.replace(/\.[^.]+$/, "") || "booking-photo";
+    return new File([blob], `${safeName}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
+
 function fillIfEmpty(current: BookingReportInput, vehicle: StockVehicle): BookingReportInput {
   return {
     ...current,
@@ -112,8 +155,11 @@ export default function BookingReportsPage() {
     companyCertificate: []
   });
   const [lookupStatus, setLookupStatus] = useState("");
+  const [driveFolderUrl, setDriveFolderUrl] = useState("");
+  const [uploadProgress, setUploadProgress] = useState("");
   const [copying, setCopying] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -233,15 +279,75 @@ export default function BookingReportsPage() {
     );
   }
 
+  async function uploadBookingFiles(): Promise<DriveUploadResult> {
+    const items = attachmentLabels.flatMap(({ key, label }) =>
+      attachmentFiles[key].map((file, index) => ({ category: key, label, file, index }))
+    );
+
+    if (!items.length) return { folderUrl: driveFolderUrl, attachments: [] };
+
+    setUploading(true);
+    setUploadProgress(`กำลังเตรียมไฟล์ ${items.length} ไฟล์`);
+    const files = [];
+
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index];
+      setUploadProgress(`กำลังอ่านไฟล์ ${index + 1}/${items.length}: ${item.label}`);
+      const compressedFile = await compressBookingImage(item.file);
+      files.push({
+        clientId: `${item.category}-${item.index}-${compressedFile.name}-${compressedFile.lastModified}`,
+        category: item.category,
+        label: item.label,
+        name: compressedFile.name,
+        type: compressedFile.type || "application/octet-stream",
+        size: compressedFile.size,
+        base64: await fileToBase64(compressedFile)
+      });
+    }
+
+    setUploadProgress("กำลังอัปโหลดรูปจองเข้า Google Drive");
+    const data = await readJson<{ result: DriveUploadResult }>("/api/drive/upload", {
+      method: "POST",
+      body: JSON.stringify({
+        reportType: "booking",
+        customerName: form.customerName,
+        plate: form.plate,
+        saleName: form.saleName,
+        files
+      })
+    });
+
+    setDriveFolderUrl(data.result.folderUrl);
+    setUploadProgress("อัปโหลด Google Drive สำเร็จ");
+    setUploading(false);
+    return data.result;
+  }
+
   async function saveDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setError("");
     setMessage("");
+    setUploadProgress("");
+
+    let uploadResult: DriveUploadResult = { folderUrl: driveFolderUrl, attachments: [] };
+    let uploadWarning = "";
+
+    try {
+      uploadResult = await uploadBookingFiles();
+    } catch (uploadError) {
+      uploadWarning = uploadError instanceof Error ? uploadError.message : "อัปโหลด Google Drive ไม่สำเร็จ";
+      setUploadProgress("");
+      setUploading(false);
+    }
 
     const payload: BookingReportInput = {
       ...form,
-      attachments: buildAttachments(),
+      attachments: uploadResult.attachments.length
+        ? uploadResult.attachments
+            .filter((attachment) => isBookingAttachmentCategory(attachment.category))
+            .map((attachment) => ({ ...attachment, category: attachment.category as BookingAttachmentCategory }))
+        : buildAttachments(),
       reportText,
       status: "draft"
     };
@@ -260,7 +366,11 @@ export default function BookingReportsPage() {
         method: "POST",
         body: JSON.stringify(payload)
       });
-      setMessage("บันทึก Draft ลง Google Sheets แล้ว ยังไม่มีการส่ง Email/LINE จริง");
+      if (uploadWarning) {
+        setError(`${uploadWarning} - บันทึก Draft ลง Google Sheets แบบไม่มีไฟล์ Drive แล้ว`);
+      } else {
+        setMessage(uploadResult.attachments.length ? "อัปโหลดรูปเข้า Google Drive และบันทึก Draft รายงานจองแล้ว" : "บันทึก Draft ลง Google Sheets แล้ว ยังไม่มีการส่ง Email/LINE จริง");
+      }
     } catch (err) {
       window.localStorage.setItem("bigcar-booking-draft-fallback", JSON.stringify(payload));
       setError(
@@ -269,6 +379,7 @@ export default function BookingReportsPage() {
           : "บันทึก Google Sheets ไม่สำเร็จ - บันทึก draft สำรองในเครื่องนี้แล้ว"
       );
     } finally {
+      setUploading(false);
       setSaving(false);
     }
   }
@@ -410,6 +521,21 @@ export default function BookingReportsPage() {
           </Panel>
 
           <Panel title="ไฟล์แนบ Draft" icon={<Paperclip size={18} />}>
+            {(uploadProgress || driveFolderUrl) && (
+              <div className="rounded-lg border border-brand/40 bg-green-950/20 p-3 text-sm text-green-100">
+                <div className="flex items-start gap-2">
+                  {uploading ? <Loader2 size={18} className="mt-0.5 shrink-0 animate-spin text-brand" /> : <Cloud size={18} className="mt-0.5 shrink-0 text-brand" />}
+                  <div className="min-w-0">
+                    <p className="font-semibold">{uploadProgress || "Google Drive พร้อมใช้งาน"}</p>
+                    {driveFolderUrl && (
+                      <a href={driveFolderUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block truncate text-brand underline">
+                        เปิดโฟลเดอร์ Google Drive
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="space-y-3">
               {attachmentLabels.map((item) => (
                 <AttachmentBox
@@ -446,14 +572,25 @@ export default function BookingReportsPage() {
             </pre>
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || uploading}
               className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-3 text-base font-bold text-ink"
             >
-              {saving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
-              บันทึก Draft
+              {saving || uploading ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
+              {uploading ? "กำลังอัปโหลดรูป..." : "บันทึก Draft"}
             </button>
+            {driveFolderUrl && (
+              <a
+                href={driveFolderUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-brand/50 bg-[#0b0d11] px-4 py-3 text-base font-bold text-brand"
+              >
+                <Cloud size={20} />
+                เปิดโฟลเดอร์ Google Drive
+              </a>
+            )}
             <p className="mt-3 text-xs leading-5 text-soft">
-              ปุ่มนี้ยังไม่ส่ง Email หรือ LINE จริง ระบบจะบันทึกข้อมูลรายงานและ metadata ไฟล์แนบไว้เพื่อทดสอบก่อนขึ้น production
+              ปุ่มนี้ยังไม่ส่ง Email หรือ LINE จริง ระบบจะอัปโหลดไฟล์แนบเข้า Google Drive และบันทึก Draft ไว้ก่อน
             </p>
           </section>
         </aside>

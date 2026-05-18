@@ -638,7 +638,7 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
 }
 
 function BookingAttachmentSummary({ attachments }: { attachments: BookingAttachment[] }) {
-  const visibleAttachments = attachments.filter((attachment) => attachment.category !== "carPhoto");
+  const visibleAttachments = attachments;
 
   return (
     <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
@@ -655,7 +655,14 @@ function BookingAttachmentSummary({ attachments }: { attachments: BookingAttachm
             <div key={`${attachment.category}-${attachment.name}-${index}`} className="rounded-lg border border-line bg-panel p-3">
               <p className="text-sm font-semibold text-white">{bookingAttachmentLabels[attachment.category]}</p>
               <p className="mt-1 truncate text-xs text-soft">{attachment.name}</p>
-              <p className="mt-2 text-xs text-amber-100">เปิดรูปจริงได้หลังเปิดระบบ Google Drive upload</p>
+              {attachment.url ? (
+                <a href={attachment.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand">
+                  <Eye size={14} />
+                  เปิดดูจาก Drive
+                </a>
+              ) : (
+                <p className="mt-2 text-xs text-amber-100">ไฟล์เก่ามีเฉพาะชื่อ ยังไม่มี URL จาก Drive</p>
+              )}
             </div>
           ))}
         </div>

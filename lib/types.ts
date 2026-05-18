@@ -169,10 +169,16 @@ export type BookingAttachmentCategory =
   | "companyCertificate";
 
 export type BookingAttachment = {
+  clientId?: string;
   category: BookingAttachmentCategory;
+  label?: string;
   name: string;
   type: string;
   size: number;
+  url?: string;
+  fileId?: string;
+  folderUrl?: string;
+  uploadedAt?: string;
 };
 
 export type DriveAttachment = {
