@@ -19,6 +19,22 @@ function mapFallbackVehicle(vehicle: StockVehicle | null): ApprovalStockVehicle 
   };
 }
 
+function mergeVehicle(primary: ApprovalStockVehicle | null, fallback: ApprovalStockVehicle | null) {
+  if (!primary) return fallback;
+  if (!fallback) return primary;
+  return {
+    plate: primary.plate || fallback.plate,
+    vin: primary.vin || fallback.vin,
+    model: primary.model || fallback.model,
+    registeredYear: primary.registeredYear || fallback.registeredYear,
+    finalGrade: primary.finalGrade || fallback.finalGrade,
+    project: primary.project || fallback.project,
+    program: primary.program || fallback.program,
+    salePrice: primary.salePrice || fallback.salePrice,
+    parkingLocation: primary.parkingLocation || fallback.parkingLocation
+  };
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -34,7 +50,7 @@ export async function GET(request: Request) {
       lookupApprovalBookingByPlate(plate)
     ]);
     const fallbackVehicle = mapFallbackVehicle(fallbackStock);
-    const vehicle = primaryVehicle?.vin ? primaryVehicle : primaryVehicle || fallbackVehicle;
+    const vehicle = mergeVehicle(primaryVehicle, fallbackVehicle);
 
     return NextResponse.json({ vehicle, booking });
   } catch (error) {
