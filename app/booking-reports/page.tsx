@@ -19,6 +19,7 @@ import {
   Upload
 } from "lucide-react";
 import { buildDefaultBookingSubject, renderBookingReport } from "@/lib/booking-report";
+import { normalizeCarYear } from "@/lib/format";
 import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, DriveUploadResult, StockVehicle } from "@/lib/types";
 
 const saleEmails: Record<string, string> = {
@@ -135,7 +136,7 @@ function fillIfEmpty(current: BookingReportInput, vehicle: StockVehicle): Bookin
     ...current,
     brand: current.brand || vehicle.brand,
     model: current.model || vehicle.model,
-    year: current.year || vehicle.year,
+    year: current.year || normalizeCarYear(vehicle.year),
     color: current.color || vehicle.color,
     salePrice: current.salePrice || numericOnly(vehicle.salePrice),
     source: current.source || vehicle.source,
@@ -343,6 +344,7 @@ export default function BookingReportsPage() {
 
     const payload: BookingReportInput = {
       ...form,
+      year: normalizeCarYear(form.year),
       attachments: uploadResult.attachments.length
         ? uploadResult.attachments
             .filter((attachment) => isBookingAttachmentCategory(attachment.category))
@@ -480,7 +482,7 @@ export default function BookingReportsPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="ยี่ห้อรถยนต์" value={form.brand} onChange={(value) => update("brand", value)} />
               <Field label="รุ่น" value={form.model} onChange={(value) => update("model", value)} />
-              <Field label="ปีรถ" value={form.year} onChange={(value) => update("year", value)} inputMode="numeric" />
+              <Field label="ปีรถ" value={form.year} onChange={(value) => update("year", normalizeCarYear(value))} inputMode="numeric" />
               <Field label="สี" value={form.color} onChange={(value) => update("color", value)} />
             </div>
           </Panel>
