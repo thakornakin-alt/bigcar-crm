@@ -1,7 +1,23 @@
 import { NextResponse } from "next/server";
-import { lookupApprovalBookingByPlate, lookupApprovalStockByPlate } from "@/lib/apps-script";
+import { lookupApprovalBookingByPlate, lookupApprovalStockByPlate, lookupStockByPlate } from "@/lib/apps-script";
+import type { ApprovalStockVehicle, StockVehicle } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+function mapFallbackVehicle(vehicle: StockVehicle | null): ApprovalStockVehicle | null {
+  if (!vehicle) return null;
+  return {
+    plate: vehicle.plate,
+    vin: vehicle.vin || "",
+    model: [vehicle.brand, vehicle.model].filter(Boolean).join(" "),
+    registeredYear: vehicle.year,
+    finalGrade: vehicle.finalGrade || "",
+    project: vehicle.project,
+    program: vehicle.program || vehicle.campaign || "",
+    salePrice: vehicle.salePrice,
+    parkingLocation: vehicle.parkingLocation || ""
+  };
+}
 
 export async function GET(request: Request) {
   try {
@@ -12,10 +28,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ vehicle: null, booking: null });
     }
 
-    const [vehicle, booking] = await Promise.all([
+    const [primaryVehicle, fallbackStock, booking] = await Promise.all([
       lookupApprovalStockByPlate(plate),
+      lookupStockByPlate(plate),
       lookupApprovalBookingByPlate(plate)
     ]);
+    const fallbackVehicle = mapFallbackVehicle(fallbackStock);
+    const vehicle = primaryVehicle?.vin ? primaryVehicle : primaryVehicle || fallbackVehicle;
 
     return NextResponse.json({ vehicle, booking });
   } catch (error) {
