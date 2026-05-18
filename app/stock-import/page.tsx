@@ -50,9 +50,26 @@ function cell(value: unknown) {
 }
 
 function yearOnly(value: unknown) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return String(value.getFullYear());
+  }
+
+  if (typeof value === "number" && value > 25000 && value < 60000) {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (parsed?.y) return String(parsed.y);
+  }
+
   const text = cell(value);
   const match = text.match(/\b(19|20)\d{2}\b/);
-  return match ? match[0] : text.replace(/[^\d]/g, "").slice(-4);
+  if (match) return match[0];
+
+  const numeric = Number(text);
+  if (numeric > 25000 && numeric < 60000) {
+    const parsed = XLSX.SSF.parse_date_code(numeric);
+    if (parsed?.y) return String(parsed.y);
+  }
+
+  return text.replace(/[^\d]/g, "").slice(-4);
 }
 
 function detectMapping(headers: string[]) {
