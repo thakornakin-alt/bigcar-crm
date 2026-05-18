@@ -1,4 +1,8 @@
 import type {
+  ApprovalBooking,
+  ApprovalLogInput,
+  ApprovalStaff,
+  ApprovalStockVehicle,
   BookingReport,
   BookingReportInput,
   Customer,
@@ -35,7 +39,11 @@ type AppsScriptAction =
   | "saveSalesReport"
   | "uploadDriveFiles"
   | "createSalesEmailDraft"
-  | "createBookingEmailDraft";
+  | "createBookingEmailDraft"
+  | "getStaffList"
+  | "lookupByPlate"
+  | "lookupBookingByPlate"
+  | "saveApprovalLog";
 
 type AppsScriptResponse<T> =
   | ({ ok: true } & T)
@@ -165,4 +173,24 @@ export async function createSalesEmailDraft(input: EmailDraftInput) {
 export async function createBookingEmailDraft(input: EmailDraftInput) {
   const data = await callAppsScript<{ result: EmailDraftResult }>("createBookingEmailDraft", input);
   return data.result;
+}
+
+export async function getStaffList() {
+  const data = await callAppsScript<{ staff: ApprovalStaff[] }>("getStaffList");
+  return data.staff;
+}
+
+export async function lookupApprovalStockByPlate(plate: string) {
+  const data = await callAppsScript<{ vehicle: ApprovalStockVehicle | null }>("lookupByPlate", { plate });
+  return data.vehicle;
+}
+
+export async function lookupApprovalBookingByPlate(plate: string) {
+  const data = await callAppsScript<{ booking: ApprovalBooking }>("lookupBookingByPlate", { plate });
+  return data.booking;
+}
+
+export async function saveApprovalLog(input: ApprovalLogInput) {
+  const data = await callAppsScript<{ saved: boolean; timestamp: string }>("saveApprovalLog", input);
+  return data;
 }

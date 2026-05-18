@@ -268,3 +268,37 @@ export type ReportHistoryItem = {
   attachments: Array<BookingAttachment | DriveAttachment>;
   reportText: string;
 };
+
+export type ApprovalStaff = {
+  nickname: string;
+  fullName: string;
+  phone: string;
+  team: string;
+  branch: string;
+};
+
+export type ApprovalStockVehicle = {
+  plate: string;
+  vin: string;
+  model: string;
+  registeredYear: string;
+  finalGrade: string;
+  project: string;
+  program: string;
+  salePrice: string;
+  parkingLocation: string;
+};
+
+export type ApprovalBooking = {
+  plate: string;
+  customerName: string;
+  address: string;
+  phone: string;
+} | null;
+
+export type ApprovalLogInput = {
+  formType: string;
+  plate: string;
+  saleName: string;
+  message: string;
+};
