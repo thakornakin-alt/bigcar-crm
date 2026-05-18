@@ -2,13 +2,24 @@
 
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Clipboard, Cloud, Eye, FileText, Loader2, Mail, Search } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clipboard, Cloud, Eye, FileText, Loader2, Mail, RotateCcw, Search, Trash2 } from "lucide-react";
 import type { ReportHistoryItem, ReportHistoryType } from "@/lib/types";
 
-type FilterType = "all" | ReportHistoryType;
+type FilterType = "all" | ReportHistoryType | "trash";
 
 async function api<T>(url: string): Promise<T> {
   const response = await fetch(url, { cache: "no-store" });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
+
+async function apiPost<T>(url: string, body: Record<string, string>): Promise<T> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Request failed");
   return data;
@@ -20,6 +31,7 @@ function typeLabel(type: ReportHistoryType) {
 
 function statusLabel(value: string) {
   if (!value) return "draft";
+  if (value === "deleted") return "อยู่ในถังขยะ";
   if (value === "draft_created") return "สร้าง Gmail Draft แล้ว";
   if (value === "draft_only") return "Draft เท่านั้น";
   return value;
@@ -32,13 +44,15 @@ export default function ReportHistoryPage() {
   const [selected, setSelected] = useState<ReportHistoryItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [copying, setCopying] = useState(false);
+  const [updating, setUpdating] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   const counts = useMemo(() => ({
     all: reports.length,
     booking: reports.filter((report) => report.type === "booking").length,
-    sales: reports.filter((report) => report.type === "sales").length
+    sales: reports.filter((report) => report.type === "sales").length,
+    trash: reports.filter((report) => report.status === "deleted").length
   }), [reports]);
 
   async function loadReports(nextQuery = query, nextType = type) {
@@ -96,6 +110,30 @@ export default function ReportHistoryPage() {
     }
   }
 
+  async function changeReportStatus(report: ReportHistoryItem, nextStatus: "deleted" | "draft") {
+    const actionText = nextStatus === "deleted" ? "ลบเข้าถังขยะ" : "กู้คืน";
+    const confirmed = window.confirm(`${actionText} ${typeLabel(report.type)} ของ ${report.customerName || report.plate} ใช่ไหม?`);
+    if (!confirmed) return;
+
+    setUpdating(true);
+    setError("");
+    setMessage("");
+    try {
+      await apiPost<{ report: ReportHistoryItem }>("/api/reports/status", {
+        id: report.id,
+        type: report.type,
+        status: nextStatus
+      });
+      setSelected(null);
+      await loadReports(query, type);
+      setMessage(nextStatus === "deleted" ? "ย้ายรายงานเข้าถังขยะแล้ว สามารถกู้คืนได้" : "กู้คืนรายงานแล้ว");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "อัปเดตสถานะไม่สำเร็จ");
+    } finally {
+      setUpdating(false);
+    }
+  }
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-5xl px-4 pb-24 pt-5 sm:px-6">
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -138,11 +176,12 @@ export default function ReportHistoryPage() {
               className="h-12 w-full bg-transparent text-white outline-none placeholder:text-[#6f7785]"
             />
           </label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {([
               ["all", `ทั้งหมด ${counts.all}`],
               ["booking", `จอง ${counts.booking}`],
-              ["sales", `ขาย ${counts.sales}`]
+              ["sales", `ขาย ${counts.sales}`],
+              ["trash", `ถังขยะ ${counts.trash}`]
             ] as Array<[FilterType, string]>).map(([key, label]) => (
               <button
                 key={key}
@@ -189,6 +228,7 @@ export default function ReportHistoryPage() {
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <StatusPill icon={<Mail size={14} />} label={statusLabel(report.emailStatus)} />
+                {report.status === "deleted" && <StatusPill icon={<Trash2 size={14} />} label="ถังขยะ" />}
                 {report.driveFolderUrl && <StatusPill icon={<Cloud size={14} />} label="Drive" />}
                 {!!report.attachments.length && <StatusPill icon={<FileText size={14} />} label={`${report.attachments.length} ไฟล์`} />}
               </div>
@@ -232,6 +272,27 @@ export default function ReportHistoryPage() {
                       <Cloud size={18} />
                       เปิด Drive Folder
                     </a>
+                  )}
+                  {selected.status === "deleted" ? (
+                    <button
+                      type="button"
+                      onClick={() => changeReportStatus(selected, "draft")}
+                      disabled={updating}
+                      className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-brand/50 px-3 font-semibold text-brand disabled:opacity-70"
+                    >
+                      {updating ? <Loader2 size={18} className="animate-spin" /> : <RotateCcw size={18} />}
+                      กู้คืนรายงาน
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => changeReportStatus(selected, "deleted")}
+                      disabled={updating}
+                      className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-red-400/40 bg-red-950/20 px-3 font-semibold text-red-100 disabled:opacity-70"
+                    >
+                      {updating ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
+                      ลบเข้าถังขยะ
+                    </button>
                   )}
                 </div>
 

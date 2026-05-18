@@ -30,6 +30,7 @@ type AppsScriptAction =
   | "importStock"
   | "getStockImportStatus"
   | "listReportHistory"
+  | "updateReportStatus"
   | "searchBookingReports"
   | "saveSalesReport"
   | "uploadDriveFiles"
@@ -134,6 +135,11 @@ export async function getStockImportStatus() {
 export async function listReportHistory(query: string, type: string) {
   const data = await callAppsScript<{ reports: ReportHistoryItem[] }>("listReportHistory", { query, type });
   return data.reports;
+}
+
+export async function updateReportStatus(input: { id: string; type: string; status: string }) {
+  const data = await callAppsScript<{ report: ReportHistoryItem }>("updateReportStatus", input);
+  return data.report;
 }
 
 export async function searchBookingReports(query: string) {
