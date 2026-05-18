@@ -708,7 +708,7 @@ function AttachmentBox({
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onRemove: (index: number) => void;
 }) {
-  const canUseCamera = item.key === "carPhoto" || item.key === "idCard" || item.key === "bookingSlip";
+  const canUseCamera = true;
 
   return (
     <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
