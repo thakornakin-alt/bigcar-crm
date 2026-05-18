@@ -215,6 +215,10 @@ ${plateLines}
 export default function ApprovalFormsPage() {
   const [form, setForm] = useState<ApprovalForm>(blankForm);
   const [staff, setStaff] = useState<ApprovalStaff[]>([]);
+  const [lookupDebug, setLookupDebug] = useState<{
+    booking: ApprovalBooking;
+    vehicle: ApprovalStockVehicle | null;
+  } | null>(null);
   const [lookupStatus, setLookupStatus] = useState("");
   const [loadingLookup, setLoadingLookup] = useState(false);
   const [savingLog, setSavingLog] = useState(false);
@@ -269,16 +273,18 @@ export default function ApprovalFormsPage() {
     setError("");
     setMessage("");
     setLookupStatus("");
+    setLookupDebug(null);
 
     try {
       const data = await api<{ vehicle: ApprovalStockVehicle | null; booking: ApprovalBooking }>(
         `/api/approval/lookup?plate=${encodeURIComponent(plate)}`
       );
+      setLookupDebug({ vehicle: data.vehicle, booking: data.booking });
       applyStock(data.vehicle);
       applyBooking(data.booking);
 
-      if (data.vehicle && data.booking) setLookupStatus("ดึงข้อมูลจาก Stock และ Booking สำเร็จ");
-      else if (data.vehicle) setLookupStatus("ดึงข้อมูลจาก Stock สำเร็จ");
+      if (data.vehicle && data.booking) setLookupStatus(data.vehicle.vin ? "ดึงข้อมูลจาก Stock และ Booking สำเร็จ พร้อมเลขตัวถัง" : "ดึงข้อมูลจาก Stock และ Booking สำเร็จ แต่ยังไม่มีเลขตัวถัง");
+      else if (data.vehicle) setLookupStatus(data.vehicle.vin ? "ดึงข้อมูลจาก Stock สำเร็จ พร้อมเลขตัวถัง" : "ดึงข้อมูลจาก Stock สำเร็จ แต่ยังไม่มีเลขตัวถัง");
       else if (data.booking) setLookupStatus("ดึงข้อมูลจาก Booking สำเร็จ แต่ไม่พบข้อมูลใน Stock");
       else setLookupStatus("ไม่พบข้อมูลใน Stock / Booking สามารถกรอกเองได้");
     } catch (err) {
@@ -333,6 +339,7 @@ export default function ApprovalFormsPage() {
   function clearForm() {
     setForm({ ...blankForm, formType: form.formType });
     setLookupStatus("");
+    setLookupDebug(null);
     setMessage("");
     setError("");
   }
@@ -386,6 +393,17 @@ export default function ApprovalFormsPage() {
                   ค้น Stock
                 </button>
               </div>
+              {lookupDebug && (
+                <div className="mt-3 rounded-lg border border-line bg-[#080a0d] p-3 text-xs text-soft">
+                  <p className="font-semibold text-white">ตรวจข้อมูลที่ระบบดึงกลับมา</p>
+                  <div className="mt-2 grid gap-1">
+                    <p>เจอ Stock: <span className="text-white">{lookupDebug.vehicle ? "ใช่" : "ไม่เจอ"}</span></p>
+                    <p>เลขตัวถัง/Vin: <span className="break-all text-white">{lookupDebug.vehicle?.vin || "-"}</span></p>
+                    <p>รุ่น: <span className="text-white">{lookupDebug.vehicle?.model || "-"}</span></p>
+                    <p>เจอ Booking: <span className="text-white">{lookupDebug.booking ? "ใช่" : "ไม่เจอ"}</span></p>
+                  </div>
+                </div>
+              )}
             </section>
           )}
 
