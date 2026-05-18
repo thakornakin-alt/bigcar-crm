@@ -34,7 +34,7 @@ function getInterestRateSheet(){var s=getNamedSheet(RATE_SHEET_NAME,RATE_HEADERS
 function getUploadFolder(type,plate,name,now){var root=getOrCreateFolder(DriveApp.getRootFolder(),DRIVE_ROOT_FOLDER_NAME),group=getOrCreateFolder(root,String(type)==="booking"?"BookingReports":"SalesReports"),day=Utilities.formatDate(now,TIME_ZONE,"yyyyMMdd"),safe=[day,plate,name].join("-").replace(/[\\\/:*?"<>|#\[\]]/g," ").replace(/\s+/g," ").trim();return getOrCreateFolder(group,safe||day)}
 function getOrCreateFolder(parent,name){var it=parent.getFoldersByName(name);return it.hasNext()?it.next():parent.createFolder(name)}
 function updateSalesEmailStatus(id,subject,to,cc,bcc,status,draftId){if(!id)return;var s=getSalesSheet(),last=s.getLastRow();if(last<=1)return;var ids=s.getRange(2,1,last-1,1).getValues();for(var i=0;i<ids.length;i++){if(String(ids[i][0])===id){s.getRange(i+2,32,1,6).setValues([[subject,to,cc,bcc,status,draftId]]);return}}}
-function authorizeGmail(){var d=GmailApp.createDraft(Session.getActiveUser().getEmail(),"Big Car CRM authorize","authorize");d.deleteDraft();return"ok"}
+function authorizeGmail(){var d=GmailApp.createDraft("thakornakin@gmail.com","Big Car CRM authorize","authorize");d.deleteDraft();return"ok"}
 function safeFileName(name){return String(name||"file").replace(/[\\\/:*?"<>|#\[\]]/g," ").replace(/\s+/g," ").trim()||"file"}
 function getNamedSheet(name,headers){var ss=SpreadsheetApp.openById(SHEET_ID),s=ss.getSheetByName(name);if(!s)s=ss.insertSheet(name);ensureHeaderRow(s,headers);return s}
 function ensureHeaderRow(sheet,headers){var rg=sheet.getRange(1,1,1,headers.length),v=rg.getValues()[0],ok=true;for(var i=0;i<headers.length;i++){if(v[i]!==headers[i]){ok=false;break}}if(!ok)rg.setValues([headers])}
