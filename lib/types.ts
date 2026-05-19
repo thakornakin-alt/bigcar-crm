@@ -309,3 +309,10 @@ export type ApprovalLogInput = {
   saleName: string;
   message: string;
 };
+
+export type LineGroup = {
+  groupId: string;
+  type: string;
+  name: string;
+  lastSeenAt: string;
+};

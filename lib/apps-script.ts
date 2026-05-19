@@ -13,6 +13,7 @@ import type {
   EmailDraftInput,
   EmailDraftResult,
   InterestRate,
+  LineGroup,
   ReportHistoryItem,
   SalesReport,
   SalesReportInput,
@@ -43,7 +44,9 @@ type AppsScriptAction =
   | "getStaffList"
   | "lookupByPlate"
   | "lookupBookingByPlate"
-  | "saveApprovalLog";
+  | "saveApprovalLog"
+  | "saveLineGroup"
+  | "listLineGroups";
 
 type AppsScriptResponse<T> =
   | ({ ok: true } & T)
@@ -193,4 +196,14 @@ export async function lookupApprovalBookingByPlate(plate: string) {
 export async function saveApprovalLog(input: ApprovalLogInput) {
   const data = await callAppsScript<{ saved: boolean; timestamp: string }>("saveApprovalLog", input);
   return data;
+}
+
+export async function saveLineGroup(input: LineGroup) {
+  const data = await callAppsScript<{ group: LineGroup }>("saveLineGroup", input);
+  return data.group;
+}
+
+export async function listLineGroups() {
+  const data = await callAppsScript<{ groups: LineGroup[] }>("listLineGroups");
+  return data.groups;
 }
