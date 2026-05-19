@@ -30,6 +30,7 @@ const saleEmails: Record<string, string> = {
 };
 const defaultEmailTo = "RDDUsedcarBooked@segroup.co.th";
 const defaultEmailCc = "rongsarit.s@tgh.co.th";
+const defaultTeamName = "พี่ลีฟ";
 
 const blankForm: BookingReportInput = {
   customerName: "",
@@ -53,7 +54,7 @@ const blankForm: BookingReportInput = {
   project: "",
   campaign: "",
   saleName: "ฐากร",
-  teamName: "",
+  teamName: defaultTeamName,
   conditions: "",
   emailSubject: "",
   emailTo: defaultEmailTo,

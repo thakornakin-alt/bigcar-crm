@@ -2,10 +2,10 @@
 
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Camera, CheckCircle2, Clipboard, Cloud, Eye, FileText, History, ImagePlus, Loader2, Mail, Save, Search, X } from "lucide-react";
+import { ArrowLeft, Camera, CheckCircle2, Clipboard, Cloud, Eye, FileText, History, ImagePlus, Loader2, Mail, Save, Search, Send, X } from "lucide-react";
 import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
 import { normalizeCarYear } from "@/lib/format";
-import type { BookingAttachment, BookingReport, DriveAttachment, DriveUploadResult, SalesReportInput } from "@/lib/types";
+import type { BookingAttachment, BookingReport, DriveAttachment, DriveUploadResult, LineGroup, SalesReportInput } from "@/lib/types";
 
 type SalesAttachmentCategory =
   | "vehiclePhotos"
@@ -49,6 +49,7 @@ const saleEmails: Record<string, string> = {
 };
 const defaultEmailTo = "RDDUsedcarBooked@segroup.co.th";
 const defaultEmailCc = "rongsarit.s@tgh.co.th";
+const defaultTeamName = "พี่ลีฟ";
 
 const blankForm: SalesReportInput = {
   bookingReportId: "",
@@ -78,7 +79,7 @@ const blankForm: SalesReportInput = {
   paymentDetail: "",
   saleConditions: "",
   saleName: "ฐากร",
-  teamName: "",
+  teamName: defaultTeamName,
   branch: "",
   deliveryDate: "",
   reportText: "",
@@ -181,7 +182,7 @@ function fromBooking(report: BookingReport): SalesReportInput {
     project: report.project,
     saleConditions: report.conditions,
     saleName: report.saleName,
-    teamName: report.teamName
+    teamName: report.teamName || defaultTeamName
   };
 }
 
@@ -212,6 +213,9 @@ export default function SalesReportsPage() {
   });
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [lineGroups, setLineGroups] = useState<LineGroup[]>([]);
+  const [selectedLineGroupId, setSelectedLineGroupId] = useState("");
+  const [sendingLine, setSendingLine] = useState(false);
 
   const reportText = useMemo(() => renderSalesReport({ ...form, reportText: "" }), [form]);
   const suggestedEmailSubject = useMemo(
@@ -251,6 +255,15 @@ export default function SalesReportsPage() {
         window.localStorage.removeItem("bigcar-sales-email");
       }
     }
+  }, []);
+
+  useEffect(() => {
+    api<{ groups: LineGroup[] }>("/api/line/groups")
+      .then((data) => {
+        setLineGroups(data.groups);
+        setSelectedLineGroupId(data.groups[0]?.groupId || "");
+      })
+      .catch(() => setLineGroups([]));
   }, []);
 
   useEffect(() => {
@@ -501,6 +514,31 @@ export default function SalesReportsPage() {
     } finally {
       setDrafting(false);
       setUploading(false);
+    }
+  }
+
+  async function sendLineReport() {
+    setSendingLine(true);
+    setError("");
+    setMessage("");
+
+    try {
+      if (!selectedLineGroupId) throw new Error("กรุณาเลือกกลุ่ม LINE ก่อนส่ง");
+      if (!reportText.trim()) throw new Error("ยังไม่มีข้อความรายงานขายสำหรับส่ง LINE");
+
+      await api("/api/line/test-send", {
+        method: "POST",
+        body: JSON.stringify({
+          groupId: selectedLineGroupId,
+          message: reportText
+        })
+      });
+
+      setMessage("ส่งรายงานขายเข้า LINE แล้ว");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ส่ง LINE ไม่สำเร็จ");
+    } finally {
+      setSendingLine(false);
     }
   }
 
@@ -755,6 +793,35 @@ export default function SalesReportsPage() {
             <pre className="max-h-[68vh] overflow-auto whitespace-pre-wrap rounded-lg border border-line bg-[#0b0d11] p-3 text-sm leading-7 text-white">
               {reportText}
             </pre>
+            <div className="mt-3 grid gap-2">
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">ส่งเข้า LINE กลุ่ม</span>
+                <select
+                  value={selectedLineGroupId}
+                  onChange={(event) => setSelectedLineGroupId(event.target.value)}
+                  className="min-h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none focus:border-brand"
+                >
+                  {lineGroups.length ? (
+                    lineGroups.map((group) => (
+                      <option key={group.groupId} value={group.groupId}>
+                        {group.name || group.groupId}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">ยังไม่พบกลุ่ม LINE</option>
+                  )}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={sendLineReport}
+                disabled={sendingLine || !selectedLineGroupId || !reportText.trim()}
+                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-3 text-base font-bold text-ink disabled:opacity-70"
+              >
+                {sendingLine ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+                {sendingLine ? "กำลังส่ง LINE..." : "ส่ง LINE"}
+              </button>
+            </div>
           </section>
         </aside>
       </div>
