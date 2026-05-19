@@ -2,8 +2,8 @@
 
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Clipboard, Eraser, FileText, Loader2, Search, Save, X } from "lucide-react";
-import type { ApprovalBooking, ApprovalStaff, ApprovalStockVehicle } from "@/lib/types";
+import { ArrowLeft, CheckCircle2, Clipboard, Eraser, FileText, Loader2, Search, Save, Send, X } from "lucide-react";
+import type { ApprovalBooking, ApprovalStaff, ApprovalStockVehicle, LineGroup } from "@/lib/types";
 
 type FormType =
   | "ขอประวัติศูนย์"
@@ -215,6 +215,8 @@ ${plateLines}
 export default function ApprovalFormsPage() {
   const [form, setForm] = useState<ApprovalForm>(blankForm);
   const [staff, setStaff] = useState<ApprovalStaff[]>([]);
+  const [lineGroups, setLineGroups] = useState<LineGroup[]>([]);
+  const [selectedLineGroupId, setSelectedLineGroupId] = useState("");
   const [lookupDebug, setLookupDebug] = useState<{
     booking: ApprovalBooking;
     vehicle: ApprovalStockVehicle | null;
@@ -222,6 +224,7 @@ export default function ApprovalFormsPage() {
   const [lookupStatus, setLookupStatus] = useState("");
   const [loadingLookup, setLoadingLookup] = useState(false);
   const [savingLog, setSavingLog] = useState(false);
+  const [sendingLine, setSendingLine] = useState(false);
   const [copying, setCopying] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -232,6 +235,12 @@ export default function ApprovalFormsPage() {
     api<{ staff: ApprovalStaff[] }>("/api/approval/staff")
       .then((data) => setStaff(data.staff))
       .catch(() => setStaff([]));
+    api<{ groups: LineGroup[] }>("/api/line/groups")
+      .then((data) => {
+        setLineGroups(data.groups);
+        setSelectedLineGroupId(data.groups[0]?.groupId || "");
+      })
+      .catch(() => setLineGroups([]));
   }, []);
 
   function update<K extends keyof ApprovalForm>(field: K, value: ApprovalForm[K]) {
@@ -333,6 +342,37 @@ export default function ApprovalFormsPage() {
       setError(err instanceof Error ? err.message : "บันทึก Log ไม่สำเร็จ");
     } finally {
       setSavingLog(false);
+    }
+  }
+
+  async function sendLine() {
+    setSendingLine(true);
+    setError("");
+    setMessage("");
+
+    try {
+      if (!selectedLineGroupId) throw new Error("กรุณาเลือกกลุ่ม LINE ก่อนส่ง");
+      await api("/api/line/test-send", {
+        method: "POST",
+        body: JSON.stringify({
+          groupId: selectedLineGroupId,
+          message: preview
+        })
+      });
+      await api("/api/approval/logs", {
+        method: "POST",
+        body: JSON.stringify({
+          formType: form.formType,
+          plate: form.formType === "ขอเบิกกุญแจ" ? form.plates || form.plate : form.plate,
+          saleName: form.saleName,
+          message: `[ส่ง LINE] ${preview}`
+        })
+      }).catch(() => undefined);
+      setMessage("ส่งข้อความฟอร์มอนุมัติเข้า LINE แล้ว");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ส่ง LINE ไม่สำเร็จ");
+    } finally {
+      setSendingLine(false);
     }
   }
 
@@ -497,6 +537,28 @@ export default function ApprovalFormsPage() {
             </div>
             <pre className="max-h-[56vh] overflow-auto whitespace-pre-wrap rounded-lg border border-line bg-[#0b0d11] p-3 text-sm leading-7 text-white">{preview}</pre>
             <div className="mt-3 grid gap-2">
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">ส่งเข้า LINE กลุ่ม</span>
+                <select
+                  value={selectedLineGroupId}
+                  onChange={(event) => setSelectedLineGroupId(event.target.value)}
+                  className="min-h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none focus:border-brand"
+                >
+                  {lineGroups.length ? (
+                    lineGroups.map((group) => (
+                      <option key={group.groupId} value={group.groupId}>
+                        {group.name || group.groupId}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">ยังไม่พบกลุ่ม LINE</option>
+                  )}
+                </select>
+              </label>
+              <button type="button" onClick={sendLine} disabled={sendingLine || !selectedLineGroupId || !preview.trim()} className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink disabled:opacity-70">
+                {sendingLine ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+                ส่ง LINE
+              </button>
               <button type="button" onClick={copyPreview} disabled={copying} className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink disabled:opacity-70">
                 {copying ? <Loader2 size={20} className="animate-spin" /> : <Clipboard size={20} />}
                 Copy ข้อความ
