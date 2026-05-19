@@ -526,18 +526,42 @@ export default function SalesReportsPage() {
       if (!selectedLineGroupId) throw new Error("กรุณาเลือกกลุ่ม LINE ก่อนส่ง");
       if (!reportText.trim()) throw new Error("ยังไม่มีข้อความรายงานขายสำหรับส่ง LINE");
 
-      await api("/api/line/test-send", {
+      let uploadResult: DriveUploadResult = { folderUrl: driveFolderUrl, attachments: [] };
+      try {
+        uploadResult = await uploadPendingFiles();
+      } catch {
+        uploadResult = { folderUrl: driveFolderUrl, attachments: [] };
+      }
+
+      const bookingAttachments = (selectedBooking?.attachments || [])
+        .filter((attachment) => attachment.fileId)
+        .map((attachment) => ({
+          name: attachment.name,
+          type: attachment.type,
+          url: attachment.url,
+          fileId: attachment.fileId
+        }));
+      const salesAttachments = uploadResult.attachments.map((attachment) => ({
+        name: attachment.name,
+        type: attachment.type,
+        url: attachment.url,
+        fileId: attachment.fileId
+      }));
+
+      const data = await api<{ result: { imageCount: number; linkCount: number } }>("/api/line/send-report", {
         method: "POST",
         body: JSON.stringify({
           groupId: selectedLineGroupId,
-          message: reportText
+          message: reportText,
+          attachments: [...bookingAttachments, ...salesAttachments]
         })
       });
 
-      setMessage("ส่งรายงานขายเข้า LINE แล้ว");
+      setMessage(`ส่งรายงานขายเข้า LINE แล้ว${data.result.imageCount ? ` พร้อมรูป ${data.result.imageCount} รูป` : ""}${data.result.linkCount ? ` และลิงก์ไฟล์ ${data.result.linkCount} รายการ` : ""}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "ส่ง LINE ไม่สำเร็จ");
     } finally {
+      setUploading(false);
       setSendingLine(false);
     }
   }

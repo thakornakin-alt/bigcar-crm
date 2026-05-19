@@ -494,18 +494,32 @@ export default function BookingReportsPage() {
       if (!selectedLineGroupId) throw new Error("กรุณาเลือกกลุ่ม LINE ก่อนส่ง");
       if (!reportText.trim()) throw new Error("ยังไม่มีข้อความรายงานจองสำหรับส่ง LINE");
 
-      await readJson("/api/line/test-send", {
+      let attachments = uploadedAttachments;
+      if (!attachments.length && Object.values(attachmentFiles).some((files) => files.length > 0)) {
+        const uploadResult = await uploadBookingFiles();
+        attachments = uploadResult.attachments;
+        setUploadedAttachments(uploadResult.attachments);
+      }
+
+      const data = await readJson<{ result: { imageCount: number; linkCount: number } }>("/api/line/send-report", {
         method: "POST",
         body: JSON.stringify({
           groupId: selectedLineGroupId,
-          message: reportText
+          message: reportText,
+          attachments: attachments.map((attachment) => ({
+            name: attachment.name,
+            type: attachment.type,
+            url: attachment.url,
+            fileId: attachment.fileId
+          }))
         })
       });
 
-      setMessage("ส่งรายงานจองเข้า LINE แล้ว");
+      setMessage(`ส่งรายงานจองเข้า LINE แล้ว${data.result.imageCount ? ` พร้อมรูป ${data.result.imageCount} รูป` : ""}${data.result.linkCount ? ` และลิงก์ไฟล์ ${data.result.linkCount} รายการ` : ""}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "ส่ง LINE ไม่สำเร็จ");
     } finally {
+      setUploading(false);
       setSendingLine(false);
     }
   }
@@ -735,7 +749,7 @@ export default function BookingReportsPage() {
               </a>
             )}
             <p className="mt-3 text-xs leading-5 text-soft">
-              บันทึก Draft จะอัปโหลดไฟล์แนบเข้า Google Drive ก่อน ส่วนปุ่ม LINE จะส่งเฉพาะข้อความ Preview นี้เข้ากลุ่มที่เลือก
+              ปุ่ม LINE จะอัปโหลดไฟล์แนบเข้า Google Drive ก่อน แล้วส่งข้อความพร้อมรูปที่ LINE รองรับเข้ากลุ่มที่เลือก
             </p>
           </SectionCard>
         </aside>

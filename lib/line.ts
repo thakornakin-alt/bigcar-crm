@@ -13,6 +13,17 @@ export type LineWebhookEvent = {
 type LinePushMessage = {
   type: "text";
   text: string;
+} | {
+  type: "image";
+  originalContentUrl: string;
+  previewImageUrl: string;
+};
+
+export type LineReportAttachment = {
+  name: string;
+  type: string;
+  url?: string;
+  fileId?: string;
 };
 
 function getLineSecret() {
@@ -59,6 +70,52 @@ export async function getLineGroupName(groupId: string) {
 }
 
 export async function pushLineText(to: string, text: string) {
+  await pushLineMessages(to, [{ type: "text", text }]);
+  return true;
+}
+
+export async function pushLineReport(to: string, text: string, attachments: LineReportAttachment[] = []) {
+  const imageMessages: LinePushMessage[] = attachments
+    .filter((attachment) => attachment.fileId && attachment.type.startsWith("image/"))
+    .map((attachment) => {
+      const imageUrl = buildDriveLineImageUrl(attachment.fileId || "");
+      return {
+        type: "image",
+        originalContentUrl: imageUrl,
+        previewImageUrl: imageUrl
+      };
+    });
+
+  const fileLinks = attachments
+    .filter((attachment) => !attachment.type.startsWith("image/") && attachment.url)
+    .map((attachment) => `${attachment.name}: ${attachment.url}`);
+
+  const firstText = fileLinks.length ? `${text}\n\nไฟล์แนบอื่น:\n${fileLinks.join("\n")}` : text;
+  const sent = await pushLineMessagesInChunks(to, [{ type: "text", text: firstText }, ...imageMessages]);
+
+  return {
+    imageCount: imageMessages.length,
+    linkCount: fileLinks.length,
+    messageCount: sent
+  };
+}
+
+function buildDriveLineImageUrl(fileId: string) {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://bigcar-crm.vercel.app");
+  return `${baseUrl.replace(/\/$/, "")}/api/drive/line-image/${encodeURIComponent(fileId)}`;
+}
+
+async function pushLineMessagesInChunks(to: string, messages: LinePushMessage[]) {
+  let sent = 0;
+  for (let index = 0; index < messages.length; index += 5) {
+    const chunk = messages.slice(index, index + 5);
+    await pushLineMessages(to, chunk);
+    sent += chunk.length;
+  }
+  return sent;
+}
+
+async function pushLineMessages(to: string, messages: LinePushMessage[]) {
   const response = await fetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
     headers: {
@@ -67,7 +124,7 @@ export async function pushLineText(to: string, text: string) {
     },
     body: JSON.stringify({
       to,
-      messages: [{ type: "text", text } satisfies LinePushMessage]
+      messages
     })
   });
 
