@@ -75,14 +75,17 @@ export async function pushLineText(to: string, text: string) {
 }
 
 export async function pushLineReport(to: string, text: string, attachments: LineReportAttachment[] = []) {
-  const imageMessages: LinePushMessage[] = attachments
+  const imageAttachments = attachments
     .filter((attachment) => attachment.fileId && attachment.type.startsWith("image/"))
     .map((attachment) => {
       const imageUrl = buildDriveLineImageUrl(attachment.fileId || "");
       return {
-        type: "image",
-        originalContentUrl: imageUrl,
-        previewImageUrl: imageUrl
+        attachment,
+        message: {
+          type: "image",
+          originalContentUrl: imageUrl,
+          previewImageUrl: imageUrl
+        } satisfies LinePushMessage
       };
     });
 
@@ -91,18 +94,58 @@ export async function pushLineReport(to: string, text: string, attachments: Line
     .map((attachment) => `${attachment.name}: ${attachment.url}`);
 
   const firstText = fileLinks.length ? `${text}\n\nไฟล์แนบอื่น:\n${fileLinks.join("\n")}` : text;
-  const sent = await pushLineMessagesInChunks(to, [{ type: "text", text: firstText }, ...imageMessages]);
+  await pushLineMessages(to, [{ type: "text", text: firstText }]);
+
+  let imageCount = 0;
+  const failedImageLinks: string[] = [];
+
+  for (const image of imageAttachments) {
+    try {
+      await pushLineMessages(to, [image.message]);
+      imageCount += 1;
+    } catch {
+      if (image.attachment.url) {
+        failedImageLinks.push(`${image.attachment.name}: ${image.attachment.url}`);
+      }
+    }
+  }
+
+  if (failedImageLinks.length) {
+    await pushLineMessagesInChunks(
+      to,
+      chunkTextLines("LINE ส่งรูปบางไฟล์ไม่สำเร็จ เปิดดูจากลิงก์นี้แทน:\n", failedImageLinks)
+        .map((lineText) => ({ type: "text", text: lineText }))
+    );
+  }
 
   return {
-    imageCount: imageMessages.length,
-    linkCount: fileLinks.length,
-    messageCount: sent
+    imageCount,
+    failedImageCount: failedImageLinks.length,
+    linkCount: fileLinks.length + failedImageLinks.length,
+    messageCount: 1 + imageCount + failedImageLinks.length
   };
 }
 
 function buildDriveLineImageUrl(fileId: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://bigcar-crm.vercel.app");
-  return `${baseUrl.replace(/\/$/, "")}/api/drive/line-image/${encodeURIComponent(fileId)}`;
+  return `https://lh3.googleusercontent.com/d/${encodeURIComponent(fileId)}=s1600`;
+}
+
+function chunkTextLines(prefix: string, lines: string[]) {
+  const chunks: string[] = [];
+  let current = prefix;
+
+  for (const line of lines) {
+    const next = `${current}${current.endsWith("\n") ? "" : "\n"}${line}`;
+    if (next.length > 4500) {
+      chunks.push(current);
+      current = `${prefix}${line}`;
+    } else {
+      current = next;
+    }
+  }
+
+  if (current.trim()) chunks.push(current);
+  return chunks;
 }
 
 async function pushLineMessagesInChunks(to: string, messages: LinePushMessage[]) {
