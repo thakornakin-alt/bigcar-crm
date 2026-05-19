@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { ArrowLeft, CheckCircle2, Loader2, MessageCircle, RefreshCcw, Send } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Loader2, MessageCircle, Pencil, RefreshCcw, Save, Send } from "lucide-react";
 import { PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
 import type { LineGroup, LineWebhookLog } from "@/lib/types";
 
@@ -24,8 +24,11 @@ export default function LineSettingsPage() {
   const [message, setMessage] = useState("ทดสอบส่งข้อความจาก Big Car CRM");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [editingGroupId, setEditingGroupId] = useState("");
+  const [editingName, setEditingName] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [savingName, setSavingName] = useState(false);
   const [lineStatus, setLineStatus] = useState<{
     config: { hasChannelId: boolean; hasChannelSecret: boolean; hasChannelAccessToken: boolean; webhookUrl: string };
     logs: LineWebhookLog[];
@@ -64,6 +67,39 @@ export default function LineSettingsPage() {
       setError(err instanceof Error ? err.message : "ส่ง LINE ไม่สำเร็จ");
     } finally {
       setSending(false);
+    }
+  }
+
+  function startEditGroup(group: LineGroup) {
+    setEditingGroupId(group.groupId);
+    setEditingName(group.name || group.groupId);
+    setError("");
+    setStatus("");
+  }
+
+  async function saveGroupName(group: LineGroup) {
+    setSavingName(true);
+    setError("");
+    setStatus("");
+
+    try {
+      await api("/api/line/groups", {
+        method: "POST",
+        body: JSON.stringify({
+          groupId: group.groupId,
+          type: group.type,
+          name: editingName,
+          lastSeenAt: group.lastSeenAt
+        })
+      });
+      setEditingGroupId("");
+      setEditingName("");
+      await loadGroups();
+      setStatus("บันทึกชื่อกลุ่ม LINE แล้ว");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "บันทึกชื่อกลุ่มไม่สำเร็จ");
+    } finally {
+      setSavingName(false);
     }
   }
 
@@ -120,20 +156,51 @@ export default function LineSettingsPage() {
           </button>
           {groups.length ? (
             <div className="space-y-2">
-              {groups.map((group) => (
-                <button
-                  type="button"
-                  key={group.groupId}
-                  onClick={() => setSelectedGroupId(group.groupId)}
-                  className={`w-full rounded-lg border p-3 text-left ${
-                    selectedGroupId === group.groupId ? "border-brand bg-[#101720]" : "border-line bg-[#0b0d11]"
-                  }`}
-                >
-                  <p className="font-semibold text-white">{group.name || group.groupId}</p>
-                  <p className="mt-1 break-all text-xs text-soft">{group.groupId}</p>
-                  <p className="mt-1 text-xs text-soft">ล่าสุด: {group.lastSeenAt || "-"}</p>
-                </button>
-              ))}
+              {groups.map((group) => {
+                const isEditing = editingGroupId === group.groupId;
+                return (
+                  <div
+                    key={group.groupId}
+                    className={`rounded-lg border p-3 ${
+                      selectedGroupId === group.groupId ? "border-brand bg-[#101720]" : "border-line bg-[#0b0d11]"
+                    }`}
+                  >
+                    <button type="button" onClick={() => setSelectedGroupId(group.groupId)} className="w-full text-left">
+                      <p className="font-semibold text-white">{group.name || group.groupId}</p>
+                      <p className="mt-1 break-all text-xs text-soft">{group.groupId}</p>
+                      <p className="mt-1 text-xs text-soft">ล่าสุด: {group.lastSeenAt || "-"}</p>
+                    </button>
+                    {isEditing ? (
+                      <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                        <input
+                          value={editingName}
+                          onChange={(event) => setEditingName(event.target.value)}
+                          className="min-h-11 rounded-lg border border-line bg-[#080a0d] px-3 text-white outline-none focus:border-brand"
+                          placeholder="เช่น กลุ่มขออนุมัติ"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => saveGroupName(group)}
+                          disabled={savingName || !editingName.trim()}
+                          className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-3 text-sm font-bold text-ink disabled:opacity-60"
+                        >
+                          {savingName ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                          Save
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => startEditGroup(group)}
+                        className="mt-3 flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line px-3 text-sm font-semibold text-white"
+                      >
+                        <Pencil size={16} className="text-brand" />
+                        แก้ชื่อกลุ่ม
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-8 text-center text-sm text-soft">
