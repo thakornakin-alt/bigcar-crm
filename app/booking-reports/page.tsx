@@ -1,7 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -20,6 +19,7 @@ import {
   Upload
 } from "lucide-react";
 import { buildDefaultBookingSubject, renderBookingReport } from "@/lib/booking-report";
+import { PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
 import { normalizeCarYear } from "@/lib/format";
 import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, DriveAttachment, DriveUploadResult, StockVehicle } from "@/lib/types";
 
@@ -472,44 +472,27 @@ export default function BookingReportsPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-5xl px-4 pb-24 pt-5 sm:px-6">
-      <header className="mb-5 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">รายงานจอง</h1>
-          <p className="mt-1 text-sm text-soft">Staging / Draft / Preview เท่านั้น ยังไม่ส่ง Email หรือ LINE จริง</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Link
-            href="/stock-import"
-            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
-          >
-            <Upload size={18} className="text-brand" aria-hidden="true" />
-            Stock
-          </Link>
-          <Link
-            href="/sales-reports"
-            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
-          >
-            <FileText size={18} className="text-brand" aria-hidden="true" />
-            ขาย
-          </Link>
-          <Link
-            href="/report-history"
-            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
-          >
-            <History size={18} className="text-brand" aria-hidden="true" />
-            ประวัติ
-          </Link>
-          <Link
-            href="/"
-            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
-          >
-            <ArrowLeft size={18} className="text-brand" aria-hidden="true" />
-            ลูกค้า
-          </Link>
-        </div>
-      </header>
+    <PageContainer wide>
+      <PageTitle
+        title="รายงานจอง"
+        subtitle="Staging / Draft / Preview เท่านั้น ยังไม่ส่ง Email หรือ LINE จริง"
+        actions={
+          <>
+            <TopMenuButton href="/stock-import" icon={<Upload size={18} />}>
+              Stock
+            </TopMenuButton>
+            <TopMenuButton href="/sales-reports" icon={<FileText size={18} />}>
+              ขาย
+            </TopMenuButton>
+            <TopMenuButton href="/report-history" icon={<History size={18} />}>
+              ประวัติ
+            </TopMenuButton>
+            <TopMenuButton href="/" icon={<ArrowLeft size={18} />}>
+              ลูกค้า
+            </TopMenuButton>
+          </>
+        }
+      />
 
       {(message || error || companyWarning) && (
         <div
@@ -526,7 +509,7 @@ export default function BookingReportsPage() {
 
       <form onSubmit={saveDraft} className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
         <div className="space-y-4">
-          <Panel title="ข้อมูลลูกค้า" icon={<ClipboardList size={18} />}>
+          <SectionCard title="ข้อมูลลูกค้า" icon={<ClipboardList size={18} />}>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -551,9 +534,9 @@ export default function BookingReportsPage() {
             <Field label="เลขบัตรประชาชน" value={form.idCard} onChange={(value) => update("idCard", value)} inputMode="numeric" />
             <Field label="เบอร์โทร" value={form.phone} onChange={(value) => update("phone", value)} inputMode="tel" />
             <TextArea label="ที่อยู่จัดส่งเอกสาร" value={form.address} onChange={(value) => update("address", value)} rows={3} />
-          </Panel>
+          </SectionCard>
 
-          <Panel title="ข้อมูลรถ" icon={<Search size={18} />}>
+          <SectionCard title="ข้อมูลรถ" icon={<Search size={18} />}>
             <Field label="ทะเบียนรถ" value={form.plate} onChange={(value) => update("plate", value)} required />
             {lookupStatus && <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs text-soft">{lookupStatus}</p>}
             <div className="grid gap-3 sm:grid-cols-2">
@@ -562,9 +545,9 @@ export default function BookingReportsPage() {
               <Field label="ปีรถ" value={form.year} onChange={(value) => update("year", normalizeCarYear(value))} inputMode="numeric" />
               <Field label="สี" value={form.color} onChange={(value) => update("color", value)} />
             </div>
-          </Panel>
+          </SectionCard>
 
-          <Panel title="ข้อมูลราคา" icon={<FileText size={18} />}>
+          <SectionCard title="ข้อมูลราคา" icon={<FileText size={18} />}>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="จองรถยนต์" value={form.bookingPrice} onChange={(value) => updateMoney("bookingPrice", value)} inputMode="numeric" />
               <Field label="ราคาที่ตั้งขาย" value={form.salePrice} onChange={(value) => updateMoney("salePrice", value)} inputMode="numeric" />
@@ -573,9 +556,9 @@ export default function BookingReportsPage() {
             </div>
             <Field label="หมายเหตุราคาที่ขาย" value={form.finalPriceNote} onChange={(value) => update("finalPriceNote", value)} placeholder="เช่น ส่วนลด 4,000" />
             <Field label="การชำระเงิน" value={form.paymentType} onChange={(value) => update("paymentType", value)} placeholder="เงินสด / ไฟแนนซ์" />
-          </Panel>
+          </SectionCard>
 
-          <Panel title="การตลาดและ Sale" icon={<Mail size={18} />}>
+          <SectionCard title="การตลาดและ Sale" icon={<Mail size={18} />}>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="แหล่งที่มา" value={form.source} onChange={(value) => update("source", value)} />
               <Field label="กรรมสิทธิ์" value={form.ownership} onChange={(value) => update("ownership", value)} />
@@ -587,9 +570,9 @@ export default function BookingReportsPage() {
               <Field label="ทีม" value={form.teamName} onChange={(value) => update("teamName", value)} placeholder="เช่น พี่ลีฟ" />
             </div>
             <TextArea label="เงื่อนไข" value={form.conditions} onChange={(value) => update("conditions", value)} rows={5} />
-          </Panel>
+          </SectionCard>
 
-          <Panel title="Gmail Draft" icon={<Mail size={18} />}>
+          <SectionCard title="Gmail Draft" icon={<Mail size={18} />}>
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs text-soft">
               ผู้ส่งตาม Sale: {senderEmail || "ยังไม่พบ mapping"} - สร้างเป็น Draft เท่านั้น ยังไม่ส่งจริง
             </p>
@@ -612,9 +595,9 @@ export default function BookingReportsPage() {
                 เปิด Gmail Draft
               </a>
             )}
-          </Panel>
+          </SectionCard>
 
-          <Panel title="ไฟล์แนบ Draft" icon={<Paperclip size={18} />}>
+          <SectionCard title="ไฟล์แนบ Draft" icon={<Paperclip size={18} />}>
             {(uploadProgress || driveFolderUrl) && (
               <div className="rounded-lg border border-brand/40 bg-green-950/20 p-3 text-sm text-green-100">
                 <div className="flex items-start gap-2">
@@ -641,11 +624,11 @@ export default function BookingReportsPage() {
                 />
               ))}
             </div>
-          </Panel>
+          </SectionCard>
         </div>
 
         <aside className="lg:sticky lg:top-4 lg:self-start">
-          <section className="rounded-lg border border-line bg-panel p-4 shadow-glow">
+          <SectionCard>
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-bold text-white">Preview รายงาน</h2>
@@ -686,22 +669,10 @@ export default function BookingReportsPage() {
             <p className="mt-3 text-xs leading-5 text-soft">
               ปุ่มนี้ยังไม่ส่ง Email หรือ LINE จริง ระบบจะอัปโหลดไฟล์แนบเข้า Google Drive และบันทึก Draft ไว้ก่อน
             </p>
-          </section>
+          </SectionCard>
         </aside>
       </form>
-    </main>
-  );
-}
-
-function Panel({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
-  return (
-    <section className="rounded-lg border border-line bg-panel p-4 shadow-glow">
-      <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-white">
-        <span className="text-brand">{icon}</span>
-        {title}
-      </h2>
-      <div className="space-y-3">{children}</div>
-    </section>
+    </PageContainer>
   );
 }
 
