@@ -494,6 +494,15 @@ export default function BookingReportsPage() {
       if (!selectedLineGroupId) throw new Error("กรุณาเลือกกลุ่ม LINE ก่อนส่ง");
       if (!reportText.trim()) throw new Error("ยังไม่มีข้อความรายงานจองสำหรับส่ง LINE");
 
+      await readJson("/api/line/test-send", {
+        method: "POST",
+        body: JSON.stringify({
+          groupId: selectedLineGroupId,
+          message: reportText
+        })
+      });
+      setMessage("ส่งข้อความรายงานจองเข้า LINE แล้ว กำลังจัดการรูปแนบ...");
+
       let attachments = uploadedAttachments;
       let uploadWarning = "";
       if (!attachments.length && Object.values(attachmentFiles).some((files) => files.length > 0)) {
@@ -512,7 +521,7 @@ export default function BookingReportsPage() {
           method: "POST",
           body: JSON.stringify({
             groupId: selectedLineGroupId,
-            message: reportText,
+            message: "รูปแนบรายงานจอง",
             attachments: attachments.map((attachment) => ({
               name: attachment.name,
               type: attachment.type,
@@ -524,13 +533,6 @@ export default function BookingReportsPage() {
 
         setMessage(`ส่งรายงานจองเข้า LINE แล้ว${data.result.imageCount ? ` พร้อมรูป ${data.result.imageCount} รูป` : ""}${data.result.linkCount ? ` และลิงก์ไฟล์ ${data.result.linkCount} รายการ` : ""}${uploadWarning ? ` (${uploadWarning})` : ""}`);
       } catch (sendError) {
-        await readJson("/api/line/test-send", {
-          method: "POST",
-          body: JSON.stringify({
-            groupId: selectedLineGroupId,
-            message: reportText
-          })
-        });
         const warning = sendError instanceof Error ? sendError.message : "ส่งรูปไม่สำเร็จ";
         setMessage(`ส่งข้อความรายงานจองเข้า LINE แล้ว แต่รูปยังไม่สำเร็จ (${uploadWarning || warning})`);
       }

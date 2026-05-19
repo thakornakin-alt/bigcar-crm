@@ -526,6 +526,15 @@ export default function SalesReportsPage() {
       if (!selectedLineGroupId) throw new Error("กรุณาเลือกกลุ่ม LINE ก่อนส่ง");
       if (!reportText.trim()) throw new Error("ยังไม่มีข้อความรายงานขายสำหรับส่ง LINE");
 
+      await api("/api/line/test-send", {
+        method: "POST",
+        body: JSON.stringify({
+          groupId: selectedLineGroupId,
+          message: reportText
+        })
+      });
+      setMessage("ส่งข้อความรายงานขายเข้า LINE แล้ว กำลังจัดการรูปแนบ...");
+
       let uploadResult: DriveUploadResult = { folderUrl: driveFolderUrl, attachments: [] };
       try {
         uploadResult = await uploadPendingFiles();
@@ -553,20 +562,13 @@ export default function SalesReportsPage() {
           method: "POST",
           body: JSON.stringify({
             groupId: selectedLineGroupId,
-            message: reportText,
+            message: "รูปแนบรายงานขาย",
             attachments: [...bookingAttachments, ...salesAttachments]
           })
         });
 
         setMessage(`ส่งรายงานขายเข้า LINE แล้ว${data.result.imageCount ? ` พร้อมรูป ${data.result.imageCount} รูป` : ""}${data.result.linkCount ? ` และลิงก์ไฟล์ ${data.result.linkCount} รายการ` : ""}`);
       } catch (sendError) {
-        await api("/api/line/test-send", {
-          method: "POST",
-          body: JSON.stringify({
-            groupId: selectedLineGroupId,
-            message: reportText
-          })
-        });
         const warning = sendError instanceof Error ? sendError.message : "ส่งรูปไม่สำเร็จ";
         setMessage(`ส่งข้อความรายงานขายเข้า LINE แล้ว แต่รูปยังไม่สำเร็จ (${warning})`);
       }
