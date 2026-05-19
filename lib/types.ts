@@ -157,6 +157,9 @@ export type StockImportResult = {
   skipped: number;
   total: number;
   importedAt: string;
+  clientVinRows?: number;
+  vinReceived?: number;
+  vinWritten?: number;
 };
 
 export type StockImportStatus = {

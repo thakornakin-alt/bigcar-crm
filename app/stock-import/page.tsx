@@ -225,6 +225,9 @@ export default function StockImportPage() {
     let imported = 0;
     let updated = 0;
     let skipped = 0;
+    let clientVinRows = 0;
+    let vinReceived = 0;
+    let vinWritten = 0;
     let importedAt = "";
 
     try {
@@ -245,11 +248,16 @@ export default function StockImportPage() {
         imported += data.result.imported;
         updated += data.result.updated;
         skipped += data.result.skipped;
+        clientVinRows += data.result.clientVinRows || 0;
+        vinReceived += data.result.vinReceived || 0;
+        vinWritten += data.result.vinWritten || 0;
         importedAt = data.result.importedAt || importedAt;
         setProgress(Math.round(Math.min(((start + chunk.length) / parsedRows.length) * 100, 100)));
       }
 
-      setMessage(`Import สำเร็จ: เพิ่ม ${imported} / อัปเดต ${updated} / ข้าม ${skipped}`);
+      setMessage(
+        `Import สำเร็จ: เพิ่ม ${imported} / อัปเดต ${updated} / ข้าม ${skipped} / เลขตัวรถ หน้าเว็บ ${clientVinRows} / Apps Script รับ ${vinReceived} / เขียน ${vinWritten}`
+      );
       setStatus((current) => ({
         total: clearExisting ? imported : current.total + imported,
         latestImportedAt: importedAt,
