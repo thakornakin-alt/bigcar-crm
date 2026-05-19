@@ -35,6 +35,15 @@ export function verifyLineSignature(body: string, signature: string | null) {
   return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
+export function getLineConfigStatus() {
+  return {
+    hasChannelId: Boolean(process.env.LINE_CHANNEL_ID),
+    hasChannelSecret: Boolean(process.env.LINE_CHANNEL_SECRET),
+    hasChannelAccessToken: Boolean(process.env.LINE_CHANNEL_ACCESS_TOKEN),
+    webhookUrl: "https://bigcar-crm.vercel.app/api/line/webhook"
+  };
+}
+
 export async function getLineGroupName(groupId: string) {
   try {
     const response = await fetch(`https://api.line.me/v2/bot/group/${encodeURIComponent(groupId)}/summary`, {

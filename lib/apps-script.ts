@@ -14,6 +14,7 @@ import type {
   EmailDraftResult,
   InterestRate,
   LineGroup,
+  LineWebhookLog,
   ReportHistoryItem,
   SalesReport,
   SalesReportInput,
@@ -46,7 +47,9 @@ type AppsScriptAction =
   | "lookupBookingByPlate"
   | "saveApprovalLog"
   | "saveLineGroup"
-  | "listLineGroups";
+  | "listLineGroups"
+  | "saveLineWebhookLog"
+  | "listLineWebhookLogs";
 
 type AppsScriptResponse<T> =
   | ({ ok: true } & T)
@@ -206,4 +209,14 @@ export async function saveLineGroup(input: LineGroup) {
 export async function listLineGroups() {
   const data = await callAppsScript<{ groups: LineGroup[] }>("listLineGroups");
   return data.groups;
+}
+
+export async function saveLineWebhookLog(input: LineWebhookLog) {
+  const data = await callAppsScript<{ saved: boolean }>("saveLineWebhookLog", input);
+  return data.saved;
+}
+
+export async function listLineWebhookLogs() {
+  const data = await callAppsScript<{ logs: LineWebhookLog[] }>("listLineWebhookLogs");
+  return data.logs;
 }

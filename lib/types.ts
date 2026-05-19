@@ -316,3 +316,11 @@ export type LineGroup = {
   name: string;
   lastSeenAt: string;
 };
+
+export type LineWebhookLog = {
+  receivedAt: string;
+  signatureValid: string;
+  eventCount: string;
+  source: string;
+  error: string;
+};

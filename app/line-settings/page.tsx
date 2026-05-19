@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { ArrowLeft, CheckCircle2, Loader2, MessageCircle, RefreshCcw, Send } from "lucide-react";
 import { PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
-import type { LineGroup } from "@/lib/types";
+import type { LineGroup, LineWebhookLog } from "@/lib/types";
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -26,11 +26,19 @@ export default function LineSettingsPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [lineStatus, setLineStatus] = useState<{
+    config: { hasChannelId: boolean; hasChannelSecret: boolean; hasChannelAccessToken: boolean; webhookUrl: string };
+    logs: LineWebhookLog[];
+  } | null>(null);
 
   async function loadGroups() {
     setError("");
-    const data = await api<{ groups: LineGroup[] }>("/api/line/groups");
+    const [data, statusData] = await Promise.all([
+      api<{ groups: LineGroup[] }>("/api/line/groups"),
+      api<{ config: { hasChannelId: boolean; hasChannelSecret: boolean; hasChannelAccessToken: boolean; webhookUrl: string }; logs: LineWebhookLog[] }>("/api/line/status")
+    ]);
     setGroups(data.groups);
+    setLineStatus(statusData);
     setSelectedGroupId((current) => current || data.groups[0]?.groupId || "");
   }
 
@@ -92,6 +100,13 @@ export default function LineSettingsPage() {
           <p className="text-sm leading-6 text-soft">
             หลังตั้งค่าแล้ว เชิญ Official Account เข้ากลุ่ม LINE และพิมพ์ข้อความในกลุ่ม 1 ครั้ง ระบบจะเก็บกลุ่มมาแสดงด้านล่าง
           </p>
+          {lineStatus && (
+            <div className="grid gap-2 text-sm sm:grid-cols-3">
+              <StatusPill label="Channel ID" ok={lineStatus.config.hasChannelId} />
+              <StatusPill label="Channel Secret" ok={lineStatus.config.hasChannelSecret} />
+              <StatusPill label="Access Token" ok={lineStatus.config.hasChannelAccessToken} />
+            </div>
+          )}
         </SectionCard>
 
         <SectionCard title="กลุ่ม LINE ที่จับได้" icon={<RefreshCcw size={18} />}>
@@ -145,7 +160,38 @@ export default function LineSettingsPage() {
             </button>
           </form>
         </SectionCard>
+
+        <SectionCard title="Webhook Log ล่าสุด" icon={<MessageCircle size={18} />}>
+          {lineStatus?.logs.length ? (
+            <div className="space-y-2">
+              {lineStatus.logs.map((log, index) => (
+                <div key={`${log.receivedAt}-${index}`} className="rounded-lg border border-line bg-[#0b0d11] p-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-semibold text-white">{log.receivedAt}</span>
+                    <span className={log.signatureValid === "yes" ? "text-brand" : "text-amber-200"}>
+                      signature: {log.signatureValid}
+                    </span>
+                  </div>
+                  <p className="mt-1 break-all text-soft">event: {log.eventCount || "0"} / {log.source || "-"}</p>
+                  {log.error && <p className="mt-1 break-all text-amber-100">{log.error}</p>}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-8 text-center text-sm text-soft">
+              ยังไม่มี webhook ยิงเข้ามา ถ้ากด Verify หรือพิมพ์ในกลุ่มแล้ว ตรงนี้ควรมี log
+            </p>
+          )}
+        </SectionCard>
       </div>
     </PageContainer>
+  );
+}
+
+function StatusPill({ label, ok }: { label: string; ok: boolean }) {
+  return (
+    <span className={`rounded-lg border px-3 py-2 ${ok ? "border-brand/40 bg-green-950/20 text-green-100" : "border-red-400/40 bg-red-950/30 text-red-100"}`}>
+      {label}: {ok ? "OK" : "Missing"}
+    </span>
   );
 }
