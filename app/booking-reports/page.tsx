@@ -15,13 +15,14 @@ import {
   Mail,
   Paperclip,
   Save,
+  Send,
   Search,
   Upload
 } from "lucide-react";
 import { buildDefaultBookingSubject, renderBookingReport } from "@/lib/booking-report";
 import { PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
 import { normalizeCarYear } from "@/lib/format";
-import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, DriveAttachment, DriveUploadResult, StockVehicle } from "@/lib/types";
+import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, DriveAttachment, DriveUploadResult, LineGroup, StockVehicle } from "@/lib/types";
 
 const saleEmails: Record<string, string> = {
   "ฐากร": "thakornakin@gmail.com",
@@ -170,6 +171,9 @@ export default function BookingReportsPage() {
   const [savedReportId, setSavedReportId] = useState("");
   const [draftUrl, setDraftUrl] = useState("");
   const [uploadedAttachments, setUploadedAttachments] = useState<DriveAttachment[]>([]);
+  const [lineGroups, setLineGroups] = useState<LineGroup[]>([]);
+  const [selectedLineGroupId, setSelectedLineGroupId] = useState("");
+  const [sendingLine, setSendingLine] = useState(false);
 
   const reportText = useMemo(() => renderBookingReport({ ...form, reportText: "" }), [form]);
   const senderEmail = saleEmails[form.saleName] || "";
@@ -190,6 +194,15 @@ export default function BookingReportsPage() {
         window.localStorage.removeItem("bigcar-booking-email");
       }
     }
+  }, []);
+
+  useEffect(() => {
+    readJson<{ groups: LineGroup[] }>("/api/line/groups")
+      .then((data) => {
+        setLineGroups(data.groups);
+        setSelectedLineGroupId(data.groups[0]?.groupId || "");
+      })
+      .catch(() => setLineGroups([]));
   }, []);
 
   useEffect(() => {
@@ -471,11 +484,36 @@ export default function BookingReportsPage() {
     }
   }
 
+  async function sendLineReport() {
+    setSendingLine(true);
+    setError("");
+    setMessage("");
+
+    try {
+      if (!selectedLineGroupId) throw new Error("กรุณาเลือกกลุ่ม LINE ก่อนส่ง");
+      if (!reportText.trim()) throw new Error("ยังไม่มีข้อความรายงานจองสำหรับส่ง LINE");
+
+      await readJson("/api/line/test-send", {
+        method: "POST",
+        body: JSON.stringify({
+          groupId: selectedLineGroupId,
+          message: reportText
+        })
+      });
+
+      setMessage("ส่งรายงานจองเข้า LINE แล้ว");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ส่ง LINE ไม่สำเร็จ");
+    } finally {
+      setSendingLine(false);
+    }
+  }
+
   return (
     <PageContainer wide>
       <PageTitle
         title="รายงานจอง"
-        subtitle="Staging / Draft / Preview เท่านั้น ยังไม่ส่ง Email หรือ LINE จริง"
+        subtitle="บันทึก Draft, สร้าง Gmail Draft และส่งข้อความเข้า LINE"
         actions={
           <>
             <TopMenuButton href="/stock-import" icon={<Upload size={18} />}>
@@ -647,6 +685,35 @@ export default function BookingReportsPage() {
             <pre className="max-h-[56vh] overflow-auto whitespace-pre-wrap rounded-lg border border-line bg-[#0b0d11] p-3 text-sm leading-7 text-white">
               {reportText}
             </pre>
+            <div className="mt-3 grid gap-2">
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">ส่งเข้า LINE กลุ่ม</span>
+                <select
+                  value={selectedLineGroupId}
+                  onChange={(event) => setSelectedLineGroupId(event.target.value)}
+                  className="min-h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none focus:border-brand"
+                >
+                  {lineGroups.length ? (
+                    lineGroups.map((group) => (
+                      <option key={group.groupId} value={group.groupId}>
+                        {group.name || group.groupId}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">ยังไม่พบกลุ่ม LINE</option>
+                  )}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={sendLineReport}
+                disabled={sendingLine || !selectedLineGroupId || !reportText.trim()}
+                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-3 text-base font-bold text-ink disabled:opacity-70"
+              >
+                {sendingLine ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+                {sendingLine ? "กำลังส่ง LINE..." : "ส่ง LINE"}
+              </button>
+            </div>
             <button
               type="submit"
               disabled={saving || uploading}
@@ -667,7 +734,7 @@ export default function BookingReportsPage() {
               </a>
             )}
             <p className="mt-3 text-xs leading-5 text-soft">
-              ปุ่มนี้ยังไม่ส่ง Email หรือ LINE จริง ระบบจะอัปโหลดไฟล์แนบเข้า Google Drive และบันทึก Draft ไว้ก่อน
+              บันทึก Draft จะอัปโหลดไฟล์แนบเข้า Google Drive ก่อน ส่วนปุ่ม LINE จะส่งเฉพาะข้อความ Preview นี้เข้ากลุ่มที่เลือก
             </p>
           </SectionCard>
         </aside>
