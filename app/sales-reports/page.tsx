@@ -50,6 +50,7 @@ const saleEmails: Record<string, string> = {
 const defaultEmailTo = "RDDUsedcarBooked@segroup.co.th";
 const defaultEmailCc = "rongsarit.s@tgh.co.th";
 const defaultTeamName = "พี่ลีฟ";
+const salesLineGroupStorageKey = "bigcar-sales-line-group";
 
 const blankForm: SalesReportInput = {
   bookingReportId: "",
@@ -261,10 +262,20 @@ export default function SalesReportsPage() {
     api<{ groups: LineGroup[] }>("/api/line/groups")
       .then((data) => {
         setLineGroups(data.groups);
-        setSelectedLineGroupId(data.groups[0]?.groupId || "");
+        const savedGroupId = window.localStorage.getItem(salesLineGroupStorageKey) || "";
+        const groupId = data.groups.some((group) => group.groupId === savedGroupId)
+          ? savedGroupId
+          : data.groups[0]?.groupId || "";
+        setSelectedLineGroupId(groupId);
       })
       .catch(() => setLineGroups([]));
   }, []);
+
+  useEffect(() => {
+    if (selectedLineGroupId) {
+      window.localStorage.setItem(salesLineGroupStorageKey, selectedLineGroupId);
+    }
+  }, [selectedLineGroupId]);
 
   useEffect(() => {
     setEmailFields((current) => current.subject.trim() ? current : { ...current, subject: suggestedEmailSubject });
