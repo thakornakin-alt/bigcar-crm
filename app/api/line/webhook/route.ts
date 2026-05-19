@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getLineGroupName, LineWebhookEvent, verifyLineSignature } from "@/lib/line";
+import { LineWebhookEvent, verifyLineSignature } from "@/lib/line";
 import { saveLineGroup, saveLineWebhookLog } from "@/lib/apps-script";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     webhookError = webhookError || (error instanceof Error ? error.message : "Invalid LINE webhook JSON");
   }
 
-  await saveLineWebhookLog({
+  void saveLineWebhookLog({
     receivedAt,
     signatureValid: signatureValid ? "yes" : "no",
     eventCount: String(events.length),
@@ -48,22 +48,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Invalid LINE signature" }, { status: 401 });
   }
 
-  const saved = [];
+  const groupsToSave = events
+    .map((event) => {
+      const sourceType = event.source?.type || "";
+      const groupId = event.source?.groupId || event.source?.roomId || "";
+      if (!groupId || (sourceType !== "group" && sourceType !== "room")) return null;
+      return {
+        groupId,
+        type: sourceType,
+        name: `${sourceType} ${groupId.slice(-6)}`,
+        lastSeenAt: new Date().toISOString()
+      };
+    })
+    .filter((group): group is { groupId: string; type: string; name: string; lastSeenAt: string } => Boolean(group));
 
-  for (const event of events) {
-    const sourceType = event.source?.type || "";
-    const groupId = event.source?.groupId || event.source?.roomId || "";
-    if (!groupId || (sourceType !== "group" && sourceType !== "room")) continue;
+  void Promise.all(groupsToSave.map((group) => saveLineGroup(group))).catch(() => undefined);
 
-    const name = sourceType === "group" ? await getLineGroupName(groupId) : "";
-    const group = await saveLineGroup({
-      groupId,
-      type: sourceType,
-      name: name || `${sourceType} ${groupId.slice(-6)}`,
-      lastSeenAt: new Date().toISOString()
-    });
-    saved.push(group);
-  }
-
-  return NextResponse.json({ ok: true, saved });
+  return NextResponse.json({ ok: true, queued: groupsToSave.length });
 }
