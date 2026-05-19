@@ -495,27 +495,45 @@ export default function BookingReportsPage() {
       if (!reportText.trim()) throw new Error("ยังไม่มีข้อความรายงานจองสำหรับส่ง LINE");
 
       let attachments = uploadedAttachments;
+      let uploadWarning = "";
       if (!attachments.length && Object.values(attachmentFiles).some((files) => files.length > 0)) {
-        const uploadResult = await uploadBookingFiles();
-        attachments = uploadResult.attachments;
-        setUploadedAttachments(uploadResult.attachments);
+        try {
+          const uploadResult = await uploadBookingFiles();
+          attachments = uploadResult.attachments;
+          setUploadedAttachments(uploadResult.attachments);
+        } catch (uploadError) {
+          uploadWarning = uploadError instanceof Error ? uploadError.message : "อัปโหลดรูปไม่สำเร็จ";
+          attachments = [];
+        }
       }
 
-      const data = await readJson<{ result: { imageCount: number; linkCount: number } }>("/api/line/send-report", {
-        method: "POST",
-        body: JSON.stringify({
-          groupId: selectedLineGroupId,
-          message: reportText,
-          attachments: attachments.map((attachment) => ({
-            name: attachment.name,
-            type: attachment.type,
-            url: attachment.url,
-            fileId: attachment.fileId
-          }))
-        })
-      });
+      try {
+        const data = await readJson<{ result: { imageCount: number; linkCount: number } }>("/api/line/send-report", {
+          method: "POST",
+          body: JSON.stringify({
+            groupId: selectedLineGroupId,
+            message: reportText,
+            attachments: attachments.map((attachment) => ({
+              name: attachment.name,
+              type: attachment.type,
+              url: attachment.url,
+              fileId: attachment.fileId
+            }))
+          })
+        });
 
-      setMessage(`ส่งรายงานจองเข้า LINE แล้ว${data.result.imageCount ? ` พร้อมรูป ${data.result.imageCount} รูป` : ""}${data.result.linkCount ? ` และลิงก์ไฟล์ ${data.result.linkCount} รายการ` : ""}`);
+        setMessage(`ส่งรายงานจองเข้า LINE แล้ว${data.result.imageCount ? ` พร้อมรูป ${data.result.imageCount} รูป` : ""}${data.result.linkCount ? ` และลิงก์ไฟล์ ${data.result.linkCount} รายการ` : ""}${uploadWarning ? ` (${uploadWarning})` : ""}`);
+      } catch (sendError) {
+        await readJson("/api/line/test-send", {
+          method: "POST",
+          body: JSON.stringify({
+            groupId: selectedLineGroupId,
+            message: reportText
+          })
+        });
+        const warning = sendError instanceof Error ? sendError.message : "ส่งรูปไม่สำเร็จ";
+        setMessage(`ส่งข้อความรายงานจองเข้า LINE แล้ว แต่รูปยังไม่สำเร็จ (${uploadWarning || warning})`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "ส่ง LINE ไม่สำเร็จ");
     } finally {

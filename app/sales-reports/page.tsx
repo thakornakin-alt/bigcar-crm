@@ -548,16 +548,28 @@ export default function SalesReportsPage() {
         fileId: attachment.fileId
       }));
 
-      const data = await api<{ result: { imageCount: number; linkCount: number } }>("/api/line/send-report", {
-        method: "POST",
-        body: JSON.stringify({
-          groupId: selectedLineGroupId,
-          message: reportText,
-          attachments: [...bookingAttachments, ...salesAttachments]
-        })
-      });
+      try {
+        const data = await api<{ result: { imageCount: number; linkCount: number } }>("/api/line/send-report", {
+          method: "POST",
+          body: JSON.stringify({
+            groupId: selectedLineGroupId,
+            message: reportText,
+            attachments: [...bookingAttachments, ...salesAttachments]
+          })
+        });
 
-      setMessage(`ส่งรายงานขายเข้า LINE แล้ว${data.result.imageCount ? ` พร้อมรูป ${data.result.imageCount} รูป` : ""}${data.result.linkCount ? ` และลิงก์ไฟล์ ${data.result.linkCount} รายการ` : ""}`);
+        setMessage(`ส่งรายงานขายเข้า LINE แล้ว${data.result.imageCount ? ` พร้อมรูป ${data.result.imageCount} รูป` : ""}${data.result.linkCount ? ` และลิงก์ไฟล์ ${data.result.linkCount} รายการ` : ""}`);
+      } catch (sendError) {
+        await api("/api/line/test-send", {
+          method: "POST",
+          body: JSON.stringify({
+            groupId: selectedLineGroupId,
+            message: reportText
+          })
+        });
+        const warning = sendError instanceof Error ? sendError.message : "ส่งรูปไม่สำเร็จ";
+        setMessage(`ส่งข้อความรายงานขายเข้า LINE แล้ว แต่รูปยังไม่สำเร็จ (${warning})`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "ส่ง LINE ไม่สำเร็จ");
     } finally {
