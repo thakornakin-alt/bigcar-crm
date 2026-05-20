@@ -95,6 +95,13 @@ function stockVehicleGroup(vehicle: StockVehicle) {
   return String(vehicle.vehicleGroup || "").trim();
 }
 
+function shortLocation(value?: string) {
+  return String(value || "-")
+    .replace("โกดัง-", "")
+    .replace("สาขา", "")
+    .trim() || "-";
+}
+
 function normalizePlate(value: string) {
   return String(value || "").replace(/\s+/g, "").toUpperCase();
 }
@@ -871,21 +878,21 @@ function AdvancedTextField({
 
 function StockPreview({ vehicles, mode, pageCount, groupCount }: { vehicles: StockVehicle[]; mode: ExportMode; pageCount: number; groupCount: number }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-line bg-[#f7faf7] text-[#111827]">
-      <div className="bg-[#00a651] p-3 text-white">
-        <p className="text-xs font-bold uppercase tracking-[0.18em]">BIG CAR RDD</p>
-        <h2 className="mt-1 text-xl font-black">ตารางรถพร้อมขาย</h2>
-        <p className="mt-1 text-xs text-white/80">
-          คัดแล้ว {vehicles.length.toLocaleString("th-TH")} คัน / {groupCount.toLocaleString("th-TH")} กลุ่ม / {Math.max(pageCount, vehicles.length ? 1 : 0).toLocaleString("th-TH")} รูป /{" "}
+    <div className="overflow-hidden rounded-lg border border-line bg-[#f6f8f7] text-[#111827] shadow-glow">
+      <div className="border-b border-[#d9e1df] bg-[#f9fbfa] p-3">
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#15803d]">Stock Catalog Preview</p>
+        <h2 className="mt-1 text-xl font-black text-[#111827]">ตารางสต็อกพร้อมส่ง</h2>
+        <p className="mt-1 text-xs text-[#64748b]">
+          {vehicles.length.toLocaleString("th-TH")} คัน / {groupCount.toLocaleString("th-TH")} กลุ่ม / {Math.max(pageCount, vehicles.length ? 1 : 0).toLocaleString("th-TH")} รูป /{" "}
           {mode === "customer" ? "สำหรับลูกค้า" : "สำหรับภายใน"}
         </p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] border-collapse text-[11px]">
+        <table className="w-full min-w-[760px] border-collapse text-[11px]">
           <thead>
-            <tr className="bg-[#00a651] text-white">
+            <tr className="bg-[#17211d] text-white">
               {["Location", "ทะเบียน", "ปีจด", "รุ่นรถยนต์", "เกียร์", "สี", "เลขไมล์", "ราคาเสนอขายRT"].map((header) => (
-                <th key={header} className="border border-[#0f5132] px-2 py-2 text-left font-bold">
+                <th key={header} className="border border-[#2d3a35] px-2 py-2 text-left font-bold">
                   {header}
                 </th>
               ))}
@@ -894,14 +901,14 @@ function StockPreview({ vehicles, mode, pageCount, groupCount }: { vehicles: Sto
           <tbody>
             {vehicles.slice(0, 8).map((vehicle) => (
               <tr key={vehicle.plate} className="bg-white">
-                <td className="border border-[#111827] px-2 py-1">{vehicle.parkingLocation || "-"}</td>
-                <td className="border border-[#111827] px-2 py-1 font-bold">{vehicle.plate || "-"}</td>
-                <td className="border border-[#111827] px-2 py-1">{vehicle.year || "-"}</td>
-                <td className="border border-[#111827] px-2 py-1">{vehicleTitle(vehicle)}</td>
-                <td className="border border-[#111827] px-2 py-1">{vehicle.gear || "-"}</td>
-                <td className="border border-[#111827] px-2 py-1">{vehicle.color || "-"}</td>
-                <td className="border border-[#111827] px-2 py-1 text-right">{formatMileage(vehicle.mileage).replace(" กม.", "")}</td>
-                <td className="border border-[#111827] bg-[#dff7f8] px-2 py-1 text-right font-bold">{formatPrice(vehicle.salePrice).replace(" บาท", "")}</td>
+                <td className="border border-[#dce3e1] px-2 py-1">{shortLocation(vehicle.parkingLocation)}</td>
+                <td className="border border-[#dce3e1] px-2 py-1 text-center font-bold">{vehicle.plate || "-"}</td>
+                <td className="border border-[#dce3e1] px-2 py-1 text-center">{vehicle.year || "-"}</td>
+                <td className="border border-[#dce3e1] px-2 py-1">{vehicleTitle(vehicle)}</td>
+                <td className="border border-[#dce3e1] px-2 py-1 text-center">{vehicle.gear || "-"}</td>
+                <td className="border border-[#dce3e1] px-2 py-1 text-center">{vehicle.color || "-"}</td>
+                <td className="border border-[#dce3e1] px-2 py-1 text-right">{formatMileage(vehicle.mileage).replace(" กม.", "")}</td>
+                <td className="border border-[#dce3e1] bg-[#e6fbf3] px-2 py-1 text-right text-sm font-black">{formatPrice(vehicle.salePrice).replace(" บาท", "")}</td>
               </tr>
             ))}
           </tbody>
@@ -914,13 +921,14 @@ function StockPreview({ vehicles, mode, pageCount, groupCount }: { vehicles: Sto
 
 function renderStockTableCanvas(canvas: HTMLCanvasElement, vehicles: StockVehicle[], mode: ExportMode, page: number, totalPages: number, groupName: string) {
   const width = 1600;
-  const margin = 36;
-  const headerHeight = 96;
-  const tableTop = 140;
-  const rowHeight = 46;
-  const footerHeight = 58;
+  const margin = 40;
+  const headerHeight = 118;
+  const tableTop = 150;
+  const rowHeight = vehicles.length <= 3 ? 62 : vehicles.length <= 8 ? 56 : 48;
+  const footerHeight = 54;
   const rows = vehicles.slice(0, maxTableItems);
-  const height = tableTop + 54 + rows.length * rowHeight + footerHeight;
+  const headerRowHeight = 50;
+  const height = tableTop + headerRowHeight + rows.length * rowHeight + footerHeight;
   const ratio = window.devicePixelRatio || 1;
   canvas.width = width * ratio;
   canvas.height = height * ratio;
@@ -930,49 +938,61 @@ function renderStockTableCanvas(canvas: HTMLCanvasElement, vehicles: StockVehicl
   if (!ctx) throw new Error("Canvas not available");
   ctx.scale(ratio, ratio);
 
-  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = "#f6f8f7";
   ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = "#00a651";
-  ctx.fillRect(0, 0, width, headerHeight);
   ctx.fillStyle = "#ffffff";
-  ctx.font = "900 34px Arial, sans-serif";
-  ctx.fillText("BIG CAR RDD", margin, 42);
-  ctx.font = "700 26px Arial, sans-serif";
+  ctx.fillRect(margin, 26, width - margin * 2, headerHeight);
+  ctx.fillStyle = "#16a34a";
+  ctx.fillRect(margin, 26, 8, headerHeight);
+  ctx.strokeStyle = "#d9e1df";
+  ctx.lineWidth = 1.2;
+  ctx.strokeRect(margin, 26, width - margin * 2, headerHeight);
+
+  ctx.fillStyle = "#111827";
+  ctx.font = "900 42px Arial, sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText(groupName || "Stock", margin + 28, 76);
+  ctx.fillStyle = "#64748b";
+  ctx.font = "600 22px Arial, sans-serif";
   ctx.fillText(
-    `${groupName} ${rows.length} คัน / หน้า ${page}/${totalPages} / ${mode === "customer" ? "สำหรับลูกค้า" : "สำหรับภายใน"} / ${new Date().toLocaleDateString("th-TH")}`,
-    margin,
-    78
+    `${rows.length.toLocaleString("th-TH")} คัน | อัปเดต ${new Date().toLocaleDateString("th-TH")} | ${mode === "customer" ? "สำหรับลูกค้า" : "สำหรับภายใน"}`,
+    margin + 28,
+    112
   );
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#111827";
+  ctx.font = "800 26px Arial, sans-serif";
+  ctx.fillText(`หน้า ${page}/${totalPages}`, width - margin - 26, 76);
 
   const columns = [
-    { key: "location", label: "Location", width: 170 },
-    { key: "plate", label: "ทะเบียน", width: 150 },
-    { key: "year", label: "ปีจด", width: 120 },
-    { key: "model", label: "รุ่นรถยนต์", width: 530 },
-    { key: "gear", label: "เกียร์", width: 95 },
-    { key: "color", label: "สี", width: 180 },
-    { key: "mileage", label: "เลขไมล์", width: 145 },
-    { key: "price", label: "ราคาเสนอขายRT", width: 138 }
+    { key: "location", label: "Location", width: 150 },
+    { key: "plate", label: "ทะเบียน", width: 140 },
+    { key: "year", label: "ปีจด", width: 110 },
+    { key: "model", label: "รุ่นรถยนต์", width: 520 },
+    { key: "gear", label: "เกียร์", width: 90 },
+    { key: "color", label: "สี", width: 170 },
+    { key: "mileage", label: "เลขไมล์", width: 150 },
+    { key: "price", label: "ราคาเสนอขายRT", width: 190 }
   ];
 
   let x = margin;
-  ctx.font = "800 22px Arial, sans-serif";
-  columns.forEach((column, index) => {
-    ctx.fillStyle = index === columns.length - 1 ? "#08706d" : "#00a651";
-    ctx.fillRect(x, tableTop, column.width, 54);
-    ctx.strokeStyle = "#111827";
-    ctx.lineWidth = 1.4;
-    ctx.strokeRect(x, tableTop, column.width, 54);
+  ctx.font = "800 21px Arial, sans-serif";
+  columns.forEach((column) => {
+    ctx.fillStyle = "#17211d";
+    ctx.fillRect(x, tableTop, column.width, headerRowHeight);
+    ctx.strokeStyle = "#2d3a35";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, tableTop, column.width, headerRowHeight);
     ctx.fillStyle = "#ffffff";
     ctx.textAlign = column.key === "price" ? "right" : "center";
-    ctx.fillText(column.label, column.key === "price" ? x + column.width - 14 : x + column.width / 2, tableTop + 35);
+    ctx.fillText(column.label, column.key === "price" ? x + column.width - 16 : x + column.width / 2, tableTop + 32);
     x += column.width;
   });
 
   rows.forEach((vehicle, rowIndex) => {
-    const rowY = tableTop + 54 + rowIndex * rowHeight;
+    const rowY = tableTop + headerRowHeight + rowIndex * rowHeight;
     const values: Record<string, string> = {
-      location: vehicle.parkingLocation || "-",
+      location: shortLocation(vehicle.parkingLocation),
       plate: vehicle.plate || "-",
       year: vehicle.year || "-",
       model: vehicleTitle(vehicle),
@@ -983,29 +1003,34 @@ function renderStockTableCanvas(canvas: HTMLCanvasElement, vehicles: StockVehicl
     };
 
     x = margin;
-    columns.forEach((column, index) => {
-      ctx.fillStyle = column.key === "price" ? "#dff7f8" : rowIndex % 2 ? "#f8fafc" : "#ffffff";
+    columns.forEach((column) => {
+      ctx.fillStyle = column.key === "price" ? "#e6fbf3" : rowIndex % 2 ? "#fbfcfc" : "#ffffff";
       ctx.fillRect(x, rowY, column.width, rowHeight);
-      ctx.strokeStyle = "#111827";
+      ctx.strokeStyle = "#dce3e1";
       ctx.lineWidth = 1;
       ctx.strokeRect(x, rowY, column.width, rowHeight);
       ctx.fillStyle = "#111827";
-      ctx.font = column.key === "price" ? "800 20px Arial, sans-serif" : "500 20px Arial, sans-serif";
+      ctx.font = column.key === "price" ? "900 22px Arial, sans-serif" : "600 19px Arial, sans-serif";
       ctx.textAlign = column.key === "price" || column.key === "mileage" ? "right" : column.key === "model" || column.key === "location" ? "left" : "center";
       const textX =
-        column.key === "price" || column.key === "mileage" ? x + column.width - 10 : column.key === "model" || column.key === "location" ? x + 10 : x + column.width / 2;
-      fillTextEllipsis(ctx, values[column.key], textX, rowY + 30, column.width - 20);
+        column.key === "price" || column.key === "mileage" ? x + column.width - 12 : column.key === "model" || column.key === "location" ? x + 12 : x + column.width / 2;
+      if (column.key === "model") {
+        drawWrappedCellText(ctx, values[column.key], textX, rowY + 19, column.width - 24, 21, 2);
+      } else if (column.key === "location" || column.key === "color") {
+        drawBadgeCellText(ctx, values[column.key], textX, rowY + Math.floor(rowHeight / 2), column.width - 24);
+      } else {
+        drawClippedText(ctx, values[column.key], textX, rowY + Math.floor(rowHeight / 2) + 7, column.width - 20);
+      }
       x += column.width;
-      if (index === columns.length - 1) ctx.textAlign = "left";
     });
   });
 
   ctx.textAlign = "left";
-  ctx.fillStyle = "#64748b";
-  ctx.font = "600 22px Arial, sans-serif";
-  ctx.fillText(`BIG CAR CRM | หน้า ${page}/${totalPages}`, margin, height - 22);
+  ctx.fillStyle = "#6b7280";
+  ctx.font = "600 18px Arial, sans-serif";
+  ctx.fillText("BIG CAR CRM", margin, height - 22);
   ctx.textAlign = "right";
-  ctx.fillText("สร้างจากสต็อกล่าสุด", width - margin, height - 22);
+  ctx.fillText(`Generated from latest stock | ${rows.length.toLocaleString("th-TH")} vehicles`, width - margin, height - 22);
   ctx.textAlign = "left";
 }
 
@@ -1036,15 +1061,76 @@ function groupVehiclesForExport(vehicles: StockVehicle[]): StockExportGroup[] {
     .sort((a, b) => b.vehicles.length - a.vehicles.length || a.name.localeCompare(b.name, "th"));
 }
 
-function fillTextEllipsis(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number) {
-  if (ctx.measureText(text).width <= maxWidth) {
-    ctx.fillText(text, x, y);
-    return;
+function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
+  const safeRadius = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + safeRadius, y);
+  ctx.lineTo(x + width - safeRadius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+  ctx.lineTo(x + width, y + height - safeRadius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+  ctx.lineTo(x + safeRadius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+  ctx.lineTo(x, y + safeRadius);
+  ctx.quadraticCurveTo(x, y, x + safeRadius, y);
+  ctx.closePath();
+}
+
+function drawClippedText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number) {
+  ctx.save();
+  const align = ctx.textAlign;
+  const clipX = align === "right" ? x - maxWidth : align === "center" ? x - maxWidth / 2 : x;
+  ctx.beginPath();
+  ctx.rect(clipX, y - 25, maxWidth, 34);
+  ctx.clip();
+  ctx.fillText(text || "-", x, y);
+  ctx.restore();
+}
+
+function drawBadgeCellText(ctx: CanvasRenderingContext2D, text: string, x: number, centerY: number, maxWidth: number) {
+  const value = text || "-";
+  const measured = Math.min(ctx.measureText(value).width + 20, maxWidth);
+  ctx.save();
+  const align = ctx.textAlign;
+  const left = align === "center" ? x - measured / 2 : align === "right" ? x - measured : x;
+  drawRoundedRect(ctx, left, centerY - 15, measured, 30, 15);
+  ctx.fillStyle = "#eef7f2";
+  ctx.fill();
+  ctx.strokeStyle = "#cfe3d7";
+  ctx.stroke();
+  ctx.fillStyle = "#14532d";
+  ctx.textAlign = "center";
+  drawClippedText(ctx, value, left + measured / 2, centerY + 7, measured - 14);
+  ctx.restore();
+}
+
+function drawWrappedCellText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number, maxLines: number) {
+  const value = text || "-";
+  const words = value.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+
+  words.forEach((word) => {
+    const next = current ? `${current} ${word}` : word;
+    if (ctx.measureText(next).width <= maxWidth || !current) {
+      current = next;
+      return;
+    }
+    lines.push(current);
+    current = word;
+  });
+  if (current) lines.push(current);
+
+  const visibleLines = lines.slice(0, maxLines);
+  if (lines.length > maxLines && visibleLines.length) {
+    let last = visibleLines[visibleLines.length - 1];
+    while (last.length > 0 && ctx.measureText(`${last}…`).width > maxWidth) {
+      last = last.slice(0, -1);
+    }
+    visibleLines[visibleLines.length - 1] = `${last}…`;
   }
 
-  let value = text;
-  while (value.length > 0 && ctx.measureText(`${value}...`).width > maxWidth) {
-    value = value.slice(0, -1);
-  }
-  ctx.fillText(`${value}...`, x, y);
+  visibleLines.forEach((line, index) => {
+    drawClippedText(ctx, line, x, y + index * lineHeight, maxWidth);
+  });
 }
