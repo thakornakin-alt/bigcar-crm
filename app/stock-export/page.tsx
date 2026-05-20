@@ -51,10 +51,10 @@ function normalizePlate(value: string) {
   return String(value || "").replace(/\s+/g, "").toUpperCase();
 }
 
-function fileName(extension: "png" | "jpg", page?: number, totalPages?: number) {
+function fileName(page?: number, totalPages?: number) {
   const date = new Date().toISOString().slice(0, 10);
-  if (page && totalPages && totalPages > 1) return `big-car-stock-${date}-page-${page}-of-${totalPages}.${extension}`;
-  return `big-car-stock-${date}.${extension}`;
+  if (page && totalPages && totalPages > 1) return `big-car-stock-${date}-page-${page}-of-${totalPages}.png`;
+  return `big-car-stock-${date}.png`;
 }
 
 export default function StockExportPage() {
@@ -179,7 +179,7 @@ export default function StockExportPage() {
     setSelectedVehicleGroups([]);
   }
 
-  async function exportImage(type: "png" | "jpg") {
+  async function exportImage() {
     setExporting(true);
     setError("");
     setMessage("");
@@ -188,15 +188,14 @@ export default function StockExportPage() {
       if (!exportVehicles.length) throw new Error("ยังไม่มีรถตามตัวกรองสำหรับ Export");
       const canvas = canvasRef.current;
       if (!canvas) throw new Error("Canvas is not ready");
-      const mimeType = type === "png" ? "image/png" : "image/jpeg";
-      const quality = type === "png" ? undefined : 0.92;
+      const mimeType = "image/png";
       const pages = exportPages.length ? exportPages : [exportVehicles];
       const files: File[] = [];
 
       for (let index = 0; index < pages.length; index += 1) {
         renderStockTableCanvas(canvas, pages[index], exportMode, index + 1, pages.length);
-        const blob = await canvasToBlob(canvas, mimeType, quality);
-        files.push(new File([blob], fileName(type, index + 1, pages.length), { type: mimeType }));
+        const blob = await canvasToBlob(canvas, mimeType);
+        files.push(new File([blob], fileName(index + 1, pages.length), { type: mimeType }));
       }
 
       const shareData = {
@@ -205,7 +204,7 @@ export default function StockExportPage() {
         files
       };
 
-      if (type === "png" && navigator.canShare?.(shareData)) {
+      if (navigator.canShare?.(shareData)) {
         await navigator.share(shareData);
         setMessage(`เปิดเมนูเซฟ/แชร์รูปแล้ว ${files.length} รูป`);
         return;
@@ -223,7 +222,7 @@ export default function StockExportPage() {
         await new Promise((resolve) => window.setTimeout(resolve, 180));
       }
 
-      setMessage(`Export ${type.toUpperCase()} แล้ว ${pages.length} รูป`);
+      setMessage(`Export PNG แล้ว ${pages.length} รูป`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Export ไม่สำเร็จ");
     } finally {
@@ -444,23 +443,15 @@ export default function StockExportPage() {
         <aside className="lg:sticky lg:top-4 lg:self-start">
           <SectionCard title="Preview รูป" icon={<FileImage size={18} />}>
             <StockPreview vehicles={exportVehicles} mode={exportMode} pageCount={exportPages.length} />
-            <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
               <button
                 type="button"
-                onClick={() => exportImage("png")}
+                onClick={exportImage}
                 disabled={exporting || !exportVehicles.length}
                 className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink disabled:opacity-60"
               >
                 {exporting ? <Loader2 size={20} className="animate-spin" /> : <Download size={20} />}
-                PNG
-              </button>
-              <button
-                type="button"
-                onClick={() => exportImage("jpg")}
-                disabled={exporting || !exportVehicles.length}
-                className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-brand/50 px-4 font-bold text-brand disabled:opacity-60"
-              >
-                JPG
+                เซฟ PNG
               </button>
               <button
                 type="button"
