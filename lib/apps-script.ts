@@ -32,6 +32,7 @@ type AppsScriptAction =
   | "listInterestRates"
   | "saveBookingReport"
   | "lookupStockByPlate"
+  | "listStockVehicles"
   | "lookupCustomerById"
   | "importStock"
   | "getStockImportStatus"
@@ -129,6 +130,11 @@ export async function saveBookingReport(input: BookingReportInput) {
 export async function lookupStockByPlate(plate: string) {
   const data = await callAppsScript<{ vehicle: StockVehicle | null }>("lookupStockByPlate", { plate });
   return data.vehicle;
+}
+
+export async function listStockVehicles(input: { query?: string; limit?: number } = {}) {
+  const data = await callAppsScript<{ vehicles: StockVehicle[]; total: number }>("listStockVehicles", input);
+  return data;
 }
 
 export async function lookupCustomerById(idCard: string) {
