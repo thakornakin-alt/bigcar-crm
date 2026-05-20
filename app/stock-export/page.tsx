@@ -158,6 +158,8 @@ export default function StockExportPage() {
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedStockFilters>(emptyAdvancedFilters);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [exportMode, setExportMode] = useState<ExportMode>("customer");
+  const [listOpen, setListOpen] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(20);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [message, setMessage] = useState("");
@@ -254,6 +256,8 @@ export default function StockExportPage() {
   const exportVehicles = filteredVehicles;
   const exportGroups = useMemo(() => groupVehiclesForExport(exportVehicles), [exportVehicles]);
   const exportPageCount = useMemo(() => exportGroups.reduce((total, group) => total + group.pages.length, 0), [exportGroups]);
+  const visibleVehicles = useMemo(() => filteredVehicles.slice(0, visibleCount), [filteredVehicles, visibleCount]);
+  const hasMoreVehicles = filteredVehicles.length > visibleCount;
 
   useEffect(() => {
     loadStock();
@@ -263,6 +267,10 @@ export default function StockExportPage() {
     const availableGroups = new Set(vehicleGroupOptions.map((group) => group.name));
     setSelectedVehicleGroups((current) => current.filter((group) => availableGroups.has(group)));
   }, [vehicleGroupOptions]);
+
+  useEffect(() => {
+    setVisibleCount(20);
+  }, [advancedFilters, query, selectedStatuses, selectedVehicleGroups]);
 
   async function loadStock() {
     setLoading(true);
@@ -398,8 +406,7 @@ export default function StockExportPage() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
-        <div className="space-y-4">
+      <div className="space-y-4">
           <SectionCard title="ค้นหาและกรองสต็อก" icon={<Search size={18} />}>
             {ENABLE_NEW_STOCK_UI ? (
               <StickyFilterBar>
@@ -584,75 +591,105 @@ export default function StockExportPage() {
             </p>
           </SectionCard>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {loading ? (
-              <div className="rounded-lg border border-line bg-panel p-6 text-center text-soft sm:col-span-2 xl:col-span-3">
-                <Loader2 className="mx-auto mb-2 animate-spin text-brand" />
-                กำลังโหลดสต็อก
-              </div>
-            ) : filteredVehicles.length ? (
-              filteredVehicles.slice(0, 120).map((vehicle) => (
-                  <div
-                    key={`${vehicle.plate}-${vehicle.vin || vehicle.model}`}
-                    className="rounded-lg border border-line bg-panel p-3 text-left"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-bold text-white">{vehicle.plate || "-"}</p>
-                        <p className="mt-1 line-clamp-2 text-sm text-soft">{vehicleTitle(vehicle)}</p>
-                      </div>
-                      <span className="rounded-full bg-[#0b0d11] px-2 py-1 text-xs font-bold text-soft">
-                        อยู่ในชุดรูป
-                      </span>
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-soft">
-                      <span>สถานะ: <b className="text-white">{vehicle.status || "-"}</b></span>
-                      <span>กลุ่ม: <b className="text-white">{vehicle.vehicleGroup || "-"}</b></span>
-                      <span>Location: <b className="text-white">{vehicle.parkingLocation || "-"}</b></span>
-                      <span>ปีจด: <b className="text-white">{vehicle.year || "-"}</b></span>
-                      <span>เกียร์: <b className="text-white">{vehicle.gear || "-"}</b></span>
-                      <span>สี: <b className="text-white">{vehicle.color || "-"}</b></span>
-                      <span>เลขไมล์: <b className="text-white">{formatMileage(vehicle.mileage)}</b></span>
-                      <span className="col-span-2">ราคาเสนอขายRT: <b className="text-brand">{formatPrice(vehicle.salePrice)}</b></span>
-                      {exportMode === "internal" && vehicle.pdiNote ? (
-                        <span className="col-span-2">PDI: <b className="text-amber-100">{vehicle.pdiNote}</b></span>
-                      ) : null}
-                    </div>
-                  </div>
-                ))
-            ) : (
-              <div className="rounded-lg border border-line bg-panel p-6 text-center text-soft sm:col-span-2 xl:col-span-3">
-                ไม่พบสต็อกตามเงื่อนไข
-              </div>
-            )}
+        <SectionCard title="Preview รูป" icon={<FileImage size={18} />}>
+          <StockPreview vehicles={exportVehicles} mode={exportMode} pageCount={exportPageCount} groupCount={exportGroups.length} />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={exportImage}
+              disabled={exporting || !exportVehicles.length}
+              className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink disabled:opacity-60"
+            >
+              {exporting ? <Loader2 size={20} className="animate-spin" /> : <Download size={20} />}
+              เซฟ PNG {exportPageCount ? `(${exportPageCount.toLocaleString("th-TH")} รูป)` : ""}
+            </button>
+            <button
+              type="button"
+              onClick={copyImage}
+              disabled={exporting || !exportVehicles.length}
+              className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-line px-4 font-bold text-white disabled:opacity-60"
+            >
+              Copy รูปแรก
+            </button>
           </div>
-        </div>
+          <canvas ref={canvasRef} className="hidden" />
+        </SectionCard>
 
-        <aside className="order-first lg:order-none lg:sticky lg:top-4 lg:self-start">
-          <SectionCard title="Preview รูป" icon={<FileImage size={18} />}>
-            <StockPreview vehicles={exportVehicles} mode={exportMode} pageCount={exportPageCount} groupCount={exportGroups.length} />
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-              <button
-                type="button"
-                onClick={exportImage}
-                disabled={exporting || !exportVehicles.length}
-                className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink disabled:opacity-60"
-              >
-                {exporting ? <Loader2 size={20} className="animate-spin" /> : <Download size={20} />}
-                เซฟ PNG
-              </button>
-              <button
-                type="button"
-                onClick={copyImage}
-                disabled={exporting || !exportVehicles.length}
-                className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-line px-4 font-bold text-white disabled:opacity-60"
-              >
-                Copy
-              </button>
+        <SectionCard title="รายการรถที่ตรงเงื่อนไข" icon={<Search size={18} />}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-2">
+              <FilterSummaryPill>พบ {filteredVehicles.length.toLocaleString("th-TH")} คัน</FilterSummaryPill>
+              <FilterSummaryPill>เลือกอัตโนมัติ {exportVehicles.length.toLocaleString("th-TH")} คัน</FilterSummaryPill>
             </div>
-            <canvas ref={canvasRef} className="hidden" />
-          </SectionCard>
-        </aside>
+            <button
+              type="button"
+              onClick={() => setListOpen((current) => !current)}
+              className="min-h-10 rounded-lg border border-line bg-[#0b0d11] px-4 text-sm font-bold text-white transition hover:border-brand"
+            >
+              {listOpen ? "ซ่อนรายการรถ" : "ดูรายการรถทั้งหมด"}
+            </button>
+          </div>
+
+          {!listOpen ? (
+            <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft">
+              ระบบจะใช้รถทั้งหมดที่ตรงเงื่อนไขไปสร้างรูปทันที ไม่ต้องติ๊กเลือกทีละคัน
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {loading ? (
+                  <div className="rounded-lg border border-line bg-panel p-6 text-center text-soft sm:col-span-2 xl:col-span-3">
+                    <Loader2 className="mx-auto mb-2 animate-spin text-brand" />
+                    กำลังโหลดสต็อก
+                  </div>
+                ) : visibleVehicles.length ? (
+                  visibleVehicles.map((vehicle) => (
+                    <div
+                      key={`${vehicle.plate}-${vehicle.vin || vehicle.model}`}
+                      className="rounded-lg border border-line bg-panel p-3 text-left"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-bold text-white">{vehicle.plate || "-"}</p>
+                          <p className="mt-1 line-clamp-2 text-sm text-soft">{vehicleTitle(vehicle)}</p>
+                        </div>
+                        <span className="rounded-full bg-[#0b0d11] px-2 py-1 text-xs font-bold text-soft">
+                          อยู่ในชุดรูป
+                        </span>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-soft">
+                        <span>สถานะ: <b className="text-white">{vehicle.status || "-"}</b></span>
+                        <span>กลุ่ม: <b className="text-white">{vehicle.vehicleGroup || "-"}</b></span>
+                        <span>Location: <b className="text-white">{vehicle.parkingLocation || "-"}</b></span>
+                        <span>ปีจด: <b className="text-white">{vehicle.year || "-"}</b></span>
+                        <span>เกียร์: <b className="text-white">{vehicle.gear || "-"}</b></span>
+                        <span>สี: <b className="text-white">{vehicle.color || "-"}</b></span>
+                        <span>เลขไมล์: <b className="text-white">{formatMileage(vehicle.mileage)}</b></span>
+                        <span className="col-span-2">ราคาเสนอขายRT: <b className="text-brand">{formatPrice(vehicle.salePrice)}</b></span>
+                        {exportMode === "internal" && vehicle.pdiNote ? (
+                          <span className="col-span-2">PDI: <b className="text-amber-100">{vehicle.pdiNote}</b></span>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-lg border border-line bg-panel p-6 text-center text-soft sm:col-span-2 xl:col-span-3">
+                    ไม่พบสต็อกตามเงื่อนไข
+                  </div>
+                )}
+              </div>
+              {hasMoreVehicles && (
+                <button
+                  type="button"
+                  onClick={() => setVisibleCount((current) => current + 20)}
+                  className="min-h-11 w-full rounded-lg border border-line bg-[#0b0d11] px-4 font-bold text-white transition hover:border-brand"
+                >
+                  โหลดเพิ่มอีก 20 คัน
+                </button>
+              )}
+            </div>
+          )}
+        </SectionCard>
       </div>
 
       <BottomSheet
