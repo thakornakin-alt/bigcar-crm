@@ -191,14 +191,35 @@ export default function StockExportPage() {
       const mimeType = type === "png" ? "image/png" : "image/jpeg";
       const quality = type === "png" ? undefined : 0.92;
       const pages = exportPages.length ? exportPages : [exportVehicles];
+      const files: File[] = [];
 
       for (let index = 0; index < pages.length; index += 1) {
         renderStockTableCanvas(canvas, pages[index], exportMode, index + 1, pages.length);
-        const url = canvas.toDataURL(mimeType, quality);
+        const blob = await canvasToBlob(canvas, mimeType, quality);
+        files.push(new File([blob], fileName(type, index + 1, pages.length), { type: mimeType }));
+      }
+
+      const shareData = {
+        title: "ตารางสต็อก BIG CAR",
+        text: `ตารางสต็อก ${exportVehicles.length.toLocaleString("th-TH")} คัน`,
+        files
+      };
+
+      if (type === "png" && navigator.canShare?.(shareData)) {
+        await navigator.share(shareData);
+        setMessage(`เปิดเมนูเซฟ/แชร์รูปแล้ว ${files.length} รูป`);
+        return;
+      }
+
+      for (let index = 0; index < files.length; index += 1) {
+        const url = URL.createObjectURL(files[index]);
         const link = document.createElement("a");
         link.href = url;
-        link.download = fileName(type, index + 1, pages.length);
+        link.download = files[index].name;
+        document.body.appendChild(link);
         link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
         await new Promise((resolve) => window.setTimeout(resolve, 180));
       }
 
@@ -456,6 +477,12 @@ export default function StockExportPage() {
       </div>
     </PageContainer>
   );
+}
+
+async function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality?: number) {
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mimeType, quality));
+  if (!blob) throw new Error("ไม่สามารถสร้างไฟล์รูปได้");
+  return blob;
 }
 
 function StockPreview({ vehicles, mode, pageCount }: { vehicles: StockVehicle[]; mode: ExportMode; pageCount: number }) {
