@@ -59,7 +59,6 @@ function fileName(extension: "png" | "jpg", page?: number, totalPages?: number) 
 
 export default function StockExportPage() {
   const [vehicles, setVehicles] = useState<StockVehicle[]>([]);
-  const [selectedPlates, setSelectedPlates] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedVehicleGroups, setSelectedVehicleGroups] = useState<string[]>([]);
@@ -145,12 +144,8 @@ export default function StockExportPage() {
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "th"));
   }, [statusMatchedVehicles]);
 
-  const selectedVehicles = useMemo(() => {
-    const selected = new Set(selectedPlates);
-    return vehicles.filter((vehicle) => selected.has(vehicle.plate));
-  }, [selectedPlates, vehicles]);
-
-  const exportPages = useMemo(() => chunkVehicles(selectedVehicles, maxTableItems), [selectedVehicles]);
+  const exportVehicles = filteredVehicles;
+  const exportPages = useMemo(() => chunkVehicles(exportVehicles, maxTableItems), [exportVehicles]);
 
   useEffect(() => {
     loadStock();
@@ -169,7 +164,6 @@ export default function StockExportPage() {
     try {
       const data = await api<StockListResponse>("/api/stock/list?limit=500");
       setVehicles(data.vehicles);
-      setSelectedPlates([]);
       if (data.warning) setError(`${data.warning} - ถ้าเพิ่งเพิ่มฟีเจอร์นี้ ต้อง deploy Apps Script เวอร์ชันใหม่ก่อน`);
       else setMessage(`โหลดสต็อก ${data.total.toLocaleString("th-TH")} คันแล้ว`);
     } catch (err) {
@@ -179,20 +173,10 @@ export default function StockExportPage() {
     }
   }
 
-  function togglePlate(plate: string) {
-    setSelectedPlates((current) => {
-      if (current.includes(plate)) return current.filter((item) => item !== plate);
-      setError("");
-      return [...current, plate];
-    });
-  }
-
-  function selectVisible() {
-    setSelectedPlates(filteredVehicles.map((vehicle) => vehicle.plate));
-  }
-
-  function clearSelected() {
-    setSelectedPlates([]);
+  function clearFilters() {
+    setQuery("");
+    setSelectedStatuses([]);
+    setSelectedVehicleGroups([]);
   }
 
   async function exportImage(type: "png" | "jpg") {
@@ -201,12 +185,12 @@ export default function StockExportPage() {
     setMessage("");
 
     try {
-      if (!selectedVehicles.length) throw new Error("กรุณาเลือกสต็อกก่อน Export");
+      if (!exportVehicles.length) throw new Error("ยังไม่มีรถตามตัวกรองสำหรับ Export");
       const canvas = canvasRef.current;
       if (!canvas) throw new Error("Canvas is not ready");
       const mimeType = type === "png" ? "image/png" : "image/jpeg";
       const quality = type === "png" ? undefined : 0.92;
-      const pages = exportPages.length ? exportPages : [selectedVehicles];
+      const pages = exportPages.length ? exportPages : [exportVehicles];
 
       for (let index = 0; index < pages.length; index += 1) {
         renderStockTableCanvas(canvas, pages[index], exportMode, index + 1, pages.length);
@@ -232,10 +216,10 @@ export default function StockExportPage() {
     setMessage("");
 
     try {
-      if (!selectedVehicles.length) throw new Error("กรุณาเลือกสต็อกก่อน Copy");
+      if (!exportVehicles.length) throw new Error("ยังไม่มีรถตามตัวกรองสำหรับ Copy");
       const canvas = canvasRef.current;
       if (!canvas) throw new Error("Canvas is not ready");
-      renderStockTableCanvas(canvas, exportPages[0] || selectedVehicles, exportMode, 1, Math.max(exportPages.length, 1));
+      renderStockTableCanvas(canvas, exportPages[0] || exportVehicles, exportMode, 1, Math.max(exportPages.length, 1));
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
       if (!blob || !navigator.clipboard || typeof ClipboardItem === "undefined") throw new Error("เครื่องนี้ยังไม่รองรับ Copy Image");
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
@@ -277,24 +261,21 @@ export default function StockExportPage() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
         <div className="space-y-4">
-          <SectionCard title="ค้นหาและเลือกสต็อก" icon={<Search size={18} />}>
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+          <SectionCard title="ค้นหาและกรองสต็อก" icon={<Search size={18} />}>
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="ค้นทะเบียน / รุ่น / ปี / Location"
                 className="h-12 rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
               />
-              <button type="button" onClick={selectVisible} className="min-h-12 rounded-lg bg-brand px-4 font-bold text-ink">
-                เลือกชุดนี้
-              </button>
-              <button type="button" onClick={clearSelected} className="min-h-12 rounded-lg border border-line px-4 font-semibold text-white">
-                ล้าง
+              <button type="button" onClick={clearFilters} className="min-h-12 rounded-lg border border-line px-4 font-semibold text-white">
+                ล้างตัวกรอง
               </button>
             </div>
             <div className="flex flex-wrap gap-2 text-xs text-soft">
-              <span className="rounded-full border border-line px-3 py-1">เลือกแล้ว {selectedVehicles.length.toLocaleString("th-TH")} คัน</span>
-              <span className="rounded-full border border-line px-3 py-1">ออกเป็น {Math.max(exportPages.length, selectedVehicles.length ? 1 : 0)} รูป</span>
+              <span className="rounded-full border border-line px-3 py-1">พร้อม Export {exportVehicles.length.toLocaleString("th-TH")} คัน</span>
+              <span className="rounded-full border border-line px-3 py-1">ออกเป็น {Math.max(exportPages.length, exportVehicles.length ? 1 : 0)} รูป</span>
               <span className="rounded-full border border-line px-3 py-1">แสดง {filteredVehicles.length.toLocaleString("th-TH")} คัน</span>
               <span className="rounded-full border border-line px-3 py-1">มีสถานะ {importedStatusCount.toLocaleString("th-TH")} คัน</span>
               <span className="rounded-full border border-line px-3 py-1">มีกลุ่มรถยนต์ {importedVehicleGroupCount.toLocaleString("th-TH")} คัน</span>
@@ -402,24 +383,18 @@ export default function StockExportPage() {
                 กำลังโหลดสต็อก
               </div>
             ) : filteredVehicles.length ? (
-              filteredVehicles.slice(0, 120).map((vehicle) => {
-                const selected = selectedPlates.includes(vehicle.plate);
-                return (
-                  <button
+              filteredVehicles.slice(0, 120).map((vehicle) => (
+                  <div
                     key={`${vehicle.plate}-${vehicle.vin || vehicle.model}`}
-                    type="button"
-                    onClick={() => togglePlate(vehicle.plate)}
-                    className={`rounded-lg border p-3 text-left transition ${
-                      selected ? "border-brand bg-[#122019]" : "border-line bg-panel hover:border-brand/60"
-                    }`}
+                    className="rounded-lg border border-line bg-panel p-3 text-left"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="font-bold text-white">{vehicle.plate || "-"}</p>
                         <p className="mt-1 line-clamp-2 text-sm text-soft">{vehicleTitle(vehicle)}</p>
                       </div>
-                      <span className={`rounded-full px-2 py-1 text-xs font-bold ${selected ? "bg-brand text-ink" : "bg-[#0b0d11] text-soft"}`}>
-                        {selected ? "เลือก" : "แตะ"}
+                      <span className="rounded-full bg-[#0b0d11] px-2 py-1 text-xs font-bold text-soft">
+                        อยู่ในชุดรูป
                       </span>
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-soft">
@@ -435,9 +410,8 @@ export default function StockExportPage() {
                         <span className="col-span-2">PDI: <b className="text-amber-100">{vehicle.pdiNote}</b></span>
                       ) : null}
                     </div>
-                  </button>
-                );
-              })
+                  </div>
+                ))
             ) : (
               <div className="rounded-lg border border-line bg-panel p-6 text-center text-soft sm:col-span-2 xl:col-span-3">
                 ไม่พบสต็อกตามเงื่อนไข
@@ -448,12 +422,12 @@ export default function StockExportPage() {
 
         <aside className="lg:sticky lg:top-4 lg:self-start">
           <SectionCard title="Preview รูป" icon={<FileImage size={18} />}>
-            <StockPreview vehicles={selectedVehicles} mode={exportMode} pageCount={exportPages.length} />
+            <StockPreview vehicles={exportVehicles} mode={exportMode} pageCount={exportPages.length} />
             <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
               <button
                 type="button"
                 onClick={() => exportImage("png")}
-                disabled={exporting || !selectedVehicles.length}
+                disabled={exporting || !exportVehicles.length}
                 className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink disabled:opacity-60"
               >
                 {exporting ? <Loader2 size={20} className="animate-spin" /> : <Download size={20} />}
@@ -462,7 +436,7 @@ export default function StockExportPage() {
               <button
                 type="button"
                 onClick={() => exportImage("jpg")}
-                disabled={exporting || !selectedVehicles.length}
+                disabled={exporting || !exportVehicles.length}
                 className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-brand/50 px-4 font-bold text-brand disabled:opacity-60"
               >
                 JPG
@@ -470,7 +444,7 @@ export default function StockExportPage() {
               <button
                 type="button"
                 onClick={copyImage}
-                disabled={exporting || !selectedVehicles.length}
+                disabled={exporting || !exportVehicles.length}
                 className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-line px-4 font-bold text-white disabled:opacity-60"
               >
                 Copy
