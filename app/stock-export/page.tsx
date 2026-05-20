@@ -460,7 +460,7 @@ export default function StockExportPage() {
           </div>
         </div>
 
-        <aside className="lg:sticky lg:top-4 lg:self-start">
+        <aside className="order-first lg:order-none lg:sticky lg:top-4 lg:self-start">
           <SectionCard title="Preview รูป" icon={<FileImage size={18} />}>
             <StockPreview vehicles={exportVehicles} mode={exportMode} pageCount={exportPageCount} groupCount={exportGroups.length} />
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
