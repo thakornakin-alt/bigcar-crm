@@ -39,6 +39,14 @@ function vehicleTitle(vehicle: StockVehicle) {
   return [vehicle.brand, vehicle.model].filter(Boolean).join(" ") || "-";
 }
 
+function stockStatus(vehicle: StockVehicle) {
+  return String(vehicle.status || "").trim();
+}
+
+function stockVehicleGroup(vehicle: StockVehicle) {
+  return String(vehicle.vehicleGroup || "").trim();
+}
+
 function fileName(extension: "png" | "jpg") {
   const date = new Date().toISOString().slice(0, 10);
   return `big-car-stock-${date}.${extension}`;
@@ -60,8 +68,8 @@ export default function StockExportPage() {
   const filteredVehicles = useMemo(() => {
     const search = query.toLowerCase().replace(/\s+/g, "");
     return vehicles.filter((vehicle) => {
-      const status = String(vehicle.status || "").trim();
-      const group = String(vehicle.vehicleGroup || "").trim() || "ไม่ระบุ";
+      const status = stockStatus(vehicle);
+      const group = stockVehicleGroup(vehicle) || "ไม่ระบุ";
       const matchesStatus = !selectedStatuses.length || selectedStatuses.includes(status);
       const matchesGroup = !selectedVehicleGroups.length || selectedVehicleGroups.includes(group);
       if (!matchesStatus) return false;
@@ -92,20 +100,26 @@ export default function StockExportPage() {
 
   const statusCounts = useMemo(() => {
     return vehicles.reduce<Record<string, number>>((counts, vehicle) => {
-      const status = String(vehicle.status || "").trim() || "ไม่ระบุ";
+      const status = stockStatus(vehicle) || "ไม่ระบุ";
       counts[status] = (counts[status] || 0) + 1;
       return counts;
     }, {});
   }, [vehicles]);
 
   const vehicleGroupOptions = useMemo(() => {
+    const hasAnySelectedStatusMatch = !selectedStatuses.length || vehicles.some((vehicle) => selectedStatuses.includes(stockStatus(vehicle)));
     const counts = vehicles.reduce<Record<string, number>>((nextCounts, vehicle) => {
-      const status = String(vehicle.status || "").trim();
+      const status = stockStatus(vehicle);
       const matchesStatus = !selectedStatuses.length || selectedStatuses.includes(status);
+      if (selectedStatuses.length && !hasAnySelectedStatusMatch) {
+        const fallbackGroup = stockVehicleGroup(vehicle);
+        if (fallbackGroup) nextCounts[fallbackGroup] = (nextCounts[fallbackGroup] || 0) + 1;
+        return nextCounts;
+      }
       if (!matchesStatus) return nextCounts;
 
-      const group = String(vehicle.vehicleGroup || "").trim() || "ไม่ระบุ";
-      nextCounts[group] = (nextCounts[group] || 0) + 1;
+      const group = stockVehicleGroup(vehicle);
+      if (group) nextCounts[group] = (nextCounts[group] || 0) + 1;
       return nextCounts;
     }, {});
 
@@ -113,6 +127,9 @@ export default function StockExportPage() {
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "th"));
   }, [selectedStatuses, vehicles]);
+
+  const importedStatusCount = useMemo(() => vehicles.filter((vehicle) => stockStatus(vehicle)).length, [vehicles]);
+  const importedVehicleGroupCount = useMemo(() => vehicles.filter((vehicle) => stockVehicleGroup(vehicle)).length, [vehicles]);
 
   const selectedVehicles = useMemo(() => {
     const selected = new Set(selectedPlates);
@@ -261,7 +278,14 @@ export default function StockExportPage() {
             <div className="flex flex-wrap gap-2 text-xs text-soft">
               <span className="rounded-full border border-line px-3 py-1">เลือกแล้ว {selectedVehicles.length}/{maxExportItems}</span>
               <span className="rounded-full border border-line px-3 py-1">แสดง {filteredVehicles.length.toLocaleString("th-TH")} คัน</span>
+              <span className="rounded-full border border-line px-3 py-1">มีสถานะ {importedStatusCount.toLocaleString("th-TH")} คัน</span>
+              <span className="rounded-full border border-line px-3 py-1">มีกลุ่มรถยนต์ {importedVehicleGroupCount.toLocaleString("th-TH")} คัน</span>
             </div>
+            {vehicles.length > 0 && (!importedStatusCount || !importedVehicleGroupCount) && (
+              <p className="rounded-lg border border-amber-400/30 bg-amber-950/20 px-3 py-3 text-sm text-amber-100">
+                โหลดสต็อกแล้ว แต่ข้อมูลสถานะ/กลุ่มรถยนต์ยังว่างในระบบ ให้ Import Stock ใหม่หลัง Vercel deploy แล้วติ๊ก “ล้าง StockInventory เดิมก่อน Import”
+              </p>
+            )}
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-white">สถานะ</p>
