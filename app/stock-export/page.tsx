@@ -119,24 +119,29 @@ function countAdvancedFilters(filters: AdvancedStockFilters) {
 }
 
 function matchesAdvancedFilters(vehicle: StockVehicle, filters: AdvancedStockFilters) {
-  if (filters.location && vehicle.parkingLocation !== filters.location) return false;
-  if (filters.year && vehicle.year !== filters.year) return false;
-  if (filters.model && !normalizeText(vehicleTitle(vehicle)).includes(normalizeText(filters.model))) return false;
-  if (filters.gear && vehicle.gear !== filters.gear) return false;
-  if (filters.color && vehicle.color !== filters.color) return false;
-  if (filters.plate && !normalizePlate(vehicle.plate).includes(normalizePlate(filters.plate))) return false;
+  return matchesAdvancedFiltersExcept(vehicle, filters, []);
+}
+
+function matchesAdvancedFiltersExcept(vehicle: StockVehicle, filters: AdvancedStockFilters, except: (keyof AdvancedStockFilters)[]) {
+  const ignored = new Set<keyof AdvancedStockFilters>(except);
+  if (!ignored.has("location") && filters.location && vehicle.parkingLocation !== filters.location) return false;
+  if (!ignored.has("year") && filters.year && vehicle.year !== filters.year) return false;
+  if (!ignored.has("model") && filters.model && !normalizeText(vehicleTitle(vehicle)).includes(normalizeText(filters.model))) return false;
+  if (!ignored.has("gear") && filters.gear && vehicle.gear !== filters.gear) return false;
+  if (!ignored.has("color") && filters.color && vehicle.color !== filters.color) return false;
+  if (!ignored.has("plate") && filters.plate && !normalizePlate(vehicle.plate).includes(normalizePlate(filters.plate))) return false;
 
   const mileage = parseNumeric(vehicle.mileage);
   const mileageMin = parseNumeric(filters.mileageMin);
   const mileageMax = parseNumeric(filters.mileageMax);
-  if (mileageMin && mileage < mileageMin) return false;
-  if (mileageMax && mileage > mileageMax) return false;
+  if (!ignored.has("mileageMin") && mileageMin && mileage < mileageMin) return false;
+  if (!ignored.has("mileageMax") && mileageMax && mileage > mileageMax) return false;
 
   const price = parseNumeric(vehicle.salePrice);
   const priceMin = parseNumeric(filters.priceMin);
   const priceMax = parseNumeric(filters.priceMax);
-  if (priceMin && price < priceMin) return false;
-  if (priceMax && price > priceMax) return false;
+  if (!ignored.has("priceMin") && priceMin && price < priceMin) return false;
+  if (!ignored.has("priceMax") && priceMax && price > priceMax) return false;
 
   return true;
 }
@@ -229,24 +234,37 @@ export default function StockExportPage() {
   }, [advancedFilters, groupMatchedVehicles]);
 
   const advancedOptions = useMemo(() => {
-    return {
-      locations: uniqueSorted(groupMatchedVehicles.map((vehicle) => vehicle.parkingLocation || "")),
-      years: uniqueSorted(groupMatchedVehicles.map((vehicle) => vehicle.year || "")),
-      models: uniqueSorted(groupMatchedVehicles.map((vehicle) => vehicleTitle(vehicle))),
-      gears: uniqueSorted(groupMatchedVehicles.map((vehicle) => vehicle.gear || "")),
-      colors: uniqueSorted(groupMatchedVehicles.map((vehicle) => vehicle.color || ""))
+    const optionValues = (except: (keyof AdvancedStockFilters)[]) => {
+      return groupMatchedVehicles.filter((vehicle) => matchesAdvancedFiltersExcept(vehicle, advancedFilters, except));
     };
-  }, [groupMatchedVehicles]);
+    const locationVehicles = optionValues(["location"]);
+    const yearVehicles = optionValues(["year"]);
+    const modelVehicles = optionValues(["model"]);
+    const gearVehicles = optionValues(["gear"]);
+    const colorVehicles = optionValues(["color"]);
+
+    return {
+      locations: uniqueSorted(locationVehicles.map((vehicle) => vehicle.parkingLocation || "")),
+      years: uniqueSorted(yearVehicles.map((vehicle) => vehicle.year || "")),
+      models: uniqueSorted(modelVehicles.map((vehicle) => vehicleTitle(vehicle))),
+      gears: uniqueSorted(gearVehicles.map((vehicle) => vehicle.gear || "")),
+      colors: uniqueSorted(colorVehicles.map((vehicle) => vehicle.color || ""))
+    };
+  }, [advancedFilters, groupMatchedVehicles]);
 
   const advancedFilterCount = useMemo(() => countAdvancedFilters(advancedFilters), [advancedFilters]);
 
   const statusCounts = useMemo(() => {
-    return groupMatchedVehicles.reduce<Record<string, number>>((counts, vehicle) => {
+    return plateMatchedVehicles.reduce<Record<string, number>>((counts, vehicle) => {
       const status = stockStatus(vehicle) || "ไม่ระบุ";
       counts[status] = (counts[status] || 0) + 1;
       return counts;
     }, {});
-  }, [groupMatchedVehicles]);
+  }, [plateMatchedVehicles]);
+
+  const statusOptions = useMemo(() => {
+    return stockStatuses.filter((status) => (statusCounts[status] || 0) > 0 || selectedStatuses.includes(status));
+  }, [selectedStatuses, statusCounts]);
 
   const vehicleGroupOptions = useMemo(() => {
     const counts = statusMatchedVehicles.reduce<Record<string, number>>((nextCounts, vehicle) => {
@@ -522,7 +540,7 @@ export default function StockExportPage() {
               </div>
               <p className="text-xs text-soft">ไม่เลือกสถานะ = แสดงทั้งหมด</p>
               <div className="flex flex-wrap gap-2">
-                {stockStatuses.map((status) => {
+                {statusOptions.map((status) => {
                   const checked = selectedStatuses.includes(status);
                   return (
                     <FilterChip
