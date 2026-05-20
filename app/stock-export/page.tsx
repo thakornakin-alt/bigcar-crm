@@ -22,16 +22,23 @@ type StockListResponse = {
   warning?: string;
 };
 
-const maxTableItems = 30;
+const maxTableItems = 20;
 const stockStatuses = ["รอขาย", "เตรียมส่งลาน", "จอง_Sale", "จอง_Internal", "จอง_รถทดแทน", "ขายแล้ว"];
 const ENABLE_NEW_STOCK_UI = process.env.NEXT_PUBLIC_ENABLE_NEW_STOCK_UI !== "false";
 
 type ExportMode = "customer" | "internal";
+type ExportFormat = "png" | "jpeg" | "pdf";
 
 type StockExportGroup = {
   name: string;
   pages: StockVehicle[][];
   vehicles: StockVehicle[];
+};
+
+type PdfImage = {
+  bytes: Uint8Array;
+  width: number;
+  height: number;
 };
 
 type AdvancedStockFilters = {
@@ -155,11 +162,16 @@ function safeFilePart(value: string) {
     .slice(0, 48) || "stock";
 }
 
-function fileName(groupName: string, page?: number, totalPages?: number) {
+function fileName(groupName: string, extension: "png" | "jpg", page?: number, totalPages?: number) {
   const date = new Date().toISOString().slice(0, 10);
   const group = safeFilePart(groupName);
-  if (page && totalPages && totalPages > 1) return `big-car-stock-${group}-${date}-page-${page}-of-${totalPages}.png`;
-  return `big-car-stock-${group}-${date}.png`;
+  if (page && totalPages && totalPages > 1) return `big-car-stock-${group}-${date}-page-${page}-of-${totalPages}.${extension}`;
+  return `big-car-stock-${group}-${date}.${extension}`;
+}
+
+function pdfFileName(groupCount: number) {
+  const date = new Date().toISOString().slice(0, 10);
+  return `big-car-stock-${groupCount.toLocaleString("en-US")}-groups-${date}.pdf`;
 }
 
 export default function StockExportPage() {
@@ -329,35 +341,47 @@ export default function StockExportPage() {
     setAdvancedFilters((current) => ({ ...current, [key]: "" }));
   }
 
-  async function exportImage() {
+  async function exportImage(format: ExportFormat) {
     setExporting(true);
     setError("");
-    setMessage("");
+    setMessage(`กำลังสร้างไฟล์ ${format.toUpperCase()} ${exportPageCount.toLocaleString("th-TH")} หน้า...`);
 
     try {
       if (!exportVehicles.length) throw new Error("ยังไม่มีรถตามตัวกรองสำหรับ Export");
       const canvas = canvasRef.current;
       if (!canvas) throw new Error("Canvas is not ready");
-      const mimeType = "image/png";
+      const mimeType = format === "jpeg" ? "image/jpeg" : "image/png";
+      const extension = format === "jpeg" ? "jpg" : "png";
       const files: File[] = [];
+      const pdfImages: PdfImage[] = [];
 
       for (const group of exportGroups) {
         for (let index = 0; index < group.pages.length; index += 1) {
-          renderStockTableCanvas(canvas, group.pages[index], exportMode, index + 1, group.pages.length, group.name);
-          const blob = await canvasToBlob(canvas, mimeType);
-          files.push(new File([blob], fileName(group.name, index + 1, group.pages.length), { type: mimeType }));
+          renderStockTableCanvas(canvas, group.pages[index], exportMode, index + 1, group.pages.length, group.name, group.vehicles.length, exportVehicles.length);
+          if (format === "pdf") {
+            const jpegBlob = await canvasToBlob(canvas, "image/jpeg", 0.92);
+            pdfImages.push({ bytes: new Uint8Array(await jpegBlob.arrayBuffer()), width: canvas.width, height: canvas.height });
+          } else {
+            const blob = await canvasToBlob(canvas, mimeType, format === "jpeg" ? 0.92 : undefined);
+            files.push(new File([blob], fileName(group.name, extension, index + 1, group.pages.length), { type: mimeType }));
+          }
         }
+      }
+
+      if (format === "pdf") {
+        const blob = buildPdfFromJpegs(pdfImages);
+        files.push(new File([blob], pdfFileName(exportGroups.length), { type: "application/pdf" }));
       }
 
       const shareData = {
         title: "ตารางสต็อก BIG CAR",
-        text: `ตารางสต็อก ${exportVehicles.length.toLocaleString("th-TH")} คัน / ${exportGroups.length.toLocaleString("th-TH")} กลุ่ม`,
+        text: `ตารางสต็อก ${exportVehicles.length.toLocaleString("th-TH")} คัน / ${exportGroups.length.toLocaleString("th-TH")} กลุ่ม / ${files.length.toLocaleString("th-TH")} ไฟล์`,
         files
       };
 
       if (navigator.canShare?.(shareData)) {
         await navigator.share(shareData);
-        setMessage(`เปิดเมนูเซฟ/แชร์รูปแล้ว ${files.length} รูป`);
+        setMessage(`เปิดเมนูเซฟ/แชร์แล้ว ${files.length.toLocaleString("th-TH")} ไฟล์`);
         return;
       }
 
@@ -373,7 +397,7 @@ export default function StockExportPage() {
         await new Promise((resolve) => window.setTimeout(resolve, 180));
       }
 
-      setMessage(`Export PNG แล้ว ${files.length} รูป แยกตามกลุ่มรถยนต์`);
+      setMessage(`Export ${format.toUpperCase()} แล้ว ${files.length.toLocaleString("th-TH")} ไฟล์ จาก ${exportPageCount.toLocaleString("th-TH")} หน้า`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Export ไม่สำเร็จ");
     } finally {
@@ -391,7 +415,7 @@ export default function StockExportPage() {
       const canvas = canvasRef.current;
       if (!canvas) throw new Error("Canvas is not ready");
       const firstGroup = exportGroups[0];
-      renderStockTableCanvas(canvas, firstGroup.pages[0] || firstGroup.vehicles, exportMode, 1, Math.max(firstGroup.pages.length, 1), firstGroup.name);
+      renderStockTableCanvas(canvas, firstGroup.pages[0] || firstGroup.vehicles, exportMode, 1, Math.max(firstGroup.pages.length, 1), firstGroup.name, firstGroup.vehicles.length, exportVehicles.length);
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
       if (!blob || !navigator.clipboard || typeof ClipboardItem === "undefined") throw new Error("เครื่องนี้ยังไม่รองรับ Copy Image");
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
@@ -612,21 +636,37 @@ export default function StockExportPage() {
               </button>
             </div>
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft">
-              Export เป็นตารางแยกตามกลุ่มรถยนต์ รูปละ {maxTableItems} คัน ถ้ากลุ่มไหนเกินจะดาวน์โหลดหลายรูปพร้อมเลขหน้า
+              Export เป็นตารางแยกตามกลุ่มรถยนต์ หน้า/รูปละ {maxTableItems} คัน ถ้ากลุ่มไหนเกินจะสร้างหลายหน้าพร้อมเลขหน้าอัตโนมัติ
             </p>
           </SectionCard>
 
         <SectionCard title="Preview รูป" icon={<FileImage size={18} />}>
           <StockPreview vehicles={exportVehicles} mode={exportMode} pageCount={exportPageCount} groupCount={exportGroups.length} />
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <button
               type="button"
-              onClick={exportImage}
+              onClick={() => exportImage("png")}
               disabled={exporting || !exportVehicles.length}
               className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink disabled:opacity-60"
             >
               {exporting ? <Loader2 size={20} className="animate-spin" /> : <Download size={20} />}
               เซฟ PNG {exportPageCount ? `(${exportPageCount.toLocaleString("th-TH")} รูป)` : ""}
+            </button>
+            <button
+              type="button"
+              onClick={() => exportImage("jpeg")}
+              disabled={exporting || !exportVehicles.length}
+              className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-brand/60 bg-brand/10 px-4 font-bold text-brand disabled:opacity-60"
+            >
+              JPG
+            </button>
+            <button
+              type="button"
+              onClick={() => exportImage("pdf")}
+              disabled={exporting || !exportVehicles.length}
+              className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-line px-4 font-bold text-white disabled:opacity-60"
+            >
+              PDF
             </button>
             <button
               type="button"
@@ -803,6 +843,69 @@ async function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality
   return blob;
 }
 
+function buildPdfFromJpegs(images: PdfImage[]) {
+  if (!images.length) throw new Error("ยังไม่มีหน้าสำหรับสร้าง PDF");
+
+  const encoder = new TextEncoder();
+  const chunks: Uint8Array[] = [];
+  const offsets: number[] = [0];
+  let length = 0;
+  const push = (part: string | Uint8Array) => {
+    const bytes = typeof part === "string" ? encoder.encode(part) : part;
+    chunks.push(bytes);
+    length += bytes.length;
+  };
+  const objectCount = 2 + images.length * 3;
+  const pageIds = images.map((_, index) => 3 + index * 3);
+
+  const writeObject = (id: number, body: (write: typeof push) => void) => {
+    offsets[id] = length;
+    push(`${id} 0 obj\n`);
+    body(push);
+    push("\nendobj\n");
+  };
+
+  push("%PDF-1.4\n%stock-export\n");
+  writeObject(1, (write) => write("<< /Type /Catalog /Pages 2 0 R >>"));
+  writeObject(2, (write) => write(`<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${images.length} >>`));
+
+  images.forEach((image, index) => {
+    const pageId = 3 + index * 3;
+    const contentId = pageId + 1;
+    const imageId = pageId + 2;
+    const pageWidth = 842;
+    const pageHeight = Math.round((pageWidth * image.height) / image.width);
+    const content = `q\n${pageWidth} 0 0 ${pageHeight} 0 0 cm\n/Im${index + 1} Do\nQ`;
+
+    writeObject(pageId, (write) => {
+      write(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /Im${index + 1} ${imageId} 0 R >> >> /Contents ${contentId} 0 R >>`);
+    });
+    writeObject(contentId, (write) => {
+      write(`<< /Length ${encoder.encode(content).length} >>\nstream\n${content}\nendstream`);
+    });
+    writeObject(imageId, (write) => {
+      write(`<< /Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${image.bytes.length} >>\nstream\n`);
+      write(image.bytes);
+      write("\nendstream");
+    });
+  });
+
+  const xrefOffset = length;
+  push(`xref\n0 ${objectCount + 1}\n`);
+  push("0000000000 65535 f \n");
+  for (let id = 1; id <= objectCount; id += 1) {
+    push(`${String(offsets[id]).padStart(10, "0")} 00000 n \n`);
+  }
+  push(`trailer\n<< /Size ${objectCount + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
+
+  const blobParts = chunks.map((chunk) => {
+    const copy = new Uint8Array(chunk.byteLength);
+    copy.set(chunk);
+    return copy.buffer;
+  });
+  return new Blob(blobParts, { type: "application/pdf" });
+}
+
 function AdvancedSelect({
   label,
   value,
@@ -937,12 +1040,21 @@ function StockPreview({ vehicles, mode, pageCount, groupCount }: { vehicles: Sto
   );
 }
 
-function renderStockTableCanvas(canvas: HTMLCanvasElement, vehicles: StockVehicle[], mode: ExportMode, page: number, totalPages: number, groupName: string) {
+function renderStockTableCanvas(
+  canvas: HTMLCanvasElement,
+  vehicles: StockVehicle[],
+  mode: ExportMode,
+  page: number,
+  totalPages: number,
+  groupName: string,
+  groupTotal: number,
+  exportTotal: number
+) {
   const width = 1600;
   const margin = 40;
   const headerHeight = 118;
   const tableTop = 150;
-  const rowHeight = vehicles.length <= 3 ? 62 : vehicles.length <= 8 ? 56 : 48;
+  const rowHeight = vehicles.length <= 3 ? 68 : vehicles.length <= 8 ? 60 : 54;
   const footerHeight = 54;
   const rows = vehicles.slice(0, maxTableItems);
   const headerRowHeight = 50;
@@ -973,7 +1085,7 @@ function renderStockTableCanvas(canvas: HTMLCanvasElement, vehicles: StockVehicl
   ctx.fillStyle = "#64748b";
   ctx.font = "600 22px Arial, sans-serif";
   ctx.fillText(
-    `${rows.length.toLocaleString("th-TH")} คัน | อัปเดต ${new Date().toLocaleDateString("th-TH")} | ${mode === "customer" ? "สำหรับลูกค้า" : "สำหรับภายใน"}`,
+    `${groupTotal.toLocaleString("th-TH")} คัน | อัปเดต ${new Date().toLocaleDateString("th-TH")} | ${mode === "customer" ? "สำหรับลูกค้า" : "สำหรับภายใน"}`,
     margin + 28,
     112
   );
@@ -1033,7 +1145,7 @@ function renderStockTableCanvas(canvas: HTMLCanvasElement, vehicles: StockVehicl
       const textX =
         column.key === "price" || column.key === "mileage" ? x + column.width - 12 : column.key === "model" || column.key === "location" ? x + 12 : x + column.width / 2;
       if (column.key === "model") {
-        drawWrappedCellText(ctx, values[column.key], textX, rowY + 19, column.width - 24, 21, 2);
+        drawWrappedCellText(ctx, values[column.key], textX, rowY + 21, column.width - 24, 23, 2);
       } else if (column.key === "location" || column.key === "color") {
         drawBadgeCellText(ctx, values[column.key], textX, rowY + Math.floor(rowHeight / 2), column.width - 24);
       } else {
@@ -1046,9 +1158,9 @@ function renderStockTableCanvas(canvas: HTMLCanvasElement, vehicles: StockVehicl
   ctx.textAlign = "left";
   ctx.fillStyle = "#6b7280";
   ctx.font = "600 18px Arial, sans-serif";
-  ctx.fillText("BIG CAR CRM", margin, height - 22);
+  ctx.fillText("Generated from latest stock", margin, height - 22);
   ctx.textAlign = "right";
-  ctx.fillText(`Generated from latest stock | ${rows.length.toLocaleString("th-TH")} vehicles`, width - margin, height - 22);
+  ctx.fillText(`จำนวนรถทั้งหมด ${exportTotal.toLocaleString("th-TH")} คัน`, width - margin, height - 22);
   ctx.textAlign = "left";
 }
 
