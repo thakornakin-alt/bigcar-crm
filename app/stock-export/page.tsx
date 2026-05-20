@@ -12,6 +12,9 @@ type StockListResponse = {
 };
 
 const maxExportItems = 12;
+const stockStatuses = ["รอขาย", "เตรียมส่งลาน", "จอง_Sale", "จอง_Internal", "จอง_รถทดแทน", "ขายแล้ว"];
+
+type ExportMode = "customer" | "internal";
 
 async function api<T>(url: string): Promise<T> {
   const response = await fetch(url, { cache: "no-store" });
@@ -24,6 +27,12 @@ function formatPrice(value: string) {
   const numeric = Number(String(value || "").replace(/[^\d.]/g, ""));
   if (!numeric) return "-";
   return `${numeric.toLocaleString("th-TH")} บาท`;
+}
+
+function formatMileage(value?: string) {
+  const numeric = Number(String(value || "").replace(/[^\d.]/g, ""));
+  if (!numeric) return "-";
+  return `${numeric.toLocaleString("th-TH")} กม.`;
 }
 
 function vehicleTitle(vehicle: StockVehicle) {
@@ -39,6 +48,8 @@ export default function StockExportPage() {
   const [vehicles, setVehicles] = useState<StockVehicle[]>([]);
   const [selectedPlates, setSelectedPlates] = useState<string[]>([]);
   const [query, setQuery] = useState("");
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(["รอขาย"]);
+  const [exportMode, setExportMode] = useState<ExportMode>("customer");
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [message, setMessage] = useState("");
@@ -47,14 +58,21 @@ export default function StockExportPage() {
 
   const filteredVehicles = useMemo(() => {
     const search = query.toLowerCase().replace(/\s+/g, "");
-    if (!search) return vehicles;
-    return vehicles.filter((vehicle) =>
-      [
+    return vehicles.filter((vehicle) => {
+      const status = String(vehicle.status || "").trim();
+      const matchesStatus = !selectedStatuses.length || selectedStatuses.includes(status);
+      if (!matchesStatus) return false;
+      if (!search) return true;
+
+      return [
         vehicle.plate,
         vehicle.brand,
         vehicle.model,
         vehicle.year,
         vehicle.color,
+        vehicle.status,
+        vehicle.gear,
+        vehicle.mileage,
         vehicle.salePrice,
         vehicle.parkingLocation,
         vehicle.project,
@@ -63,9 +81,17 @@ export default function StockExportPage() {
         .join("")
         .toLowerCase()
         .replace(/\s+/g, "")
-        .includes(search)
-    );
-  }, [query, vehicles]);
+        .includes(search);
+    });
+  }, [query, selectedStatuses, vehicles]);
+
+  const statusCounts = useMemo(() => {
+    return vehicles.reduce<Record<string, number>>((counts, vehicle) => {
+      const status = String(vehicle.status || "").trim() || "ไม่ระบุ";
+      counts[status] = (counts[status] || 0) + 1;
+      return counts;
+    }, {});
+  }, [vehicles]);
 
   const selectedVehicles = useMemo(() => {
     const selected = new Set(selectedPlates);
@@ -123,7 +149,7 @@ export default function StockExportPage() {
       if (!selectedVehicles.length) throw new Error("กรุณาเลือกสต็อกก่อน Export");
       const canvas = canvasRef.current;
       if (!canvas) throw new Error("Canvas is not ready");
-      await renderStockCanvas(canvas, selectedVehicles);
+      await renderStockCanvas(canvas, selectedVehicles, exportMode);
 
       const mimeType = type === "png" ? "image/png" : "image/jpeg";
       const quality = type === "png" ? undefined : 0.92;
@@ -149,7 +175,7 @@ export default function StockExportPage() {
       if (!selectedVehicles.length) throw new Error("กรุณาเลือกสต็อกก่อน Copy");
       const canvas = canvasRef.current;
       if (!canvas) throw new Error("Canvas is not ready");
-      await renderStockCanvas(canvas, selectedVehicles);
+      await renderStockCanvas(canvas, selectedVehicles, exportMode);
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
       if (!blob || !navigator.clipboard || typeof ClipboardItem === "undefined") throw new Error("เครื่องนี้ยังไม่รองรับ Copy Image");
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
@@ -196,7 +222,7 @@ export default function StockExportPage() {
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="ค้นทะเบียน / รุ่น / ปี / สถานที่"
+                placeholder="ค้นทะเบียน / รุ่น / ปี / Location"
                 className="h-12 rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
               />
               <button type="button" onClick={selectVisible} className="min-h-12 rounded-lg bg-brand px-4 font-bold text-ink">
@@ -209,6 +235,56 @@ export default function StockExportPage() {
             <div className="flex flex-wrap gap-2 text-xs text-soft">
               <span className="rounded-full border border-line px-3 py-1">เลือกแล้ว {selectedVehicles.length}/{maxExportItems}</span>
               <span className="rounded-full border border-line px-3 py-1">แสดง {filteredVehicles.length.toLocaleString("th-TH")} คัน</span>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-white">สถานะ</p>
+                <button type="button" onClick={() => setSelectedStatuses([])} className="text-xs font-semibold text-brand">
+                  ทั้งหมด
+                </button>
+              </div>
+              <p className="text-xs text-soft">ไม่เลือกสถานะ = แสดงทั้งหมด</p>
+              <div className="flex flex-wrap gap-2">
+                {stockStatuses.map((status) => {
+                  const checked = selectedStatuses.includes(status);
+                  return (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() =>
+                        setSelectedStatuses((current) =>
+                          current.includes(status) ? current.filter((item) => item !== status) : [...current, status]
+                        )
+                      }
+                      className={`min-h-10 rounded-lg border px-3 text-sm font-semibold ${
+                        checked ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-soft"
+                      }`}
+                    >
+                      {status} ({statusCounts[status] || 0})
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setExportMode("customer")}
+                className={`min-h-11 rounded-lg border px-4 font-bold ${
+                  exportMode === "customer" ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-white"
+                }`}
+              >
+                สำหรับลูกค้า
+              </button>
+              <button
+                type="button"
+                onClick={() => setExportMode("internal")}
+                className={`min-h-11 rounded-lg border px-4 font-bold ${
+                  exportMode === "internal" ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-white"
+                }`}
+              >
+                สำหรับภายใน
+              </button>
             </div>
           </SectionCard>
 
@@ -240,10 +316,16 @@ export default function StockExportPage() {
                       </span>
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-soft">
-                      <span>ปี: <b className="text-white">{vehicle.year || "-"}</b></span>
+                      <span>สถานะ: <b className="text-white">{vehicle.status || "-"}</b></span>
+                      <span>Location: <b className="text-white">{vehicle.parkingLocation || "-"}</b></span>
+                      <span>ปีจด: <b className="text-white">{vehicle.year || "-"}</b></span>
+                      <span>เกียร์: <b className="text-white">{vehicle.gear || "-"}</b></span>
                       <span>สี: <b className="text-white">{vehicle.color || "-"}</b></span>
-                      <span className="col-span-2">ราคา: <b className="text-brand">{formatPrice(vehicle.salePrice)}</b></span>
-                      <span className="col-span-2">จอด: <b className="text-white">{vehicle.parkingLocation || "-"}</b></span>
+                      <span>เลขไมล์: <b className="text-white">{formatMileage(vehicle.mileage)}</b></span>
+                      <span className="col-span-2">ราคาเสนอขายRT: <b className="text-brand">{formatPrice(vehicle.salePrice)}</b></span>
+                      {exportMode === "internal" && vehicle.pdiNote ? (
+                        <span className="col-span-2">PDI: <b className="text-amber-100">{vehicle.pdiNote}</b></span>
+                      ) : null}
                     </div>
                   </button>
                 );
@@ -258,7 +340,7 @@ export default function StockExportPage() {
 
         <aside className="lg:sticky lg:top-4 lg:self-start">
           <SectionCard title="Preview รูป" icon={<FileImage size={18} />}>
-            <StockPreview vehicles={selectedVehicles} />
+            <StockPreview vehicles={selectedVehicles} mode={exportMode} />
             <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
               <button
                 type="button"
@@ -294,13 +376,13 @@ export default function StockExportPage() {
   );
 }
 
-function StockPreview({ vehicles }: { vehicles: StockVehicle[] }) {
+function StockPreview({ vehicles, mode }: { vehicles: StockVehicle[]; mode: ExportMode }) {
   return (
     <div className="overflow-hidden rounded-lg border border-line bg-[#080a0d]">
       <div className="bg-gradient-to-r from-[#101820] via-[#0e1713] to-[#101820] p-4">
         <p className="text-xs font-bold uppercase tracking-[0.24em] text-brand">BIG CAR RDD</p>
         <h2 className="mt-1 text-2xl font-black text-white">รถพร้อมขาย</h2>
-        <p className="mt-1 text-sm text-soft">คัดแล้ว {vehicles.length} คัน</p>
+        <p className="mt-1 text-sm text-soft">คัดแล้ว {vehicles.length} คัน / {mode === "customer" ? "สำหรับลูกค้า" : "สำหรับภายใน"}</p>
       </div>
       <div className="space-y-2 p-3">
         {vehicles.length ? vehicles.map((vehicle) => (
@@ -312,7 +394,10 @@ function StockPreview({ vehicles }: { vehicles: StockVehicle[] }) {
               </div>
               <p className="text-right text-sm font-black text-brand">{formatPrice(vehicle.salePrice)}</p>
             </div>
-            <p className="mt-2 text-xs text-soft">ปี {vehicle.year || "-"} / สี {vehicle.color || "-"} / {vehicle.parkingLocation || "-"}</p>
+            <p className="mt-2 text-xs text-soft">
+              {vehicle.parkingLocation || "-"} / ปี {vehicle.year || "-"} / {vehicle.gear || "-"} / สี {vehicle.color || "-"} / {formatMileage(vehicle.mileage)}
+            </p>
+            {mode === "internal" && vehicle.pdiNote ? <p className="mt-1 text-xs text-amber-100">PDI: {vehicle.pdiNote}</p> : null}
           </div>
         )) : (
           <p className="py-12 text-center text-sm text-soft">เลือกสต็อกเพื่อดู Preview</p>
@@ -322,9 +407,9 @@ function StockPreview({ vehicles }: { vehicles: StockVehicle[] }) {
   );
 }
 
-async function renderStockCanvas(canvas: HTMLCanvasElement, vehicles: StockVehicle[]) {
+async function renderStockCanvas(canvas: HTMLCanvasElement, vehicles: StockVehicle[], mode: ExportMode) {
   const width = 1080;
-  const cardHeight = 142;
+  const cardHeight = mode === "internal" ? 176 : 154;
   const height = Math.max(1080, 270 + vehicles.length * cardHeight + 110);
   const ratio = window.devicePixelRatio || 1;
   canvas.width = width * ratio;
@@ -350,17 +435,27 @@ async function renderStockCanvas(canvas: HTMLCanvasElement, vehicles: StockVehic
   ctx.fillText("รถพร้อมขาย", 64, 154);
   ctx.fillStyle = "#aab3c0";
   ctx.font = "400 30px Arial, sans-serif";
-  ctx.fillText(`คัดสต็อก ${vehicles.length} คัน อัปเดต ${new Date().toLocaleDateString("th-TH")}`, 64, 206);
+  ctx.fillText(`คัดสต็อก ${vehicles.length} คัน / ${mode === "customer" ? "สำหรับลูกค้า" : "สำหรับภายใน"} / อัปเดต ${new Date().toLocaleDateString("th-TH")}`, 64, 206);
 
   let y = 260;
   vehicles.forEach((vehicle, index) => {
-    roundRect(ctx, 54, y, width - 108, 112, 18, index % 2 ? "#111821" : "#0d1219", "#263141");
+    const boxHeight = mode === "internal" && vehicle.pdiNote ? 146 : 124;
+    roundRect(ctx, 54, y, width - 108, boxHeight, 18, index % 2 ? "#111821" : "#0d1219", "#263141");
     ctx.fillStyle = "#22c55e";
     ctx.font = "900 34px Arial, sans-serif";
     ctx.fillText(vehicle.plate || "-", 82, y + 43);
     ctx.fillStyle = "#ffffff";
     ctx.font = "800 30px Arial, sans-serif";
-    fillTextEllipsis(ctx, vehicleTitle(vehicle), 82, y + 82, 560);
+    fillTextEllipsis(ctx, vehicleTitle(vehicle), 82, y + 80, 560);
+    ctx.fillStyle = "#c7d0dc";
+    ctx.font = "500 22px Arial, sans-serif";
+    fillTextEllipsis(
+      ctx,
+      `${vehicle.parkingLocation || "-"} | ปี ${vehicle.year || "-"} | ${vehicle.gear || "-"} | สี ${vehicle.color || "-"} | ${formatMileage(vehicle.mileage)}`,
+      82,
+      y + 112,
+      700
+    );
 
     ctx.textAlign = "right";
     ctx.fillStyle = "#22c55e";
@@ -368,8 +463,15 @@ async function renderStockCanvas(canvas: HTMLCanvasElement, vehicles: StockVehic
     ctx.fillText(formatPrice(vehicle.salePrice), width - 82, y + 43);
     ctx.fillStyle = "#c7d0dc";
     ctx.font = "500 24px Arial, sans-serif";
-    ctx.fillText(`ปี ${vehicle.year || "-"} | สี ${vehicle.color || "-"} | ${vehicle.parkingLocation || "-"}`, width - 82, y + 82);
+    ctx.fillText(vehicle.status || "-", width - 82, y + 82);
     ctx.textAlign = "left";
+
+    if (mode === "internal" && vehicle.pdiNote) {
+      ctx.fillStyle = "#fde68a";
+      ctx.font = "500 22px Arial, sans-serif";
+      fillTextEllipsis(ctx, `PDI: ${vehicle.pdiNote}`, 82, y + 140, 880);
+    }
+
     y += cardHeight;
   });
 

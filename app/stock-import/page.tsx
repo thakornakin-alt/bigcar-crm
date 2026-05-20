@@ -26,7 +26,11 @@ const fieldLabels: Array<{ key: keyof StockVehicle; label: string; aliases: stri
   { key: "vin", label: "เลขตัวรถ", aliases: ["เลขตัวรถ", "เลขตัวถัง", "vin", "chassis"] },
   { key: "finalGrade", label: "เกรด Final", aliases: ["เกรด final", "เกรดfinal", "finalgrade", "grade"] },
   { key: "program", label: "Program", aliases: ["program", "PROGRAM"] },
-  { key: "parkingLocation", label: "สถานที่จอด", aliases: ["สถานที่จอด", "parking", "location"] }
+  { key: "parkingLocation", label: "Location", aliases: ["location", "สถานที่จอด", "โลเคชั่น", "parking"] },
+  { key: "status", label: "สถานะ", aliases: ["สถานะ", "status"] },
+  { key: "gear", label: "เกียร์", aliases: ["เกียร์", "gear", "transmission"] },
+  { key: "mileage", label: "เลขไมล์", aliases: ["เลขไมล์", "ไมล์", "mileage", "odo", "odometer"] },
+  { key: "pdiNote", label: "หมายเหตุ PDI", aliases: ["หมายเหตุ pdi", "หมายเหตุPDI", "pdi", "pdinote", "หมายเหตุ"] }
 ];
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
@@ -104,7 +108,11 @@ function mapRows(rows: RawRow[], mapping: Record<keyof StockVehicle, string>) {
       vin: cell(row[mapping.vin]) || cell(row[vinFallbackKey]),
       finalGrade: cell(row[mapping.finalGrade]),
       program: cell(row[mapping.program]),
-      parkingLocation: cell(row[mapping.parkingLocation])
+      parkingLocation: cell(row[mapping.parkingLocation]),
+      status: cell(row[mapping.status]),
+      gear: cell(row[mapping.gear]),
+      mileage: cell(row[mapping.mileage]).replace(/[^\d.]/g, ""),
+      pdiNote: cell(row[mapping.pdiNote])
     }))
     .filter((row) => row.plate);
 }

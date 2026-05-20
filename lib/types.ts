@@ -143,6 +143,10 @@ export type StockVehicle = {
   finalGrade?: string;
   program?: string;
   parkingLocation?: string;
+  status?: string;
+  gear?: string;
+  mileage?: string;
+  pdiNote?: string;
 };
 
 export type StockImportInput = {
