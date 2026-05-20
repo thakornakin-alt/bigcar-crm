@@ -110,19 +110,23 @@ export default function StockExportPage() {
     return Array.from(byPlate.values());
   }, [query, vehicles]);
 
-  const groupMatchedVehicles = useMemo(() => {
+  const statusMatchedVehicles = useMemo(() => {
     return plateMatchedVehicles.filter((vehicle) => {
-      const group = stockVehicleGroup(vehicle) || "ไม่ระบุ";
-      return !selectedVehicleGroups.length || selectedVehicleGroups.includes(group);
-    });
-  }, [plateMatchedVehicles, selectedVehicleGroups]);
-
-  const filteredVehicles = useMemo(() => {
-    return groupMatchedVehicles.filter((vehicle) => {
       const status = stockStatus(vehicle);
       return !selectedStatuses.length || !importedStatusCount || selectedStatuses.includes(status);
     });
-  }, [groupMatchedVehicles, importedStatusCount, selectedStatuses]);
+  }, [importedStatusCount, plateMatchedVehicles, selectedStatuses]);
+
+  const groupMatchedVehicles = useMemo(() => {
+    return statusMatchedVehicles.filter((vehicle) => {
+      const group = stockVehicleGroup(vehicle) || "ไม่ระบุ";
+      return !selectedVehicleGroups.length || selectedVehicleGroups.includes(group);
+    });
+  }, [selectedVehicleGroups, statusMatchedVehicles]);
+
+  const filteredVehicles = useMemo(() => {
+    return groupMatchedVehicles;
+  }, [groupMatchedVehicles]);
 
   const statusCounts = useMemo(() => {
     return groupMatchedVehicles.reduce<Record<string, number>>((counts, vehicle) => {
@@ -133,7 +137,7 @@ export default function StockExportPage() {
   }, [groupMatchedVehicles]);
 
   const vehicleGroupOptions = useMemo(() => {
-    const counts = plateMatchedVehicles.reduce<Record<string, number>>((nextCounts, vehicle) => {
+    const counts = statusMatchedVehicles.reduce<Record<string, number>>((nextCounts, vehicle) => {
       const group = stockVehicleGroup(vehicle);
       if (group) nextCounts[group] = (nextCounts[group] || 0) + 1;
       return nextCounts;
@@ -142,7 +146,7 @@ export default function StockExportPage() {
     return Object.entries(counts)
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "th"));
-  }, [plateMatchedVehicles]);
+  }, [statusMatchedVehicles]);
 
   const selectedVehicles = useMemo(() => {
     const selected = new Set(selectedPlates);
