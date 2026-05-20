@@ -12,6 +12,8 @@ const chunkSize = 300;
 const defaultHeaderRow = 5;
 const vinFallbackKey = "__BIGCAR_COL_U";
 const vinFallbackLabel = "คอลัมน์ U (ล็อกอัตโนมัติ)";
+const vehicleGroupFallbackKey = "__BIGCAR_COL_H";
+const vehicleGroupFallbackLabel = "คอลัมน์ H (ล็อกอัตโนมัติ)";
 const fieldLabels: Array<{ key: keyof StockVehicle; label: string; aliases: string[] }> = [
   { key: "plate", label: "ทะเบียนรถ", aliases: ["ทะเบียนรถ", "ทะเบียน", "plate", "licenseplate", "regno", "เลขทะเบียน"] },
   { key: "brand", label: "ยี่ห้อรถ", aliases: ["ยี่ห้อรถ", "ยี่ห้อ", "brand", "make"] },
@@ -88,7 +90,7 @@ function detectMapping(headers: string[]) {
 
   return fieldLabels.reduce<Record<keyof StockVehicle, string>>((mapping, field) => {
     const found = normalized.find((item) => field.aliases.some((alias) => item.normalized === normalizeHeader(alias)));
-    mapping[field.key] = found?.header || (field.key === "vin" ? vinFallbackKey : "");
+    mapping[field.key] = found?.header || (field.key === "vin" ? vinFallbackKey : field.key === "vehicleGroup" ? vehicleGroupFallbackKey : "");
     return mapping;
   }, {} as Record<keyof StockVehicle, string>);
 }
@@ -114,7 +116,7 @@ function mapRows(rows: RawRow[], mapping: Record<keyof StockVehicle, string>) {
       gear: cell(row[mapping.gear]),
       mileage: cell(row[mapping.mileage]).replace(/[^\d.]/g, ""),
       pdiNote: cell(row[mapping.pdiNote]),
-      vehicleGroup: cell(row[mapping.vehicleGroup])
+      vehicleGroup: cell(row[mapping.vehicleGroup]) || cell(row[vehicleGroupFallbackKey])
     }))
     .filter((row) => row.plate);
 }
@@ -130,6 +132,7 @@ function readSheetRows(sheet: XLSX.WorkSheet | undefined, headerRow: number) {
     const rowNumber = typeof row.__rowNum__ === "number" ? row.__rowNum__ : headerRow + index;
     return {
       ...row,
+      [vehicleGroupFallbackKey]: cell(sheet[XLSX.utils.encode_cell({ c: 7, r: rowNumber })]?.v),
       [vinFallbackKey]: cell(sheet[XLSX.utils.encode_cell({ c: 20, r: rowNumber })]?.v)
     };
   });
@@ -399,6 +402,7 @@ export default function StockImportPage() {
                     >
                       <option value="">ไม่ใช้</option>
                       {field.key === "vin" && <option value={vinFallbackKey}>{vinFallbackLabel}</option>}
+                      {field.key === "vehicleGroup" && <option value={vehicleGroupFallbackKey}>{vehicleGroupFallbackLabel}</option>}
                       {headers.map((header) => (
                         <option key={header} value={header}>
                           {header}
