@@ -642,6 +642,7 @@ export default function StockExportPage() {
 
         <SectionCard title="Preview รูป" icon={<FileImage size={18} />}>
           <StockPreview vehicles={exportVehicles} mode={exportMode} pageCount={exportPageCount} groupCount={exportGroups.length} />
+          <ExportPlanSummary groups={exportGroups} pageCount={exportPageCount} vehicleCount={exportVehicles.length} />
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <button
               type="button"
@@ -994,6 +995,50 @@ function AdvancedTextField({
         className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-semibold text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
       />
     </label>
+  );
+}
+
+function ExportPlanSummary({ groups, pageCount, vehicleCount }: { groups: StockExportGroup[]; pageCount: number; vehicleCount: number }) {
+  const visibleGroups = groups.slice(0, 6);
+  const hiddenCount = Math.max(groups.length - visibleGroups.length, 0);
+
+  if (!vehicleCount) {
+    return (
+      <div className="rounded-lg border border-line bg-[#0b0d11] px-3 py-4 text-center text-sm text-soft">
+        เลือกสถานะหรือกลุ่มรถยนต์เพื่อดูจำนวนไฟล์ก่อน Export
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-bold text-white">สรุปไฟล์ที่จะได้</p>
+          <p className="mt-1 text-xs text-soft">
+            {vehicleCount.toLocaleString("th-TH")} คัน / {groups.length.toLocaleString("th-TH")} กลุ่ม / {pageCount.toLocaleString("th-TH")} หน้า
+          </p>
+        </div>
+        <span className="rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-xs font-bold text-brand">
+          {maxTableItems} คันต่อหน้า
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {visibleGroups.map((group) => (
+          <div key={group.name} className="rounded-lg border border-line bg-panel/70 px-3 py-2">
+            <p className="truncate text-sm font-bold text-white">{group.name}</p>
+            <p className="mt-1 text-xs text-soft">
+              {group.vehicles.length.toLocaleString("th-TH")} คัน - {group.pages.length.toLocaleString("th-TH")} หน้า
+            </p>
+          </div>
+        ))}
+      </div>
+      {hiddenCount ? (
+        <p className="mt-2 text-xs text-soft">
+          และอีก {hiddenCount.toLocaleString("th-TH")} กลุ่ม จะถูกสร้างไฟล์ตามลำดับอัตโนมัติ
+        </p>
+      ) : null}
+    </div>
   );
 }
 
