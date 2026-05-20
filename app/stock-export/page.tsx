@@ -47,6 +47,10 @@ function stockVehicleGroup(vehicle: StockVehicle) {
   return String(vehicle.vehicleGroup || "").trim();
 }
 
+function normalizePlate(value: string) {
+  return String(value || "").replace(/\s+/g, "").toUpperCase();
+}
+
 function fileName(extension: "png" | "jpg") {
   const date = new Date().toISOString().slice(0, 10);
   return `big-car-stock-${date}.${extension}`;
@@ -56,7 +60,7 @@ export default function StockExportPage() {
   const [vehicles, setVehicles] = useState<StockVehicle[]>([]);
   const [selectedPlates, setSelectedPlates] = useState<string[]>([]);
   const [query, setQuery] = useState("");
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(["รอขาย"]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedVehicleGroups, setSelectedVehicleGroups] = useState<string[]>([]);
   const [exportMode, setExportMode] = useState<ExportMode>("customer");
   const [loading, setLoading] = useState(true);
@@ -65,59 +69,67 @@ export default function StockExportPage() {
   const [error, setError] = useState("");
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const filteredVehicles = useMemo(() => {
-    const search = query.toLowerCase().replace(/\s+/g, "");
-    return vehicles.filter((vehicle) => {
-      const status = stockStatus(vehicle);
-      const group = stockVehicleGroup(vehicle) || "ไม่ระบุ";
-      const matchesStatus = !selectedStatuses.length || selectedStatuses.includes(status);
-      const matchesGroup = !selectedVehicleGroups.length || selectedVehicleGroups.includes(group);
-      if (!matchesStatus) return false;
-      if (!matchesGroup) return false;
-      if (!search) return true;
+  const importedStatusCount = useMemo(() => vehicles.filter((vehicle) => stockStatus(vehicle)).length, [vehicles]);
+  const importedVehicleGroupCount = useMemo(() => vehicles.filter((vehicle) => stockVehicleGroup(vehicle)).length, [vehicles]);
 
-      return [
-        vehicle.plate,
-        vehicle.brand,
-        vehicle.model,
-        vehicle.year,
-        vehicle.color,
-        vehicle.status,
-        vehicle.gear,
-        vehicle.mileage,
-        vehicle.salePrice,
-        vehicle.parkingLocation,
-        vehicle.project,
-        vehicle.program,
-        vehicle.vehicleGroup
-      ]
-        .join("")
-        .toLowerCase()
-        .replace(/\s+/g, "")
-        .includes(search);
+  const plateMatchedVehicles = useMemo(() => {
+    const search = query.toLowerCase().replace(/\s+/g, "");
+    const byPlate = new Map<string, StockVehicle>();
+
+    vehicles.forEach((vehicle) => {
+      const plateKey = normalizePlate(vehicle.plate);
+      if (!plateKey || byPlate.has(plateKey)) return;
+      if (search) {
+        const hay = [
+          vehicle.plate,
+          vehicle.brand,
+          vehicle.model,
+          vehicle.year,
+          vehicle.color,
+          vehicle.status,
+          vehicle.gear,
+          vehicle.mileage,
+          vehicle.salePrice,
+          vehicle.parkingLocation,
+          vehicle.project,
+          vehicle.program,
+          vehicle.vehicleGroup
+        ]
+          .join("")
+          .toLowerCase()
+          .replace(/\s+/g, "");
+        if (!hay.includes(search)) return;
+      }
+      byPlate.set(plateKey, vehicle);
     });
-  }, [query, selectedStatuses, selectedVehicleGroups, vehicles]);
+
+    return Array.from(byPlate.values());
+  }, [query, vehicles]);
+
+  const groupMatchedVehicles = useMemo(() => {
+    return plateMatchedVehicles.filter((vehicle) => {
+      const group = stockVehicleGroup(vehicle) || "ไม่ระบุ";
+      return !selectedVehicleGroups.length || selectedVehicleGroups.includes(group);
+    });
+  }, [plateMatchedVehicles, selectedVehicleGroups]);
+
+  const filteredVehicles = useMemo(() => {
+    return groupMatchedVehicles.filter((vehicle) => {
+      const status = stockStatus(vehicle);
+      return !selectedStatuses.length || !importedStatusCount || selectedStatuses.includes(status);
+    });
+  }, [groupMatchedVehicles, importedStatusCount, selectedStatuses]);
 
   const statusCounts = useMemo(() => {
-    return vehicles.reduce<Record<string, number>>((counts, vehicle) => {
+    return groupMatchedVehicles.reduce<Record<string, number>>((counts, vehicle) => {
       const status = stockStatus(vehicle) || "ไม่ระบุ";
       counts[status] = (counts[status] || 0) + 1;
       return counts;
     }, {});
-  }, [vehicles]);
+  }, [groupMatchedVehicles]);
 
   const vehicleGroupOptions = useMemo(() => {
-    const hasAnySelectedStatusMatch = !selectedStatuses.length || vehicles.some((vehicle) => selectedStatuses.includes(stockStatus(vehicle)));
-    const counts = vehicles.reduce<Record<string, number>>((nextCounts, vehicle) => {
-      const status = stockStatus(vehicle);
-      const matchesStatus = !selectedStatuses.length || selectedStatuses.includes(status);
-      if (selectedStatuses.length && !hasAnySelectedStatusMatch) {
-        const fallbackGroup = stockVehicleGroup(vehicle);
-        if (fallbackGroup) nextCounts[fallbackGroup] = (nextCounts[fallbackGroup] || 0) + 1;
-        return nextCounts;
-      }
-      if (!matchesStatus) return nextCounts;
-
+    const counts = plateMatchedVehicles.reduce<Record<string, number>>((nextCounts, vehicle) => {
       const group = stockVehicleGroup(vehicle);
       if (group) nextCounts[group] = (nextCounts[group] || 0) + 1;
       return nextCounts;
@@ -126,10 +138,7 @@ export default function StockExportPage() {
     return Object.entries(counts)
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "th"));
-  }, [selectedStatuses, vehicles]);
-
-  const importedStatusCount = useMemo(() => vehicles.filter((vehicle) => stockStatus(vehicle)).length, [vehicles]);
-  const importedVehicleGroupCount = useMemo(() => vehicles.filter((vehicle) => stockVehicleGroup(vehicle)).length, [vehicles]);
+  }, [plateMatchedVehicles]);
 
   const selectedVehicles = useMemo(() => {
     const selected = new Set(selectedPlates);
