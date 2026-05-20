@@ -16,6 +16,12 @@ const stockStatuses = ["รอขาย", "เตรียมส่งลาน"
 
 type ExportMode = "customer" | "internal";
 
+type StockExportGroup = {
+  name: string;
+  pages: StockVehicle[][];
+  vehicles: StockVehicle[];
+};
+
 async function api<T>(url: string): Promise<T> {
   const response = await fetch(url, { cache: "no-store" });
   const data = await response.json();
@@ -51,10 +57,20 @@ function normalizePlate(value: string) {
   return String(value || "").replace(/\s+/g, "").toUpperCase();
 }
 
-function fileName(page?: number, totalPages?: number) {
+function safeFilePart(value: string) {
+  return String(value || "stock")
+    .replace(/[\\/:*?"<>|#\[\]]/g, " ")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48) || "stock";
+}
+
+function fileName(groupName: string, page?: number, totalPages?: number) {
   const date = new Date().toISOString().slice(0, 10);
-  if (page && totalPages && totalPages > 1) return `big-car-stock-${date}-page-${page}-of-${totalPages}.png`;
-  return `big-car-stock-${date}.png`;
+  const group = safeFilePart(groupName);
+  if (page && totalPages && totalPages > 1) return `big-car-stock-${group}-${date}-page-${page}-of-${totalPages}.png`;
+  return `big-car-stock-${group}-${date}.png`;
 }
 
 export default function StockExportPage() {
@@ -145,7 +161,8 @@ export default function StockExportPage() {
   }, [statusMatchedVehicles]);
 
   const exportVehicles = filteredVehicles;
-  const exportPages = useMemo(() => chunkVehicles(exportVehicles, maxTableItems), [exportVehicles]);
+  const exportGroups = useMemo(() => groupVehiclesForExport(exportVehicles), [exportVehicles]);
+  const exportPageCount = useMemo(() => exportGroups.reduce((total, group) => total + group.pages.length, 0), [exportGroups]);
 
   useEffect(() => {
     loadStock();
@@ -189,18 +206,19 @@ export default function StockExportPage() {
       const canvas = canvasRef.current;
       if (!canvas) throw new Error("Canvas is not ready");
       const mimeType = "image/png";
-      const pages = exportPages.length ? exportPages : [exportVehicles];
       const files: File[] = [];
 
-      for (let index = 0; index < pages.length; index += 1) {
-        renderStockTableCanvas(canvas, pages[index], exportMode, index + 1, pages.length);
-        const blob = await canvasToBlob(canvas, mimeType);
-        files.push(new File([blob], fileName(index + 1, pages.length), { type: mimeType }));
+      for (const group of exportGroups) {
+        for (let index = 0; index < group.pages.length; index += 1) {
+          renderStockTableCanvas(canvas, group.pages[index], exportMode, index + 1, group.pages.length, group.name);
+          const blob = await canvasToBlob(canvas, mimeType);
+          files.push(new File([blob], fileName(group.name, index + 1, group.pages.length), { type: mimeType }));
+        }
       }
 
       const shareData = {
         title: "ตารางสต็อก BIG CAR",
-        text: `ตารางสต็อก ${exportVehicles.length.toLocaleString("th-TH")} คัน`,
+        text: `ตารางสต็อก ${exportVehicles.length.toLocaleString("th-TH")} คัน / ${exportGroups.length.toLocaleString("th-TH")} กลุ่ม`,
         files
       };
 
@@ -222,7 +240,7 @@ export default function StockExportPage() {
         await new Promise((resolve) => window.setTimeout(resolve, 180));
       }
 
-      setMessage(`Export PNG แล้ว ${pages.length} รูป`);
+      setMessage(`Export PNG แล้ว ${files.length} รูป แยกตามกลุ่มรถยนต์`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Export ไม่สำเร็จ");
     } finally {
@@ -239,11 +257,12 @@ export default function StockExportPage() {
       if (!exportVehicles.length) throw new Error("ยังไม่มีรถตามตัวกรองสำหรับ Copy");
       const canvas = canvasRef.current;
       if (!canvas) throw new Error("Canvas is not ready");
-      renderStockTableCanvas(canvas, exportPages[0] || exportVehicles, exportMode, 1, Math.max(exportPages.length, 1));
+      const firstGroup = exportGroups[0];
+      renderStockTableCanvas(canvas, firstGroup.pages[0] || firstGroup.vehicles, exportMode, 1, Math.max(firstGroup.pages.length, 1), firstGroup.name);
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
       if (!blob || !navigator.clipboard || typeof ClipboardItem === "undefined") throw new Error("เครื่องนี้ยังไม่รองรับ Copy Image");
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      setMessage(exportPages.length > 1 ? "Copy รูปหน้าแรกแล้ว ถ้ามีหลายหน้าให้ใช้ PNG/JPG" : "Copy รูปสต็อกแล้ว");
+      setMessage(exportPageCount > 1 ? "Copy รูปแรกของกลุ่มแรกแล้ว ถ้ามีหลายรูปให้ใช้เซฟ PNG" : "Copy รูปสต็อกแล้ว");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Copy รูปไม่สำเร็จ");
     } finally {
@@ -295,7 +314,8 @@ export default function StockExportPage() {
             </div>
             <div className="flex flex-wrap gap-2 text-xs text-soft">
               <span className="rounded-full border border-line px-3 py-1">พร้อม Export {exportVehicles.length.toLocaleString("th-TH")} คัน</span>
-              <span className="rounded-full border border-line px-3 py-1">ออกเป็น {Math.max(exportPages.length, exportVehicles.length ? 1 : 0)} รูป</span>
+              <span className="rounded-full border border-line px-3 py-1">ออกเป็น {exportPageCount.toLocaleString("th-TH")} รูป</span>
+              <span className="rounded-full border border-line px-3 py-1">แยก {exportGroups.length.toLocaleString("th-TH")} กลุ่ม</span>
               <span className="rounded-full border border-line px-3 py-1">แสดง {filteredVehicles.length.toLocaleString("th-TH")} คัน</span>
               <span className="rounded-full border border-line px-3 py-1">มีสถานะ {importedStatusCount.toLocaleString("th-TH")} คัน</span>
               <span className="rounded-full border border-line px-3 py-1">มีกลุ่มรถยนต์ {importedVehicleGroupCount.toLocaleString("th-TH")} คัน</span>
@@ -392,7 +412,7 @@ export default function StockExportPage() {
               </button>
             </div>
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft">
-              Export เป็นตารางอัตโนมัติ รูปละ {maxTableItems} คัน ถ้าเกินจะดาวน์โหลดหลายรูปพร้อมเลขหน้า
+              Export เป็นตารางแยกตามกลุ่มรถยนต์ รูปละ {maxTableItems} คัน ถ้ากลุ่มไหนเกินจะดาวน์โหลดหลายรูปพร้อมเลขหน้า
             </p>
           </SectionCard>
 
@@ -442,7 +462,7 @@ export default function StockExportPage() {
 
         <aside className="lg:sticky lg:top-4 lg:self-start">
           <SectionCard title="Preview รูป" icon={<FileImage size={18} />}>
-            <StockPreview vehicles={exportVehicles} mode={exportMode} pageCount={exportPages.length} />
+            <StockPreview vehicles={exportVehicles} mode={exportMode} pageCount={exportPageCount} groupCount={exportGroups.length} />
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
               <button
                 type="button"
@@ -476,14 +496,14 @@ async function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality
   return blob;
 }
 
-function StockPreview({ vehicles, mode, pageCount }: { vehicles: StockVehicle[]; mode: ExportMode; pageCount: number }) {
+function StockPreview({ vehicles, mode, pageCount, groupCount }: { vehicles: StockVehicle[]; mode: ExportMode; pageCount: number; groupCount: number }) {
   return (
     <div className="overflow-hidden rounded-lg border border-line bg-[#f7faf7] text-[#111827]">
       <div className="bg-[#00a651] p-3 text-white">
         <p className="text-xs font-bold uppercase tracking-[0.18em]">BIG CAR RDD</p>
         <h2 className="mt-1 text-xl font-black">ตารางรถพร้อมขาย</h2>
         <p className="mt-1 text-xs text-white/80">
-          คัดแล้ว {vehicles.length.toLocaleString("th-TH")} คัน / {Math.max(pageCount, vehicles.length ? 1 : 0).toLocaleString("th-TH")} รูป /{" "}
+          คัดแล้ว {vehicles.length.toLocaleString("th-TH")} คัน / {groupCount.toLocaleString("th-TH")} กลุ่ม / {Math.max(pageCount, vehicles.length ? 1 : 0).toLocaleString("th-TH")} รูป /{" "}
           {mode === "customer" ? "สำหรับลูกค้า" : "สำหรับภายใน"}
         </p>
       </div>
@@ -514,12 +534,12 @@ function StockPreview({ vehicles, mode, pageCount }: { vehicles: StockVehicle[];
           </tbody>
         </table>
       </div>
-      {vehicles.length ? <p className="p-2 text-xs text-[#475569]">Preview แสดง 8 คันแรก ตอน Export จะแบ่งรูปละ 30 คันพร้อมเลขหน้า</p> : <p className="p-6 text-center text-sm text-[#475569]">เลือกสต็อกเพื่อดู Preview</p>}
+      {vehicles.length ? <p className="p-2 text-xs text-[#475569]">Preview แสดง 8 คันแรก ตอน Export จะแยกตามกลุ่มรถยนต์และแบ่งรูปละ 30 คัน</p> : <p className="p-6 text-center text-sm text-[#475569]">เลือกสต็อกเพื่อดู Preview</p>}
     </div>
   );
 }
 
-function renderStockTableCanvas(canvas: HTMLCanvasElement, vehicles: StockVehicle[], mode: ExportMode, page: number, totalPages: number) {
+function renderStockTableCanvas(canvas: HTMLCanvasElement, vehicles: StockVehicle[], mode: ExportMode, page: number, totalPages: number, groupName: string) {
   const width = 1600;
   const margin = 36;
   const headerHeight = 96;
@@ -546,7 +566,7 @@ function renderStockTableCanvas(canvas: HTMLCanvasElement, vehicles: StockVehicl
   ctx.fillText("BIG CAR RDD", margin, 42);
   ctx.font = "700 26px Arial, sans-serif";
   ctx.fillText(
-    `ตารางรถพร้อมขาย ${rows.length} คัน / หน้า ${page}/${totalPages} / ${mode === "customer" ? "สำหรับลูกค้า" : "สำหรับภายใน"} / ${new Date().toLocaleDateString("th-TH")}`,
+    `${groupName} ${rows.length} คัน / หน้า ${page}/${totalPages} / ${mode === "customer" ? "สำหรับลูกค้า" : "สำหรับภายใน"} / ${new Date().toLocaleDateString("th-TH")}`,
     margin,
     78
   );
@@ -622,6 +642,25 @@ function chunkVehicles(vehicles: StockVehicle[], size: number) {
     chunks.push(vehicles.slice(index, index + size));
   }
   return chunks;
+}
+
+function groupVehiclesForExport(vehicles: StockVehicle[]): StockExportGroup[] {
+  const groups = new Map<string, StockVehicle[]>();
+
+  vehicles.forEach((vehicle) => {
+    const groupName = stockVehicleGroup(vehicle) || "ไม่ระบุ";
+    const list = groups.get(groupName) || [];
+    list.push(vehicle);
+    groups.set(groupName, list);
+  });
+
+  return Array.from(groups.entries())
+    .map(([name, groupVehicles]) => ({
+      name,
+      vehicles: groupVehicles,
+      pages: chunkVehicles(groupVehicles, maxTableItems)
+    }))
+    .sort((a, b) => b.vehicles.length - a.vehicles.length || a.name.localeCompare(b.name, "th"));
 }
 
 function fillTextEllipsis(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number) {
