@@ -15,6 +15,7 @@ import {
   Plus,
   Save,
   Search,
+  Settings,
   Trash2,
   Upload,
   User,
@@ -214,6 +215,13 @@ export default function Home() {
           >
             <MessageCircle size={18} className="text-brand" aria-hidden="true" />
             LINE
+          </Link>
+          <Link
+            href="/settings"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
+          >
+            <Settings size={18} className="text-brand" aria-hidden="true" />
+            ตั้งค่า
           </Link>
           <Link
             href="/calculator"

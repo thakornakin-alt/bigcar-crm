@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { buildDefaultBookingSubject, renderBookingReport } from "@/lib/booking-report";
 import { PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
+import { bookingLineGroupStorageKey, defaultSystemSettings, readSystemSettings } from "@/lib/client-settings";
 import { normalizeCarYear } from "@/lib/format";
 import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, DriveAttachment, DriveUploadResult, LineGroup, StockVehicle } from "@/lib/types";
 
@@ -31,7 +32,6 @@ const saleEmails: Record<string, string> = {
 const defaultEmailTo = "RDDUsedcarBooked@segroup.co.th";
 const defaultEmailCc = "rongsarit.s@tgh.co.th";
 const defaultTeamName = "พี่ลีฟ";
-const bookingLineGroupStorageKey = "bigcar-booking-line-group";
 
 const blankForm: BookingReportInput = {
   customerName: "",
@@ -182,15 +182,22 @@ export default function BookingReportsPage() {
   const companyWarning = form.buyerType === "company" && attachmentFiles.companyCertificate.length === 0;
 
   useEffect(() => {
+    const settings = readSystemSettings();
     const latest = window.localStorage.getItem("bigcar-booking-email");
+    setForm((current) => ({
+      ...current,
+      teamName: current.teamName || settings.defaultTeamName || defaultSystemSettings.defaultTeamName,
+      emailTo: settings.bookingEmailTo || defaultEmailTo,
+      emailCc: settings.bookingEmailCc || defaultEmailCc
+    }));
     if (latest) {
       try {
         const parsed = JSON.parse(latest) as Pick<BookingReportInput, "emailTo" | "emailCc" | "emailBcc">;
         setForm((current) => ({
           ...current,
           ...parsed,
-          emailTo: defaultEmailTo,
-          emailCc: parsed.emailCc?.trim() || defaultEmailCc
+          emailTo: settings.bookingEmailTo || defaultEmailTo,
+          emailCc: parsed.emailCc?.trim() || settings.bookingEmailCc || defaultEmailCc
         }));
       } catch {
         window.localStorage.removeItem("bigcar-booking-email");

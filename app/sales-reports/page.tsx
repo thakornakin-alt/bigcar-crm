@@ -4,6 +4,7 @@ import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState
 import Link from "next/link";
 import { ArrowLeft, Camera, CheckCircle2, Clipboard, Cloud, Eye, FileText, History, ImagePlus, Loader2, Mail, Save, Search, Send, X } from "lucide-react";
 import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
+import { defaultSystemSettings, readSystemSettings, salesLineGroupStorageKey } from "@/lib/client-settings";
 import { normalizeCarYear } from "@/lib/format";
 import type { BookingAttachment, BookingReport, DriveAttachment, DriveUploadResult, LineGroup, SalesReportInput } from "@/lib/types";
 
@@ -50,7 +51,6 @@ const saleEmails: Record<string, string> = {
 const defaultEmailTo = "RDDUsedcarBooked@segroup.co.th";
 const defaultEmailCc = "rongsarit.s@tgh.co.th";
 const defaultTeamName = "พี่ลีฟ";
-const salesLineGroupStorageKey = "bigcar-sales-line-group";
 
 const blankForm: SalesReportInput = {
   bookingReportId: "",
@@ -242,6 +242,16 @@ export default function SalesReportsPage() {
   }, []);
 
   useEffect(() => {
+    const settings = readSystemSettings();
+    setForm((current) => ({
+      ...current,
+      teamName: current.teamName || settings.defaultTeamName || defaultSystemSettings.defaultTeamName
+    }));
+    setEmailFields((current) => ({
+      ...current,
+      to: settings.salesEmailTo || defaultEmailTo,
+      cc: settings.salesEmailCc || defaultEmailCc
+    }));
     const latest = window.localStorage.getItem("bigcar-sales-email");
     if (latest) {
       try {
@@ -249,8 +259,8 @@ export default function SalesReportsPage() {
         setEmailFields((current) => ({
           ...current,
           ...parsed,
-          to: defaultEmailTo,
-          cc: parsed.cc?.trim() || defaultEmailCc
+          to: settings.salesEmailTo || defaultEmailTo,
+          cc: parsed.cc?.trim() || settings.salesEmailCc || defaultEmailCc
         }));
       } catch {
         window.localStorage.removeItem("bigcar-sales-email");
