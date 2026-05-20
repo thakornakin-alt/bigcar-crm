@@ -11,10 +11,12 @@ type StockListResponse = {
   warning?: string;
 };
 
-const maxExportItems = 8;
+const maxCardItems = 8;
+const maxTableItems = 30;
 const stockStatuses = ["รอขาย", "เตรียมส่งลาน", "จอง_Sale", "จอง_Internal", "จอง_รถทดแทน", "ขายแล้ว"];
 
 type ExportMode = "customer" | "internal";
+type ExportLayout = "card" | "table";
 
 async function api<T>(url: string): Promise<T> {
   const response = await fetch(url, { cache: "no-store" });
@@ -63,6 +65,7 @@ export default function StockExportPage() {
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedVehicleGroups, setSelectedVehicleGroups] = useState<string[]>([]);
   const [exportMode, setExportMode] = useState<ExportMode>("customer");
+  const [exportLayout, setExportLayout] = useState<ExportLayout>("card");
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [message, setMessage] = useState("");
@@ -71,6 +74,7 @@ export default function StockExportPage() {
 
   const importedStatusCount = useMemo(() => vehicles.filter((vehicle) => stockStatus(vehicle)).length, [vehicles]);
   const importedVehicleGroupCount = useMemo(() => vehicles.filter((vehicle) => stockVehicleGroup(vehicle)).length, [vehicles]);
+  const exportLimit = exportLayout === "table" ? maxTableItems : maxCardItems;
 
   const plateMatchedVehicles = useMemo(() => {
     const search = query.toLowerCase().replace(/\s+/g, "");
@@ -142,8 +146,8 @@ export default function StockExportPage() {
 
   const selectedVehicles = useMemo(() => {
     const selected = new Set(selectedPlates);
-    return vehicles.filter((vehicle) => selected.has(vehicle.plate)).slice(0, maxExportItems);
-  }, [selectedPlates, vehicles]);
+    return vehicles.filter((vehicle) => selected.has(vehicle.plate)).slice(0, exportLimit);
+  }, [exportLimit, selectedPlates, vehicles]);
 
   useEffect(() => {
     loadStock();
@@ -175,8 +179,8 @@ export default function StockExportPage() {
   function togglePlate(plate: string) {
     setSelectedPlates((current) => {
       if (current.includes(plate)) return current.filter((item) => item !== plate);
-      if (current.length >= maxExportItems) {
-        setError(`เลือกได้สูงสุด ${maxExportItems} คันต่อรูป เพื่อให้อ่านง่ายบนมือถือ`);
+      if (current.length >= exportLimit) {
+        setError(`เลือกได้สูงสุด ${exportLimit} คันต่อรูปในโหมดนี้`);
         return current;
       }
       setError("");
@@ -185,7 +189,7 @@ export default function StockExportPage() {
   }
 
   function selectVisible() {
-    setSelectedPlates(filteredVehicles.slice(0, maxExportItems).map((vehicle) => vehicle.plate));
+    setSelectedPlates(filteredVehicles.slice(0, exportLimit).map((vehicle) => vehicle.plate));
   }
 
   function clearSelected() {
@@ -201,7 +205,7 @@ export default function StockExportPage() {
       if (!selectedVehicles.length) throw new Error("กรุณาเลือกสต็อกก่อน Export");
       const canvas = canvasRef.current;
       if (!canvas) throw new Error("Canvas is not ready");
-      await renderStockCanvas(canvas, selectedVehicles, exportMode);
+      await renderStockCanvas(canvas, selectedVehicles, exportMode, exportLayout);
 
       const mimeType = type === "png" ? "image/png" : "image/jpeg";
       const quality = type === "png" ? undefined : 0.92;
@@ -227,7 +231,7 @@ export default function StockExportPage() {
       if (!selectedVehicles.length) throw new Error("กรุณาเลือกสต็อกก่อน Copy");
       const canvas = canvasRef.current;
       if (!canvas) throw new Error("Canvas is not ready");
-      await renderStockCanvas(canvas, selectedVehicles, exportMode);
+      await renderStockCanvas(canvas, selectedVehicles, exportMode, exportLayout);
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
       if (!blob || !navigator.clipboard || typeof ClipboardItem === "undefined") throw new Error("เครื่องนี้ยังไม่รองรับ Copy Image");
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
@@ -285,7 +289,7 @@ export default function StockExportPage() {
               </button>
             </div>
             <div className="flex flex-wrap gap-2 text-xs text-soft">
-              <span className="rounded-full border border-line px-3 py-1">เลือกแล้ว {selectedVehicles.length}/{maxExportItems}</span>
+              <span className="rounded-full border border-line px-3 py-1">เลือกแล้ว {selectedVehicles.length}/{exportLimit}</span>
               <span className="rounded-full border border-line px-3 py-1">แสดง {filteredVehicles.length.toLocaleString("th-TH")} คัน</span>
               <span className="rounded-full border border-line px-3 py-1">มีสถานะ {importedStatusCount.toLocaleString("th-TH")} คัน</span>
               <span className="rounded-full border border-line px-3 py-1">มีกลุ่มรถยนต์ {importedVehicleGroupCount.toLocaleString("th-TH")} คัน</span>
@@ -381,6 +385,29 @@ export default function StockExportPage() {
                 สำหรับภายใน
               </button>
             </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setExportLayout("card");
+                  setSelectedPlates((current) => current.slice(0, maxCardItems));
+                }}
+                className={`min-h-11 rounded-lg border px-4 font-bold ${
+                  exportLayout === "card" ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-white"
+                }`}
+              >
+                การ์ดอ่านง่าย 8 คัน
+              </button>
+              <button
+                type="button"
+                onClick={() => setExportLayout("table")}
+                className={`min-h-11 rounded-lg border px-4 font-bold ${
+                  exportLayout === "table" ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-white"
+                }`}
+              >
+                ตาราง 30 คัน
+              </button>
+            </div>
           </SectionCard>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -436,7 +463,7 @@ export default function StockExportPage() {
 
         <aside className="lg:sticky lg:top-4 lg:self-start">
           <SectionCard title="Preview รูป" icon={<FileImage size={18} />}>
-            <StockPreview vehicles={selectedVehicles} mode={exportMode} />
+            <StockPreview vehicles={selectedVehicles} mode={exportMode} layout={exportLayout} />
             <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
               <button
                 type="button"
@@ -472,7 +499,47 @@ export default function StockExportPage() {
   );
 }
 
-function StockPreview({ vehicles, mode }: { vehicles: StockVehicle[]; mode: ExportMode }) {
+function StockPreview({ vehicles, mode, layout }: { vehicles: StockVehicle[]; mode: ExportMode; layout: ExportLayout }) {
+  if (layout === "table") {
+    return (
+      <div className="overflow-hidden rounded-lg border border-line bg-[#f7faf7] text-[#111827]">
+        <div className="bg-[#00a651] p-3 text-white">
+          <p className="text-xs font-bold uppercase tracking-[0.18em]">BIG CAR RDD</p>
+          <h2 className="mt-1 text-xl font-black">ตารางรถพร้อมขาย</h2>
+          <p className="mt-1 text-xs text-white/80">คัดแล้ว {vehicles.length} คัน / {mode === "customer" ? "สำหรับลูกค้า" : "สำหรับภายใน"}</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] border-collapse text-[11px]">
+            <thead>
+              <tr className="bg-[#00a651] text-white">
+                {["Location", "ทะเบียน", "ปีจด", "รุ่นรถยนต์", "เกียร์", "สี", "เลขไมล์", "ราคาเสนอขายRT"].map((header) => (
+                  <th key={header} className="border border-[#0f5132] px-2 py-2 text-left font-bold">
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {vehicles.slice(0, 8).map((vehicle) => (
+                <tr key={vehicle.plate} className="bg-white">
+                  <td className="border border-[#111827] px-2 py-1">{vehicle.parkingLocation || "-"}</td>
+                  <td className="border border-[#111827] px-2 py-1 font-bold">{vehicle.plate || "-"}</td>
+                  <td className="border border-[#111827] px-2 py-1">{vehicle.year || "-"}</td>
+                  <td className="border border-[#111827] px-2 py-1">{vehicleTitle(vehicle)}</td>
+                  <td className="border border-[#111827] px-2 py-1">{vehicle.gear || "-"}</td>
+                  <td className="border border-[#111827] px-2 py-1">{vehicle.color || "-"}</td>
+                  <td className="border border-[#111827] px-2 py-1 text-right">{formatMileage(vehicle.mileage).replace(" กม.", "")}</td>
+                  <td className="border border-[#111827] bg-[#dff7f8] px-2 py-1 text-right font-bold">{formatPrice(vehicle.salePrice).replace(" บาท", "")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {vehicles.length > 8 ? <p className="p-2 text-xs text-[#475569]">Preview แสดง 8 คันแรก ตอน Export จะออกได้สูงสุด 30 คัน</p> : null}
+      </div>
+    );
+  }
+
   return (
     <div className="overflow-hidden rounded-lg border border-line bg-[#080a0d]">
       <div className="bg-gradient-to-r from-[#101820] via-[#0e1713] to-[#101820] p-4">
@@ -503,7 +570,12 @@ function StockPreview({ vehicles, mode }: { vehicles: StockVehicle[]; mode: Expo
   );
 }
 
-async function renderStockCanvas(canvas: HTMLCanvasElement, vehicles: StockVehicle[], mode: ExportMode) {
+async function renderStockCanvas(canvas: HTMLCanvasElement, vehicles: StockVehicle[], mode: ExportMode, layout: ExportLayout) {
+  if (layout === "table") {
+    renderStockTableCanvas(canvas, vehicles, mode);
+    return;
+  }
+
   const width = 1080;
   const columnGap = 28;
   const cardWidth = 462;
@@ -586,6 +658,99 @@ async function renderStockCanvas(canvas: HTMLCanvasElement, vehicles: StockVehic
   ctx.fillText("BIG CAR CRM", 64, height - 52);
   ctx.textAlign = "right";
   ctx.fillText("สอบถามรายละเอียดเพิ่มเติม", width - 64, height - 52);
+  ctx.textAlign = "left";
+}
+
+function renderStockTableCanvas(canvas: HTMLCanvasElement, vehicles: StockVehicle[], mode: ExportMode) {
+  const width = 1600;
+  const margin = 36;
+  const headerHeight = 96;
+  const tableTop = 140;
+  const rowHeight = 46;
+  const footerHeight = 58;
+  const rows = vehicles.slice(0, maxTableItems);
+  const height = tableTop + 54 + rows.length * rowHeight + footerHeight;
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = width * ratio;
+  canvas.height = height * ratio;
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas not available");
+  ctx.scale(ratio, ratio);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "#00a651";
+  ctx.fillRect(0, 0, width, headerHeight);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "900 34px Arial, sans-serif";
+  ctx.fillText("BIG CAR RDD", margin, 42);
+  ctx.font = "700 26px Arial, sans-serif";
+  ctx.fillText(`ตารางรถพร้อมขาย ${rows.length} คัน / ${mode === "customer" ? "สำหรับลูกค้า" : "สำหรับภายใน"} / ${new Date().toLocaleDateString("th-TH")}`, margin, 78);
+
+  const columns = [
+    { key: "location", label: "Location", width: 170 },
+    { key: "plate", label: "ทะเบียน", width: 150 },
+    { key: "year", label: "ปีจด", width: 120 },
+    { key: "model", label: "รุ่นรถยนต์", width: 530 },
+    { key: "gear", label: "เกียร์", width: 95 },
+    { key: "color", label: "สี", width: 180 },
+    { key: "mileage", label: "เลขไมล์", width: 145 },
+    { key: "price", label: "ราคาเสนอขายRT", width: 138 }
+  ];
+
+  let x = margin;
+  ctx.font = "800 22px Arial, sans-serif";
+  columns.forEach((column, index) => {
+    ctx.fillStyle = index === columns.length - 1 ? "#08706d" : "#00a651";
+    ctx.fillRect(x, tableTop, column.width, 54);
+    ctx.strokeStyle = "#111827";
+    ctx.lineWidth = 1.4;
+    ctx.strokeRect(x, tableTop, column.width, 54);
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = column.key === "price" ? "right" : "center";
+    ctx.fillText(column.label, column.key === "price" ? x + column.width - 14 : x + column.width / 2, tableTop + 35);
+    x += column.width;
+  });
+
+  rows.forEach((vehicle, rowIndex) => {
+    const rowY = tableTop + 54 + rowIndex * rowHeight;
+    const values: Record<string, string> = {
+      location: vehicle.parkingLocation || "-",
+      plate: vehicle.plate || "-",
+      year: vehicle.year || "-",
+      model: vehicleTitle(vehicle),
+      gear: vehicle.gear || "-",
+      color: vehicle.color || "-",
+      mileage: formatMileage(vehicle.mileage).replace(" กม.", ""),
+      price: formatPrice(vehicle.salePrice).replace(" บาท", "")
+    };
+
+    x = margin;
+    columns.forEach((column, index) => {
+      ctx.fillStyle = column.key === "price" ? "#dff7f8" : rowIndex % 2 ? "#f8fafc" : "#ffffff";
+      ctx.fillRect(x, rowY, column.width, rowHeight);
+      ctx.strokeStyle = "#111827";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, rowY, column.width, rowHeight);
+      ctx.fillStyle = "#111827";
+      ctx.font = column.key === "price" ? "800 20px Arial, sans-serif" : "500 20px Arial, sans-serif";
+      ctx.textAlign = column.key === "price" || column.key === "mileage" ? "right" : column.key === "model" || column.key === "location" ? "left" : "center";
+      const textX =
+        column.key === "price" || column.key === "mileage" ? x + column.width - 10 : column.key === "model" || column.key === "location" ? x + 10 : x + column.width / 2;
+      fillTextEllipsis(ctx, values[column.key], textX, rowY + 30, column.width - 20);
+      x += column.width;
+      if (index === columns.length - 1) ctx.textAlign = "left";
+    });
+  });
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#64748b";
+  ctx.font = "600 22px Arial, sans-serif";
+  ctx.fillText("BIG CAR CRM", margin, height - 22);
+  ctx.textAlign = "right";
+  ctx.fillText("สร้างจากสต็อกล่าสุด", width - margin, height - 22);
   ctx.textAlign = "left";
 }
 
