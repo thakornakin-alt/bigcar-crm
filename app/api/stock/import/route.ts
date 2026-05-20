@@ -42,7 +42,14 @@ export async function POST(request: Request) {
     }
 
     const result = await importStock({ rows, sourceName, clearExisting });
-    return NextResponse.json({ result: { ...result, clientVinRows: rows.filter((row: StockVehicle) => row.vin).length } });
+    return NextResponse.json({
+      result: {
+        ...result,
+        clientVinRows: rows.filter((row: StockVehicle) => row.vin).length,
+        clientStatusRows: rows.filter((row: StockVehicle) => row.status).length,
+        clientVehicleGroupRows: rows.filter((row: StockVehicle) => row.vehicleGroup).length
+      }
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to import stock" },

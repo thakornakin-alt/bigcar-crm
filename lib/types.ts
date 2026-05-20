@@ -163,6 +163,8 @@ export type StockImportResult = {
   total: number;
   importedAt: string;
   clientVinRows?: number;
+  clientStatusRows?: number;
+  clientVehicleGroupRows?: number;
   vinReceived?: number;
   vinWritten?: number;
 };

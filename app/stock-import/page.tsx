@@ -157,6 +157,9 @@ export default function StockImportPage() {
   const parsedRows = useMemo(() => mapRows(workbookRows[activeSheet] || [], mapping), [activeSheet, mapping, workbookRows]);
   const previewRows = parsedRows.slice(0, 8);
   const missingPlate = !mapping.plate;
+  const parsedVinCount = useMemo(() => parsedRows.filter((row) => row.vin).length, [parsedRows]);
+  const parsedStatusCount = useMemo(() => parsedRows.filter((row) => row.status).length, [parsedRows]);
+  const parsedVehicleGroupCount = useMemo(() => parsedRows.filter((row) => row.vehicleGroup).length, [parsedRows]);
 
   useEffect(() => {
     api<{ status: StockImportStatus }>("/api/stock/status")
@@ -239,6 +242,8 @@ export default function StockImportPage() {
     let updated = 0;
     let skipped = 0;
     let clientVinRows = 0;
+    let clientStatusRows = 0;
+    let clientVehicleGroupRows = 0;
     let vinReceived = 0;
     let vinWritten = 0;
     let importedAt = "";
@@ -262,6 +267,8 @@ export default function StockImportPage() {
         updated += data.result.updated;
         skipped += data.result.skipped;
         clientVinRows += data.result.clientVinRows || 0;
+        clientStatusRows += data.result.clientStatusRows || 0;
+        clientVehicleGroupRows += data.result.clientVehicleGroupRows || 0;
         vinReceived += data.result.vinReceived || 0;
         vinWritten += data.result.vinWritten || 0;
         importedAt = data.result.importedAt || importedAt;
@@ -269,7 +276,7 @@ export default function StockImportPage() {
       }
 
       setMessage(
-        `Import สำเร็จ: เพิ่ม ${imported} / อัปเดต ${updated} / ข้าม ${skipped} / เลขตัวรถ หน้าเว็บ ${clientVinRows} / Apps Script รับ ${vinReceived} / เขียน ${vinWritten}`
+        `Import สำเร็จ: เพิ่ม ${imported} / อัปเดต ${updated} / ข้าม ${skipped} / เลขตัวรถ ${clientVinRows} / สถานะ ${clientStatusRows} / กลุ่มรถยนต์ ${clientVehicleGroupRows} / Apps Script รับเลขตัวรถ ${vinReceived} / เขียน ${vinWritten}`
       );
       setStatus((current) => ({
         total: clearExisting ? imported : current.total + imported,
@@ -423,7 +430,8 @@ export default function StockImportPage() {
                   <h2 className="text-lg font-bold text-white">Preview</h2>
                   <p className="text-xs text-soft">พบข้อมูลพร้อม import {parsedRows.length.toLocaleString("th-TH")} แถว</p>
                   <p className="mt-1 text-xs text-soft">
-                    เลขตัวรถที่อ่านได้ {parsedRows.filter((row) => row.vin).length.toLocaleString("th-TH")} แถว
+                    เลขตัวรถ {parsedVinCount.toLocaleString("th-TH")} / สถานะ {parsedStatusCount.toLocaleString("th-TH")} / กลุ่มรถยนต์{" "}
+                    {parsedVehicleGroupCount.toLocaleString("th-TH")} แถว
                   </p>
                 </div>
                 <button
@@ -469,6 +477,11 @@ export default function StockImportPage() {
                         <td className="px-3 py-2">{row.finalGrade}</td>
                         <td className="px-3 py-2">{row.program}</td>
                         <td className="px-3 py-2">{row.parkingLocation}</td>
+                        <td className="px-3 py-2">{row.status}</td>
+                        <td className="px-3 py-2">{row.gear}</td>
+                        <td className="px-3 py-2">{row.mileage}</td>
+                        <td className="px-3 py-2">{row.pdiNote}</td>
+                        <td className="px-3 py-2">{row.vehicleGroup}</td>
                       </tr>
                     ))}
                   </tbody>
