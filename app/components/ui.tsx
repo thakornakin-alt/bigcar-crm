@@ -136,3 +136,61 @@ export function FilterSummaryPill({ children }: { children: ReactNode }) {
     </span>
   );
 }
+
+export function ActiveFilterTag({
+  children,
+  onRemove
+}: {
+  children: ReactNode;
+  onRemove: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onRemove}
+      className="inline-flex min-h-8 items-center gap-2 rounded-full border border-brand/40 bg-brand/10 px-3 text-xs font-bold text-brand transition hover:bg-brand hover:text-ink"
+    >
+      <span>{children}</span>
+      <span aria-hidden="true">×</span>
+    </button>
+  );
+}
+
+export function BottomSheet({
+  open,
+  title,
+  children,
+  footer,
+  onClose
+}: {
+  open: boolean;
+  title: string;
+  children: ReactNode;
+  footer?: ReactNode;
+  onClose: () => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-3 pb-3 backdrop-blur-sm sm:items-center sm:pb-0">
+      <button type="button" className="absolute inset-0 cursor-default" aria-label="ปิด" onClick={onClose} />
+      <section className="relative max-h-[88vh] w-full max-w-xl overflow-hidden rounded-lg border border-line bg-panel shadow-glow">
+        <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+          <h2 className="text-lg font-bold text-white">{title}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-[#0b0d11] text-xl font-bold text-white transition hover:border-brand"
+            aria-label="ปิด"
+          >
+            ×
+          </button>
+        </header>
+        <div className="max-h-[65vh] overflow-y-auto px-4 py-4">
+          <div className="space-y-3">{children}</div>
+        </div>
+        {footer && <footer className="border-t border-line px-4 py-3">{footer}</footer>}
+      </section>
+    </div>
+  );
+}

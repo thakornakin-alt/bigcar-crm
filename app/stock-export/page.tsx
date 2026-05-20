@@ -1,8 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, Download, FileImage, Loader2, Search, Upload } from "lucide-react";
-import { FilterChip, FilterSummaryPill, PageContainer, PageTitle, SearchField, SectionCard, StickyFilterBar, TopMenuButton } from "@/app/components/ui";
+import { ArrowLeft, CheckCircle2, Download, FileImage, Filter, Loader2, Search, Upload } from "lucide-react";
+import {
+  ActiveFilterTag,
+  BottomSheet,
+  FilterChip,
+  FilterSummaryPill,
+  PageContainer,
+  PageTitle,
+  SearchField,
+  SectionCard,
+  StickyFilterBar,
+  TopMenuButton
+} from "@/app/components/ui";
 import type { StockVehicle } from "@/lib/types";
 
 type StockListResponse = {
@@ -21,6 +32,32 @@ type StockExportGroup = {
   name: string;
   pages: StockVehicle[][];
   vehicles: StockVehicle[];
+};
+
+type AdvancedStockFilters = {
+  location: string;
+  year: string;
+  model: string;
+  gear: string;
+  color: string;
+  plate: string;
+  mileageMin: string;
+  mileageMax: string;
+  priceMin: string;
+  priceMax: string;
+};
+
+const emptyAdvancedFilters: AdvancedStockFilters = {
+  location: "",
+  year: "",
+  model: "",
+  gear: "",
+  color: "",
+  plate: "",
+  mileageMin: "",
+  mileageMax: "",
+  priceMin: "",
+  priceMax: ""
 };
 
 async function api<T>(url: string): Promise<T> {
@@ -42,6 +79,10 @@ function formatMileage(value?: string) {
   return `${numeric.toLocaleString("th-TH")} กม.`;
 }
 
+function parseNumeric(value?: string) {
+  return Number(String(value || "").replace(/[^\d.]/g, "")) || 0;
+}
+
 function vehicleTitle(vehicle: StockVehicle) {
   return [vehicle.brand, vehicle.model].filter(Boolean).join(" ") || "-";
 }
@@ -56,6 +97,41 @@ function stockVehicleGroup(vehicle: StockVehicle) {
 
 function normalizePlate(value: string) {
   return String(value || "").replace(/\s+/g, "").toUpperCase();
+}
+
+function normalizeText(value: string) {
+  return String(value || "").toLowerCase().replace(/\s+/g, "");
+}
+
+function uniqueSorted(values: string[]) {
+  return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, "th"));
+}
+
+function countAdvancedFilters(filters: AdvancedStockFilters) {
+  return Object.values(filters).filter((value) => String(value || "").trim()).length;
+}
+
+function matchesAdvancedFilters(vehicle: StockVehicle, filters: AdvancedStockFilters) {
+  if (filters.location && vehicle.parkingLocation !== filters.location) return false;
+  if (filters.year && vehicle.year !== filters.year) return false;
+  if (filters.model && !normalizeText(vehicleTitle(vehicle)).includes(normalizeText(filters.model))) return false;
+  if (filters.gear && vehicle.gear !== filters.gear) return false;
+  if (filters.color && vehicle.color !== filters.color) return false;
+  if (filters.plate && !normalizePlate(vehicle.plate).includes(normalizePlate(filters.plate))) return false;
+
+  const mileage = parseNumeric(vehicle.mileage);
+  const mileageMin = parseNumeric(filters.mileageMin);
+  const mileageMax = parseNumeric(filters.mileageMax);
+  if (mileageMin && mileage < mileageMin) return false;
+  if (mileageMax && mileage > mileageMax) return false;
+
+  const price = parseNumeric(vehicle.salePrice);
+  const priceMin = parseNumeric(filters.priceMin);
+  const priceMax = parseNumeric(filters.priceMax);
+  if (priceMin && price < priceMin) return false;
+  if (priceMax && price > priceMax) return false;
+
+  return true;
 }
 
 function safeFilePart(value: string) {
@@ -79,6 +155,8 @@ export default function StockExportPage() {
   const [query, setQuery] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedVehicleGroups, setSelectedVehicleGroups] = useState<string[]>([]);
+  const [advancedFilters, setAdvancedFilters] = useState<AdvancedStockFilters>(emptyAdvancedFilters);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [exportMode, setExportMode] = useState<ExportMode>("customer");
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -138,8 +216,20 @@ export default function StockExportPage() {
   }, [selectedVehicleGroups, statusMatchedVehicles]);
 
   const filteredVehicles = useMemo(() => {
-    return groupMatchedVehicles;
+    return groupMatchedVehicles.filter((vehicle) => matchesAdvancedFilters(vehicle, advancedFilters));
+  }, [advancedFilters, groupMatchedVehicles]);
+
+  const advancedOptions = useMemo(() => {
+    return {
+      locations: uniqueSorted(groupMatchedVehicles.map((vehicle) => vehicle.parkingLocation || "")),
+      years: uniqueSorted(groupMatchedVehicles.map((vehicle) => vehicle.year || "")),
+      models: uniqueSorted(groupMatchedVehicles.map((vehicle) => vehicleTitle(vehicle))),
+      gears: uniqueSorted(groupMatchedVehicles.map((vehicle) => vehicle.gear || "")),
+      colors: uniqueSorted(groupMatchedVehicles.map((vehicle) => vehicle.color || ""))
+    };
   }, [groupMatchedVehicles]);
+
+  const advancedFilterCount = useMemo(() => countAdvancedFilters(advancedFilters), [advancedFilters]);
 
   const statusCounts = useMemo(() => {
     return groupMatchedVehicles.reduce<Record<string, number>>((counts, vehicle) => {
@@ -195,6 +285,15 @@ export default function StockExportPage() {
     setQuery("");
     setSelectedStatuses([]);
     setSelectedVehicleGroups([]);
+    setAdvancedFilters(emptyAdvancedFilters);
+  }
+
+  function setAdvancedFilter<K extends keyof AdvancedStockFilters>(key: K, value: AdvancedStockFilters[K]) {
+    setAdvancedFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function clearAdvancedFilter(key: keyof AdvancedStockFilters) {
+    setAdvancedFilters((current) => ({ ...current, [key]: "" }));
   }
 
   async function exportImage() {
@@ -311,9 +410,19 @@ export default function StockExportPage() {
                     placeholder="ค้นทะเบียน / รุ่น / ปี / Location"
                     icon={<Search size={18} />}
                   />
-                  <button type="button" onClick={clearFilters} className="min-h-12 rounded-lg border border-line bg-[#0b0d11] px-4 font-semibold text-white transition hover:border-brand/60">
-                    ล้างตัวกรอง
-                  </button>
+                  <div className="grid grid-cols-2 gap-2 sm:flex">
+                    <button
+                      type="button"
+                      onClick={() => setAdvancedOpen(true)}
+                      className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-4 font-semibold text-white transition hover:border-brand/60"
+                    >
+                      <Filter size={18} className="text-brand" />
+                      Filter{advancedFilterCount ? ` (${advancedFilterCount})` : ""}
+                    </button>
+                    <button type="button" onClick={clearFilters} className="min-h-12 rounded-lg border border-line bg-[#0b0d11] px-4 font-semibold text-white transition hover:border-brand/60">
+                      ล้างตัวกรอง
+                    </button>
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <FilterSummaryPill>พร้อม Export {exportVehicles.length.toLocaleString("th-TH")} คัน</FilterSummaryPill>
@@ -347,6 +456,44 @@ export default function StockExportPage() {
                 </div>
               </>
             )}
+            {ENABLE_NEW_STOCK_UI && (query || selectedStatuses.length || selectedVehicleGroups.length || advancedFilterCount) ? (
+              <div className="flex flex-wrap gap-2">
+                {query && <ActiveFilterTag onRemove={() => setQuery("")}>ค้นหา: {query}</ActiveFilterTag>}
+                {selectedStatuses.map((status) => (
+                  <ActiveFilterTag key={`status-${status}`} onRemove={() => setSelectedStatuses((current) => current.filter((item) => item !== status))}>
+                    {status}
+                  </ActiveFilterTag>
+                ))}
+                {selectedVehicleGroups.map((group) => (
+                  <ActiveFilterTag key={`group-${group}`} onRemove={() => setSelectedVehicleGroups((current) => current.filter((item) => item !== group))}>
+                    {group}
+                  </ActiveFilterTag>
+                ))}
+                {advancedFilters.location && <ActiveFilterTag onRemove={() => clearAdvancedFilter("location")}>Location: {advancedFilters.location}</ActiveFilterTag>}
+                {advancedFilters.year && <ActiveFilterTag onRemove={() => clearAdvancedFilter("year")}>ปี: {advancedFilters.year}</ActiveFilterTag>}
+                {advancedFilters.model && <ActiveFilterTag onRemove={() => clearAdvancedFilter("model")}>รุ่น: {advancedFilters.model}</ActiveFilterTag>}
+                {advancedFilters.gear && <ActiveFilterTag onRemove={() => clearAdvancedFilter("gear")}>เกียร์: {advancedFilters.gear}</ActiveFilterTag>}
+                {advancedFilters.color && <ActiveFilterTag onRemove={() => clearAdvancedFilter("color")}>สี: {advancedFilters.color}</ActiveFilterTag>}
+                {advancedFilters.plate && <ActiveFilterTag onRemove={() => clearAdvancedFilter("plate")}>ทะเบียน: {advancedFilters.plate}</ActiveFilterTag>}
+                {(advancedFilters.mileageMin || advancedFilters.mileageMax) && (
+                  <ActiveFilterTag
+                    onRemove={() => setAdvancedFilters((current) => ({ ...current, mileageMin: "", mileageMax: "" }))}
+                  >
+                    ไมล์: {advancedFilters.mileageMin || "0"}-{advancedFilters.mileageMax || "∞"}
+                  </ActiveFilterTag>
+                )}
+                {(advancedFilters.priceMin || advancedFilters.priceMax) && (
+                  <ActiveFilterTag
+                    onRemove={() => setAdvancedFilters((current) => ({ ...current, priceMin: "", priceMax: "" }))}
+                  >
+                    ราคา: {advancedFilters.priceMin || "0"}-{advancedFilters.priceMax || "∞"}
+                  </ActiveFilterTag>
+                )}
+                <button type="button" onClick={clearFilters} className="min-h-8 rounded-full border border-line px-3 text-xs font-bold text-soft transition hover:border-brand hover:text-white">
+                  ล้างทั้งหมด
+                </button>
+              </div>
+            ) : null}
             {vehicles.length > 0 && (!importedStatusCount || !importedVehicleGroupCount) && (
               <p className="rounded-lg border border-amber-400/30 bg-amber-950/20 px-3 py-3 text-sm text-amber-100">
                 โหลดสต็อกแล้ว แต่ข้อมูลสถานะ/กลุ่มรถยนต์ยังว่างในระบบ ให้ Import Stock ใหม่หลัง Vercel deploy แล้วติ๊ก “ล้าง StockInventory เดิมก่อน Import”
@@ -507,6 +654,83 @@ export default function StockExportPage() {
           </SectionCard>
         </aside>
       </div>
+
+      <BottomSheet
+        open={advancedOpen}
+        title="Advanced Filter"
+        onClose={() => setAdvancedOpen(false)}
+        footer={
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setAdvancedFilters(emptyAdvancedFilters)}
+              className="min-h-11 rounded-lg border border-line px-4 font-bold text-white transition hover:border-brand"
+            >
+              ล้างเฉพาะ Filter
+            </button>
+            <button
+              type="button"
+              onClick={() => setAdvancedOpen(false)}
+              className="min-h-11 rounded-lg bg-brand px-4 font-bold text-ink"
+            >
+              ใช้ตัวกรอง
+            </button>
+          </div>
+        }
+      >
+        <AdvancedSelect label="Location" value={advancedFilters.location} onChange={(value) => setAdvancedFilter("location", value)} options={advancedOptions.locations} />
+        <AdvancedSelect label="ปีจด" value={advancedFilters.year} onChange={(value) => setAdvancedFilter("year", value)} options={advancedOptions.years} />
+        <AdvancedSearchable
+          label="รุ่นรถยนต์"
+          value={advancedFilters.model}
+          onChange={(value) => setAdvancedFilter("model", value)}
+          options={advancedOptions.models}
+          placeholder="พิมพ์หรือเลือกรุ่นรถ"
+          listId="stock-model-options"
+        />
+        <div className="grid grid-cols-2 gap-2">
+          <AdvancedSelect label="เกียร์" value={advancedFilters.gear} onChange={(value) => setAdvancedFilter("gear", value)} options={advancedOptions.gears} />
+          <AdvancedSelect label="สี" value={advancedFilters.color} onChange={(value) => setAdvancedFilter("color", value)} options={advancedOptions.colors} />
+        </div>
+        <AdvancedTextField
+          label="ทะเบียน"
+          value={advancedFilters.plate}
+          onChange={(value) => setAdvancedFilter("plate", value)}
+          placeholder="ค้นทะเบียนเฉพาะ"
+        />
+        <div className="grid grid-cols-2 gap-2">
+          <AdvancedTextField
+            label="เลขไมล์ต่ำสุด"
+            value={advancedFilters.mileageMin}
+            onChange={(value) => setAdvancedFilter("mileageMin", value)}
+            placeholder="เช่น 50000"
+            inputMode="numeric"
+          />
+          <AdvancedTextField
+            label="เลขไมล์สูงสุด"
+            value={advancedFilters.mileageMax}
+            onChange={(value) => setAdvancedFilter("mileageMax", value)}
+            placeholder="เช่น 150000"
+            inputMode="numeric"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <AdvancedTextField
+            label="ราคาต่ำสุด"
+            value={advancedFilters.priceMin}
+            onChange={(value) => setAdvancedFilter("priceMin", value)}
+            placeholder="เช่น 300000"
+            inputMode="numeric"
+          />
+          <AdvancedTextField
+            label="ราคาสูงสุด"
+            value={advancedFilters.priceMax}
+            onChange={(value) => setAdvancedFilter("priceMax", value)}
+            placeholder="เช่น 800000"
+            inputMode="numeric"
+          />
+        </div>
+      </BottomSheet>
     </PageContainer>
   );
 }
@@ -515,6 +739,97 @@ async function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mimeType, quality));
   if (!blob) throw new Error("ไม่สามารถสร้างไฟล์รูปได้");
   return blob;
+}
+
+function AdvancedSelect({
+  label,
+  value,
+  options,
+  onChange
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-sm font-bold text-white">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-semibold text-white outline-none focus:border-brand"
+      >
+        <option value="">ทั้งหมด</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function AdvancedSearchable({
+  label,
+  value,
+  options,
+  placeholder,
+  listId,
+  onChange
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  placeholder: string;
+  listId: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-sm font-bold text-white">{label}</span>
+      <input
+        value={value}
+        list={listId}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-semibold text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
+      />
+      <datalist id={listId}>
+        {options.map((option) => (
+          <option key={option} value={option} />
+        ))}
+      </datalist>
+    </label>
+  );
+}
+
+function AdvancedTextField({
+  label,
+  value,
+  placeholder,
+  inputMode,
+  onChange
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  inputMode?: "numeric" | "text";
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-sm font-bold text-white">{label}</span>
+      <input
+        value={value}
+        inputMode={inputMode}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-semibold text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
+      />
+    </label>
+  );
 }
 
 function StockPreview({ vehicles, mode, pageCount, groupCount }: { vehicles: StockVehicle[]; mode: ExportMode; pageCount: number; groupCount: number }) {
