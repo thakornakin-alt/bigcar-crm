@@ -19,7 +19,12 @@ function cleanRow(row: Partial<StockVehicle>): StockVehicle {
     vin: String(row.vin || "").trim(),
     finalGrade: String(row.finalGrade || "").trim(),
     program: String(row.program || "").trim(),
-    parkingLocation: String(row.parkingLocation || "").trim()
+    parkingLocation: String(row.parkingLocation || "").trim(),
+    status: String(row.status || "").trim(),
+    gear: String(row.gear || "").trim(),
+    mileage: String(row.mileage || "").trim(),
+    pdiNote: String(row.pdiNote || "").trim(),
+    vehicleGroup: String(row.vehicleGroup || "").trim()
   };
 }
 
