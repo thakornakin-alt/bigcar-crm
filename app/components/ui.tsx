@@ -1,5 +1,9 @@
-import { ReactNode } from "react";
+import { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
 import Link from "next/link";
+
+function classNames(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(" ");
+}
 
 export function PageContainer({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
   return (
@@ -73,5 +77,62 @@ export function SectionCard({
       )}
       <div className="space-y-3">{children}</div>
     </section>
+  );
+}
+
+export function StickyFilterBar({ children }: { children: ReactNode }) {
+  return (
+    <div className="sticky top-2 z-20 -mx-1 rounded-lg border border-line/80 bg-[#11141a]/95 p-2 shadow-glow backdrop-blur sm:mx-0">
+      <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
+export function SearchField({
+  icon,
+  className = "",
+  ...props
+}: InputHTMLAttributes<HTMLInputElement> & {
+  icon?: ReactNode;
+}) {
+  return (
+    <label className={classNames("flex min-h-12 items-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-3 text-white transition focus-within:border-brand", className)}>
+      {icon && <span className="flex h-5 w-5 shrink-0 items-center justify-center text-brand">{icon}</span>}
+      <input
+        {...props}
+        className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-white outline-none placeholder:text-[#6f7785]"
+      />
+    </label>
+  );
+}
+
+export function FilterChip({
+  active = false,
+  children,
+  className = "",
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  active?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      {...props}
+      className={classNames(
+        "min-h-10 rounded-lg border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-45",
+        active ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-soft hover:border-brand/60 hover:text-white",
+        className
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function FilterSummaryPill({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-full border border-line bg-[#0b0d11] px-3 py-1 text-xs font-semibold text-soft">
+      {children}
+    </span>
   );
 }

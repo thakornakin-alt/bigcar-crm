@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, CheckCircle2, Download, FileImage, Loader2, Search, Upload } from "lucide-react";
-import { PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
+import { FilterChip, FilterSummaryPill, PageContainer, PageTitle, SearchField, SectionCard, StickyFilterBar, TopMenuButton } from "@/app/components/ui";
 import type { StockVehicle } from "@/lib/types";
 
 type StockListResponse = {
@@ -13,6 +13,7 @@ type StockListResponse = {
 
 const maxTableItems = 30;
 const stockStatuses = ["รอขาย", "เตรียมส่งลาน", "จอง_Sale", "จอง_Internal", "จอง_รถทดแทน", "ขายแล้ว"];
+const ENABLE_NEW_STOCK_UI = process.env.NEXT_PUBLIC_ENABLE_NEW_STOCK_UI !== "false";
 
 type ExportMode = "customer" | "internal";
 
@@ -301,25 +302,51 @@ export default function StockExportPage() {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
         <div className="space-y-4">
           <SectionCard title="ค้นหาและกรองสต็อก" icon={<Search size={18} />}>
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="ค้นทะเบียน / รุ่น / ปี / Location"
-                className="h-12 rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
-              />
-              <button type="button" onClick={clearFilters} className="min-h-12 rounded-lg border border-line px-4 font-semibold text-white">
-                ล้างตัวกรอง
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2 text-xs text-soft">
-              <span className="rounded-full border border-line px-3 py-1">พร้อม Export {exportVehicles.length.toLocaleString("th-TH")} คัน</span>
-              <span className="rounded-full border border-line px-3 py-1">ออกเป็น {exportPageCount.toLocaleString("th-TH")} รูป</span>
-              <span className="rounded-full border border-line px-3 py-1">แยก {exportGroups.length.toLocaleString("th-TH")} กลุ่ม</span>
-              <span className="rounded-full border border-line px-3 py-1">แสดง {filteredVehicles.length.toLocaleString("th-TH")} คัน</span>
-              <span className="rounded-full border border-line px-3 py-1">มีสถานะ {importedStatusCount.toLocaleString("th-TH")} คัน</span>
-              <span className="rounded-full border border-line px-3 py-1">มีกลุ่มรถยนต์ {importedVehicleGroupCount.toLocaleString("th-TH")} คัน</span>
-            </div>
+            {ENABLE_NEW_STOCK_UI ? (
+              <StickyFilterBar>
+                <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                  <SearchField
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="ค้นทะเบียน / รุ่น / ปี / Location"
+                    icon={<Search size={18} />}
+                  />
+                  <button type="button" onClick={clearFilters} className="min-h-12 rounded-lg border border-line bg-[#0b0d11] px-4 font-semibold text-white transition hover:border-brand/60">
+                    ล้างตัวกรอง
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <FilterSummaryPill>พร้อม Export {exportVehicles.length.toLocaleString("th-TH")} คัน</FilterSummaryPill>
+                  <FilterSummaryPill>ออกเป็น {exportPageCount.toLocaleString("th-TH")} รูป</FilterSummaryPill>
+                  <FilterSummaryPill>แยก {exportGroups.length.toLocaleString("th-TH")} กลุ่ม</FilterSummaryPill>
+                  <FilterSummaryPill>แสดง {filteredVehicles.length.toLocaleString("th-TH")} คัน</FilterSummaryPill>
+                  <FilterSummaryPill>มีสถานะ {importedStatusCount.toLocaleString("th-TH")} คัน</FilterSummaryPill>
+                  <FilterSummaryPill>มีกลุ่มรถยนต์ {importedVehicleGroupCount.toLocaleString("th-TH")} คัน</FilterSummaryPill>
+                </div>
+              </StickyFilterBar>
+            ) : (
+              <>
+                <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                  <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="ค้นทะเบียน / รุ่น / ปี / Location"
+                    className="h-12 rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
+                  />
+                  <button type="button" onClick={clearFilters} className="min-h-12 rounded-lg border border-line px-4 font-semibold text-white">
+                    ล้างตัวกรอง
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs text-soft">
+                  <span className="rounded-full border border-line px-3 py-1">พร้อม Export {exportVehicles.length.toLocaleString("th-TH")} คัน</span>
+                  <span className="rounded-full border border-line px-3 py-1">ออกเป็น {exportPageCount.toLocaleString("th-TH")} รูป</span>
+                  <span className="rounded-full border border-line px-3 py-1">แยก {exportGroups.length.toLocaleString("th-TH")} กลุ่ม</span>
+                  <span className="rounded-full border border-line px-3 py-1">แสดง {filteredVehicles.length.toLocaleString("th-TH")} คัน</span>
+                  <span className="rounded-full border border-line px-3 py-1">มีสถานะ {importedStatusCount.toLocaleString("th-TH")} คัน</span>
+                  <span className="rounded-full border border-line px-3 py-1">มีกลุ่มรถยนต์ {importedVehicleGroupCount.toLocaleString("th-TH")} คัน</span>
+                </div>
+              </>
+            )}
             {vehicles.length > 0 && (!importedStatusCount || !importedVehicleGroupCount) && (
               <p className="rounded-lg border border-amber-400/30 bg-amber-950/20 px-3 py-3 text-sm text-amber-100">
                 โหลดสต็อกแล้ว แต่ข้อมูลสถานะ/กลุ่มรถยนต์ยังว่างในระบบ ให้ Import Stock ใหม่หลัง Vercel deploy แล้วติ๊ก “ล้าง StockInventory เดิมก่อน Import”
@@ -337,20 +364,17 @@ export default function StockExportPage() {
                 {stockStatuses.map((status) => {
                   const checked = selectedStatuses.includes(status);
                   return (
-                    <button
+                    <FilterChip
                       key={status}
-                      type="button"
+                      active={checked}
                       onClick={() =>
                         setSelectedStatuses((current) =>
                           current.includes(status) ? current.filter((item) => item !== status) : [...current, status]
                         )
                       }
-                      className={`min-h-10 rounded-lg border px-3 text-sm font-semibold ${
-                        checked ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-soft"
-                      }`}
                     >
                       {status} ({statusCounts[status] || 0})
-                    </button>
+                    </FilterChip>
                   );
                 })}
               </div>
@@ -368,20 +392,17 @@ export default function StockExportPage() {
                   {vehicleGroupOptions.map((group) => {
                     const checked = selectedVehicleGroups.includes(group.name);
                     return (
-                      <button
+                      <FilterChip
                         key={group.name}
-                        type="button"
+                        active={checked}
                         onClick={() =>
                           setSelectedVehicleGroups((current) =>
                             current.includes(group.name) ? current.filter((item) => item !== group.name) : [...current, group.name]
                           )
                         }
-                        className={`min-h-10 rounded-lg border px-3 text-sm font-semibold ${
-                          checked ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-soft"
-                        }`}
                       >
                         {group.name} ({group.count})
-                      </button>
+                      </FilterChip>
                     );
                   })}
                 </div>
