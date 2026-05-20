@@ -30,7 +30,8 @@ const fieldLabels: Array<{ key: keyof StockVehicle; label: string; aliases: stri
   { key: "status", label: "สถานะ", aliases: ["สถานะ", "status"] },
   { key: "gear", label: "เกียร์", aliases: ["เกียร์", "gear", "transmission"] },
   { key: "mileage", label: "เลขไมล์", aliases: ["เลขไมล์", "ไมล์", "mileage", "odo", "odometer"] },
-  { key: "pdiNote", label: "หมายเหตุ PDI", aliases: ["หมายเหตุ pdi", "หมายเหตุPDI", "pdi", "pdinote", "หมายเหตุ"] }
+  { key: "pdiNote", label: "หมายเหตุ PDI", aliases: ["หมายเหตุ pdi", "หมายเหตุPDI", "pdi", "pdinote", "หมายเหตุ"] },
+  { key: "vehicleGroup", label: "กลุ่มรถยนต์", aliases: ["กลุ่มรถยนต์", "กลุ่มรถ", "กลุ่ม", "ประเภทรถ", "ประเภท", "vehiclegroup", "cartype", "segment"] }
 ];
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
@@ -112,7 +113,8 @@ function mapRows(rows: RawRow[], mapping: Record<keyof StockVehicle, string>) {
       status: cell(row[mapping.status]),
       gear: cell(row[mapping.gear]),
       mileage: cell(row[mapping.mileage]).replace(/[^\d.]/g, ""),
-      pdiNote: cell(row[mapping.pdiNote])
+      pdiNote: cell(row[mapping.pdiNote]),
+      vehicleGroup: cell(row[mapping.vehicleGroup])
     }))
     .filter((row) => row.plate);
 }

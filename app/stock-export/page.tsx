@@ -49,6 +49,7 @@ export default function StockExportPage() {
   const [selectedPlates, setSelectedPlates] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>(["รอขาย"]);
+  const [selectedVehicleGroups, setSelectedVehicleGroups] = useState<string[]>([]);
   const [exportMode, setExportMode] = useState<ExportMode>("customer");
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -60,8 +61,11 @@ export default function StockExportPage() {
     const search = query.toLowerCase().replace(/\s+/g, "");
     return vehicles.filter((vehicle) => {
       const status = String(vehicle.status || "").trim();
+      const group = String(vehicle.vehicleGroup || "").trim() || "ไม่ระบุ";
       const matchesStatus = !selectedStatuses.length || selectedStatuses.includes(status);
+      const matchesGroup = !selectedVehicleGroups.length || selectedVehicleGroups.includes(group);
       if (!matchesStatus) return false;
+      if (!matchesGroup) return false;
       if (!search) return true;
 
       return [
@@ -76,14 +80,15 @@ export default function StockExportPage() {
         vehicle.salePrice,
         vehicle.parkingLocation,
         vehicle.project,
-        vehicle.program
+        vehicle.program,
+        vehicle.vehicleGroup
       ]
         .join("")
         .toLowerCase()
         .replace(/\s+/g, "")
         .includes(search);
     });
-  }, [query, selectedStatuses, vehicles]);
+  }, [query, selectedStatuses, selectedVehicleGroups, vehicles]);
 
   const statusCounts = useMemo(() => {
     return vehicles.reduce<Record<string, number>>((counts, vehicle) => {
@@ -93,6 +98,22 @@ export default function StockExportPage() {
     }, {});
   }, [vehicles]);
 
+  const vehicleGroupOptions = useMemo(() => {
+    const counts = vehicles.reduce<Record<string, number>>((nextCounts, vehicle) => {
+      const status = String(vehicle.status || "").trim();
+      const matchesStatus = !selectedStatuses.length || selectedStatuses.includes(status);
+      if (!matchesStatus) return nextCounts;
+
+      const group = String(vehicle.vehicleGroup || "").trim() || "ไม่ระบุ";
+      nextCounts[group] = (nextCounts[group] || 0) + 1;
+      return nextCounts;
+    }, {});
+
+    return Object.entries(counts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "th"));
+  }, [selectedStatuses, vehicles]);
+
   const selectedVehicles = useMemo(() => {
     const selected = new Set(selectedPlates);
     return vehicles.filter((vehicle) => selected.has(vehicle.plate)).slice(0, maxExportItems);
@@ -101,6 +122,11 @@ export default function StockExportPage() {
   useEffect(() => {
     loadStock();
   }, []);
+
+  useEffect(() => {
+    const availableGroups = new Set(vehicleGroupOptions.map((group) => group.name));
+    setSelectedVehicleGroups((current) => current.filter((group) => availableGroups.has(group)));
+  }, [vehicleGroupOptions]);
 
   async function loadStock() {
     setLoading(true);
@@ -266,6 +292,42 @@ export default function StockExportPage() {
                 })}
               </div>
             </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-white">กลุ่มรถยนต์</p>
+                <button type="button" onClick={() => setSelectedVehicleGroups([])} className="text-xs font-semibold text-brand">
+                  ทั้งหมด
+                </button>
+              </div>
+              <p className="text-xs text-soft">รายการนี้เปลี่ยนตามสถานะที่เลือกด้านบน</p>
+              {vehicleGroupOptions.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {vehicleGroupOptions.map((group) => {
+                    const checked = selectedVehicleGroups.includes(group.name);
+                    return (
+                      <button
+                        key={group.name}
+                        type="button"
+                        onClick={() =>
+                          setSelectedVehicleGroups((current) =>
+                            current.includes(group.name) ? current.filter((item) => item !== group.name) : [...current, group.name]
+                          )
+                        }
+                        className={`min-h-10 rounded-lg border px-3 text-sm font-semibold ${
+                          checked ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-soft"
+                        }`}
+                      >
+                        {group.name} ({group.count})
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft">
+                  ยังไม่พบคอลัมน์กลุ่มรถยนต์ในสต็อกที่ Import
+                </p>
+              )}
+            </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <button
                 type="button"
@@ -317,6 +379,7 @@ export default function StockExportPage() {
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-soft">
                       <span>สถานะ: <b className="text-white">{vehicle.status || "-"}</b></span>
+                      <span>กลุ่ม: <b className="text-white">{vehicle.vehicleGroup || "-"}</b></span>
                       <span>Location: <b className="text-white">{vehicle.parkingLocation || "-"}</b></span>
                       <span>ปีจด: <b className="text-white">{vehicle.year || "-"}</b></span>
                       <span>เกียร์: <b className="text-white">{vehicle.gear || "-"}</b></span>

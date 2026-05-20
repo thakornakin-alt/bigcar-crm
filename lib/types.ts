@@ -147,6 +147,7 @@ export type StockVehicle = {
   gear?: string;
   mileage?: string;
   pdiNote?: string;
+  vehicleGroup?: string;
 };
 
 export type StockImportInput = {
