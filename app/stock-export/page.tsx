@@ -11,7 +11,7 @@ type StockListResponse = {
   warning?: string;
 };
 
-const maxExportItems = 12;
+const maxExportItems = 8;
 const stockStatuses = ["รอขาย", "เตรียมส่งลาน", "จอง_Sale", "จอง_Internal", "จอง_รถทดแทน", "ขายแล้ว"];
 
 type ExportMode = "customer" | "internal";
@@ -505,8 +505,12 @@ function StockPreview({ vehicles, mode }: { vehicles: StockVehicle[]; mode: Expo
 
 async function renderStockCanvas(canvas: HTMLCanvasElement, vehicles: StockVehicle[], mode: ExportMode) {
   const width = 1080;
-  const cardHeight = mode === "internal" ? 176 : 154;
-  const height = Math.max(1080, 270 + vehicles.length * cardHeight + 110);
+  const columnGap = 28;
+  const cardWidth = 462;
+  const cardHeight = mode === "internal" ? 270 : 238;
+  const rowGap = 26;
+  const rows = Math.max(Math.ceil(vehicles.length / 2), 1);
+  const height = Math.max(1080, 292 + rows * cardHeight + (rows - 1) * rowGap + 118);
   const ratio = window.devicePixelRatio || 1;
   canvas.width = width * ratio;
   canvas.height = height * ratio;
@@ -535,40 +539,46 @@ async function renderStockCanvas(canvas: HTMLCanvasElement, vehicles: StockVehic
 
   let y = 260;
   vehicles.forEach((vehicle, index) => {
-    const boxHeight = mode === "internal" && vehicle.pdiNote ? 146 : 124;
-    roundRect(ctx, 54, y, width - 108, boxHeight, 18, index % 2 ? "#111821" : "#0d1219", "#263141");
-    ctx.fillStyle = "#22c55e";
-    ctx.font = "900 34px Arial, sans-serif";
-    ctx.fillText(vehicle.plate || "-", 82, y + 43);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "800 30px Arial, sans-serif";
-    fillTextEllipsis(ctx, vehicleTitle(vehicle), 82, y + 80, 560);
-    ctx.fillStyle = "#c7d0dc";
-    ctx.font = "500 22px Arial, sans-serif";
-    fillTextEllipsis(
-      ctx,
-      `${vehicle.parkingLocation || "-"} | ปี ${vehicle.year || "-"} | ${vehicle.gear || "-"} | สี ${vehicle.color || "-"} | ${formatMileage(vehicle.mileage)}`,
-      82,
-      y + 112,
-      700
-    );
+    const column = index % 2;
+    const row = Math.floor(index / 2);
+    const x = 54 + column * (cardWidth + columnGap);
+    y = 260 + row * (cardHeight + rowGap);
+    roundRect(ctx, x, y, cardWidth, cardHeight, 22, index % 2 ? "#111821" : "#0d1219", "#2c3848");
 
+    ctx.fillStyle = "#0a0f14";
+    ctx.fillRect(x + 18, y + 18, cardWidth - 36, 54);
+    ctx.fillStyle = "#22c55e";
+    ctx.font = "900 36px Arial, sans-serif";
+    ctx.fillText(vehicle.plate || "-", x + 34, y + 56);
     ctx.textAlign = "right";
     ctx.fillStyle = "#22c55e";
-    ctx.font = "900 34px Arial, sans-serif";
-    ctx.fillText(formatPrice(vehicle.salePrice), width - 82, y + 43);
-    ctx.fillStyle = "#c7d0dc";
-    ctx.font = "500 24px Arial, sans-serif";
-    ctx.fillText(vehicle.status || "-", width - 82, y + 82);
+    ctx.font = "900 28px Arial, sans-serif";
+    ctx.fillText(formatPrice(vehicle.salePrice), x + cardWidth - 34, y + 55);
     ctx.textAlign = "left";
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "800 30px Arial, sans-serif";
+    wrapText(ctx, vehicleTitle(vehicle), x + 34, y + 106, cardWidth - 68, 34, 2);
+
+    ctx.fillStyle = "#c7d0dc";
+    ctx.font = "700 23px Arial, sans-serif";
+    ctx.fillText(`ปี ${vehicle.year || "-"}`, x + 34, y + 174);
+    ctx.fillText(`${vehicle.gear || "-"} / สี ${vehicle.color || "-"}`, x + 190, y + 174);
+    ctx.fillText(`ไมล์ ${formatMileage(vehicle.mileage)}`, x + 34, y + 210);
+    if (mode === "internal") {
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "700 21px Arial, sans-serif";
+      fillTextEllipsis(ctx, `Location ${vehicle.parkingLocation || "-"}`, x + 34, y + 246, cardWidth - 68);
+      fillTextEllipsis(ctx, `สถานะ ${vehicle.status || "-"} / กลุ่ม ${vehicle.vehicleGroup || "-"}`, x + 34, y + 276, cardWidth - 68);
+    } else {
+      fillTextEllipsis(ctx, `Location ${vehicle.parkingLocation || "-"}`, x + 34, y + 246, cardWidth - 68);
+    }
 
     if (mode === "internal" && vehicle.pdiNote) {
       ctx.fillStyle = "#fde68a";
-      ctx.font = "500 22px Arial, sans-serif";
-      fillTextEllipsis(ctx, `PDI: ${vehicle.pdiNote}`, 82, y + 140, 880);
+      ctx.font = "600 20px Arial, sans-serif";
+      fillTextEllipsis(ctx, `PDI: ${vehicle.pdiNote}`, x + 34, y + cardHeight - 26, cardWidth - 68);
     }
-
-    y += cardHeight;
   });
 
   ctx.fillStyle = "#7d8794";
@@ -609,4 +619,27 @@ function fillTextEllipsis(ctx: CanvasRenderingContext2D, text: string, x: number
     value = value.slice(0, -1);
   }
   ctx.fillText(`${value}...`, x, y);
+}
+
+function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number, maxLines: number) {
+  const words = String(text || "-").split(/\s+/);
+  let line = "";
+  let lineCount = 0;
+
+  words.forEach((word) => {
+    if (lineCount >= maxLines) return;
+    const testLine = line ? `${line} ${word}` : word;
+    if (ctx.measureText(testLine).width > maxWidth && line) {
+      const isLastLine = lineCount === maxLines - 1;
+      fillTextEllipsis(ctx, isLastLine ? `${line} ${word}` : line, x, y + lineCount * lineHeight, maxWidth);
+      line = isLastLine ? "" : word;
+      lineCount += 1;
+    } else {
+      line = testLine;
+    }
+  });
+
+  if (line && lineCount < maxLines) {
+    fillTextEllipsis(ctx, line, x, y + lineCount * lineHeight, maxWidth);
+  }
 }
