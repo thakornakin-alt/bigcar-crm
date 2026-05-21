@@ -1080,7 +1080,7 @@ function StockPreview({ vehicles, mode, pageCount, groupCount }: { vehicles: Sto
           </tbody>
         </table>
       </div>
-      {vehicles.length ? <p className="p-2 text-xs text-[#475569]">Preview แสดง 8 คันแรก ตอน Export จะแยกตามกลุ่มรถยนต์และแบ่งรูปละ 30 คัน</p> : <p className="p-6 text-center text-sm text-[#475569]">เลือกสต็อกเพื่อดู Preview</p>}
+      {vehicles.length ? <p className="p-2 text-xs text-[#475569]">Preview แสดง 8 คันแรก ตอน Export จะแยกตามกลุ่มรถยนต์และแบ่งรูปละ {maxTableItems} คัน</p> : <p className="p-6 text-center text-sm text-[#475569]">เลือกสต็อกเพื่อดู Preview</p>}
     </div>
   );
 }
@@ -1095,14 +1095,14 @@ function renderStockTableCanvas(
   groupTotal: number,
   exportTotal: number
 ) {
-  const width = 1600;
-  const margin = 40;
-  const headerHeight = 118;
-  const tableTop = 150;
-  const rowHeight = vehicles.length <= 3 ? 68 : vehicles.length <= 8 ? 60 : 54;
-  const footerHeight = 54;
+  const width = 1800;
+  const margin = 44;
+  const headerHeight = 126;
+  const tableTop = 166;
+  const rowHeight = vehicles.length <= 3 ? 76 : vehicles.length <= 8 ? 66 : 58;
+  const footerHeight = 60;
   const rows = vehicles.slice(0, maxTableItems);
-  const headerRowHeight = 50;
+  const headerRowHeight = 56;
   const height = tableTop + headerRowHeight + rows.length * rowHeight + footerHeight;
   const ratio = window.devicePixelRatio || 1;
   canvas.width = width * ratio;
@@ -1113,54 +1113,54 @@ function renderStockTableCanvas(
   if (!ctx) throw new Error("Canvas not available");
   ctx.scale(ratio, ratio);
 
-  ctx.fillStyle = "#f6f8f7";
+  ctx.fillStyle = "#f4f7f5";
   ctx.fillRect(0, 0, width, height);
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(margin, 26, width - margin * 2, headerHeight);
-  ctx.fillStyle = "#16a34a";
+  ctx.fillStyle = "#10b981";
   ctx.fillRect(margin, 26, 8, headerHeight);
   ctx.strokeStyle = "#d9e1df";
   ctx.lineWidth = 1.2;
   ctx.strokeRect(margin, 26, width - margin * 2, headerHeight);
 
   ctx.fillStyle = "#111827";
-  ctx.font = "900 42px Arial, sans-serif";
+  ctx.font = "900 48px Arial, Tahoma, sans-serif";
   ctx.textAlign = "left";
-  ctx.fillText(groupName || "Stock", margin + 28, 76);
+  ctx.fillText(groupName || "Stock", margin + 30, 82);
   ctx.fillStyle = "#64748b";
-  ctx.font = "600 22px Arial, sans-serif";
+  ctx.font = "600 24px Arial, Tahoma, sans-serif";
   ctx.fillText(
     `${groupTotal.toLocaleString("th-TH")} คัน | อัปเดต ${new Date().toLocaleDateString("th-TH")} | ${mode === "customer" ? "สำหรับลูกค้า" : "สำหรับภายใน"}`,
-    margin + 28,
-    112
+    margin + 30,
+    120
   );
   ctx.textAlign = "right";
   ctx.fillStyle = "#111827";
-  ctx.font = "800 26px Arial, sans-serif";
-  ctx.fillText(`หน้า ${page}/${totalPages}`, width - margin - 26, 76);
+  ctx.font = "800 30px Arial, Tahoma, sans-serif";
+  ctx.fillText(`หน้า ${page}/${totalPages}`, width - margin - 28, 82);
 
   const columns = [
-    { key: "location", label: "Location", width: 150 },
-    { key: "plate", label: "ทะเบียน", width: 140 },
-    { key: "year", label: "ปีจด", width: 110 },
-    { key: "model", label: "รุ่นรถยนต์", width: 520 },
-    { key: "gear", label: "เกียร์", width: 90 },
-    { key: "color", label: "สี", width: 170 },
-    { key: "mileage", label: "เลขไมล์", width: 150 },
-    { key: "price", label: "ราคาเสนอขายRT", width: 190 }
+    { key: "location", label: "Location", width: 165 },
+    { key: "plate", label: "ทะเบียน", width: 150 },
+    { key: "year", label: "ปีจด", width: 120 },
+    { key: "model", label: "รุ่นรถยนต์", width: 620 },
+    { key: "gear", label: "เกียร์", width: 95 },
+    { key: "color", label: "สี", width: 190 },
+    { key: "mileage", label: "เลขไมล์", width: 170 },
+    { key: "price", label: "ราคาเสนอขายRT", width: 202 }
   ];
 
   let x = margin;
-  ctx.font = "800 21px Arial, sans-serif";
+  ctx.font = "800 23px Arial, Tahoma, sans-serif";
   columns.forEach((column) => {
-    ctx.fillStyle = "#17211d";
+    ctx.fillStyle = column.key === "price" ? "#0f766e" : "#13221c";
     ctx.fillRect(x, tableTop, column.width, headerRowHeight);
     ctx.strokeStyle = "#2d3a35";
     ctx.lineWidth = 1;
     ctx.strokeRect(x, tableTop, column.width, headerRowHeight);
     ctx.fillStyle = "#ffffff";
     ctx.textAlign = column.key === "price" ? "right" : "center";
-    ctx.fillText(column.label, column.key === "price" ? x + column.width - 16 : x + column.width / 2, tableTop + 32);
+    ctx.fillText(column.label, column.key === "price" ? x + column.width - 18 : x + column.width / 2, tableTop + 36);
     x += column.width;
   });
 
@@ -1179,18 +1179,18 @@ function renderStockTableCanvas(
 
     x = margin;
     columns.forEach((column) => {
-      ctx.fillStyle = column.key === "price" ? "#e6fbf3" : rowIndex % 2 ? "#fbfcfc" : "#ffffff";
+      ctx.fillStyle = column.key === "price" ? "#e8fbf2" : rowIndex % 2 ? "#fbfcfc" : "#ffffff";
       ctx.fillRect(x, rowY, column.width, rowHeight);
       ctx.strokeStyle = "#dce3e1";
       ctx.lineWidth = 1;
       ctx.strokeRect(x, rowY, column.width, rowHeight);
       ctx.fillStyle = "#111827";
-      ctx.font = column.key === "price" ? "900 22px Arial, sans-serif" : "600 19px Arial, sans-serif";
+      ctx.font = column.key === "price" ? "900 26px Arial, Tahoma, sans-serif" : "600 21px Arial, Tahoma, sans-serif";
       ctx.textAlign = column.key === "price" || column.key === "mileage" ? "right" : column.key === "model" || column.key === "location" ? "left" : "center";
       const textX =
-        column.key === "price" || column.key === "mileage" ? x + column.width - 12 : column.key === "model" || column.key === "location" ? x + 12 : x + column.width / 2;
+        column.key === "price" || column.key === "mileage" ? x + column.width - 14 : column.key === "model" || column.key === "location" ? x + 14 : x + column.width / 2;
       if (column.key === "model") {
-        drawWrappedCellText(ctx, values[column.key], textX, rowY + 21, column.width - 24, 23, 2);
+        drawWrappedCellText(ctx, values[column.key], textX, rowY + 23, column.width - 28, 25, 2);
       } else if (column.key === "location" || column.key === "color") {
         drawBadgeCellText(ctx, values[column.key], textX, rowY + Math.floor(rowHeight / 2), column.width - 24);
       } else {
@@ -1202,7 +1202,7 @@ function renderStockTableCanvas(
 
   ctx.textAlign = "left";
   ctx.fillStyle = "#6b7280";
-  ctx.font = "600 18px Arial, sans-serif";
+  ctx.font = "600 20px Arial, Tahoma, sans-serif";
   ctx.fillText("Generated from latest stock", margin, height - 22);
   ctx.textAlign = "right";
   ctx.fillText(`จำนวนรถทั้งหมด ${exportTotal.toLocaleString("th-TH")} คัน`, width - margin, height - 22);
