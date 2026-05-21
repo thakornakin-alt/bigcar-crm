@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, Download, FileImage, Filter, Loader2, Search, Upload } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Download, FileImage, Filter, Loader2, MessageCircle, Search, Upload } from "lucide-react";
 import {
   ActiveFilterTag,
   BottomSheet,
@@ -15,6 +15,8 @@ import {
   TopMenuButton
 } from "@/app/components/ui";
 import type { StockVehicle } from "@/lib/types";
+import type { DriveUploadResult, LineGroup } from "@/lib/types";
+import { salesLineGroupStorageKey } from "@/lib/client-settings";
 
 type StockListResponse = {
   vehicles: StockVehicle[];
@@ -39,6 +41,13 @@ type PdfImage = {
   bytes: Uint8Array;
   width: number;
   height: number;
+};
+
+type StockExportFileBundle = {
+  files: File[];
+  pageCount: number;
+  groupCount: number;
+  vehicleCount: number;
 };
 
 type AdvancedStockFilters = {
@@ -69,6 +78,17 @@ const emptyAdvancedFilters: AdvancedStockFilters = {
 
 async function api<T>(url: string): Promise<T> {
   const response = await fetch(url, { cache: "no-store" });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
+
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Request failed");
   return data;
@@ -176,6 +196,8 @@ function pdfFileName(groupCount: number) {
 
 export default function StockExportPage() {
   const [vehicles, setVehicles] = useState<StockVehicle[]>([]);
+  const [lineGroups, setLineGroups] = useState<LineGroup[]>([]);
+  const [selectedLineGroupId, setSelectedLineGroupId] = useState("");
   const [query, setQuery] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedVehicleGroups, setSelectedVehicleGroups] = useState<string[]>([]);
@@ -186,6 +208,7 @@ export default function StockExportPage() {
   const [visibleCount, setVisibleCount] = useState(20);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [sendingLine, setSendingLine] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -298,7 +321,14 @@ export default function StockExportPage() {
 
   useEffect(() => {
     loadStock();
+    loadLineGroups();
   }, []);
+
+  useEffect(() => {
+    if (selectedLineGroupId) {
+      window.localStorage.setItem(salesLineGroupStorageKey, selectedLineGroupId);
+    }
+  }, [selectedLineGroupId]);
 
   useEffect(() => {
     const availableGroups = new Set(vehicleGroupOptions.map((group) => group.name));
@@ -326,6 +356,19 @@ export default function StockExportPage() {
     }
   }
 
+  async function loadLineGroups() {
+    try {
+      const data = await api<{ groups: LineGroup[] }>("/api/line/groups");
+      setLineGroups(data.groups);
+      const savedGroupId = window.localStorage.getItem(salesLineGroupStorageKey) || "";
+      const groupId = data.groups.some((group) => group.groupId === savedGroupId) ? savedGroupId : data.groups[0]?.groupId || "";
+      setSelectedLineGroupId(groupId);
+    } catch {
+      setLineGroups([]);
+      setSelectedLineGroupId("");
+    }
+  }
+
   function clearFilters() {
     setQuery("");
     setSelectedStatuses([]);
@@ -347,31 +390,7 @@ export default function StockExportPage() {
     setMessage(`กำลังสร้างไฟล์ ${format.toUpperCase()} ${exportPageCount.toLocaleString("th-TH")} หน้า...`);
 
     try {
-      if (!exportVehicles.length) throw new Error("ยังไม่มีรถตามตัวกรองสำหรับ Export");
-      const canvas = canvasRef.current;
-      if (!canvas) throw new Error("Canvas is not ready");
-      const mimeType = format === "jpeg" ? "image/jpeg" : "image/png";
-      const extension = format === "jpeg" ? "jpg" : "png";
-      const files: File[] = [];
-      const pdfImages: PdfImage[] = [];
-
-      for (const group of exportGroups) {
-        for (let index = 0; index < group.pages.length; index += 1) {
-          renderStockTableCanvas(canvas, group.pages[index], exportMode, index + 1, group.pages.length, group.name, group.vehicles.length, exportVehicles.length);
-          if (format === "pdf") {
-            const jpegBlob = await canvasToBlob(canvas, "image/jpeg", 0.92);
-            pdfImages.push({ bytes: new Uint8Array(await jpegBlob.arrayBuffer()), width: canvas.width, height: canvas.height });
-          } else {
-            const blob = await canvasToBlob(canvas, mimeType, format === "jpeg" ? 0.92 : undefined);
-            files.push(new File([blob], fileName(group.name, extension, index + 1, group.pages.length), { type: mimeType }));
-          }
-        }
-      }
-
-      if (format === "pdf") {
-        const blob = buildPdfFromJpegs(pdfImages);
-        files.push(new File([blob], pdfFileName(exportGroups.length), { type: "application/pdf" }));
-      }
+      const { files } = await createStockExportFiles(format);
 
       const shareData = {
         title: "ตารางสต็อก BIG CAR",
@@ -403,6 +422,96 @@ export default function StockExportPage() {
     } finally {
       setExporting(false);
     }
+  }
+
+  async function sendLineStockImages() {
+    setSendingLine(true);
+    setError("");
+    setMessage("กำลังสร้างรูป JPG สำหรับส่ง LINE...");
+
+    try {
+      if (!selectedLineGroupId) throw new Error("กรุณาเลือกกลุ่ม LINE ก่อนส่ง");
+      const bundle = await createStockExportFiles("jpeg");
+      setMessage(`กำลังอัปโหลดรูป ${bundle.files.length.toLocaleString("th-TH")} ไฟล์เข้า Drive...`);
+
+      const files = await Promise.all(
+        bundle.files.map(async (file, index) => ({
+          clientId: `stock-export-${Date.now()}-${index}`,
+          category: "stockExport",
+          label: "รูปสต็อก",
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          base64: await fileToBase64(file)
+        }))
+      );
+
+      const upload = await postJson<{ result: DriveUploadResult }>("/api/drive/upload", {
+        reportType: "sales",
+        customerName: "Stock Export",
+        plate: "STOCK",
+        saleName: "BIG CAR CRM",
+        files
+      });
+
+      const groupNames = exportGroups.map((group) => group.name).slice(0, 8).join(", ");
+      const moreGroups = exportGroups.length > 8 ? ` และอีก ${exportGroups.length - 8} กลุ่ม` : "";
+      const lineMessage = [
+        "ตารางสต็อก BIG CAR",
+        `จำนวนรถ: ${bundle.vehicleCount.toLocaleString("th-TH")} คัน`,
+        `จำนวนรูป: ${bundle.pageCount.toLocaleString("th-TH")} รูป`,
+        `กลุ่ม: ${groupNames || "ทั้งหมด"}${moreGroups}`,
+        `อัปเดต: ${new Date().toLocaleDateString("th-TH")}`
+      ].join("\n");
+
+      const data = await postJson<{ result: { imageCount: number; linkCount: number } }>("/api/line/send-report", {
+        groupId: selectedLineGroupId,
+        message: lineMessage,
+        attachments: upload.result.attachments
+      });
+
+      setMessage(`ส่งรูปสต็อกเข้า LINE แล้ว ${data.result.imageCount.toLocaleString("th-TH")} รูป${data.result.linkCount ? ` / ลิงก์ ${data.result.linkCount.toLocaleString("th-TH")} รายการ` : ""}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ส่งรูปสต็อกเข้า LINE ไม่สำเร็จ");
+    } finally {
+      setSendingLine(false);
+    }
+  }
+
+  async function createStockExportFiles(format: ExportFormat): Promise<StockExportFileBundle> {
+    if (!exportVehicles.length) throw new Error("ยังไม่มีรถตามตัวกรองสำหรับ Export");
+    const canvas = canvasRef.current;
+    if (!canvas) throw new Error("Canvas is not ready");
+
+    const mimeType = format === "jpeg" ? "image/jpeg" : "image/png";
+    const extension = format === "jpeg" ? "jpg" : "png";
+    const files: File[] = [];
+    const pdfImages: PdfImage[] = [];
+
+    for (const group of exportGroups) {
+      for (let index = 0; index < group.pages.length; index += 1) {
+        renderStockTableCanvas(canvas, group.pages[index], exportMode, index + 1, group.pages.length, group.name, group.vehicles.length, exportVehicles.length);
+        if (format === "pdf") {
+          const jpegBlob = await canvasToBlob(canvas, "image/jpeg", 0.92);
+          pdfImages.push({ bytes: new Uint8Array(await jpegBlob.arrayBuffer()), width: canvas.width, height: canvas.height });
+        } else {
+          const blob = await canvasToBlob(canvas, mimeType, format === "jpeg" ? 0.92 : undefined);
+          files.push(new File([blob], fileName(group.name, extension, index + 1, group.pages.length), { type: mimeType }));
+        }
+      }
+    }
+
+    if (format === "pdf") {
+      const blob = buildPdfFromJpegs(pdfImages);
+      files.push(new File([blob], pdfFileName(exportGroups.length), { type: "application/pdf" }));
+    }
+
+    return {
+      files,
+      pageCount: exportPageCount,
+      groupCount: exportGroups.length,
+      vehicleCount: exportVehicles.length
+    };
   }
 
   async function copyImage() {
@@ -643,6 +752,35 @@ export default function StockExportPage() {
         <SectionCard title="Preview รูป" icon={<FileImage size={18} />}>
           <StockPreview vehicles={exportVehicles} mode={exportMode} pageCount={exportPageCount} groupCount={exportGroups.length} />
           <ExportPlanSummary groups={exportGroups} pageCount={exportPageCount} vehicleCount={exportVehicles.length} />
+          <div className="grid gap-2 rounded-lg border border-line bg-[#0b0d11] p-3 sm:grid-cols-[1fr_auto]">
+            <label>
+              <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">ส่งรูปสต็อกเข้า LINE กลุ่ม</span>
+              <select
+                value={selectedLineGroupId}
+                onChange={(event) => setSelectedLineGroupId(event.target.value)}
+                className="min-h-12 w-full rounded-lg border border-line bg-[#080a0d] px-3 text-white outline-none focus:border-brand"
+              >
+                {lineGroups.length ? (
+                  lineGroups.map((group) => (
+                    <option key={group.groupId} value={group.groupId}>
+                      {group.name || group.groupId}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">ยังไม่พบกลุ่ม LINE</option>
+                )}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={sendLineStockImages}
+              disabled={sendingLine || exporting || !selectedLineGroupId || !exportVehicles.length}
+              className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink disabled:opacity-60 sm:self-end"
+            >
+              {sendingLine ? <Loader2 size={20} className="animate-spin" /> : <MessageCircle size={20} />}
+              ส่ง LINE
+            </button>
+          </div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <button
               type="button"
@@ -842,6 +980,16 @@ async function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mimeType, quality));
   if (!blob) throw new Error("ไม่สามารถสร้างไฟล์รูปได้");
   return blob;
+}
+
+async function fileToBase64(file: File) {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("อ่านไฟล์รูปไม่สำเร็จ"));
+    reader.readAsDataURL(file);
+  });
+  return dataUrl.split(",")[1] || "";
 }
 
 function buildPdfFromJpegs(images: PdfImage[]) {
