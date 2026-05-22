@@ -30,6 +30,7 @@ const ENABLE_NEW_STOCK_UI = process.env.NEXT_PUBLIC_ENABLE_NEW_STOCK_UI !== "fal
 
 type ExportMode = "customer" | "internal";
 type ExportFormat = "png" | "jpeg" | "pdf";
+type PdiRemarkFilter = "all" | "none" | "has";
 
 type StockExportGroup = {
   name: string;
@@ -122,6 +123,25 @@ function stockVehicleGroup(vehicle: StockVehicle) {
   return String(vehicle.vehicleGroup || "").trim();
 }
 
+function cleanPdiRemark(value?: string) {
+  return String(value ?? "").trim();
+}
+
+function hasPdiRemark(value?: string) {
+  const remark = cleanPdiRemark(value).replace(/\s+/g, "");
+  return Boolean(remark && remark !== "-" && remark !== "–" && remark !== "—");
+}
+
+function matchesPdiRemarkFilter(vehicle: StockVehicle, filter: PdiRemarkFilter) {
+  if (filter === "all") return true;
+  const hasRemark = hasPdiRemark(vehicle.pdiNote);
+  return filter === "has" ? hasRemark : !hasRemark;
+}
+
+function pdiRemarkText(value?: string) {
+  return hasPdiRemark(value) ? cleanPdiRemark(value) : "-";
+}
+
 function shortLocation(value?: string) {
   return String(value || "-")
     .replace("โกดัง-", "")
@@ -202,6 +222,7 @@ export default function StockExportPage() {
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedVehicleGroups, setSelectedVehicleGroups] = useState<string[]>([]);
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedStockFilters>(emptyAdvancedFilters);
+  const [pdiRemarkFilter, setPdiRemarkFilter] = useState<PdiRemarkFilter>("all");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [exportMode, setExportMode] = useState<ExportMode>("customer");
   const [listOpen, setListOpen] = useState(false);
@@ -264,9 +285,13 @@ export default function StockExportPage() {
     });
   }, [selectedVehicleGroups, statusMatchedVehicles]);
 
-  const filteredVehicles = useMemo(() => {
+  const advancedMatchedVehicles = useMemo(() => {
     return groupMatchedVehicles.filter((vehicle) => matchesAdvancedFilters(vehicle, advancedFilters));
   }, [advancedFilters, groupMatchedVehicles]);
+
+  const filteredVehicles = useMemo(() => {
+    return advancedMatchedVehicles.filter((vehicle) => matchesPdiRemarkFilter(vehicle, pdiRemarkFilter));
+  }, [advancedMatchedVehicles, pdiRemarkFilter]);
 
   const advancedOptions = useMemo(() => {
     const optionValues = (except: (keyof AdvancedStockFilters)[]) => {
@@ -288,6 +313,18 @@ export default function StockExportPage() {
   }, [advancedFilters, groupMatchedVehicles]);
 
   const advancedFilterCount = useMemo(() => countAdvancedFilters(advancedFilters), [advancedFilters]);
+
+  const pdiRemarkCounts = useMemo(() => {
+    return advancedMatchedVehicles.reduce(
+      (counts, vehicle) => {
+        if (hasPdiRemark(vehicle.pdiNote)) counts.has += 1;
+        else counts.none += 1;
+        counts.all += 1;
+        return counts;
+      },
+      { all: 0, none: 0, has: 0 }
+    );
+  }, [advancedMatchedVehicles]);
 
   const statusCounts = useMemo(() => {
     return plateMatchedVehicles.reduce<Record<string, number>>((counts, vehicle) => {
@@ -337,7 +374,7 @@ export default function StockExportPage() {
 
   useEffect(() => {
     setVisibleCount(20);
-  }, [advancedFilters, query, selectedStatuses, selectedVehicleGroups]);
+  }, [advancedFilters, pdiRemarkFilter, query, selectedStatuses, selectedVehicleGroups]);
 
   async function loadStock() {
     setLoading(true);
@@ -374,6 +411,7 @@ export default function StockExportPage() {
     setSelectedStatuses([]);
     setSelectedVehicleGroups([]);
     setAdvancedFilters(emptyAdvancedFilters);
+    setPdiRemarkFilter("all");
   }
 
   function setAdvancedFilter<K extends keyof AdvancedStockFilters>(key: K, value: AdvancedStockFilters[K]) {
@@ -621,7 +659,7 @@ export default function StockExportPage() {
                 </div>
               </>
             )}
-            {ENABLE_NEW_STOCK_UI && (query || selectedStatuses.length || selectedVehicleGroups.length || advancedFilterCount) ? (
+            {ENABLE_NEW_STOCK_UI && (query || selectedStatuses.length || selectedVehicleGroups.length || advancedFilterCount || pdiRemarkFilter !== "all") ? (
               <div className="flex flex-wrap gap-2">
                 {query && <ActiveFilterTag onRemove={() => setQuery("")}>ค้นหา: {query}</ActiveFilterTag>}
                 {selectedStatuses.map((status) => (
@@ -640,6 +678,11 @@ export default function StockExportPage() {
                 {advancedFilters.gear && <ActiveFilterTag onRemove={() => clearAdvancedFilter("gear")}>เกียร์: {advancedFilters.gear}</ActiveFilterTag>}
                 {advancedFilters.color && <ActiveFilterTag onRemove={() => clearAdvancedFilter("color")}>สี: {advancedFilters.color}</ActiveFilterTag>}
                 {advancedFilters.plate && <ActiveFilterTag onRemove={() => clearAdvancedFilter("plate")}>ทะเบียน: {advancedFilters.plate}</ActiveFilterTag>}
+                {pdiRemarkFilter !== "all" && (
+                  <ActiveFilterTag onRemove={() => setPdiRemarkFilter("all")}>
+                    หมายเหตุ PDI: {pdiRemarkFilter === "has" ? "มีหมายเหตุ" : "ไม่มีหมายเหตุ"}
+                  </ActiveFilterTag>
+                )}
                 {(advancedFilters.mileageMin || advancedFilters.mileageMax) && (
                   <ActiveFilterTag
                     onRemove={() => setAdvancedFilters((current) => ({ ...current, mileageMin: "", mileageMax: "" }))}
@@ -732,7 +775,7 @@ export default function StockExportPage() {
                   exportMode === "customer" ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-white"
                 }`}
               >
-                สำหรับลูกค้า
+                โหมดลูกค้า
               </button>
               <button
                 type="button"
@@ -741,8 +784,47 @@ export default function StockExportPage() {
                   exportMode === "internal" ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-white"
                 }`}
               >
-                สำหรับภายใน
+                โหมดภายใน
               </button>
+            </div>
+            {exportMode === "internal" ? (
+              <p className="rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 py-3 text-sm text-amber-100">
+                โหมดภายใน: แสดงข้อมูลหมายเหตุ PDI สำหรับหลังบ้านเท่านั้น
+              </p>
+            ) : (
+              <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft">
+                โหมดลูกค้า: ซ่อนหมายเหตุ PDI ใน Preview / Export / รูปที่ส่งลูกค้าเสมอ
+              </p>
+            )}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-white">หมายเหตุ PDI</p>
+                <button type="button" onClick={() => setPdiRemarkFilter("all")} className="text-xs font-semibold text-brand">
+                  ทั้งหมด
+                </button>
+              </div>
+              <p className="text-xs text-soft">ใช้คัดรถก่อนส่งลูกค้า โดยไม่แสดงข้อความหมายเหตุในโหมดลูกค้า</p>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { value: "all", label: "ทั้งหมด", count: pdiRemarkCounts.all },
+                  { value: "none", label: "ไม่มีหมายเหตุ", count: pdiRemarkCounts.none },
+                  { value: "has", label: "มีหมายเหตุ", count: pdiRemarkCounts.has }
+                ] as Array<{ value: PdiRemarkFilter; label: string; count: number }>).map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setPdiRemarkFilter(item.value)}
+                    className={`min-h-11 rounded-lg border px-2 text-sm font-bold transition ${
+                      pdiRemarkFilter === item.value
+                        ? "border-brand bg-brand text-ink"
+                        : "border-line bg-[#0b0d11] text-white hover:border-brand/60"
+                    }`}
+                  >
+                    <span className="block leading-5">{item.label}</span>
+                    <span className="block text-xs opacity-75">({item.count.toLocaleString("th-TH")})</span>
+                  </button>
+                ))}
+              </div>
             </div>
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft">
               Export เป็นตารางแยกตามกลุ่มรถยนต์ หน้า/รูปละ {maxTableItems} คัน ถ้ากลุ่มไหนเกินจะสร้างหลายหน้าพร้อมเลขหน้าอัตโนมัติ
@@ -870,8 +952,8 @@ export default function StockExportPage() {
                         <span>สี: <b className="text-white">{vehicle.color || "-"}</b></span>
                         <span>เลขไมล์: <b className="text-white">{formatMileage(vehicle.mileage)}</b></span>
                         <span className="col-span-2">ราคาเสนอขายRT: <b className="text-brand">{formatPrice(vehicle.salePrice)}</b></span>
-                        {exportMode === "internal" && vehicle.pdiNote ? (
-                          <span className="col-span-2">PDI: <b className="text-amber-100">{vehicle.pdiNote}</b></span>
+                        {exportMode === "internal" ? (
+                          <span className="col-span-2">หมายเหตุ PDI: <b className={hasPdiRemark(vehicle.pdiNote) ? "text-amber-100" : "text-white"}>{pdiRemarkText(vehicle.pdiNote)}</b></span>
                         ) : null}
                       </div>
                     </div>
