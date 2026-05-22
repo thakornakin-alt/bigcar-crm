@@ -310,7 +310,7 @@ export default function RealtimeBookingPage() {
     <PageContainer wide>
       <PageTitle
         title="Realtime Booking Queue"
-        subtitle="Waiting ก่อนเมลเข้า Match ราคา RT และ Generate ข้อความจองแบบเร็ว"
+        subtitle="กรอกคิวไว้ก่อน ระบบรอเมลราคา RT แล้ว Match / ส่ง LINE ให้อัตโนมัติ"
         actions={
           <>
             <TopMenuButton href="/" icon={<ArrowLeft size={18} />}>หน้าแรก</TopMenuButton>
@@ -338,7 +338,7 @@ export default function RealtimeBookingPage() {
       )}
 
       <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-        <SectionCard title="Waiting Mode" icon={<Zap size={18} />}>
+        <SectionCard title="เพิ่มคิวจองด่วน" icon={<Zap size={18} />}>
           <form onSubmit={handleWaiting} className="space-y-3">
             <Field label="ทะเบียนรถ" value={form.plate} onChange={(value) => setForm((cur) => ({ ...cur, plate: value }))} placeholder="1ขห 9832" autoFocus />
             <Field label="ชื่อ-นามสกุลลูกค้า" value={form.customerName} onChange={(value) => setForm((cur) => ({ ...cur, customerName: value }))} placeholder="วิชาญชัย พรหมโท" />
@@ -369,16 +369,30 @@ export default function RealtimeBookingPage() {
               className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 py-3 text-base font-black text-slate-950 transition hover:bg-cyan-200 disabled:opacity-60"
             >
               {saving ? <Loader2 size={20} className="animate-spin" /> : <Clock3 size={20} />}
-              Waiting Queue
+              เข้าคิวรอราคา RT
             </button>
           </form>
         </SectionCard>
 
-        <SectionCard title="Realtime Monitor" icon={<Activity size={18} />}>
+        <SectionCard title="สถานะคิว realtime" icon={<Activity size={18} />}>
+          <div className="rounded-lg border border-cyan-300/30 bg-cyan-300/10 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black text-cyan-100">ระบบรอเมลราคา RT อัตโนมัติ</p>
+                <p className="mt-1 text-xs leading-5 text-cyan-100/75">
+                  เมลใหม่เข้าแล้วระบบจะ Match ราคาให้เอง ปุ่ม Sync ถูกซ่อนไว้สำหรับแอดมิน/กรณีฉุกเฉิน
+                </p>
+              </div>
+              <span className="rounded-full border border-cyan-300/40 px-3 py-1 text-xs font-black text-cyan-100">
+                AUTO MODE
+              </span>
+            </div>
+          </div>
+
           <div className="rounded-lg border border-cyan-300/25 bg-cyan-300/5 p-3">
             <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
               <label className="block">
-                <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">ส่ง LINE ไปที่</span>
+                <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">กลุ่ม LINE แจ้งผล</span>
                 <select
                   value={lineTargetId}
                   onChange={(event) => setLineTargetId(event.target.value)}
@@ -399,7 +413,7 @@ export default function RealtimeBookingPage() {
                   onChange={(event) => setAutoSendLine(event.target.checked)}
                   className="h-5 w-5 accent-cyan-300"
                 />
-                Auto Send เมื่อ Match
+                ส่ง LINE อัตโนมัติเมื่อ Match
               </label>
             </div>
             {!lineGroups.length && (
@@ -419,32 +433,41 @@ export default function RealtimeBookingPage() {
                 className="h-12 min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-[#6f7785]"
               />
             </label>
-            <button
-              type="button"
-              onClick={simulateMailSync}
-              disabled={syncing}
-              className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-cyan-300/40 bg-cyan-300/10 px-4 font-bold text-cyan-100"
-            >
-              {syncing ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
-              Test Mail Sync
-            </button>
-            <button
-              type="button"
-              onClick={syncRealGmail}
-              disabled={gmailSyncing}
-              className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-brand/40 bg-brand/10 px-4 font-bold text-brand"
-            >
-              {gmailSyncing ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
-              Sync Gmail จริง
-            </button>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <FilterSummaryPill>Sync ล่าสุด {time(dashboard?.lastSyncAt)}</FilterSummaryPill>
-            <FilterSummaryPill>Parse ล่าสุด {dashboard?.latestMail?.durationMs ?? 0} ms</FilterSummaryPill>
+            <FilterSummaryPill>เมลล่าสุด {time(dashboard?.lastSyncAt)}</FilterSummaryPill>
+            <FilterSummaryPill>Parse {dashboard?.latestMail?.durationMs ?? 0} ms</FilterSummaryPill>
             <FilterSummaryPill>Duplicate {dashboard?.duplicated || 0}</FilterSummaryPill>
-            <FilterSummaryPill>Cancelled {dashboard?.cancelled || 0}</FilterSummaryPill>
+            <FilterSummaryPill>ยกเลิก {dashboard?.cancelled || 0}</FilterSummaryPill>
           </div>
+
+          <details className="rounded-lg border border-line bg-[#0b0d11] p-3">
+            <summary className="cursor-pointer text-sm font-bold text-soft">เครื่องมือแอดมิน / ทดสอบระบบ</summary>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={simulateMailSync}
+                disabled={syncing}
+                className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-cyan-300/40 bg-cyan-300/10 px-4 font-bold text-cyan-100"
+              >
+                {syncing ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
+                จำลองเมลราคา
+              </button>
+              <button
+                type="button"
+                onClick={syncRealGmail}
+                disabled={gmailSyncing}
+                className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-brand/40 bg-brand/10 px-4 font-bold text-brand"
+              >
+                {gmailSyncing ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
+                Sync Gmail เอง
+              </button>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-soft">
+              ใช้เฉพาะตอนทดสอบหรือกรณี Gmail Push ไม่มา หน้าใช้งานจริงให้รอระบบอัตโนมัติ
+            </p>
+          </details>
 
           <div className="space-y-2">
             {filteredQueue.length ? (
@@ -469,7 +492,7 @@ export default function RealtimeBookingPage() {
       </div>
 
       <section className="mt-4 grid gap-4 lg:grid-cols-2">
-        <SectionCard title="Mail Logs" icon={<Mail size={18} />}>
+        <SectionCard title="ประวัติเมลราคา" icon={<Mail size={18} />}>
           {(dashboard?.mailLogs || []).length ? (
             dashboard?.mailLogs.map((log) => (
               <div key={log.id} className="rounded-lg border border-line bg-[#0b0d11] p-3 text-sm">
@@ -486,13 +509,12 @@ export default function RealtimeBookingPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="Production Adapter Plan" icon={<ShieldCheck size={18} />}>
+        <SectionCard title="โหมดความเร็ว" icon={<ShieldCheck size={18} />}>
           <ul className="space-y-2 text-sm text-[#dbe7f3]">
-            <li>Phase 1: ใช้ in-memory fast queue เพื่อทดสอบ UX และ flow ใน CRM</li>
-            <li>Phase 2: เพิ่ม PostgreSQL + Prisma สำหรับข้อมูลถาวร</li>
-            <li>Phase 3: เพิ่ม Redis index สำหรับค้นทะเบียนหลักพันภายใน 1-3 วินาที</li>
-            <li>Phase 4: Gmail Push Worker + LINE เฉพาะเซลส์เจ้าของเคส</li>
-            <li>Phase 5: Socket.IO backend แยก Railway/Render สำหรับ realtime หลาย user จริง</li>
+            <li>หลัก: Gmail Push/Webhook เมื่อเมลใหม่เข้า ระบบ Match ทันที</li>
+            <li>สำรอง: ปุ่ม Sync Gmail เองถูกซ่อนไว้ในเครื่องมือแอดมิน</li>
+            <li>กันพลาด: ราคา RT เก่ากว่าเวลาที่กดคิวจะไม่ถูกนำมา Match</li>
+            <li>ส่งต่อ: เปิด “ส่ง LINE อัตโนมัติเมื่อ Match” เพื่อไม่ต้องกดเอง</li>
           </ul>
         </SectionCard>
       </section>
