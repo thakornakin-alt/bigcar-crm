@@ -1384,7 +1384,7 @@ function renderStockTableCanvas(
   const margin = 44;
   const headerHeight = 126;
   const tableTop = 166;
-  const rowHeight = vehicles.length <= 3 ? 76 : vehicles.length <= 8 ? 66 : 58;
+  const rowHeight = mode === "internal" ? (vehicles.length <= 3 ? 100 : vehicles.length <= 8 ? 92 : 84) : vehicles.length <= 3 ? 76 : vehicles.length <= 8 ? 66 : 58;
   const footerHeight = 60;
   const rows = vehicles.slice(0, maxTableItems);
   const headerRowHeight = 56;
@@ -1424,21 +1424,34 @@ function renderStockTableCanvas(
   ctx.font = "800 30px Arial, Tahoma, sans-serif";
   ctx.fillText(`หน้า ${page}/${totalPages}`, width - margin - 28, 82);
 
-  const columns = [
-    { key: "location", label: "Location", width: 165 },
-    { key: "plate", label: "ทะเบียน", width: 150 },
-    { key: "year", label: "ปีจด", width: 120 },
-    { key: "model", label: "รุ่นรถยนต์", width: 620 },
-    { key: "gear", label: "เกียร์", width: 95 },
-    { key: "color", label: "สี", width: 190 },
-    { key: "mileage", label: "เลขไมล์", width: 170 },
-    { key: "price", label: "ราคาเสนอขายRT", width: 202 }
-  ];
+  const columns =
+    mode === "internal"
+      ? [
+          { key: "location", label: "Location", width: 120 },
+          { key: "plate", label: "ทะเบียน", width: 130 },
+          { key: "year", label: "ปีจด", width: 82 },
+          { key: "model", label: "รุ่นรถยนต์", width: 370 },
+          { key: "gear", label: "เกียร์", width: 70 },
+          { key: "color", label: "สี", width: 110 },
+          { key: "mileage", label: "เลขไมล์", width: 120 },
+          { key: "price", label: "ราคาเสนอขายRT", width: 160 },
+          { key: "pdi", label: "หมายเหตุ PDI", width: 550 }
+        ]
+      : [
+          { key: "location", label: "Location", width: 165 },
+          { key: "plate", label: "ทะเบียน", width: 150 },
+          { key: "year", label: "ปีจด", width: 120 },
+          { key: "model", label: "รุ่นรถยนต์", width: 620 },
+          { key: "gear", label: "เกียร์", width: 95 },
+          { key: "color", label: "สี", width: 190 },
+          { key: "mileage", label: "เลขไมล์", width: 170 },
+          { key: "price", label: "ราคาเสนอขายRT", width: 202 }
+        ];
 
   let x = margin;
   ctx.font = "800 23px Arial, Tahoma, sans-serif";
   columns.forEach((column) => {
-    ctx.fillStyle = column.key === "price" ? "#0f766e" : "#13221c";
+    ctx.fillStyle = column.key === "price" ? "#0f766e" : column.key === "pdi" ? "#7c4a03" : "#13221c";
     ctx.fillRect(x, tableTop, column.width, headerRowHeight);
     ctx.strokeStyle = "#2d3a35";
     ctx.lineWidth = 1;
@@ -1459,7 +1472,8 @@ function renderStockTableCanvas(
       gear: vehicle.gear || "-",
       color: vehicle.color || "-",
       mileage: formatMileage(vehicle.mileage).replace(" กม.", ""),
-      price: formatPrice(vehicle.salePrice).replace(" บาท", "")
+      price: formatPrice(vehicle.salePrice).replace(" บาท", ""),
+      pdi: mode === "internal" ? pdiRemarkText(stockPdiRemark(vehicle)) : ""
     };
 
     x = margin;
@@ -1470,12 +1484,15 @@ function renderStockTableCanvas(
       ctx.lineWidth = 1;
       ctx.strokeRect(x, rowY, column.width, rowHeight);
       ctx.fillStyle = "#111827";
-      ctx.font = column.key === "price" ? "900 26px Arial, Tahoma, sans-serif" : "600 21px Arial, Tahoma, sans-serif";
-      ctx.textAlign = column.key === "price" || column.key === "mileage" ? "right" : column.key === "model" || column.key === "location" ? "left" : "center";
+      ctx.font = column.key === "price" ? "900 24px Arial, Tahoma, sans-serif" : column.key === "pdi" ? "600 18px Arial, Tahoma, sans-serif" : mode === "internal" ? "600 19px Arial, Tahoma, sans-serif" : "600 21px Arial, Tahoma, sans-serif";
+      ctx.textAlign = column.key === "price" || column.key === "mileage" ? "right" : column.key === "model" || column.key === "location" || column.key === "pdi" ? "left" : "center";
       const textX =
-        column.key === "price" || column.key === "mileage" ? x + column.width - 14 : column.key === "model" || column.key === "location" ? x + 14 : x + column.width / 2;
+        column.key === "price" || column.key === "mileage" ? x + column.width - 14 : column.key === "model" || column.key === "location" || column.key === "pdi" ? x + 14 : x + column.width / 2;
       if (column.key === "model") {
         drawWrappedCellText(ctx, values[column.key], textX, rowY + 23, column.width - 28, 25, 2);
+      } else if (column.key === "pdi") {
+        ctx.fillStyle = hasPdiRemark(stockPdiRemark(vehicle)) ? "#7c2d12" : "#6b7280";
+        drawWrappedCellText(ctx, values[column.key], textX, rowY + 24, column.width - 28, 24, 3);
       } else if (column.key === "location" || column.key === "color") {
         drawBadgeCellText(ctx, values[column.key], textX, rowY + Math.floor(rowHeight / 2), column.width - 24);
       } else {
