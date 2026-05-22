@@ -11,7 +11,6 @@ import {
   DatabaseZap,
   Loader2,
   Mail,
-  Radio,
   Search,
   Send,
   ShieldCheck,
@@ -319,14 +318,6 @@ export default function RealtimeBookingPage() {
         }
       />
 
-      <section className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <Metric icon={<DatabaseZap size={18} />} label="รถ RT" value={dashboard?.vehicleCount || 0} />
-        <Metric icon={<Clock3 size={18} />} label="Waiting" value={dashboard?.waiting || 0} />
-        <Metric icon={<Zap size={18} />} label="Matched" value={dashboard?.matched || 0} />
-        <Metric icon={<ShieldCheck size={18} />} label="Booked" value={dashboard?.booked || 0} />
-        <Metric icon={<Radio size={18} />} label="Online" value={dashboard?.onlineUsers || 0} />
-      </section>
-
       {(message || error) && (
         <div
           className={`mb-4 rounded-lg border px-4 py-3 text-sm font-semibold ${
@@ -372,6 +363,21 @@ export default function RealtimeBookingPage() {
               เข้าคิวรอราคา RT
             </button>
           </form>
+
+          <div className="mt-4 rounded-lg border border-line bg-[#0b0d11] p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-soft">สถานะระบบ</p>
+              <span className="rounded-full border border-cyan-300/35 px-2 py-0.5 text-[11px] font-black text-cyan-100">
+                AUTO
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              <CompactMetric icon={<DatabaseZap size={14} />} label="RT" value={dashboard?.vehicleCount || 0} />
+              <CompactMetric icon={<Clock3 size={14} />} label="รอ" value={dashboard?.waiting || 0} />
+              <CompactMetric icon={<Zap size={14} />} label="Match" value={dashboard?.matched || 0} />
+              <CompactMetric icon={<ShieldCheck size={14} />} label="Booked" value={dashboard?.booked || 0} />
+            </div>
+          </div>
         </SectionCard>
 
         <SectionCard title="สถานะคิว realtime" icon={<Activity size={18} />}>
@@ -522,14 +528,14 @@ export default function RealtimeBookingPage() {
   );
 }
 
-function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
+function CompactMetric({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
   return (
-    <div className="rounded-lg border border-line bg-panel p-4 shadow-glow">
-      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg border border-cyan-300/30 bg-cyan-300/10 text-cyan-200">
+    <div className="rounded-md border border-line bg-panel/70 px-2 py-2 text-center">
+      <div className="mx-auto mb-1 flex h-6 w-6 items-center justify-center rounded-md border border-cyan-300/25 bg-cyan-300/10 text-cyan-200">
         {icon}
       </div>
-      <p className="text-2xl font-black text-white">{value}</p>
-      <p className="mt-1 text-sm font-semibold text-soft">{label}</p>
+      <p className="text-lg font-black leading-none text-white">{value}</p>
+      <p className="mt-1 truncate text-[11px] font-bold text-soft">{label}</p>
     </div>
   );
 }
