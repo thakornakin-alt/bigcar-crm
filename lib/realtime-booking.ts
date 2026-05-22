@@ -85,27 +85,7 @@ function getStore(): RealtimeBookingStore {
 }
 
 function seedPrices(): ParsedVehiclePrice[] {
-  const now = new Date().toISOString();
-  return [
-    {
-      plate: "1ขห 9832",
-      normalizedPlate: normalizePlate("1ขห 9832"),
-      rtPrice: 764000,
-      source: "seed",
-      mailSubject: "Pricing and Status Update",
-      receivedAt: now,
-      parsedAt: now
-    },
-    {
-      plate: "1นข 4313",
-      normalizedPlate: normalizePlate("1นข 4313"),
-      rtPrice: 912000,
-      source: "seed",
-      mailSubject: "Pricing and Status Update",
-      receivedAt: now,
-      parsedAt: now
-    }
-  ];
+  return [];
 }
 
 export function normalizePlate(value: string) {
