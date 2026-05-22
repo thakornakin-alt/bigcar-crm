@@ -1,5 +1,9 @@
 import * as XLSX from "xlsx";
-import { ingestVehiclePrices } from "@/lib/realtime-booking";
+import {
+  getRealtimeBookingSubjectPatterns,
+  ingestVehiclePrices,
+  isRealtimeBookingSubjectAllowed
+} from "@/lib/realtime-booking";
 
 type GmailMessageList = {
   messages?: Array<{ id: string; threadId: string }>;
@@ -114,11 +118,10 @@ function isAllowedMessage(message: GmailMessage) {
   const subject = headerValue(message, "Subject");
   const from = headerValue(message, "From");
   const to = [headerValue(message, "To"), headerValue(message, "Cc")].join(" ");
-  const subjectPattern = process.env.REALTIME_BOOKING_GMAIL_SUBJECT || "Pricing and Status Update";
   const senderDomain = process.env.REALTIME_BOOKING_GMAIL_SENDER_DOMAIN || "";
   const recipientContains = process.env.REALTIME_BOOKING_GMAIL_RECIPIENT_CONTAINS || "";
 
-  if (!subject.toLowerCase().includes(subjectPattern.toLowerCase())) return false;
+  if (!isRealtimeBookingSubjectAllowed(subject)) return false;
   if (senderDomain && !from.toLowerCase().includes(senderDomain.toLowerCase())) return false;
   if (recipientContains && !to.toLowerCase().includes(recipientContains.toLowerCase())) return false;
   return true;
@@ -173,10 +176,9 @@ async function downloadAttachment(token: string, messageId: string, part: GmailM
 
 export async function syncRealtimeBookingFromGmail(input: { query?: string; maxResults?: number } = {}) {
   const token = await getAccessToken();
-  const query =
-    input.query ||
-    `subject:"${process.env.REALTIME_BOOKING_GMAIL_SUBJECT || "Pricing and Status Update"}" newer_than:1d has:attachment`;
-  const maxResults = Math.min(Math.max(input.maxResults || 5, 1), 20);
+  const subjectPatterns = getRealtimeBookingSubjectPatterns();
+  const query = input.query || "newer_than:1d has:attachment";
+  const maxResults = Math.min(Math.max(input.maxResults || 20, 1), 20);
   const list = await gmailFetch<GmailMessageList>(`/messages?q=${encodeURIComponent(query)}&maxResults=${maxResults}`, token);
   const messageIds = list.messages || [];
 
@@ -220,6 +222,7 @@ export async function syncRealtimeBookingFromGmail(input: { query?: string; maxR
   return {
     ok: true,
     query,
+    subjectPatterns,
     checked: messageIds.length,
     processed
   };

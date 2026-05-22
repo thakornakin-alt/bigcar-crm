@@ -121,6 +121,27 @@ function getPriceMaxAgeMs() {
   return Math.max(minutes, 1) * 60 * 1000;
 }
 
+export function getRealtimeBookingSubjectPatterns() {
+  const raw = process.env.REALTIME_BOOKING_GMAIL_SUBJECT;
+  const value = raw === undefined ? "Pricing and Status Update" : raw;
+  return value
+    .split(/[,\n|]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function realtimeBookingSubjectDescription() {
+  const patterns = getRealtimeBookingSubjectPatterns();
+  return patterns.length ? patterns.join(" / ") : "any subject";
+}
+
+export function isRealtimeBookingSubjectAllowed(subject: string) {
+  const patterns = getRealtimeBookingSubjectPatterns();
+  if (!patterns.length) return true;
+  const normalizedSubject = String(subject || "").toLowerCase();
+  return patterns.some((pattern) => normalizedSubject.includes(pattern.toLowerCase()));
+}
+
 export function listRealtimeQueue() {
   return [...getStore().waiting].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -263,7 +284,7 @@ export function ingestVehiclePrices(input: {
   const receivedAt = input.receivedAt || new Date().toISOString();
   const parsedAt = new Date().toISOString();
 
-  const validSubject = /Pricing and Status Update/i.test(input.subject);
+  const validSubject = isRealtimeBookingSubjectAllowed(input.subject);
 
   if (!validSubject) {
     const ignored: MailLog = {
@@ -276,7 +297,7 @@ export function ingestVehiclePrices(input: {
       vehicleCount: 0,
       matchedCount: 0,
       durationMs: Date.now() - start,
-      error: "Subject does not match Pricing and Status Update"
+      error: `Subject does not match ${realtimeBookingSubjectDescription()}`
     };
     store.mailLogs.unshift(ignored);
     return ignored;
