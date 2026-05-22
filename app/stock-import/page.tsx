@@ -160,6 +160,7 @@ export default function StockImportPage() {
   const parsedVinCount = useMemo(() => parsedRows.filter((row) => row.vin).length, [parsedRows]);
   const parsedStatusCount = useMemo(() => parsedRows.filter((row) => row.status).length, [parsedRows]);
   const parsedVehicleGroupCount = useMemo(() => parsedRows.filter((row) => row.vehicleGroup).length, [parsedRows]);
+  const parsedPdiNoteCount = useMemo(() => parsedRows.filter((row) => row.pdiNote).length, [parsedRows]);
 
   useEffect(() => {
     api<{ status: StockImportStatus }>("/api/stock/status")
@@ -244,8 +245,11 @@ export default function StockImportPage() {
     let clientVinRows = 0;
     let clientStatusRows = 0;
     let clientVehicleGroupRows = 0;
+    let clientPdiNoteRows = 0;
     let vinReceived = 0;
     let vinWritten = 0;
+    let pdiReceived = 0;
+    let pdiWritten = 0;
     let importedAt = "";
 
     try {
@@ -269,14 +273,17 @@ export default function StockImportPage() {
         clientVinRows += data.result.clientVinRows || 0;
         clientStatusRows += data.result.clientStatusRows || 0;
         clientVehicleGroupRows += data.result.clientVehicleGroupRows || 0;
+        clientPdiNoteRows += data.result.clientPdiNoteRows || 0;
         vinReceived += data.result.vinReceived || 0;
         vinWritten += data.result.vinWritten || 0;
+        pdiReceived += data.result.pdiReceived || 0;
+        pdiWritten += data.result.pdiWritten || 0;
         importedAt = data.result.importedAt || importedAt;
         setProgress(Math.round(Math.min(((start + chunk.length) / parsedRows.length) * 100, 100)));
       }
 
       setMessage(
-        `Import สำเร็จ: เพิ่ม ${imported} / อัปเดต ${updated} / ข้าม ${skipped} / เลขตัวรถ ${clientVinRows} / สถานะ ${clientStatusRows} / กลุ่มรถยนต์ ${clientVehicleGroupRows} / Apps Script รับเลขตัวรถ ${vinReceived} / เขียน ${vinWritten}`
+        `Import สำเร็จ: เพิ่ม ${imported} / อัปเดต ${updated} / ข้าม ${skipped} / เลขตัวรถ ${clientVinRows} / สถานะ ${clientStatusRows} / กลุ่มรถยนต์ ${clientVehicleGroupRows} / หมายเหตุ PDI ${clientPdiNoteRows} / Apps Script รับ PDI ${pdiReceived} / เขียน ${pdiWritten} / รับเลขตัวรถ ${vinReceived} / เขียน ${vinWritten}`
       );
       setStatus((current) => ({
         total: clearExisting ? imported : current.total + imported,
@@ -431,7 +438,7 @@ export default function StockImportPage() {
                   <p className="text-xs text-soft">พบข้อมูลพร้อม import {parsedRows.length.toLocaleString("th-TH")} แถว</p>
                   <p className="mt-1 text-xs text-soft">
                     เลขตัวรถ {parsedVinCount.toLocaleString("th-TH")} / สถานะ {parsedStatusCount.toLocaleString("th-TH")} / กลุ่มรถยนต์{" "}
-                    {parsedVehicleGroupCount.toLocaleString("th-TH")} แถว
+                    {parsedVehicleGroupCount.toLocaleString("th-TH")} / หมายเหตุ PDI {parsedPdiNoteCount.toLocaleString("th-TH")} แถว
                   </p>
                 </div>
                 <button

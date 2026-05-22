@@ -250,6 +250,7 @@ export default function StockExportPage() {
 
   const importedStatusCount = useMemo(() => vehicles.filter((vehicle) => stockStatus(vehicle)).length, [vehicles]);
   const importedVehicleGroupCount = useMemo(() => vehicles.filter((vehicle) => stockVehicleGroup(vehicle)).length, [vehicles]);
+  const importedPdiNoteCount = useMemo(() => vehicles.filter((vehicle) => hasPdiRemark(stockPdiRemark(vehicle))).length, [vehicles]);
 
   const plateMatchedVehicles = useMemo(() => {
     const search = query.toLowerCase().replace(/\s+/g, "");
@@ -719,6 +720,12 @@ export default function StockExportPage() {
             {vehicles.length > 0 && (!importedStatusCount || !importedVehicleGroupCount) && (
               <p className="rounded-lg border border-amber-400/30 bg-amber-950/20 px-3 py-3 text-sm text-amber-100">
                 โหลดสต็อกแล้ว แต่ข้อมูลสถานะ/กลุ่มรถยนต์ยังว่างในระบบ ให้ Import Stock ใหม่หลัง Vercel deploy แล้วติ๊ก “ล้าง StockInventory เดิมก่อน Import”
+              </p>
+            )}
+            {exportMode === "internal" && (
+              <p className={`rounded-lg border px-3 py-3 text-sm ${importedPdiNoteCount > 0 ? "border-line bg-[#0b0d11] text-soft" : "border-amber-300/30 bg-amber-300/10 text-amber-100"}`}>
+                ระบบอ่านหมายเหตุ PDI ได้ {importedPdiNoteCount.toLocaleString("th-TH")} คันจากสต็อกที่โหลดมา
+                {importedPdiNoteCount === 0 ? " - ถ้าไฟล์มีหมายเหตุ ให้ Import Stock ใหม่หลังอัปเดต Apps Script แล้วดูบรรทัด Import ว่า Apps Script รับ PDI มากกว่า 0 หรือไม่" : ""}
               </p>
             )}
             <div className="space-y-2">

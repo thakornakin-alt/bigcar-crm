@@ -47,7 +47,8 @@ export async function POST(request: Request) {
         ...result,
         clientVinRows: rows.filter((row: StockVehicle) => row.vin).length,
         clientStatusRows: rows.filter((row: StockVehicle) => row.status).length,
-        clientVehicleGroupRows: rows.filter((row: StockVehicle) => row.vehicleGroup).length
+        clientVehicleGroupRows: rows.filter((row: StockVehicle) => row.vehicleGroup).length,
+        clientPdiNoteRows: rows.filter((row: StockVehicle) => row.pdiNote).length
       }
     });
   } catch (error) {

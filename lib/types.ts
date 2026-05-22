@@ -165,8 +165,11 @@ export type StockImportResult = {
   clientVinRows?: number;
   clientStatusRows?: number;
   clientVehicleGroupRows?: number;
+  clientPdiNoteRows?: number;
   vinReceived?: number;
   vinWritten?: number;
+  pdiReceived?: number;
+  pdiWritten?: number;
 };
 
 export type StockImportStatus = {
