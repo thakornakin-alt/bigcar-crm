@@ -127,14 +127,28 @@ function cleanPdiRemark(value?: string) {
   return String(value ?? "").trim();
 }
 
+function pdiNoteFromVehicle(vehicle: StockVehicle) {
+  const raw = vehicle as StockVehicle & Record<string, unknown>;
+  const keys = ["pdiNote", "PdiNote", "PDINote", "pdi", "PDI", "pdi_note", "pdiRemark", "remark", "note", "หมายเหตุ PDI", "หมายเหตุPDI", "หมายเหตุ"];
+  for (const key of keys) {
+    const value = raw[key];
+    if (value !== undefined && value !== null && cleanPdiRemark(String(value))) return cleanPdiRemark(String(value));
+  }
+  return "";
+}
+
 function hasPdiRemark(value?: string) {
   const remark = cleanPdiRemark(value).replace(/\s+/g, "");
   return Boolean(remark && remark !== "-" && remark !== "–" && remark !== "—");
 }
 
+function stockPdiRemark(vehicle: StockVehicle) {
+  return pdiNoteFromVehicle(vehicle);
+}
+
 function matchesPdiRemarkFilter(vehicle: StockVehicle, filter: PdiRemarkFilter) {
   if (filter === "all") return true;
-  const hasRemark = hasPdiRemark(vehicle.pdiNote);
+  const hasRemark = hasPdiRemark(stockPdiRemark(vehicle));
   return filter === "has" ? hasRemark : !hasRemark;
 }
 
@@ -317,7 +331,7 @@ export default function StockExportPage() {
   const pdiRemarkCounts = useMemo(() => {
     return advancedMatchedVehicles.reduce(
       (counts, vehicle) => {
-        if (hasPdiRemark(vehicle.pdiNote)) counts.has += 1;
+        if (hasPdiRemark(stockPdiRemark(vehicle))) counts.has += 1;
         else counts.none += 1;
         counts.all += 1;
         return counts;
@@ -953,7 +967,7 @@ export default function StockExportPage() {
                         <span>เลขไมล์: <b className="text-white">{formatMileage(vehicle.mileage)}</b></span>
                         <span className="col-span-2">ราคาเสนอขายRT: <b className="text-brand">{formatPrice(vehicle.salePrice)}</b></span>
                         {exportMode === "internal" ? (
-                          <span className="col-span-2">หมายเหตุ PDI: <b className={hasPdiRemark(vehicle.pdiNote) ? "text-amber-100" : "text-white"}>{pdiRemarkText(vehicle.pdiNote)}</b></span>
+                          <span className="col-span-2">หมายเหตุ PDI: <b className={hasPdiRemark(stockPdiRemark(vehicle)) ? "text-amber-100" : "text-white"}>{pdiRemarkText(stockPdiRemark(vehicle))}</b></span>
                         ) : null}
                       </div>
                     </div>
