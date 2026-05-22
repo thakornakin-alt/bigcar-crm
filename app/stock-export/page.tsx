@@ -369,6 +369,10 @@ export default function StockExportPage() {
   const exportGroups = useMemo(() => groupVehiclesForExport(exportVehicles), [exportVehicles]);
   const exportPageCount = useMemo(() => exportGroups.reduce((total, group) => total + group.pages.length, 0), [exportGroups]);
   const visibleVehicles = useMemo(() => filteredVehicles.slice(0, visibleCount), [filteredVehicles, visibleCount]);
+  const pdiRemarkVehicles = useMemo(
+    () => filteredVehicles.filter((vehicle) => hasPdiRemark(stockPdiRemark(vehicle))),
+    [filteredVehicles]
+  );
   const hasMoreVehicles = filteredVehicles.length > visibleCount;
 
   useEffect(() => {
@@ -846,6 +850,29 @@ export default function StockExportPage() {
                   </button>
                 ))}
               </div>
+              {exportMode === "internal" && pdiRemarkVehicles.length > 0 ? (
+                <div className="rounded-lg border border-amber-300/30 bg-amber-300/10 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-bold text-amber-100">หมายเหตุ PDI ที่พบ</p>
+                    <span className="rounded-full bg-amber-300/15 px-2 py-1 text-xs font-bold text-amber-100">
+                      {pdiRemarkVehicles.length.toLocaleString("th-TH")} คัน
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {pdiRemarkVehicles.slice(0, 5).map((vehicle) => (
+                      <div key={`pdi-${vehicle.plate}-${vehicle.vin || vehicle.model}`} className="rounded-md bg-[#0b0d11]/70 px-3 py-2">
+                        <p className="text-xs font-bold text-white">{vehicle.plate || "-"} · {vehicleTitle(vehicle)}</p>
+                        <p className="mt-1 text-xs leading-5 text-amber-100">{pdiRemarkText(stockPdiRemark(vehicle))}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {pdiRemarkVehicles.length > 5 ? (
+                    <p className="mt-2 text-xs text-amber-100/80">
+                      แสดงตัวอย่าง 5 คันแรก เปิดรายการรถทั้งหมดเพื่อดูครบทุกคัน
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft">
               Export เป็นตารางแยกตามกลุ่มรถยนต์ หน้า/รูปละ {maxTableItems} คัน ถ้ากลุ่มไหนเกินจะสร้างหลายหน้าพร้อมเลขหน้าอัตโนมัติ
@@ -950,35 +977,42 @@ export default function StockExportPage() {
                     กำลังโหลดสต็อก
                   </div>
                 ) : visibleVehicles.length ? (
-                  visibleVehicles.map((vehicle) => (
-                    <div
-                      key={`${vehicle.plate}-${vehicle.vin || vehicle.model}`}
-                      className="rounded-lg border border-line bg-panel p-3 text-left"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="font-bold text-white">{vehicle.plate || "-"}</p>
-                          <p className="mt-1 line-clamp-2 text-sm text-soft">{vehicleTitle(vehicle)}</p>
+                  visibleVehicles.map((vehicle) => {
+                    const pdiRemark = stockPdiRemark(vehicle);
+                    const hasRemark = hasPdiRemark(pdiRemark);
+                    return (
+                      <div
+                        key={`${vehicle.plate}-${vehicle.vin || vehicle.model}`}
+                        className={`rounded-lg border bg-panel p-3 text-left ${exportMode === "internal" && hasRemark ? "border-amber-300/40" : "border-line"}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-bold text-white">{vehicle.plate || "-"}</p>
+                            <p className="mt-1 line-clamp-2 text-sm text-soft">{vehicleTitle(vehicle)}</p>
+                          </div>
+                          <span className="rounded-full bg-[#0b0d11] px-2 py-1 text-xs font-bold text-soft">
+                            อยู่ในชุดรูป
+                          </span>
                         </div>
-                        <span className="rounded-full bg-[#0b0d11] px-2 py-1 text-xs font-bold text-soft">
-                          อยู่ในชุดรูป
-                        </span>
-                      </div>
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-soft">
-                        <span>สถานะ: <b className="text-white">{vehicle.status || "-"}</b></span>
-                        <span>กลุ่ม: <b className="text-white">{vehicle.vehicleGroup || "-"}</b></span>
-                        <span>Location: <b className="text-white">{vehicle.parkingLocation || "-"}</b></span>
-                        <span>ปีจด: <b className="text-white">{vehicle.year || "-"}</b></span>
-                        <span>เกียร์: <b className="text-white">{vehicle.gear || "-"}</b></span>
-                        <span>สี: <b className="text-white">{vehicle.color || "-"}</b></span>
-                        <span>เลขไมล์: <b className="text-white">{formatMileage(vehicle.mileage)}</b></span>
-                        <span className="col-span-2">ราคาเสนอขายRT: <b className="text-brand">{formatPrice(vehicle.salePrice)}</b></span>
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-soft">
+                          <span>สถานะ: <b className="text-white">{vehicle.status || "-"}</b></span>
+                          <span>กลุ่ม: <b className="text-white">{vehicle.vehicleGroup || "-"}</b></span>
+                          <span>Location: <b className="text-white">{vehicle.parkingLocation || "-"}</b></span>
+                          <span>ปีจด: <b className="text-white">{vehicle.year || "-"}</b></span>
+                          <span>เกียร์: <b className="text-white">{vehicle.gear || "-"}</b></span>
+                          <span>สี: <b className="text-white">{vehicle.color || "-"}</b></span>
+                          <span>เลขไมล์: <b className="text-white">{formatMileage(vehicle.mileage)}</b></span>
+                          <span className="col-span-2">ราคาเสนอขายRT: <b className="text-brand">{formatPrice(vehicle.salePrice)}</b></span>
+                        </div>
                         {exportMode === "internal" ? (
-                          <span className="col-span-2">หมายเหตุ PDI: <b className={hasPdiRemark(stockPdiRemark(vehicle)) ? "text-amber-100" : "text-white"}>{pdiRemarkText(stockPdiRemark(vehicle))}</b></span>
+                          <div className={`mt-3 rounded-lg border px-3 py-2 ${hasRemark ? "border-amber-300/30 bg-amber-300/10" : "border-line bg-[#0b0d11]"}`}>
+                            <p className="text-xs font-bold text-amber-100">หมายเหตุ PDI</p>
+                            <p className={`mt-1 text-sm leading-6 ${hasRemark ? "text-amber-50" : "text-soft"}`}>{pdiRemarkText(pdiRemark)}</p>
+                          </div>
                         ) : null}
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="rounded-lg border border-line bg-panel p-6 text-center text-soft sm:col-span-2 xl:col-span-3">
                     ไม่พบสต็อกตามเงื่อนไข
