@@ -442,8 +442,6 @@ export default function RealtimeBookingPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <FilterSummaryPill>เมลล่าสุด {time(dashboard?.lastSyncAt)}</FilterSummaryPill>
-            <FilterSummaryPill>Parse {dashboard?.latestMail?.durationMs ?? 0} ms</FilterSummaryPill>
             <FilterSummaryPill>Duplicate {dashboard?.duplicated || 0}</FilterSummaryPill>
             <FilterSummaryPill>ยกเลิก {dashboard?.cancelled || 0}</FilterSummaryPill>
           </div>
@@ -473,6 +471,36 @@ export default function RealtimeBookingPage() {
             <p className="mt-2 text-xs leading-5 text-soft">
               ใช้เฉพาะตอนทดสอบหรือกรณี Gmail Push ไม่มา หน้าใช้งานจริงให้รอระบบอัตโนมัติ
             </p>
+
+            <div className="mt-4 rounded-lg border border-line bg-black/20 p-3">
+              <p className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-soft">ประวัติเมลราคา</p>
+              {(dashboard?.mailLogs || []).length ? (
+                <div className="space-y-2">
+                  {dashboard?.mailLogs.slice(0, 5).map((log) => (
+                    <div key={log.id} className="rounded-lg border border-line bg-[#0b0d11] p-3 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-bold text-white">{log.subject}</p>
+                        <span className="rounded-full border border-cyan-300/40 px-2 py-1 text-xs font-bold text-cyan-100">{log.status}</span>
+                      </div>
+                      <p className="mt-1 text-soft">{log.sender} / {time(log.receivedAt)}</p>
+                      <p className="mt-2 text-[#dbe7f3]">รถ {log.vehicleCount} คัน / match {log.matchedCount} คิว / {log.durationMs} ms</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-lg border border-line bg-[#0b0d11] p-3 text-sm text-soft">ยังไม่มี log เมล</p>
+              )}
+            </div>
+
+            <div className="mt-3 rounded-lg border border-line bg-black/20 p-3">
+              <p className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-soft">โหมดความเร็ว</p>
+              <ul className="space-y-1.5 text-xs leading-5 text-[#dbe7f3]">
+                <li>หลัก: Gmail Push/Webhook เมื่อเมลใหม่เข้า ระบบ Match ทันที</li>
+                <li>สำรอง: ปุ่ม Sync Gmail เอง ใช้กรณี Gmail Push ไม่มา</li>
+                <li>กันพลาด: ราคา RT เก่ากว่าเวลาที่กดคิวจะไม่ถูกนำมา Match</li>
+                <li>ส่งต่อ: เปิด “ส่ง LINE อัตโนมัติเมื่อ Match” เพื่อไม่ต้องกดเอง</li>
+              </ul>
+            </div>
           </details>
 
           <div className="space-y-2">
@@ -496,34 +524,6 @@ export default function RealtimeBookingPage() {
           </div>
         </SectionCard>
       </div>
-
-      <section className="mt-4 grid gap-4 lg:grid-cols-2">
-        <SectionCard title="ประวัติเมลราคา" icon={<Mail size={18} />}>
-          {(dashboard?.mailLogs || []).length ? (
-            dashboard?.mailLogs.map((log) => (
-              <div key={log.id} className="rounded-lg border border-line bg-[#0b0d11] p-3 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-bold text-white">{log.subject}</p>
-                  <span className="rounded-full border border-cyan-300/40 px-2 py-1 text-xs font-bold text-cyan-100">{log.status}</span>
-                </div>
-                <p className="mt-1 text-soft">{log.sender} / {time(log.receivedAt)}</p>
-                <p className="mt-2 text-[#dbe7f3]">รถ {log.vehicleCount} คัน / match {log.matchedCount} คิว / {log.durationMs} ms</p>
-              </div>
-            ))
-          ) : (
-            <p className="rounded-lg border border-line bg-[#0b0d11] p-4 text-soft">ยังไม่มี log เมล</p>
-          )}
-        </SectionCard>
-
-        <SectionCard title="โหมดความเร็ว" icon={<ShieldCheck size={18} />}>
-          <ul className="space-y-2 text-sm text-[#dbe7f3]">
-            <li>หลัก: Gmail Push/Webhook เมื่อเมลใหม่เข้า ระบบ Match ทันที</li>
-            <li>สำรอง: ปุ่ม Sync Gmail เองถูกซ่อนไว้ในเครื่องมือแอดมิน</li>
-            <li>กันพลาด: ราคา RT เก่ากว่าเวลาที่กดคิวจะไม่ถูกนำมา Match</li>
-            <li>ส่งต่อ: เปิด “ส่ง LINE อัตโนมัติเมื่อ Match” เพื่อไม่ต้องกดเอง</li>
-          </ul>
-        </SectionCard>
-      </section>
     </PageContainer>
   );
 }
