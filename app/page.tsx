@@ -14,6 +14,7 @@ import {
   Pencil,
   Phone,
   Plus,
+  Radio,
   Save,
   Search,
   Settings,
@@ -216,6 +217,13 @@ export default function Home() {
           >
             <MessageCircle size={18} className="text-brand" aria-hidden="true" />
             ฟอร์มอนุมัติ
+          </Link>
+          <Link
+            href="/realtime-booking"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
+          >
+            <Radio size={18} className="text-brand" aria-hidden="true" />
+            Realtime จอง
           </Link>
           <Link
             href="/line-settings"
