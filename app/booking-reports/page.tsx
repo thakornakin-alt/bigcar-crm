@@ -23,6 +23,7 @@ import { buildDefaultBookingSubject, renderBookingReport } from "@/lib/booking-r
 import { PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
 import { bookingLineGroupStorageKey, defaultSystemSettings, readSystemSettings } from "@/lib/client-settings";
 import { normalizeCarYear } from "@/lib/format";
+import { useSalesProfile } from "@/lib/use-sales-profile";
 import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, DriveAttachment, DriveUploadResult, LineGroup, StockVehicle } from "@/lib/types";
 
 const saleEmails: Record<string, string> = {
@@ -152,7 +153,12 @@ function fillIfEmpty(current: BookingReportInput, vehicle: StockVehicle): Bookin
   };
 }
 
+function uniqueOptions(values: string[]) {
+  return values.map((value) => value.trim()).filter((value, index, list) => value && list.indexOf(value) === index);
+}
+
 export default function BookingReportsPage() {
+  const { user: salesProfile } = useSalesProfile();
   const [form, setForm] = useState<BookingReportInput>(blankForm);
   const [attachmentFiles, setAttachmentFiles] = useState<Record<BookingAttachmentCategory, File[]>>({
     bookingSlip: [],
@@ -180,6 +186,7 @@ export default function BookingReportsPage() {
   const reportText = useMemo(() => renderBookingReport({ ...form, reportText: "" }), [form]);
   const senderEmail = saleEmails[form.saleName] || "";
   const companyWarning = form.buyerType === "company" && attachmentFiles.companyCertificate.length === 0;
+  const saleOptions = useMemo(() => uniqueOptions([salesProfile?.firstName || "", blankForm.saleName, "กันตา"]), [salesProfile?.firstName]);
 
   useEffect(() => {
     const settings = readSystemSettings();
@@ -204,6 +211,15 @@ export default function BookingReportsPage() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (!salesProfile) return;
+    setForm((current) => ({
+      ...current,
+      saleName: !current.saleName || current.saleName === blankForm.saleName ? salesProfile.firstName || current.saleName : current.saleName,
+      teamName: !current.teamName ? defaultTeamName : current.teamName
+    }));
+  }, [salesProfile]);
 
   useEffect(() => {
     readJson<{ groups: LineGroup[] }>("/api/line/groups")
@@ -566,7 +582,7 @@ export default function BookingReportsPage() {
     <PageContainer wide>
       <PageTitle
         title="รายงานจอง"
-        subtitle="บันทึก Draft, สร้าง Gmail Draft และส่งข้อความเข้า LINE"
+        subtitle={salesProfile ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname} (${salesProfile.phone})` : "บันทึก Draft, สร้าง Gmail Draft และส่งข้อความเข้า LINE"}
         actions={
           <>
             <TopMenuButton href="/stock-import" icon={<Upload size={18} />}>
@@ -657,9 +673,14 @@ export default function BookingReportsPage() {
               <Field label="Campaign" value={form.campaign} onChange={(value) => update("campaign", value)} />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Select label="Sale" value={form.saleName} onChange={(value) => update("saleName", value)} options={["ฐากร", "กันตา"]} />
+              <Select label="Sale" value={form.saleName} onChange={(value) => update("saleName", value)} options={saleOptions} />
               <Field label="ทีม" value={form.teamName} onChange={(value) => update("teamName", value)} placeholder="เช่น พี่ลีฟ" />
             </div>
+            {salesProfile && (
+              <p className="rounded-lg border border-brand/30 bg-green-950/20 px-3 py-2 text-xs leading-5 text-green-100">
+                ดึงจากโปรไฟล์ Login: {salesProfile.firstName} {salesProfile.lastName} · {salesProfile.phone} · {salesProfile.branch}
+              </p>
+            )}
             <TextArea label="เงื่อนไข" value={form.conditions} onChange={(value) => update("conditions", value)} rows={5} />
           </SectionCard>
 
