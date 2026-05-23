@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { ArrowLeft, CheckCircle2, Loader2, MessageCircle, Save, Settings } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FlaskConical, Loader2, MessageCircle, Save, Settings, Shield, UserRound } from "lucide-react";
 import { PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
 import {
   BigCarSystemSettings,
@@ -123,6 +123,28 @@ export default function SettingsPage() {
           <span>{error || message}</span>
         </div>
       )}
+
+      <div className="mb-4">
+        <SectionCard title="ระบบทดลอง CRM v2" icon={<FlaskConical size={18} />}>
+          <p className="text-sm leading-6 text-soft">
+            เมนูนี้เป็นโครงระบบ Multi-user สำหรับพัฒนาต่อ ยังไม่บังคับ Login/Register และยังไม่กระทบระบบเดิม
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <TopMenuButton href="/crm" icon={<UserRound size={18} />}>
+              CRM v2
+            </TopMenuButton>
+            <TopMenuButton href="/profile" icon={<UserRound size={18} />}>
+              โปรไฟล์
+            </TopMenuButton>
+            <TopMenuButton href="/admin/crm" icon={<Shield size={18} />}>
+              Admin CRM
+            </TopMenuButton>
+            <TopMenuButton href="/auth" icon={<Shield size={18} />}>
+              Auth Preview
+            </TopMenuButton>
+          </div>
+        </SectionCard>
+      </div>
 
       <form onSubmit={saveSettings} className="space-y-4">
         <SectionCard title="ค่าเริ่มต้นรายงาน" icon={<Settings size={18} />}>
