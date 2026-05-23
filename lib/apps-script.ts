@@ -18,6 +18,9 @@ import type {
   ReportHistoryItem,
   SalesReport,
   SalesReportInput,
+  SalesUser,
+  SalesUserLoginInput,
+  SalesUserRegisterInput,
   StockImportInput,
   StockImportResult,
   StockImportStatus,
@@ -50,7 +53,9 @@ type AppsScriptAction =
   | "saveLineGroup"
   | "listLineGroups"
   | "saveLineWebhookLog"
-  | "listLineWebhookLogs";
+  | "listLineWebhookLogs"
+  | "registerSalesUser"
+  | "loginSalesUser";
 
 type AppsScriptResponse<T> =
   | ({ ok: true } & T)
@@ -225,4 +230,14 @@ export async function saveLineWebhookLog(input: LineWebhookLog) {
 export async function listLineWebhookLogs() {
   const data = await callAppsScript<{ logs: LineWebhookLog[] }>("listLineWebhookLogs");
   return data.logs;
+}
+
+export async function registerSalesUser(input: SalesUserRegisterInput) {
+  const data = await callAppsScript<{ user: SalesUser }>("registerSalesUser", { user: input });
+  return data.user;
+}
+
+export async function loginSalesUser(input: SalesUserLoginInput) {
+  const data = await callAppsScript<{ user: SalesUser }>("loginSalesUser", input);
+  return data.user;
 }

@@ -178,6 +178,45 @@ export type StockImportStatus = {
   latestUpdatedAt: string;
 };
 
+export type SalesUserRole = "super_admin" | "admin" | "sales" | "viewer";
+
+export type SalesUser = {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  nickname: string;
+  phone: string;
+  lineId: string;
+  lineQrUrl: string;
+  avatarUrl: string;
+  position: string;
+  branch: string;
+  role: SalesUserRole;
+  locked: boolean;
+};
+
+export type SalesUserRegisterInput = {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  nickname: string;
+  phone: string;
+  lineId: string;
+  lineQrUrl?: string;
+  avatarUrl?: string;
+  position?: string;
+  branch: string;
+};
+
+export type SalesUserLoginInput = {
+  email: string;
+  password: string;
+};
+
 export type CustomerLookup = {
   customerName: string;
   phone: string;
