@@ -6,6 +6,7 @@ import { ArrowLeft, Camera, CheckCircle2, Clipboard, Cloud, Eye, FileText, Histo
 import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
 import { defaultSystemSettings, readSystemSettings, salesLineGroupStorageKey } from "@/lib/client-settings";
 import { normalizeCarYear } from "@/lib/format";
+import { useSalesProfile } from "@/lib/use-sales-profile";
 import type { BookingAttachment, BookingReport, DriveAttachment, DriveUploadResult, LineGroup, SalesReportInput } from "@/lib/types";
 
 type SalesAttachmentCategory =
@@ -192,6 +193,7 @@ function defaultSalesEmailSubject(input: SalesReportInput) {
 }
 
 export default function SalesReportsPage() {
+  const { user: salesProfile } = useSalesProfile();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<BookingReport[]>([]);
   const [form, setForm] = useState<SalesReportInput>(blankForm);
@@ -291,6 +293,16 @@ export default function SalesReportsPage() {
     setEmailFields((current) => current.subject.trim() ? current : { ...current, subject: suggestedEmailSubject });
   }, [suggestedEmailSubject]);
 
+  useEffect(() => {
+    if (!salesProfile) return;
+    setForm((current) => ({
+      ...current,
+      saleName: !current.saleName || current.saleName === blankForm.saleName ? salesProfile.firstName || current.saleName : current.saleName,
+      teamName: current.teamName || defaultTeamName,
+      branch: current.branch || salesProfile.branch
+    }));
+  }, [salesProfile]);
+
   function update(field: keyof SalesReportInput, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
   }
@@ -301,7 +313,13 @@ export default function SalesReportsPage() {
 
   function selectBooking(report: BookingReport) {
     setSelectedBooking(report);
-    setForm(fromBooking(report));
+    const nextForm = fromBooking(report);
+    setForm({
+      ...nextForm,
+      saleName: nextForm.saleName || salesProfile?.firstName || blankForm.saleName,
+      teamName: nextForm.teamName || defaultTeamName,
+      branch: nextForm.branch || salesProfile?.branch || ""
+    });
   }
 
   async function addSalesFiles(category: SalesAttachmentCategory, event: ChangeEvent<HTMLInputElement>) {
@@ -607,7 +625,7 @@ export default function SalesReportsPage() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
           <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">รายงานขาย</h1>
-          <p className="mt-1 text-sm text-soft">ค้นรายงานจองเดิม แล้วสร้างรายงานขายแบบ Draft / Preview</p>
+          <p className="mt-1 text-sm text-soft">{salesProfile ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname} (${salesProfile.phone})` : "ค้นรายงานจองเดิม แล้วสร้างรายงานขายแบบ Draft / Preview"}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/booking-reports" className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white">
@@ -685,6 +703,11 @@ export default function SalesReportsPage() {
                 <Field label="Sale" value={form.saleName} onChange={(value) => update("saleName", value)} required />
                 <Field label="ทีม" value={form.teamName} onChange={(value) => update("teamName", value)} />
               </div>
+              {salesProfile && (
+                <p className="rounded-lg border border-brand/30 bg-green-950/20 px-3 py-2 text-xs leading-5 text-green-100">
+                  ดึงจากโปรไฟล์ Login: {salesProfile.firstName} {salesProfile.lastName} · {salesProfile.phone} · {salesProfile.branch}
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
