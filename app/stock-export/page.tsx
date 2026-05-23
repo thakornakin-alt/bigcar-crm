@@ -1328,6 +1328,10 @@ function ExportPlanSummary({ groups, pageCount, vehicleCount }: { groups: StockE
 }
 
 function StockPreview({ vehicles, mode, pageCount, groupCount }: { vehicles: StockVehicle[]; mode: ExportMode; pageCount: number; groupCount: number }) {
+  const headers = mode === "internal"
+    ? ["Location", "ทะเบียน", "ปีจด", "รุ่นรถยนต์", "เกียร์", "สี", "เลขไมล์", "ราคาเสนอขายRT", "หมายเหตุ PDI"]
+    : ["Location", "ทะเบียน", "ปีจด", "รุ่นรถยนต์", "เกียร์", "สี", "เลขไมล์", "ราคาเสนอขายRT"];
+
   return (
     <div className="overflow-hidden rounded-lg border border-line bg-[#f6f8f7] text-[#111827] shadow-glow">
       <div className="border-b border-[#d9e1df] bg-[#f9fbfa] p-3">
@@ -1339,11 +1343,11 @@ function StockPreview({ vehicles, mode, pageCount, groupCount }: { vehicles: Sto
         </p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] border-collapse text-[11px]">
+        <table className={`w-full border-collapse text-[11px] ${mode === "internal" ? "min-w-[1080px]" : "min-w-[760px]"}`}>
           <thead>
             <tr className="bg-[#17211d] text-white">
-              {["Location", "ทะเบียน", "ปีจด", "รุ่นรถยนต์", "เกียร์", "สี", "เลขไมล์", "ราคาเสนอขายRT"].map((header) => (
-                <th key={header} className="border border-[#2d3a35] px-2 py-2 text-left font-bold">
+              {headers.map((header) => (
+                <th key={header} className={`border border-[#2d3a35] px-2 py-2 font-bold ${header === "หมายเหตุ PDI" ? "bg-[#7c4a03] text-left" : "text-left"}`}>
                   {header}
                 </th>
               ))}
@@ -1360,6 +1364,11 @@ function StockPreview({ vehicles, mode, pageCount, groupCount }: { vehicles: Sto
                 <td className="border border-[#dce3e1] px-2 py-1 text-center">{vehicle.color || "-"}</td>
                 <td className="border border-[#dce3e1] px-2 py-1 text-right">{formatMileage(vehicle.mileage).replace(" กม.", "")}</td>
                 <td className="border border-[#dce3e1] bg-[#e6fbf3] px-2 py-1 text-right text-sm font-black">{formatPrice(vehicle.salePrice).replace(" บาท", "")}</td>
+                {mode === "internal" ? (
+                  <td className={`max-w-[320px] border border-[#dce3e1] px-2 py-1 text-left leading-5 ${hasPdiRemark(stockPdiRemark(vehicle)) ? "bg-[#fff7ed] font-semibold text-[#7c2d12]" : "text-[#64748b]"}`}>
+                    {pdiRemarkText(stockPdiRemark(vehicle))}
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>
