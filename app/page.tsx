@@ -177,6 +177,13 @@ export default function Home() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link
+            href="/crm"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
+          >
+            <User size={18} className="text-brand" aria-hidden="true" />
+            CRM v2
+          </Link>
+          <Link
             href="/booking-reports"
             className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
           >
