@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { recordActivity } from "@/lib/activity-log";
 import { pushLineReport } from "@/lib/line";
+import { getRequestSalesUser } from "@/lib/request-user";
 import type { LineReportAttachment } from "@/lib/line";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +18,12 @@ export async function POST(request: Request) {
     }
 
     const result = await pushLineReport(groupId, message, attachments);
+    await recordActivity(getRequestSalesUser(), {
+      action: "line.sendReport",
+      targetType: "lineGroup",
+      targetId: groupId,
+      detail: `${message} / ${attachments.length} ไฟล์`
+    });
     return NextResponse.json({ ok: true, result });
   } catch (error) {
     return NextResponse.json(

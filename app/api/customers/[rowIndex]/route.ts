@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { deleteCustomer, listCustomers, updateCustomer } from "@/lib/apps-script";
+import { recordActivity } from "@/lib/activity-log";
 import { canAccessCustomerOwner, getRequestSalesUser } from "@/lib/request-user";
 import type { CustomerInput } from "@/lib/types";
 
@@ -38,6 +39,12 @@ export async function PUT(request: Request, { params }: { params: { rowIndex: st
     }
 
     const customer = await updateCustomer(rowIndex, input);
+    await recordActivity(currentUser, {
+      action: "customer.update",
+      targetType: "customer",
+      targetId: customer.no,
+      detail: `${customer.name} / ${customer.car}`
+    });
     return NextResponse.json({ customer });
   } catch (error) {
     return NextResponse.json(
@@ -57,6 +64,12 @@ export async function DELETE(_request: Request, { params }: { params: { rowIndex
       return NextResponse.json({ error: "ไม่มีสิทธิ์ลบลูกค้ารายนี้" }, { status: 403 });
     }
     await deleteCustomer(rowIndex);
+    await recordActivity(currentUser, {
+      action: "customer.delete",
+      targetType: "customer",
+      targetId: existing.no,
+      detail: `${existing.name} / ${existing.car}`
+    });
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(

@@ -1,4 +1,6 @@
 import type {
+  ActivityLog,
+  ActivityLogInput,
   ApprovalBooking,
   ApprovalLogInput,
   ApprovalStaff,
@@ -60,7 +62,9 @@ type AppsScriptAction =
   | "loginSalesUser"
   | "listSalesUsers"
   | "updateSalesUser"
-  | "uploadProfileImage";
+  | "uploadProfileImage"
+  | "saveActivityLog"
+  | "listActivityLogs";
 
 type AppsScriptResponse<T> =
   | ({ ok: true } & T)
@@ -270,4 +274,14 @@ export async function updateSalesUser(input: {
 export async function uploadProfileImage(input: ProfileImageUploadInput) {
   const data = await callAppsScript<{ result: ProfileImageUploadResult }>("uploadProfileImage", input);
   return data.result;
+}
+
+export async function saveActivityLog(input: ActivityLogInput) {
+  const data = await callAppsScript<{ saved: boolean }>("saveActivityLog", { log: input });
+  return data.saved;
+}
+
+export async function listActivityLogs(limit = 100) {
+  const data = await callAppsScript<{ logs: ActivityLog[] }>("listActivityLogs", { limit });
+  return data.logs;
 }

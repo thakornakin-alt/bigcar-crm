@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { recordActivity } from "@/lib/activity-log";
 import { pushLineText } from "@/lib/line";
+import { getRequestSalesUser } from "@/lib/request-user";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +16,12 @@ export async function POST(request: Request) {
     }
 
     await pushLineText(groupId, message);
+    await recordActivity(getRequestSalesUser(), {
+      action: "line.sendText",
+      targetType: "lineGroup",
+      targetId: groupId,
+      detail: message.slice(0, 180)
+    });
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(

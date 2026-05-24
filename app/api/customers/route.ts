@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { addCustomer, listCustomers } from "@/lib/apps-script";
+import { recordActivity } from "@/lib/activity-log";
 import { canReadAllCustomers, getRequestSalesUser, salesUserOwnerName } from "@/lib/request-user";
 import type { CustomerInput } from "@/lib/types";
 
@@ -47,6 +48,12 @@ export async function POST(request: Request) {
     }
 
     const customer = await addCustomer(input);
+    await recordActivity(currentUser, {
+      action: "customer.create",
+      targetType: "customer",
+      targetId: customer.no,
+      detail: `${customer.name} / ${customer.car}`
+    });
     return NextResponse.json({ customer }, { status: 201 });
   } catch (error) {
     return NextResponse.json(

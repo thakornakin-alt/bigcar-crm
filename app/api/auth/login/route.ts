@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { loginSalesUser } from "@/lib/apps-script";
+import { recordActivity } from "@/lib/activity-log";
 import { setSalesProfileCookie } from "@/lib/auth-session";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,12 @@ export async function POST(request: Request) {
     });
     const response = NextResponse.json({ user });
     setSalesProfileCookie(response, user);
+    await recordActivity(user, {
+      action: "auth.login",
+      targetType: "salesUser",
+      targetId: user.id,
+      detail: user.email
+    });
     return response;
   } catch (error) {
     return NextResponse.json(

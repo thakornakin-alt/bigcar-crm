@@ -221,6 +221,20 @@ export type SalesUserLoginInput = {
   password: string;
 };
 
+export type ActivityLogInput = {
+  userId?: string;
+  userName?: string;
+  role?: string;
+  action: string;
+  targetType?: string;
+  targetId?: string;
+  detail?: string;
+};
+
+export type ActivityLog = Required<ActivityLogInput> & {
+  at: string;
+};
+
 export type CustomerLookup = {
   customerName: string;
   phone: string;

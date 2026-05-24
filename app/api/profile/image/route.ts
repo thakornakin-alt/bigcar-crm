@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { updateSalesUser, uploadProfileImage } from "@/lib/apps-script";
+import { recordActivity } from "@/lib/activity-log";
 import { salesProfileCookieName, setSalesProfileCookie, verifySalesProfileToken } from "@/lib/auth-session";
 import type { ProfileImageKind } from "@/lib/types";
 
@@ -53,6 +54,12 @@ export async function POST(request: Request) {
 
     const response = NextResponse.json({ image: { ...uploaded, url: imageUrl }, user: nextUser }, { status: 201 });
     setSalesProfileCookie(response, nextUser);
+    await recordActivity(nextUser, {
+      action: kind === "avatar" ? "profile.avatar.upload" : "profile.lineQr.upload",
+      targetType: "salesUser",
+      targetId: nextUser.id,
+      detail: uploaded.name
+    });
     return response;
   } catch (error) {
     return NextResponse.json(

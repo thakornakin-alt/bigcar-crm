@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { ArrowLeft, CheckCircle2, FlaskConical, Loader2, MessageCircle, Save, Settings, Shield, UserRound } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FlaskConical, History, Loader2, MessageCircle, Save, Settings, Shield, UserRound } from "lucide-react";
 import { PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
 import {
   BigCarSystemSettings,
@@ -9,6 +9,7 @@ import {
   readSystemSettings,
   writeSystemSettings
 } from "@/lib/client-settings";
+import { useSalesProfile } from "@/lib/use-sales-profile";
 import type { LineGroup } from "@/lib/types";
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
@@ -25,6 +26,8 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export default function SettingsPage() {
+  const { user } = useSalesProfile();
+  const isAdmin = user?.role === "super_admin" || user?.role === "admin";
   const [settings, setSettings] = useState<BigCarSystemSettings>(defaultSystemSettings);
   const [groups, setGroups] = useState<LineGroup[]>([]);
   const [newGroupId, setNewGroupId] = useState("");
@@ -139,6 +142,11 @@ export default function SettingsPage() {
             <TopMenuButton href="/admin/crm" icon={<Shield size={18} />}>
               Admin CRM
             </TopMenuButton>
+            {isAdmin && (
+              <TopMenuButton href="/admin/activity" icon={<History size={18} />}>
+                Activity Log
+              </TopMenuButton>
+            )}
             <TopMenuButton href="/auth" icon={<Shield size={18} />}>
               Auth Preview
             </TopMenuButton>
