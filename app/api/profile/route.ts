@@ -16,6 +16,8 @@ export async function PATCH(request: Request) {
       id: currentUser.id,
       phone: String(body.phone ?? currentUser.phone ?? "").trim(),
       lineId: String(body.lineId ?? currentUser.lineId ?? "").trim(),
+      lineQrUrl: String(body.lineQrUrl ?? currentUser.lineQrUrl ?? "").trim(),
+      avatarUrl: String(body.avatarUrl ?? currentUser.avatarUrl ?? "").trim(),
       position: String(body.position ?? currentUser.position ?? "").trim(),
       branch: String(body.branch ?? currentUser.branch ?? "").trim()
     });

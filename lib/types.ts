@@ -283,6 +283,24 @@ export type DriveUploadResult = {
   attachments: DriveAttachment[];
 };
 
+export type ProfileImageKind = "avatar" | "lineQr";
+
+export type ProfileImageUploadInput = {
+  userId: string;
+  kind: ProfileImageKind;
+  file: DriveUploadFile;
+};
+
+export type ProfileImageUploadResult = {
+  name: string;
+  type: string;
+  size: number;
+  url: string;
+  fileId: string;
+  folderUrl: string;
+  uploadedAt: string;
+};
+
 export type EmailDraftInput = {
   reportId?: string;
   subject: string;

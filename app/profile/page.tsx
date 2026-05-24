@@ -1,9 +1,10 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BadgeCheck, LineChart, Loader2, LogOut, Phone, Save, UserRound } from "lucide-react";
+import { BadgeCheck, ImageUp, LineChart, Loader2, LogOut, Phone, QrCode, Save, UserRound } from "lucide-react";
 import { CrmShell } from "@/app/components/crm-shell";
 import { SectionCard } from "@/app/components/ui";
 import { demoCurrentUser, fullName, roleLabels } from "@/lib/crm-core";
@@ -21,6 +22,7 @@ export default function ProfilePage() {
     branch: ""
   });
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState<"" | "avatar" | "lineQr">("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -67,6 +69,41 @@ export default function ProfilePage() {
     }
   }
 
+  async function uploadProfileImage(kind: "avatar" | "lineQr", file: File | null) {
+    if (!file) return;
+    if (!salesProfile) {
+      setError("กรุณา Login ก่อนอัปโหลดรูป");
+      return;
+    }
+
+    setUploading(kind);
+    setError("");
+    setMessage("");
+    try {
+      const base64 = await fileToBase64(file);
+      const response = await fetch("/api/profile/image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind,
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          base64
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "อัปโหลดรูปไม่สำเร็จ");
+      setUser(data.user);
+      setMessage(kind === "avatar" ? "อัปโหลดรูปโปรไฟล์แล้ว" : "อัปโหลด QR LINE แล้ว");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "อัปโหลดรูปไม่สำเร็จ");
+    } finally {
+      setUploading("");
+    }
+  }
+
   return (
     <CrmShell
       user={user}
@@ -90,8 +127,12 @@ export default function ProfilePage() {
       <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
         <SectionCard title="ข้อมูลเซลล์" icon={<UserRound size={18} />}>
           <div className="flex items-center gap-3">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-brand text-3xl font-black text-ink">
-              {user.nickname.slice(0, 1) || "U"}
+            <div
+              className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-brand bg-cover bg-center text-3xl font-black text-ink ring-1 ring-brand/30"
+              style={user.avatarUrl ? { backgroundImage: `url(${user.avatarUrl})` } : undefined}
+              aria-label="รูปโปรไฟล์เซลล์"
+            >
+              {!user.avatarUrl ? user.nickname.slice(0, 1) || "U" : null}
             </div>
             <div>
               <p className="text-xl font-black text-white">{fullName(user)}</p>
@@ -103,6 +144,8 @@ export default function ProfilePage() {
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2">Email: <b className="text-white">{user.email}</b></p>
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2">เบอร์: <b className="text-white">{user.phone}</b></p>
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2">LINE ID: <b className="text-white">{user.lineId || "-"}</b></p>
+            <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2">รูปโปรไฟล์: <b className="text-white">{user.avatarUrl ? "มีแล้ว" : "ยังไม่มี"}</b></p>
+            <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2">QR LINE: <b className="text-white">{user.lineQrUrl ? "มีแล้ว" : "ยังไม่มี"}</b></p>
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2">สาขา: <b className="text-white">{user.branch}</b></p>
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2">ตำแหน่ง: <b className="text-white">{user.position}</b></p>
           </div>
@@ -124,10 +167,25 @@ export default function ProfilePage() {
               ตอนนี้ยังใช้ default profile ถ้าต้องการแก้ข้อมูลส่วนตัวให้ Login ก่อน
             </p>
           )}
-          <div className="rounded-lg border border-dashed border-line bg-[#0b0d11] px-4 py-8 text-center">
-            <UserRound className="mx-auto text-brand" size={34} />
-            <p className="mt-3 font-bold text-white">Avatar Uploader</p>
-            <p className="mt-1 text-sm leading-6 text-soft">ตอนนี้เปิด Register/Login จริงก่อน ส่วนอัปโหลดรูปเซลล์จะต่อแบบแยก storage ภายหลัง</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <ProfileImageUploader
+              title="รูปโปรไฟล์เซลล์"
+              description="ใช้ในรูปค่างวดและเอกสาร export"
+              icon={<ImageUp size={18} />}
+              imageUrl={user.avatarUrl}
+              disabled={!salesProfile || Boolean(uploading)}
+              loading={uploading === "avatar"}
+              onSelect={(file) => uploadProfileImage("avatar", file)}
+            />
+            <ProfileImageUploader
+              title="QR LINE"
+              description="เก็บไว้ใช้กับ export/ลายเซ็นเซลล์"
+              icon={<QrCode size={18} />}
+              imageUrl={user.lineQrUrl}
+              disabled={!salesProfile || Boolean(uploading)}
+              loading={uploading === "lineQr"}
+              onSelect={(file) => uploadProfileImage("lineQr", file)}
+            />
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft"><Phone size={16} className="mb-2 text-brand" /> ใช้ข้อมูลเซลล์อัตโนมัติใน CRM v2</p>
@@ -141,6 +199,61 @@ export default function ProfilePage() {
         </SectionCard>
       </div>
     </CrmShell>
+  );
+}
+
+function fileToBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("อ่านไฟล์รูปไม่สำเร็จ"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function ProfileImageUploader({
+  title,
+  description,
+  icon,
+  imageUrl,
+  disabled,
+  loading,
+  onSelect
+}: {
+  title: string;
+  description: string;
+  icon: ReactNode;
+  imageUrl: string;
+  disabled: boolean;
+  loading: boolean;
+  onSelect: (file: File | null) => void;
+}) {
+  return (
+    <label className={`block rounded-lg border border-dashed border-line bg-[#0b0d11] p-4 ${disabled ? "opacity-70" : "cursor-pointer hover:border-brand/60"}`}>
+      <input
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        disabled={disabled}
+        className="sr-only"
+        onChange={(event) => onSelect(event.target.files?.[0] || null)}
+      />
+      <div className="flex items-start gap-3">
+        <div
+          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-line bg-panel bg-cover bg-center text-brand"
+          style={imageUrl ? { backgroundImage: `url(${imageUrl})` } : undefined}
+        >
+          {!imageUrl ? icon : null}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-2 font-black text-white">
+            {loading ? <Loader2 size={16} className="animate-spin text-brand" /> : null}
+            {title}
+          </p>
+          <p className="mt-1 text-sm leading-5 text-soft">{description}</p>
+          <p className="mt-2 text-xs font-bold text-brand">{imageUrl ? "แตะเพื่อเปลี่ยนรูป" : "แตะเพื่ออัปโหลด"}</p>
+        </div>
+      </div>
+    </label>
   );
 }
 

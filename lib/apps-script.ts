@@ -15,6 +15,8 @@ import type {
   InterestRate,
   LineGroup,
   LineWebhookLog,
+  ProfileImageUploadInput,
+  ProfileImageUploadResult,
   ReportHistoryItem,
   SalesReport,
   SalesReportInput,
@@ -57,7 +59,8 @@ type AppsScriptAction =
   | "registerSalesUser"
   | "loginSalesUser"
   | "listSalesUsers"
-  | "updateSalesUser";
+  | "updateSalesUser"
+  | "uploadProfileImage";
 
 type AppsScriptResponse<T> =
   | ({ ok: true } & T)
@@ -255,9 +258,16 @@ export async function updateSalesUser(input: {
   locked?: boolean;
   phone?: string;
   lineId?: string;
+  lineQrUrl?: string;
+  avatarUrl?: string;
   position?: string;
   branch?: string;
 }) {
   const data = await callAppsScript<{ user: SalesUser }>("updateSalesUser", { user: input });
   return data.user;
+}
+
+export async function uploadProfileImage(input: ProfileImageUploadInput) {
+  const data = await callAppsScript<{ result: ProfileImageUploadResult }>("uploadProfileImage", input);
+  return data.result;
 }

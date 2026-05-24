@@ -162,7 +162,9 @@ export default function CalculatorPage() {
         rows,
         contactName: salesProfile?.nickname || salesProfile?.firstName || "บิ๊ก",
         contactPhone: salesProfile?.phone || "091-778-5117",
-        contactLineId: salesProfile?.lineId || "@bigcars"
+        contactLineId: salesProfile?.lineId || "@bigcars",
+        contactAvatarUrl: salesProfile?.avatarUrl || "",
+        contactLineQrUrl: salesProfile?.lineQrUrl || ""
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "บันทึกรูปไม่สำเร็จ");
@@ -439,7 +441,9 @@ async function exportInstallmentImage({
   rows,
   contactName,
   contactPhone,
-  contactLineId
+  contactLineId,
+  contactAvatarUrl,
+  contactLineQrUrl
 }: {
   carModel: string;
   actualYear: string;
@@ -449,8 +453,11 @@ async function exportInstallmentImage({
   contactName: string;
   contactPhone: string;
   contactLineId: string;
+  contactAvatarUrl: string;
+  contactLineQrUrl: string;
 }) {
-  const profileImage = await loadCanvasImage("/big-profile.png").catch(() => null);
+  const profileImage = await loadCanvasImage(contactAvatarUrl || "/big-profile.png").catch(() => null);
+  const lineQrImage = contactLineQrUrl ? await loadCanvasImage(contactLineQrUrl).catch(() => null) : null;
   const canvas = document.createElement("canvas");
   const scale = Math.max(window.devicePixelRatio || 1, 2);
   const width = 1100;
@@ -489,6 +496,19 @@ async function exportInstallmentImage({
       imageWidth,
       imageHeight
     );
+  }
+
+  if (lineQrImage) {
+    const qrSize = 112;
+    ctx.fillStyle = "#ffffff";
+    roundRect(ctx, width - qrSize - 70, 162, qrSize + 20, qrSize + 20, 16);
+    ctx.fill();
+    ctx.drawImage(lineQrImage, width - qrSize - 60, 172, qrSize, qrSize);
+    ctx.fillStyle = "#dce2eb";
+    ctx.font = "700 16px Arial, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("สแกน LINE", width - qrSize / 2 - 60, 306);
+    ctx.textAlign = "left";
   }
 
   ctx.fillStyle = "#ffffff";
@@ -631,6 +651,7 @@ function formatPayment(value: number) {
 function loadCanvasImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
+    image.crossOrigin = "anonymous";
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error("โหลดรูปโปรไฟล์ไม่สำเร็จ"));
     image.src = src;
