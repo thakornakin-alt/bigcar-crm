@@ -4,7 +4,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { CalendarDays, Car, Loader2, Phone, Save, Search, Sparkles, UserRound } from "lucide-react";
 import { FilterChip, PageContainer, PageTitle, SearchField, SectionCard, TopMenuButton } from "@/app/components/ui";
-import type { Customer, StockVehicle } from "@/lib/types";
+import type { StockVehicle } from "@/lib/types";
+import type { SalesLead } from "@/lib/leads";
 
 type LeadForm = {
   name: string;
@@ -69,7 +70,7 @@ function legacyToday() {
 }
 
 export default function LeadsPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [leads, setLeads] = useState<SalesLead[]>([]);
   const [vehicleGroups, setVehicleGroups] = useState<string[]>(fallbackGroups);
   const [form, setForm] = useState<LeadForm>(blankForm);
   const [query, setQuery] = useState("");
@@ -80,26 +81,26 @@ export default function LeadsPage() {
   const [error, setError] = useState("");
 
   const today = legacyToday();
-  const newTodayCount = customers.filter((customer) => customer.date === today).length;
+  const newTodayCount = leads.filter((lead) => lead.date === today).length;
 
-  const visibleCustomers = useMemo(() => {
+  const visibleLeads = useMemo(() => {
     const term = normalizeText(query);
-    return customers.filter((customer) => {
-      const matchesQuery = !term || normalizeText([customer.name, customer.phone, customer.car, customer.note].join(" ")).includes(term);
-      const matchesStage = stage === "ทั้งหมด" || (stage === "ใหม่วันนี้" ? customer.date === today : true);
+    return leads.filter((lead) => {
+      const matchesQuery = !term || normalizeText([lead.name, lead.phone, lead.vehicleGroup, lead.budget, lead.comment].join(" ")).includes(term);
+      const matchesStage = stage === "ทั้งหมด" || (stage === "ใหม่วันนี้" ? lead.date === today : true);
       return matchesQuery && matchesStage;
     });
-  }, [customers, query, stage, today]);
+  }, [leads, query, stage, today]);
 
   async function loadData() {
     setLoading(true);
     setError("");
     try {
       const [customerData, stockData] = await Promise.all([
-        api<{ customers: Customer[] }>("/api/customers"),
+        api<{ leads: SalesLead[] }>("/api/leads"),
         api<{ vehicles: StockVehicle[] }>("/api/stock/list?limit=500").catch(() => ({ vehicles: [] }))
       ]);
-      setCustomers(customerData.customers || []);
+      setLeads(customerData.leads || []);
       const stockGroups = Array.from(
         new Set((stockData.vehicles || []).map((vehicle) => String(vehicle.vehicleGroup || "").trim()).filter(Boolean))
       ).sort((a, b) => a.localeCompare(b, "th"));
@@ -126,13 +127,14 @@ export default function LeadsPage() {
     setMessage("");
     setError("");
     try {
-      await api("/api/customers", {
+      await api("/api/leads", {
         method: "POST",
         body: JSON.stringify({
           name: form.name,
           phone: form.phone,
-          car: vehicleGroup,
-          note: [`งบประมาณ: ${form.budget || "-"}`, form.comment].filter(Boolean).join("\n")
+          vehicleGroup,
+          budget: form.budget,
+          comment: form.comment
         })
       });
       setForm(blankForm);
@@ -164,7 +166,7 @@ export default function LeadsPage() {
       )}
 
       <section className="mb-4 grid gap-3 sm:grid-cols-2">
-        <SummaryCard label="ลูกค้ามุ่งหวังทั้งหมด" value={`${customers.length.toLocaleString("th-TH")} ราย`} />
+        <SummaryCard label="ลูกค้ามุ่งหวังทั้งหมด" value={`${leads.length.toLocaleString("th-TH")} ราย`} />
         <SummaryCard label="ลูกค้าใหม่วันนี้" value={`${newTodayCount.toLocaleString("th-TH")} ราย`} />
       </section>
 
@@ -225,10 +227,10 @@ export default function LeadsPage() {
                 <Loader2 size={22} className="mr-2 animate-spin text-brand" />
                 Loading
               </div>
-            ) : visibleCustomers.length ? (
+            ) : visibleLeads.length ? (
               <div className="space-y-2">
-                {visibleCustomers.map((customer) => (
-                  <LeadCard key={`${customer.no}-${customer.rowIndex}`} customer={customer} />
+                {visibleLeads.map((lead) => (
+                  <LeadCard key={lead.id} lead={lead} />
                 ))}
               </div>
             ) : (
@@ -279,18 +281,24 @@ function Field({
   );
 }
 
-function LeadCard({ customer }: { customer: Customer }) {
+function LeadCard({ lead }: { lead: SalesLead }) {
   return (
     <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-lg font-black text-white">{customer.name}</p>
-          <p className="mt-1 text-sm text-soft">{customer.phone} · {customer.car}</p>
-          <p className="mt-1 text-xs text-soft">วันที่บันทึก: {customer.date || "-"}</p>
+          <p className="text-lg font-black text-white">{lead.name}</p>
+          <p className="mt-1 text-sm text-soft">{lead.phone} · {lead.vehicleGroup}</p>
+          <p className="mt-1 text-xs text-soft">วันที่บันทึก: {lead.date || "-"}</p>
         </div>
         <span className="rounded-full border border-brand/40 px-2.5 py-1 text-xs font-black text-brand">Lead</span>
       </div>
-      {customer.note && <p className="mt-3 whitespace-pre-line rounded-lg border border-line bg-black/20 px-3 py-2 text-sm leading-6 text-soft">{customer.note}</p>}
+      {(lead.budget || lead.comment) && (
+        <p className="mt-3 whitespace-pre-line rounded-lg border border-line bg-black/20 px-3 py-2 text-sm leading-6 text-soft">
+          {lead.budget ? `งบประมาณ: ${lead.budget}` : ""}
+          {lead.budget && lead.comment ? "\n" : ""}
+          {lead.comment}
+        </p>
+      )}
     </div>
   );
 }

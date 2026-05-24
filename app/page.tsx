@@ -3,7 +3,8 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { Bell, CalendarDays, Check, ClipboardCheck, FileText, User } from "lucide-react";
 import { AppHeader } from "@/app/components/ui";
-import type { Customer, ReportHistoryItem } from "@/lib/types";
+import type { ReportHistoryItem } from "@/lib/types";
+import type { SalesLead } from "@/lib/leads";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 
 async function api<T>(url: string): Promise<T> {
@@ -15,19 +16,19 @@ async function api<T>(url: string): Promise<T> {
 
 export default function Home() {
   const { user: salesProfile } = useSalesProfile();
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [leads, setLeads] = useState<SalesLead[]>([]);
   const [reports, setReports] = useState<ReportHistoryItem[]>([]);
 
   useEffect(() => {
-    api<{ customers: Customer[]; total?: number }>("/api/customers")
-      .then((data) => setCustomers(data.customers || []))
-      .catch(() => setCustomers([]));
+    api<{ leads: SalesLead[]; total?: number }>("/api/leads")
+      .then((data) => setLeads(data.leads || []))
+      .catch(() => setLeads([]));
     api<{ reports: ReportHistoryItem[] }>("/api/reports/history?type=all")
       .then((data) => setReports(data.reports || []))
       .catch(() => setReports([]));
   }, []);
 
-  const dashboard = useMemo(() => buildDashboardMetrics(customers, reports), [customers, reports]);
+  const dashboard = useMemo(() => buildDashboardMetrics(leads, reports), [leads, reports]);
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-3xl px-4 pb-24 pt-5 sm:px-6">
@@ -105,7 +106,7 @@ function BentoCard({
   );
 }
 
-function buildDashboardMetrics(customers: Customer[], reports: ReportHistoryItem[]) {
+function buildDashboardMetrics(leads: SalesLead[], reports: ReportHistoryItem[]) {
   const activeReports = reports.filter((report) => report.status !== "deleted");
   const bookings = activeReports.filter((report) => report.type === "booking");
   const sales = activeReports.filter((report) => report.type === "sales");
@@ -121,10 +122,10 @@ function buildDashboardMetrics(customers: Customer[], reports: ReportHistoryItem
   const waitingDelivery = waitingDeliverySales + waitingDeliveryBookings;
   const delivered = sales.filter((report) => report.status === "closed" || report.status === "delivered").length;
   const today = legacyToday();
-  const newLeadsToday = customers.filter((customer) => String(customer.date || "") === today).length;
+  const newLeadsToday = leads.filter((lead) => String(lead.date || "") === today).length;
 
   return {
-    leads: customers.length.toLocaleString("th-TH"),
+    leads: leads.length.toLocaleString("th-TH"),
     newLeadsToday: newLeadsToday.toLocaleString("th-TH"),
     bookings: bookings.length.toLocaleString("th-TH"),
     financeWaiting: financeWaiting.toLocaleString("th-TH"),
