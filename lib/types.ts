@@ -5,6 +5,8 @@ export type Customer = {
   name: string;
   phone: string;
   note: string;
+  ownerId?: string;
+  ownerName?: string;
   rowIndex: number;
 };
 
@@ -13,6 +15,8 @@ export type CustomerInput = {
   name: string;
   phone: string;
   note: string;
+  ownerId?: string;
+  ownerName?: string;
 };
 
 export type InterestRate = {

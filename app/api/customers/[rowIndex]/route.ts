@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
-import { deleteCustomer, updateCustomer } from "@/lib/apps-script";
+import { deleteCustomer, listCustomers, updateCustomer } from "@/lib/apps-script";
+import { canAccessCustomerOwner, getRequestSalesUser } from "@/lib/request-user";
 import type { CustomerInput } from "@/lib/types";
 
-function cleanInput(body: Partial<CustomerInput>) {
+function cleanInput(body: Partial<CustomerInput>): CustomerInput {
   return {
     car: String(body.car || "").trim(),
     name: String(body.name || "").trim(),
     phone: String(body.phone || "").trim(),
-    note: String(body.note || "").trim()
+    note: String(body.note || "").trim(),
+    ownerId: String(body.ownerId || "").trim(),
+    ownerName: String(body.ownerName || "").trim()
   };
 }
 
@@ -21,8 +24,14 @@ function getRowIndex(params: { rowIndex: string }) {
 
 export async function PUT(request: Request, { params }: { params: { rowIndex: string } }) {
   try {
+    const currentUser = getRequestSalesUser();
     const rowIndex = getRowIndex(params);
     const input = cleanInput(await request.json());
+    const existing = (await listCustomers()).find((customer) => customer.rowIndex === rowIndex);
+    if (!existing) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+    if (!canAccessCustomerOwner(currentUser, existing.ownerId)) {
+      return NextResponse.json({ error: "ไม่มีสิทธิ์แก้ไขลูกค้ารายนี้" }, { status: 403 });
+    }
 
     if (!input.car || !input.name || !input.phone) {
       return NextResponse.json({ error: "Car, Name and Phone are required" }, { status: 400 });
@@ -40,7 +49,13 @@ export async function PUT(request: Request, { params }: { params: { rowIndex: st
 
 export async function DELETE(_request: Request, { params }: { params: { rowIndex: string } }) {
   try {
+    const currentUser = getRequestSalesUser();
     const rowIndex = getRowIndex(params);
+    const existing = (await listCustomers()).find((customer) => customer.rowIndex === rowIndex);
+    if (!existing) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+    if (!canAccessCustomerOwner(currentUser, existing.ownerId)) {
+      return NextResponse.json({ error: "ไม่มีสิทธิ์ลบลูกค้ารายนี้" }, { status: 403 });
+    }
     await deleteCustomer(rowIndex);
     return NextResponse.json({ ok: true });
   } catch (error) {

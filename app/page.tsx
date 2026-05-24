@@ -24,6 +24,7 @@ import {
   X
 } from "lucide-react";
 import type { Customer, CustomerInput } from "@/lib/types";
+import { useSalesProfile } from "@/lib/use-sales-profile";
 
 const blankForm: CustomerInput = {
   car: "",
@@ -50,7 +51,9 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export default function Home() {
+  const { user: salesProfile } = useSalesProfile();
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [totalCustomers, setTotalCustomers] = useState(0);
   const [form, setForm] = useState<CustomerInput>(blankForm);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Customer | null>(null);
@@ -64,8 +67,9 @@ export default function Home() {
 
   async function loadCustomers() {
     setError("");
-    const data = await api<{ customers: Customer[] }>("/api/customers");
+    const data = await api<{ customers: Customer[]; total?: number }>("/api/customers");
     setCustomers(data.customers);
+    setTotalCustomers(data.total ?? data.customers.length);
   }
 
   useEffect(() => {
@@ -174,6 +178,13 @@ export default function Home() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
           <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">บันทึกลูกค้า</h1>
+          <p className="mt-1 text-sm text-soft">
+            {salesProfile
+              ? salesProfile.role === "sales" || salesProfile.role === "viewer"
+                ? `แสดงลูกค้าของ ${salesProfile.nickname} เท่านั้น`
+                : `Login เป็น ${salesProfile.nickname} เห็นลูกค้าทั้งหมด`
+              : "ยังไม่ Login จะแสดงข้อมูลเดิมทั้งหมด"}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link
@@ -250,6 +261,11 @@ export default function Home() {
       </header>
 
       <section className="mb-4 rounded-lg border border-line bg-panel p-4 shadow-glow">
+        {salesProfile && (
+          <p className="mb-3 rounded-lg border border-brand/30 bg-brand/10 px-3 py-2 text-sm font-semibold text-brand">
+            ลูกค้าที่บันทึกใหม่จะเป็น owner: {salesProfile.nickname}
+          </p>
+        )}
         <form onSubmit={handleAdd} className="space-y-3">
           <Field
             icon={<Car size={19} />}
@@ -309,7 +325,9 @@ export default function Home() {
       <section className="mb-3">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-bold text-white">รายชื่อลูกค้า</h2>
-          <span className="rounded-full border border-line px-3 py-1 text-xs text-soft">{customers.length} รายการ</span>
+          <span className="rounded-full border border-line px-3 py-1 text-xs text-soft">
+            {customers.length} รายการ{totalCustomers !== customers.length ? ` / ทั้งหมด ${totalCustomers}` : ""}
+          </span>
         </div>
         <label className="flex min-h-12 items-center gap-3 rounded-lg border border-line bg-[#0d0f13] px-3">
           <Search size={20} className="text-soft" aria-hidden="true" />
@@ -346,6 +364,12 @@ export default function Home() {
                 <span>{customer.phone}</span>
                 <span className="text-[#68707d]">/</span>
                 <span>{customer.date}</span>
+                {customer.ownerName && (
+                  <>
+                    <span className="text-[#68707d]">/</span>
+                    <span>Owner: {customer.ownerName}</span>
+                  </>
+                )}
               </div>
               {customer.note && <p className="mt-2 line-clamp-2 text-sm text-[#9aa3b2]">{customer.note}</p>}
             </button>
@@ -364,6 +388,7 @@ export default function Home() {
               <div>
                 <p className="text-xs text-soft">Customer #{selected.no}</p>
                 <h2 className="mt-1 text-xl font-bold text-white">{selected.name}</h2>
+                <p className="mt-1 text-xs text-soft">Owner: {selected.ownerName || "ยังไม่ระบุ"}</p>
               </div>
               <button
                 type="button"
