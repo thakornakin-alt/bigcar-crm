@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, FileUp, Loader2, RefreshCw, Search, UploadCloud } from "lucide-react";
 import { FilterChip, PageContainer, PageTitle, SearchField, SectionCard, TopMenuButton } from "@/app/components/ui";
 import type { ReportHistoryItem } from "@/lib/types";
+import type { DriveUploadFile, DriveUploadResult } from "@/lib/types";
 
 type FinanceCase = {
   id: string;
@@ -16,8 +17,15 @@ type FinanceCase = {
   booking: ReportHistoryItem;
 };
 
-async function api<T>(url: string): Promise<T> {
-  const response = await fetch(url, { cache: "no-store" });
+async function api<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers || {})
+    },
+    cache: "no-store"
+  });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Request failed");
   return data;
@@ -56,6 +64,7 @@ function buildFinanceCases(reports: ReportHistoryItem[]): FinanceCase[] {
   return activeReports
     .filter((report) => report.type === "booking")
     .filter((report) => isFinanceBooking(report))
+    .filter((report) => report.status !== "finance_approved")
     .filter((report) => !salesPlates.has(normalizePlate(report.plate)))
     .map((booking) => {
       const status: FinanceCase["status"] = "รอผลไฟแนนซ์";
@@ -78,8 +87,11 @@ export default function FinanceApprovalPage() {
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [manualPlate, setManualPlate] = useState("");
+  const [poFile, setPoFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
   const financeCases = useMemo(() => buildFinanceCases(reports), [reports]);
   const visibleCases = useMemo(() => {
@@ -112,6 +124,70 @@ export default function FinanceApprovalPage() {
     setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   }
 
+  function chooseFile(event: ChangeEvent<HTMLInputElement>) {
+    setPoFile(event.target.files?.[0] || null);
+    setMessage("");
+    setError("");
+  }
+
+  async function uploadApproval() {
+    setUploading(true);
+    setMessage("");
+    setError("");
+
+    try {
+      if (!poFile) throw new Error("กรุณาเลือกไฟล์ใบอนุมัติ PO");
+      const selectedCases = financeCases.filter((item) => selectedIds.includes(item.id));
+      const manualCase = manualPlate.trim()
+        ? financeCases.find((item) => normalizePlate(item.plate) === normalizePlate(manualPlate))
+        : null;
+      const targets = selectedCases.length ? selectedCases : manualCase ? [manualCase] : [];
+
+      if (!targets.length) throw new Error("กรุณาเลือกทะเบียน หรือระบุทะเบียนที่อยู่ในรอผลไฟแนนซ์");
+
+      const uploadFile = await fileToUploadFile(poFile);
+
+      for (const item of targets) {
+        const upload = await api<{ result: DriveUploadResult }>("/api/drive/upload", {
+          method: "POST",
+          body: JSON.stringify({
+            reportType: "booking",
+            customerName: item.customerName,
+            plate: item.plate,
+            saleName: item.owner,
+            files: [{ ...uploadFile, clientId: `${item.id}-${uploadFile.clientId}` }]
+          })
+        });
+
+        await api("/api/reports/status", {
+          method: "POST",
+          body: JSON.stringify({ id: item.id, type: "booking", status: "finance_approved" })
+        });
+
+        await api("/api/vehicle-prep/finance-approved", {
+          method: "POST",
+          body: JSON.stringify({
+            bookingId: item.id,
+            plate: item.plate,
+            customerName: item.customerName,
+            folderUrl: upload.result.folderUrl,
+            attachments: upload.result.attachments
+          })
+        });
+      }
+
+      setSelectedIds([]);
+      setPoFile(null);
+      setManualPlate("");
+      setMessage(`อัปโหลด PO และดันเข้า รอส่งมอบ แล้ว ${targets.length.toLocaleString("th-TH")} เคส`);
+      await loadReports();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "อัปโหลด PO ไม่สำเร็จ");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <PageContainer wide>
       <PageTitle
@@ -134,6 +210,7 @@ export default function FinanceApprovalPage() {
         }
       />
 
+      {message && <div className="mb-4 rounded-lg border border-emerald-300/40 bg-emerald-950/30 px-4 py-3 text-sm font-bold text-emerald-100">{message}</div>}
       {error && <div className="mb-4 rounded-lg border border-amber-300/40 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">{error}</div>}
 
       <section className="mb-4 grid gap-3 sm:grid-cols-3">
@@ -148,10 +225,11 @@ export default function FinanceApprovalPage() {
             <div className="rounded-lg border border-dashed border-brand/40 bg-brand/10 px-4 py-6 text-center">
               <FileUp size={28} className="mx-auto text-brand" />
               <p className="mt-3 text-lg font-black text-white">เพิ่มไฟล์ใบอนุมัติ</p>
-              <p className="mt-1 text-sm leading-6 text-soft">PDF / รูปภาพ / เอกสารไฟแนนซ์</p>
-              <button type="button" className="mt-4 min-h-11 rounded-lg bg-brand px-4 text-sm font-black text-ink">
+              <p className="mt-1 text-sm leading-6 text-soft">{poFile ? poFile.name : "PDF / รูปภาพ / เอกสารไฟแนนซ์"}</p>
+              <label className="mt-4 inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg bg-brand px-4 text-sm font-black text-ink">
                 เลือกไฟล์
-              </button>
+                <input type="file" className="hidden" accept="image/*,.pdf,.xlsx,.xls,.csv" onChange={chooseFile} />
+              </label>
             </div>
             <label className="block">
               <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">หรือระบุทะเบียนเอง</span>
@@ -162,6 +240,15 @@ export default function FinanceApprovalPage() {
                 className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
               />
             </label>
+            <button
+              type="button"
+              onClick={uploadApproval}
+              disabled={uploading || !poFile || (!selectedIds.length && !manualPlate.trim())}
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-black text-ink disabled:opacity-55"
+            >
+              {uploading ? <Loader2 size={18} className="animate-spin" /> : <UploadCloud size={18} />}
+              {uploading ? "กำลังอัปโหลด PO..." : "อัปโหลด PO และส่งเข้า รอส่งมอบ"}
+            </button>
           </SectionCard>
         </section>
 
@@ -202,6 +289,25 @@ export default function FinanceApprovalPage() {
       </div>
     </PageContainer>
   );
+}
+
+async function fileToUploadFile(file: File): Promise<DriveUploadFile> {
+  const base64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+    reader.onerror = () => reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
+    reader.readAsDataURL(file);
+  });
+
+  return {
+    clientId: `${Date.now()}-${file.name}`,
+    category: "finance_po",
+    label: "ใบอนุมัติ PO",
+    name: file.name,
+    type: file.type || "application/octet-stream",
+    size: file.size,
+    base64
+  };
 }
 
 function FinanceCaseCard({ item, selected, onToggle }: { item: FinanceCase; selected: boolean; onToggle: () => void }) {

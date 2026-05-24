@@ -110,8 +110,15 @@ function buildDashboardMetrics(customers: Customer[], reports: ReportHistoryItem
   const bookings = activeReports.filter((report) => report.type === "booking");
   const sales = activeReports.filter((report) => report.type === "sales");
   const salesPlateKeys = new Set(sales.map((report) => normalizePlate(report.plate)).filter(Boolean));
-  const financeWaiting = bookings.filter((report) => isFinanceBooking(report) && !salesPlateKeys.has(normalizePlate(report.plate))).length;
-  const waitingDelivery = sales.filter((report) => report.status !== "closed" && report.status !== "delivered").length;
+  const waitingDeliverySales = sales.filter((report) => report.status !== "closed" && report.status !== "delivered").length;
+  const waitingDeliveryBookings = bookings.filter((report) => {
+    const plate = normalizePlate(report.plate);
+    if (salesPlateKeys.has(plate)) return false;
+    if (isFinanceBooking(report)) return report.status === "finance_approved";
+    return true;
+  }).length;
+  const financeWaiting = bookings.filter((report) => isFinanceBooking(report) && report.status !== "finance_approved" && !salesPlateKeys.has(normalizePlate(report.plate))).length;
+  const waitingDelivery = waitingDeliverySales + waitingDeliveryBookings;
   const delivered = sales.filter((report) => report.status === "closed" || report.status === "delivered").length;
   const today = legacyToday();
   const newLeadsToday = customers.filter((customer) => String(customer.date || "") === today).length;

@@ -27,8 +27,15 @@ const closeEffects = [
   "นำไปสรุป Dashboard / คอมมิชชั่น"
 ];
 
-async function api<T>(url: string): Promise<T> {
-  const response = await fetch(url, { cache: "no-store" });
+async function api<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers || {})
+    },
+    cache: "no-store"
+  });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Request failed");
   return data;
@@ -72,7 +79,9 @@ export default function CaseClosurePage() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<CaseFilter>("ready");
   const [loading, setLoading] = useState(true);
+  const [closingId, setClosingId] = useState("");
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
   const closeCases = useMemo(() => buildCloseCases(reports), [reports]);
   const filteredByStatus = useMemo(() => {
@@ -110,6 +119,25 @@ export default function CaseClosurePage() {
     loadReports();
   }, []);
 
+  async function closeCase(id: string) {
+    setClosingId(id);
+    setError("");
+    setMessage("");
+    try {
+      await api("/api/reports/status", {
+        method: "POST",
+        body: JSON.stringify({ id, type: "sales", status: "closed" })
+      });
+      setMessage("ปิดเคสและย้ายเข้า ส่งมอบแล้ว เรียบร้อย");
+      await loadReports();
+      setFilter("closed");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ปิดเคสไม่สำเร็จ");
+    } finally {
+      setClosingId("");
+    }
+  }
+
   return (
     <PageContainer wide>
       <PageTitle
@@ -132,6 +160,7 @@ export default function CaseClosurePage() {
         }
       />
 
+      {message && <div className="mb-4 rounded-lg border border-emerald-300/40 bg-emerald-950/30 px-4 py-3 text-sm font-bold text-emerald-100">{message}</div>}
       {error && <div className="mb-4 rounded-lg border border-amber-300/40 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">{error}</div>}
 
       <section className="mb-4 grid gap-3 sm:grid-cols-3">
@@ -176,7 +205,7 @@ export default function CaseClosurePage() {
                 Loading
               </div>
             ) : visibleCases.length ? (
-              visibleCases.map((item) => <CloseCaseCard key={item.id} item={item} />)
+              visibleCases.map((item) => <CloseCaseCard key={item.id} item={item} closing={closingId === item.id} onClose={() => closeCase(item.id)} />)
             ) : (
               <div className="rounded-lg border border-line bg-[#0b0d11] px-4 py-8 text-center text-soft">
                 ไม่พบเคสในสถานะนี้
@@ -189,7 +218,7 @@ export default function CaseClosurePage() {
   );
 }
 
-function CloseCaseCard({ item }: { item: CloseCase }) {
+function CloseCaseCard({ item, closing, onClose }: { item: CloseCase; closing: boolean; onClose: () => void }) {
   return (
     <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -207,8 +236,14 @@ function CloseCaseCard({ item }: { item: CloseCase }) {
         <InfoBox icon={<Car size={16} />} label="สถานะเคส" value={item.status === "พร้อมปิดเคส" ? "รอปิดเคสจริง" : item.status} />
       </div>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <button type="button" className="min-h-10 rounded-lg bg-brand px-3 text-sm font-black text-ink disabled:opacity-60" disabled={item.status !== "พร้อมปิดเคส"}>
-          ปิดเคส
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-3 text-sm font-black text-ink disabled:opacity-60"
+          disabled={item.status !== "พร้อมปิดเคส" || closing}
+        >
+          {closing ? <Loader2 size={16} className="animate-spin" /> : null}
+          {closing ? "กำลังปิดเคส..." : "ปิดเคส"}
         </button>
         <a href="/sales-reports" className="flex min-h-10 items-center justify-center rounded-lg border border-line bg-panel px-3 text-sm font-black text-white">
           เปิดรายงานขาย

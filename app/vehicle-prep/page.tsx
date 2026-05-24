@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, Car, CheckCircle2, Download, Loader2, RefreshCw, Wrench } from "lucide-react";
 import { FilterChip, PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
 import type { ReportHistoryItem } from "@/lib/types";
+import type { PrepChecklistKey, VehiclePrepRecord } from "@/lib/vehicle-prep";
 
 type PrepFilter = "ready" | "finance_waiting" | "all";
 type PaymentMode = "cash" | "finance" | "unknown";
@@ -23,13 +24,26 @@ type VehiclePrepCase = {
   deliveryDate: string;
   booking: ReportHistoryItem;
   sales?: ReportHistoryItem;
+  prep?: VehiclePrepRecord;
   badges: string[];
 };
 
-const checklist = ["ลอกลาย", "สปารถ", "เปลี่ยนน้ำมันเครื่อง", "ล้างรถ"];
+const checklist: Array<{ key: PrepChecklistKey; label: string }> = [
+  { key: "decal", label: "ลอกลาย" },
+  { key: "spa", label: "สปารถ" },
+  { key: "oil", label: "เปลี่ยนน้ำมันเครื่อง" },
+  { key: "wash", label: "ล้างรถ" }
+];
 
-async function api<T>(url: string): Promise<T> {
-  const response = await fetch(url, { cache: "no-store" });
+async function api<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers || {})
+    },
+    cache: "no-store"
+  });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Request failed");
   return data;
@@ -79,9 +93,10 @@ function latestByPlate(reports: ReportHistoryItem[]) {
   return map;
 }
 
-function buildPrepCases(reports: ReportHistoryItem[]): VehiclePrepCase[] {
+function buildPrepCases(reports: ReportHistoryItem[], prepRecords: VehiclePrepRecord[]): VehiclePrepCase[] {
   const activeReports = reports.filter((report) => report.status !== "deleted");
   const latestSalesByPlate = latestByPlate(activeReports.filter((report) => report.type === "sales"));
+  const prepByBookingId = new Map(prepRecords.map((record) => [record.bookingId, record]));
 
   return activeReports
     .filter((report) => report.type === "booking")
@@ -89,16 +104,18 @@ function buildPrepCases(reports: ReportHistoryItem[]): VehiclePrepCase[] {
       const plateKey = normalizePlate(booking.plate);
       const sales = latestSalesByPlate.get(plateKey);
       const paymentMode = detectPaymentMode(booking);
-      const deliveryDate = sales ? extractLineValue(sales.reportText, ["วันรับรถ"]) : "";
+      const prep = prepByBookingId.get(booking.id);
+      const deliveryDate = prep?.deliveryDate || (sales ? extractLineValue(sales.reportText, ["วันรับรถ"]) : "");
       const branch = sales ? extractLineValue(sales.reportText, ["สาขา"]) : "";
-      const isFinanceWaiting = paymentMode === "finance" && !sales;
+      const isFinanceWaiting = paymentMode === "finance" && !sales && booking.status !== "finance_approved" && !prep?.financeApprovedAt;
       const prepStatus: VehiclePrepCase["prepStatus"] = isFinanceWaiting ? "รอผลไฟแนนซ์" : "รอส่งมอบ";
       const badges = [
         paymentLabel(paymentMode),
+        booking.status === "finance_approved" || prep?.financeApprovedAt ? "ไฟแนนซ์อนุมัติแล้ว" : "",
         sales ? "มีรายงานขายแล้ว" : "ยังไม่มีรายงานขาย",
         deliveryDate ? `นัดรับรถ ${deliveryDate}` : "ยังไม่ได้นัดรับรถ",
         isFinanceWaiting ? "รอใบอนุมัติไฟแนนซ์" : "รอส่งมอบ"
-      ];
+      ].filter(Boolean);
 
       return {
         id: booking.id,
@@ -114,20 +131,25 @@ function buildPrepCases(reports: ReportHistoryItem[]): VehiclePrepCase[] {
         deliveryDate: deliveryDate || "-",
         booking,
         sales,
+        prep,
         badges
       };
     })
+    .filter((item) => item.sales?.status !== "closed" && item.sales?.status !== "delivered")
     .sort((a, b) => String(b.booking.createdAt).localeCompare(String(a.booking.createdAt)));
 }
 
 export default function VehiclePrepPage() {
   const [reports, setReports] = useState<ReportHistoryItem[]>([]);
+  const [prepRecords, setPrepRecords] = useState<VehiclePrepRecord[]>([]);
   const [filter, setFilter] = useState<PrepFilter>("ready");
   const [expandedId, setExpandedId] = useState("");
   const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState("");
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
-  const cases = useMemo(() => buildPrepCases(reports), [reports]);
+  const cases = useMemo(() => buildPrepCases(reports, prepRecords), [reports, prepRecords]);
   const readyCases = cases.filter((item) => item.prepStatus === "รอส่งมอบ");
   const financeWaitingCases = cases.filter((item) => item.prepStatus === "รอผลไฟแนนซ์");
   const visibleCases = filter === "ready" ? readyCases : filter === "finance_waiting" ? financeWaitingCases : cases;
@@ -136,13 +158,48 @@ export default function VehiclePrepPage() {
     setLoading(true);
     setError("");
     try {
-      const data = await api<{ reports: ReportHistoryItem[] }>("/api/reports/history?type=all");
-      setReports(data.reports || []);
+      const [reportData, prepData] = await Promise.all([
+        api<{ reports: ReportHistoryItem[] }>("/api/reports/history?type=all"),
+        api<{ records: VehiclePrepRecord[] }>("/api/vehicle-prep")
+      ]);
+      setReports(reportData.reports || []);
+      setPrepRecords(prepData.records || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "โหลดข้อมูลเตรียมรถไม่สำเร็จ");
       setReports([]);
+      setPrepRecords([]);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function savePrep(input: {
+    bookingId: string;
+    plate: string;
+    customerName: string;
+    garageOutDate: string;
+    garageReturnDate: string;
+    deliveryDate: string;
+    checklist: Record<PrepChecklistKey, boolean>;
+    extraNote: string;
+  }) {
+    setSavingId(input.bookingId);
+    setMessage("");
+    setError("");
+    try {
+      const data = await api<{ record: VehiclePrepRecord }>("/api/vehicle-prep", {
+        method: "POST",
+        body: JSON.stringify(input)
+      });
+      setPrepRecords((current) => {
+        const rest = current.filter((record) => record.bookingId !== data.record.bookingId);
+        return [...rest, data.record];
+      });
+      setMessage("บันทึกงานส่งมอบและอัปเดตปฏิทินแล้ว");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "บันทึกงานส่งมอบไม่สำเร็จ");
+    } finally {
+      setSavingId("");
     }
   }
 
@@ -172,6 +229,7 @@ export default function VehiclePrepPage() {
         }
       />
 
+      {message && <div className="mb-4 rounded-lg border border-emerald-300/40 bg-emerald-950/30 px-4 py-3 text-sm font-bold text-emerald-100">{message}</div>}
       {error && <div className="mb-4 rounded-lg border border-amber-300/40 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">{error}</div>}
 
       <section className="mb-4 grid gap-3 sm:grid-cols-3">
@@ -200,6 +258,8 @@ export default function VehiclePrepPage() {
                 item={item}
                 expanded={expandedId === item.id}
                 onToggle={() => setExpandedId((current) => current === item.id ? "" : item.id)}
+                saving={savingId === item.id}
+                onSave={savePrep}
               />
             ))
           ) : (
@@ -212,11 +272,11 @@ export default function VehiclePrepPage() {
         <SectionCard title="Preview งานส่งมอบ" icon={<CheckCircle2 size={18} />}>
           <div className="grid gap-2 sm:grid-cols-2">
             {checklist.map((item) => (
-              <div key={item} className="flex min-h-12 items-center gap-3 rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-bold text-white">
+              <div key={item.key} className="flex min-h-12 items-center gap-3 rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-bold text-white">
                 <span className="flex h-7 w-7 items-center justify-center rounded-md border border-brand/30 bg-brand/10 text-brand">
                   <CheckCircle2 size={15} />
                 </span>
-                {item}
+                {item.label}
               </div>
             ))}
           </div>
@@ -231,7 +291,65 @@ export default function VehiclePrepPage() {
   );
 }
 
-function PrepCaseCard({ item, expanded, onToggle }: { item: VehiclePrepCase; expanded: boolean; onToggle: () => void }) {
+function PrepCaseCard({
+  item,
+  expanded,
+  saving,
+  onToggle,
+  onSave
+}: {
+  item: VehiclePrepCase;
+  expanded: boolean;
+  saving: boolean;
+  onToggle: () => void;
+  onSave: (input: {
+    bookingId: string;
+    plate: string;
+    customerName: string;
+    garageOutDate: string;
+    garageReturnDate: string;
+    deliveryDate: string;
+    checklist: Record<PrepChecklistKey, boolean>;
+    extraNote: string;
+  }) => void;
+}) {
+  const [garageOutDate, setGarageOutDate] = useState(item.prep?.garageOutDate || "");
+  const [garageReturnDate, setGarageReturnDate] = useState(item.prep?.garageReturnDate || "");
+  const [deliveryDate, setDeliveryDate] = useState(isoDateOrEmpty(item.prep?.deliveryDate || item.deliveryDate));
+  const [checks, setChecks] = useState<Record<PrepChecklistKey, boolean>>({
+    decal: Boolean(item.prep?.checklist?.decal),
+    spa: Boolean(item.prep?.checklist?.spa),
+    oil: Boolean(item.prep?.checklist?.oil),
+    wash: Boolean(item.prep?.checklist?.wash)
+  });
+  const [extraNote, setExtraNote] = useState(item.prep?.extraNote || "");
+
+  function save() {
+    onSave({
+      bookingId: item.id,
+      plate: item.plate,
+      customerName: item.customerName,
+      garageOutDate,
+      garageReturnDate,
+      deliveryDate,
+      checklist: checks,
+      extraNote
+    });
+  }
+
+  function exportPng() {
+    exportPrepPng({
+      plate: item.plate,
+      customerName: item.customerName,
+      model: item.model,
+      garageOutDate,
+      garageReturnDate,
+      deliveryDate,
+      checklist: checks,
+      extraNote
+    });
+  }
+
   return (
     <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
       <div className="flex items-start justify-between gap-3">
@@ -251,27 +369,58 @@ function PrepCaseCard({ item, expanded, onToggle }: { item: VehiclePrepCase; exp
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <InfoRow label="รุ่นรถ" value={item.model} />
             <InfoRow label="ประเภทการซื้อ" value={item.paymentLabel} />
-            <InfoRow label="วันส่งอู่" value="-" />
-            <InfoRow label="วันรถกลับจากอู่" value="-" />
-            <InfoRow label="วันนัดส่งมอบ" value={item.deliveryDate} />
-            <InfoRow label="แจ้งเตือนปฏิทิน" value="เชื่อมปฏิทินใหญ่" />
+            <DateField label="วันส่งอู่" value={garageOutDate} onChange={setGarageOutDate} />
+            <DateField label="วันรถกลับจากอู่" value={garageReturnDate} onChange={setGarageReturnDate} />
+            <DateField label="วันนัดส่งมอบ" value={deliveryDate} onChange={setDeliveryDate} />
+            <InfoRow label="แจ้งเตือนปฏิทิน" value="กดบันทึกแล้วเข้าปฏิทินอัตโนมัติ" />
           </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {checklist.map((item) => (
-              <label key={item} className="flex min-h-10 items-center gap-2 rounded-lg border border-line bg-black/20 px-3 text-sm font-bold text-white">
-                <input type="checkbox" className="h-4 w-4 accent-brand" />
-                {item}
+            {checklist.map((check) => (
+              <label key={check.key} className="flex min-h-10 items-center gap-2 rounded-lg border border-line bg-black/20 px-3 text-sm font-bold text-white">
+                <input
+                  type="checkbox"
+                  checked={checks[check.key]}
+                  onChange={(event) => setChecks((current) => ({ ...current, [check.key]: event.target.checked }))}
+                  className="h-4 w-4 accent-brand"
+                />
+                {check.label}
               </label>
             ))}
           </div>
           <textarea
             rows={3}
             placeholder="อื่นๆ"
+            value={extraNote}
+            onChange={(event) => setExtraNote(event.target.value)}
             className="mt-3 min-h-20 w-full rounded-lg border border-line bg-black/20 px-3 py-2 text-sm text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
           />
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <button type="button" onClick={save} disabled={saving} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-3 text-sm font-black text-ink disabled:opacity-60">
+              {saving ? <Loader2 size={17} className="animate-spin" /> : <CheckCircle2 size={17} />}
+              บันทึกงานส่งมอบ
+            </button>
+            <button type="button" onClick={exportPng} className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-black text-white">
+              <Download size={17} />
+              Export PNG
+            </button>
+          </div>
         </>
       )}
     </div>
+  );
+}
+
+function DateField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="rounded-lg border border-line bg-black/20 px-3 py-2">
+      <span className="text-xs text-soft">{label}</span>
+      <input
+        type="date"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 h-9 w-full bg-transparent text-sm font-black text-white outline-none"
+      />
+    </label>
   );
 }
 
@@ -301,4 +450,98 @@ function InfoTile({ icon, label, value }: { icon: ReactNode; label: string; valu
       <p className="mt-1 text-xs text-soft">{value}</p>
     </div>
   );
+}
+
+function isoDateOrEmpty(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) ? value : "";
+}
+
+function exportPrepPng(input: {
+  plate: string;
+  customerName: string;
+  model: string;
+  garageOutDate: string;
+  garageReturnDate: string;
+  deliveryDate: string;
+  checklist: Record<PrepChecklistKey, boolean>;
+  extraNote: string;
+}) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1200;
+  canvas.height = 820;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  ctx.fillStyle = "#f7f8f6";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#0f1720";
+  ctx.font = "800 52px Arial";
+  ctx.fillText("สรุปงานรอส่งมอบ", 64, 92);
+  ctx.fillStyle = "#0bbf72";
+  ctx.fillRect(64, 124, 10, 150);
+
+  ctx.fillStyle = "#0f1720";
+  ctx.font = "800 38px Arial";
+  ctx.fillText(input.plate || "-", 96, 162);
+  ctx.font = "700 30px Arial";
+  ctx.fillText(input.customerName || "-", 96, 208);
+  ctx.font = "600 24px Arial";
+  ctx.fillStyle = "#56606d";
+  ctx.fillText(input.model || "-", 96, 248);
+
+  const rows = [
+    ["วันส่งอู่", input.garageOutDate || "-"],
+    ["วันรถกลับจากอู่", input.garageReturnDate || "-"],
+    ["วันนัดส่งมอบ", input.deliveryDate || "-"]
+  ];
+
+  ctx.font = "800 26px Arial";
+  rows.forEach(([label, value], index) => {
+    const y = 350 + index * 78;
+    ctx.fillStyle = "#e9fbf2";
+    ctx.fillRect(64, y - 42, 500, 58);
+    ctx.fillStyle = "#56606d";
+    ctx.fillText(label, 88, y - 5);
+    ctx.fillStyle = "#0f1720";
+    ctx.fillText(value, 340, y - 5);
+  });
+
+  ctx.fillStyle = "#0f1720";
+  ctx.font = "800 30px Arial";
+  ctx.fillText("Checklist", 650, 330);
+  ctx.font = "700 26px Arial";
+  checklist.forEach((item, index) => {
+    const y = 386 + index * 56;
+    ctx.fillStyle = input.checklist[item.key] ? "#0bbf72" : "#d3d8df";
+    ctx.beginPath();
+    ctx.arc(670, y - 8, 13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#0f1720";
+    ctx.fillText(item.label, 700, y);
+  });
+
+  ctx.fillStyle = "#56606d";
+  ctx.font = "600 24px Arial";
+  wrapCanvasText(ctx, input.extraNote || "ไม่มีหมายเหตุเพิ่มเติม", 64, 650, 1060, 34);
+
+  const link = document.createElement("a");
+  link.download = `prep-${input.plate || "vehicle"}.png`;
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+}
+
+function wrapCanvasText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
+  const words = text.split(/\s+/);
+  let line = "";
+  for (const word of words) {
+    const testLine = line ? `${line} ${word}` : word;
+    if (ctx.measureText(testLine).width > maxWidth && line) {
+      ctx.fillText(line, x, y);
+      line = word;
+      y += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+  if (line) ctx.fillText(line, x, y);
 }
