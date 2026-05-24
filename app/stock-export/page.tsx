@@ -17,6 +17,7 @@ import {
 import type { StockVehicle } from "@/lib/types";
 import type { DriveUploadResult, LineGroup } from "@/lib/types";
 import { salesLineGroupStorageKey } from "@/lib/client-settings";
+import { useSalesProfile } from "@/lib/use-sales-profile";
 
 type StockListResponse = {
   vehicles: StockVehicle[];
@@ -228,7 +229,14 @@ function pdfFileName(groupCount: number) {
   return `big-car-stock-${groupCount.toLocaleString("en-US")}-groups-${date}.pdf`;
 }
 
+function senderName(user: { firstName: string; lastName: string; nickname: string; phone: string } | null) {
+  if (!user) return "BIG CAR CRM";
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+  return [user.nickname || fullName, user.phone].filter(Boolean).join(" · ") || "BIG CAR CRM";
+}
+
 export default function StockExportPage() {
+  const { user: salesProfile } = useSalesProfile();
   const [vehicles, setVehicles] = useState<StockVehicle[]>([]);
   const [lineGroups, setLineGroups] = useState<LineGroup[]>([]);
   const [selectedLineGroupId, setSelectedLineGroupId] = useState("");
@@ -507,7 +515,7 @@ export default function StockExportPage() {
         reportType: "sales",
         customerName: "Stock Export",
         plate: "STOCK",
-        saleName: "BIG CAR CRM",
+        saleName: senderName(salesProfile),
         files
       });
 
@@ -518,7 +526,8 @@ export default function StockExportPage() {
         `จำนวนรถ: ${bundle.vehicleCount.toLocaleString("th-TH")} คัน`,
         `จำนวนรูป: ${bundle.pageCount.toLocaleString("th-TH")} รูป`,
         `กลุ่ม: ${groupNames || "ทั้งหมด"}${moreGroups}`,
-        `อัปเดต: ${new Date().toLocaleDateString("th-TH")}`
+        `อัปเดต: ${new Date().toLocaleDateString("th-TH")}`,
+        `ส่งโดย: ${senderName(salesProfile)}`
       ].join("\n");
 
       const data = await postJson<{ result: { imageCount: number; linkCount: number } }>("/api/line/send-report", {
@@ -597,7 +606,11 @@ export default function StockExportPage() {
     <PageContainer wide>
       <PageTitle
         title="สร้างรูปสต็อก"
-        subtitle="เลือกสต็อกแล้ว Export เป็นรูปสำหรับส่งต่อได้ทันที"
+        subtitle={
+          salesProfile
+            ? `เลือกสต็อกแล้วส่งต่อได้ทันที · ใช้โปรไฟล์ ${salesProfile.nickname} (${salesProfile.phone})`
+            : "เลือกสต็อกแล้ว Export เป็นรูปสำหรับส่งต่อได้ทันที"
+        }
         actions={
           <>
             <TopMenuButton href="/stock-import" icon={<Upload size={18} />}>
@@ -900,6 +913,11 @@ export default function StockExportPage() {
                   <option value="">ยังไม่พบกลุ่ม LINE</option>
                 )}
               </select>
+              {salesProfile && (
+                <p className="mt-2 text-xs font-semibold text-soft">
+                  ส่งโดย {senderName(salesProfile)}
+                </p>
+              )}
             </label>
             <button
               type="button"
