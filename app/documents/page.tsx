@@ -6,11 +6,10 @@ import { Download, FileImage, FileSpreadsheet, FileText, Search, Upload } from "
 import { PageContainer, PageTitle, SearchField, SectionCard, TopMenuButton } from "@/app/components/ui";
 
 const documentItems = [
-  { title: "แบบฟอร์มจอง", type: "PDF", updatedAt: "พร้อมต่อยอด", href: "/booking-reports", icon: FileText },
-  { title: "ใบอนุมัติไฟแนนซ์", type: "Upload", updatedAt: "แยกตาม Version 3", href: "/finance-approval", icon: Upload },
+  { title: "แบบฟอร์มจอง", type: "PDF", updatedAt: "รายงานจอง", href: "/booking-reports", icon: FileText },
+  { title: "ใบอนุมัติไฟแนนซ์", type: "Upload", updatedAt: "รอผลไฟแนนซ์", href: "/finance-approval", icon: Upload },
   { title: "ตารางผ่อน", type: "Export", updatedAt: "จาก Calculator", href: "/calculator", icon: FileSpreadsheet },
-  { title: "รูปสต๊อก", type: "PNG", updatedAt: "จาก Stock Export", href: "/stock-export", icon: FileImage },
-  { title: "เอกสารสัญญา", type: "Future", updatedAt: "เตรียมรองรับ", href: "/documents", icon: FileText }
+  { title: "รูปสต๊อก", type: "PNG", updatedAt: "จาก Stock Export", href: "/stock-export", icon: FileImage }
 ];
 
 export default function DocumentsPage() {
@@ -29,7 +28,7 @@ export default function DocumentsPage() {
     <PageContainer wide>
       <PageTitle
         title="เอกสาร"
-        subtitle="ศูนย์รวมเอกสาร ดาวน์โหลด เปิดไฟล์ และเตรียม OCR บัตรแบบ Preview ก่อนบันทึก"
+        subtitle="ศูนย์รวมเอกสารที่ใช้งานจริง เปิดงานต่อได้ทันที"
       />
 
       <div className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
@@ -74,7 +73,7 @@ export default function DocumentsPage() {
                       <Link href={item.href} className="flex min-h-10 items-center justify-center rounded-lg border border-line px-3 text-sm font-bold text-white">
                         เปิดไฟล์
                       </Link>
-                      <button type="button" className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-3 text-sm font-black text-ink disabled:opacity-60" disabled={item.type === "Future"}>
+                      <button type="button" className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-3 text-sm font-black text-ink disabled:opacity-60">
                         <Download size={16} />
                         ดาวน์โหลด
                       </button>
@@ -89,7 +88,7 @@ export default function DocumentsPage() {
         <section className="space-y-4">
           <SectionCard title="อัปโหลดเอกสาร" icon={<Upload size={18} />}>
             <div className="rounded-lg border border-line bg-[#0b0d11] px-4 py-5 text-sm leading-6 text-soft">
-              หน้านี้ใช้รวมเอกสารและไฟล์กลาง ส่วน OCR Smart Document ถูกย้ายไปอยู่ใน “รายงานจอง” ตาม Version 3 เพื่อให้เชื่อมกับข้อมูลลูกค้าจองจริงโดยตรง
+              OCR และเอกสารลูกค้าอยู่ในรายงานจอง เพื่อให้ไฟล์ผูกกับเคสและค้นกลับง่าย
             </div>
             <TopMenuButton href="/booking-reports" icon={<FileText size={18} />} variant="primary">
               ไป OCR ในรายงานจอง

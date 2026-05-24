@@ -187,7 +187,7 @@ export function addWaitingQueue(input: WaitingQueueInput) {
     waitingOrder: store.sequence,
     status: activeSamePlate ? "DUPLICATED" : "WAITING",
     createdAt: new Date().toISOString(),
-    note: activeSamePlate ? `ทะเบียนนี้มีคิวก่อนแล้ว: ${activeSamePlate.saleName}` : undefined,
+    note: activeSamePlate ? `ทะเบียนนี้มีรายการก่อนแล้ว: ${activeSamePlate.saleName}` : undefined,
     lineStatus: "not_sent"
   };
 
@@ -202,8 +202,8 @@ export function addWaitingQueue(input: WaitingQueueInput) {
 
 export function markBooked(id: string) {
   const item = getStore().waiting.find((queueItem) => queueItem.id === id);
-  if (!item) throw new Error("ไม่พบคิวนี้");
-  if (item.status !== "MATCHED") throw new Error("ต้อง Match ราคา RT ก่อนจึงจะจองได้");
+  if (!item) throw new Error("ไม่พบรายการนี้");
+  if (item.status !== "MATCHED") throw new Error("ต้องมีราคา RT ก่อนจึงจะปิดรายการได้");
 
   item.status = "BOOKED";
   item.bookedAt = new Date().toISOString();
@@ -212,12 +212,12 @@ export function markBooked(id: string) {
 
 export async function sendQueueLine(id: string, targetId: string) {
   const item = getStore().waiting.find((queueItem) => queueItem.id === id);
-  if (!item) throw new Error("ไม่พบคิวนี้");
+  if (!item) throw new Error("ไม่พบรายการนี้");
   if (!targetId.trim()) throw new Error("กรุณาเลือก LINE group หรือ user");
-  if (!item.bookingText) throw new Error("ต้อง Match ราคา RT ก่อนจึงจะส่ง LINE ได้");
+  if (!item.bookingText) throw new Error("ต้องมีราคา RT ก่อนจึงจะส่ง LINE ได้");
 
   const text = [
-    "Realtime Booking Queue",
+    "ข้อมูลรถสำหรับส่งต่อ",
     `สถานะ: ${item.status}`,
     "",
     item.bookingText,
@@ -241,8 +241,8 @@ export async function sendQueueLine(id: string, targetId: string) {
 
 export function cancelQueue(id: string, reason = "") {
   const item = getStore().waiting.find((queueItem) => queueItem.id === id);
-  if (!item) throw new Error("ไม่พบคิวนี้");
-  if (item.status === "BOOKED") throw new Error("คิวที่ Lock Booked แล้วต้องให้ Admin ยกเลิก");
+  if (!item) throw new Error("ไม่พบรายการนี้");
+  if (item.status === "BOOKED") throw new Error("รายการนี้ถูกปิดแล้ว ต้องให้ Admin ยกเลิก");
   if (item.status === "CANCELLED") return item;
 
   item.status = "CANCELLED";
