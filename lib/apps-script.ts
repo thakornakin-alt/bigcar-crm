@@ -253,6 +253,8 @@ export async function updateSalesUser(input: {
   id: string;
   role?: SalesUser["role"];
   locked?: boolean;
+  phone?: string;
+  lineId?: string;
   position?: string;
   branch?: string;
 }) {

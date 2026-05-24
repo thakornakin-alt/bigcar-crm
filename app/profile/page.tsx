@@ -1,8 +1,9 @@
 "use client";
 
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BadgeCheck, LineChart, LogOut, Phone, UserRound } from "lucide-react";
+import { BadgeCheck, LineChart, Loader2, LogOut, Phone, Save, UserRound } from "lucide-react";
 import { CrmShell } from "@/app/components/crm-shell";
 import { SectionCard } from "@/app/components/ui";
 import { demoCurrentUser, fullName, roleLabels } from "@/lib/crm-core";
@@ -13,11 +14,57 @@ export default function ProfilePage() {
   const { user: salesProfile, loading, setUser } = useSalesProfile();
   const user = salesProfile || demoCurrentUser;
   const isAdmin = user.role === "super_admin" || user.role === "admin";
+  const [form, setForm] = useState({
+    phone: "",
+    lineId: "",
+    position: "",
+    branch: ""
+  });
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setForm({
+      phone: user.phone || "",
+      lineId: user.lineId || "",
+      position: user.position || "",
+      branch: user.branch || ""
+    });
+  }, [user.branch, user.lineId, user.phone, user.position]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
     setUser(null);
     router.refresh();
+  }
+
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!salesProfile) {
+      setError("กรุณา Login ก่อนแก้โปรไฟล์");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form)
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "บันทึกโปรไฟล์ไม่สำเร็จ");
+      setUser(data.user);
+      setMessage("บันทึกโปรไฟล์แล้ว หน้าต่าง ๆ จะใช้ข้อมูลใหม่นี้ทันที");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "บันทึกโปรไฟล์ไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -34,6 +81,12 @@ export default function ProfilePage() {
         ) : null
       }
     >
+      {(message || error) && (
+        <div className={`mb-4 rounded-lg border px-4 py-3 text-sm font-bold ${error ? "border-red-300/30 bg-red-400/10 text-red-100" : "border-brand/30 bg-brand/10 text-brand"}`}>
+          {error || message}
+        </div>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
         <SectionCard title="ข้อมูลเซลล์" icon={<UserRound size={18} />}>
           <div className="flex items-center gap-3">
@@ -55,7 +108,22 @@ export default function ProfilePage() {
           </div>
         </SectionCard>
 
-        <SectionCard title="ระบบรูปโปรไฟล์" icon={<BadgeCheck size={18} />}>
+        <SectionCard title="แก้โปรไฟล์ตัวเอง" icon={<BadgeCheck size={18} />}>
+          <form onSubmit={saveProfile} className="grid gap-3 sm:grid-cols-2">
+            <ProfileField label="เบอร์โทร" value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value }))} />
+            <ProfileField label="LINE ID" value={form.lineId} onChange={(value) => setForm((current) => ({ ...current, lineId: value }))} />
+            <ProfileField label="ตำแหน่ง / ทีม" value={form.position} onChange={(value) => setForm((current) => ({ ...current, position: value }))} placeholder="Sales / ทีมพี่ลีฟ" />
+            <ProfileField label="สาขา" value={form.branch} onChange={(value) => setForm((current) => ({ ...current, branch: value }))} placeholder="สาขาบางนา" />
+            <button disabled={saving || !salesProfile} className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand px-4 font-black text-ink disabled:opacity-60 sm:col-span-2">
+              {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+              บันทึกโปรไฟล์
+            </button>
+          </form>
+          {!salesProfile && (
+            <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft">
+              ตอนนี้ยังใช้ default profile ถ้าต้องการแก้ข้อมูลส่วนตัวให้ Login ก่อน
+            </p>
+          )}
           <div className="rounded-lg border border-dashed border-line bg-[#0b0d11] px-4 py-8 text-center">
             <UserRound className="mx-auto text-brand" size={34} />
             <p className="mt-3 font-bold text-white">Avatar Uploader</p>
@@ -73,5 +141,29 @@ export default function ProfilePage() {
         </SectionCard>
       </div>
     </CrmShell>
+  );
+}
+
+function ProfileField({
+  label,
+  value,
+  onChange,
+  placeholder
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-sm font-bold text-white">{label}</span>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder || label}
+        className="mt-2 h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none placeholder:text-soft/60 focus:border-brand"
+      />
+    </label>
   );
 }
