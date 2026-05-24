@@ -11,7 +11,7 @@ const navItems = [
   { href: "/booking-reports", label: "รายงานจอง", icon: FileText },
   { href: "/sales-reports", label: "รายงานขาย", icon: FileText },
   { href: "/vehicle-prep", label: "การเตรียมรถ", icon: Wrench },
-  { href: "/leads", label: "ลูกค้ามุ่งหวัง", icon: Users },
+  { href: "/leads", label: "ลูกค้าหารถ", icon: Users },
   { href: "/finance-approval", label: "ไฟแนนซ์", icon: UploadCloud },
   { href: "/admin/crm", label: "Admin", icon: Shield }
 ];

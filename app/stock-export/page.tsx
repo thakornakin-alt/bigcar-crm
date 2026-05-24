@@ -6,7 +6,6 @@ import {
   ActiveFilterTag,
   BottomSheet,
   FilterChip,
-  FilterSummaryPill,
   PageContainer,
   PageTitle,
   SearchField,
@@ -627,7 +626,7 @@ export default function StockExportPage() {
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
       if (!blob || !navigator.clipboard || typeof ClipboardItem === "undefined") throw new Error("เครื่องนี้ยังไม่รองรับ Copy Image");
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      setMessage(exportPageCount > 1 ? "Copy รูปแรกของกลุ่มแรกแล้ว ถ้ามีหลายรูปให้ใช้เซฟ PNG" : "Copy รูปสต็อกแล้ว");
+      setMessage("คัดลอกรูปสต็อกแล้ว");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Copy รูปไม่สำเร็จ");
     } finally {
@@ -637,14 +636,7 @@ export default function StockExportPage() {
 
   return (
     <PageContainer wide>
-      <PageTitle
-        title="สร้างรูปสต็อก"
-        subtitle={
-          salesProfile
-            ? `เลือกสต็อกแล้วส่งต่อได้ทันที · ใช้โปรไฟล์ ${salesProfile.nickname}`
-            : "เลือกสต็อกแล้ว Export เป็นรูปสำหรับส่งต่อได้ทันที"
-        }
-      />
+      <PageTitle title="สร้างรูปสต็อก" subtitle="ค้นหา กรอง และเซฟรูปสต็อก" />
 
       {(message || error) && (
         <div
@@ -682,14 +674,6 @@ export default function StockExportPage() {
                     </button>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <FilterSummaryPill>พร้อม Export {exportVehicles.length.toLocaleString("th-TH")} คัน</FilterSummaryPill>
-                  <FilterSummaryPill>ออกเป็น {exportPageCount.toLocaleString("th-TH")} รูป</FilterSummaryPill>
-                  <FilterSummaryPill>แยก {exportGroups.length.toLocaleString("th-TH")} กลุ่ม</FilterSummaryPill>
-                  <FilterSummaryPill>แสดง {filteredVehicles.length.toLocaleString("th-TH")} คัน</FilterSummaryPill>
-                  <FilterSummaryPill>มีสถานะ {importedStatusCount.toLocaleString("th-TH")} คัน</FilterSummaryPill>
-                  <FilterSummaryPill>มีกลุ่มรถยนต์ {importedVehicleGroupCount.toLocaleString("th-TH")} คัน</FilterSummaryPill>
-                </div>
               </StickyFilterBar>
             ) : (
               <>
@@ -703,14 +687,6 @@ export default function StockExportPage() {
                   <button type="button" onClick={clearFilters} className="min-h-12 rounded-lg border border-line px-4 font-semibold text-white">
                     ล้างตัวกรอง
                   </button>
-                </div>
-                <div className="flex flex-wrap gap-2 text-xs text-soft">
-                  <span className="rounded-full border border-line px-3 py-1">พร้อม Export {exportVehicles.length.toLocaleString("th-TH")} คัน</span>
-                  <span className="rounded-full border border-line px-3 py-1">ออกเป็น {exportPageCount.toLocaleString("th-TH")} รูป</span>
-                  <span className="rounded-full border border-line px-3 py-1">แยก {exportGroups.length.toLocaleString("th-TH")} กลุ่ม</span>
-                  <span className="rounded-full border border-line px-3 py-1">แสดง {filteredVehicles.length.toLocaleString("th-TH")} คัน</span>
-                  <span className="rounded-full border border-line px-3 py-1">มีสถานะ {importedStatusCount.toLocaleString("th-TH")} คัน</span>
-                  <span className="rounded-full border border-line px-3 py-1">มีกลุ่มรถยนต์ {importedVehicleGroupCount.toLocaleString("th-TH")} คัน</span>
                 </div>
               </>
             )}
@@ -759,13 +735,13 @@ export default function StockExportPage() {
             ) : null}
             {vehicles.length > 0 && (!importedStatusCount || !importedVehicleGroupCount) && (
               <p className="rounded-lg border border-amber-400/30 bg-amber-950/20 px-3 py-3 text-sm text-amber-100">
-                โหลดสต็อกแล้ว แต่ข้อมูลสถานะ/กลุ่มรถยนต์ยังว่างในระบบ ให้ Import Stock ใหม่หลัง Vercel deploy แล้วติ๊ก “ล้าง StockInventory เดิมก่อน Import”
+                ข้อมูลสถานะ/กลุ่มรถยนต์ยังไม่ครบ กรุณาอัปเดตสต็อกใหม่
               </p>
             )}
             {exportMode === "internal" && (
               <p className={`rounded-lg border px-3 py-3 text-sm ${importedPdiNoteCount > 0 ? "border-line bg-[#0b0d11] text-soft" : "border-amber-300/30 bg-amber-300/10 text-amber-100"}`}>
                 ระบบอ่านหมายเหตุ PDI ได้ {importedPdiNoteCount.toLocaleString("th-TH")} คันจากสต็อกที่โหลดมา
-                {importedPdiNoteCount === 0 ? " - ถ้าไฟล์มีหมายเหตุ ให้ Import Stock ใหม่หลังอัปเดต Apps Script แล้วดูบรรทัด Import ว่า Apps Script รับ PDI มากกว่า 0 หรือไม่" : ""}
+                {importedPdiNoteCount === 0 ? " - ถ้าไฟล์มีหมายเหตุ กรุณาอัปเดตสต็อกใหม่" : ""}
               </p>
             )}
             <div className="space-y-2">
@@ -824,7 +800,7 @@ export default function StockExportPage() {
                 </div>
               ) : (
                 <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft">
-                  ยังไม่พบคอลัมน์กลุ่มรถยนต์ในสต็อกที่ Import
+                  ยังไม่พบกลุ่มรถยนต์ในสต็อก
                 </p>
               )}
             </div>
@@ -917,7 +893,6 @@ export default function StockExportPage() {
 
         <SectionCard title="Preview รูป" icon={<FileImage size={18} />}>
           <StockPreview vehicles={exportVehicles} mode={exportMode} pageCount={exportPageCount} groupCount={exportGroups.length} />
-          <ExportPlanSummary groups={exportGroups} pageCount={exportPageCount} vehicleCount={exportVehicles.length} />
           <div className="grid gap-2 rounded-lg border border-line bg-[#0b0d11] p-3 sm:grid-cols-[1fr_auto]">
             <label>
               <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">ส่งรูปสต็อกเข้า LINE กลุ่ม</span>
@@ -952,7 +927,7 @@ export default function StockExportPage() {
               ส่ง LINE
             </button>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-2 sm:grid-cols-3">
             <button
               type="button"
               onClick={() => exportImage("png")}
@@ -978,24 +953,12 @@ export default function StockExportPage() {
             >
               PDF
             </button>
-            <button
-              type="button"
-              onClick={copyImage}
-              disabled={exporting || !exportVehicles.length}
-              className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-line px-4 font-bold text-white disabled:opacity-60"
-            >
-              Copy รูปแรก
-            </button>
           </div>
           <canvas ref={canvasRef} className="hidden" />
         </SectionCard>
 
-        <SectionCard title="รายการรถที่ตรงเงื่อนไข" icon={<Search size={18} />}>
+        <SectionCard title="รายการรถ" icon={<Search size={18} />}>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap gap-2">
-              <FilterSummaryPill>พบ {filteredVehicles.length.toLocaleString("th-TH")} คัน</FilterSummaryPill>
-              <FilterSummaryPill>เลือกอัตโนมัติ {exportVehicles.length.toLocaleString("th-TH")} คัน</FilterSummaryPill>
-            </div>
             <button
               type="button"
               onClick={() => setListOpen((current) => !current)}
@@ -1415,7 +1378,7 @@ function StockPreview({ vehicles, mode, pageCount, groupCount }: { vehicles: Sto
           </tbody>
         </table>
       </div>
-      {vehicles.length ? <p className="p-2 text-xs text-[#475569]">Preview แสดง 8 คันแรก ตอน Export จะแยกตามกลุ่มรถยนต์และแบ่งรูปละ {maxTableItems} คัน</p> : <p className="p-6 text-center text-sm text-[#475569]">เลือกสต็อกเพื่อดู Preview</p>}
+      {!vehicles.length ? <p className="p-6 text-center text-sm text-[#475569]">เลือกสต็อกเพื่อดู Preview</p> : null}
     </div>
   );
 }

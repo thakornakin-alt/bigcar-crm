@@ -129,10 +129,9 @@ const globalNavItems = [
   { href: "/booking-reports", label: "รายงานจอง", icon: FileText },
   { href: "/sales-reports", label: "รายงานขาย", icon: FileText },
   { href: "/vehicle-prep", label: "การเตรียมรถ", icon: Wrench },
-  { href: "/leads", label: "ลูกค้ามุ่งหวัง", icon: Users },
+  { href: "/leads", label: "ลูกค้าหารถ", icon: Users },
   { href: "/finance-approval", label: "ไฟแนนซ์", icon: UploadCloud },
-  { href: "/front-office-calendar", label: "ปฏิทินหน้าบ้าน", icon: CalendarDays },
-  { href: "/back-office-calendar", label: "ปฏิทินหลังบ้าน", icon: CalendarDays },
+  { href: "/calendar", label: "ปฏิทิน", icon: CalendarDays },
   { href: "/approval-forms", label: "อนุมัติ", icon: CheckSquare },
   { href: "/documents", label: "เอกสาร", icon: FileText },
   { href: "/settings", label: "ตั้งค่า", icon: Settings }

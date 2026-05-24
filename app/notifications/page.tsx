@@ -25,9 +25,9 @@ const notifications = [
     tone: "amber"
   },
   {
-    title: "พบรถเข้าใหม่ที่ตรงกับลูกค้ามุ่งหวัง",
+    title: "พบรถเข้าใหม่ที่ตรงกับลูกค้าหารถ",
     plate: "หลายคัน",
-    customerName: "ลูกค้ามุ่งหวัง",
+    customerName: "ลูกค้าหารถ",
     owner: "ระบบแนะนำ",
     detail: "แนะนำเท่านั้น ไม่ Auto จองหรือทักลูกค้า",
     href: "/stock-matches",

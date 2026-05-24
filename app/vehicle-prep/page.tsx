@@ -153,7 +153,7 @@ export default function VehiclePrepPage() {
     <PageContainer wide>
       <PageTitle
         title="การเตรียมรถ"
-        subtitle="ดึงจากรายงานจองจริง: ซื้อสดเข้าเตรียมรถทันที ส่วนไฟแนนซ์จะรออนุมัติก่อน ไม่บังคับวันรับรถเร็วเกินจริง"
+        subtitle="งานเตรียมส่งมอบ"
         actions={
           <>
             <button

@@ -7,16 +7,14 @@ import {
   CheckCircle2,
   Clock3,
   Copy,
-  DatabaseZap,
   Loader2,
   Mail,
   Search,
   Send,
-  ShieldCheck,
   XCircle,
   Zap
 } from "lucide-react";
-import { FilterSummaryPill, PageContainer, PageTitle, SectionCard } from "@/app/components/ui";
+import { PageContainer, PageTitle, SectionCard } from "@/app/components/ui";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import type { RealtimePaymentType, RealtimeQueueStatus } from "@/lib/realtime-booking";
 
@@ -324,11 +322,7 @@ export default function RealtimeBookingPage() {
     <PageContainer wide>
       <PageTitle
         title="แย่งคิวรถ"
-        subtitle={
-          salesProfile
-            ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname}`
-            : "ล็อกสิทธิ์รถชั่วคราวเฉพาะกรณีจำเป็น ไม่ใช่รายงานจองจริง"
-        }
+        subtitle="คิวรถ realtime"
       />
 
       {(message || error) && (
@@ -343,9 +337,6 @@ export default function RealtimeBookingPage() {
 
       <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
         <SectionCard title="แย่งคิวรถ" icon={<Zap size={18} />}>
-          <div className="rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-3 py-3 text-sm leading-6 text-cyan-100">
-            ใช้เฉพาะรถฮอตหรือมีหลายเซลล์คุยคันเดียวกัน ระบบนี้เป็นการล็อกสิทธิ์ชั่วคราว ไม่ใช่ลูกค้าจองจริง และไม่บังคับทุกเคสต้องผ่านหน้านี้
-          </div>
           <form onSubmit={handleWaiting} className="space-y-3">
             <Field label="ทะเบียนรถ" value={form.plate} onChange={(value) => setForm((cur) => ({ ...cur, plate: value }))} placeholder="1ขห 9832" autoFocus />
             <Field label="ชื่อ-นามสกุลลูกค้า" value={form.customerName} onChange={(value) => setForm((cur) => ({ ...cur, customerName: value }))} placeholder="วิชาญชัย พรหมโท" />
@@ -370,11 +361,6 @@ export default function RealtimeBookingPage() {
               </div>
             </label>
             <Field label="เซลส์เจ้าของเคส" value={form.saleName} onChange={(value) => setForm((cur) => ({ ...cur, saleName: value }))} />
-            {salesProfile && (
-              <p className="rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-100">
-                ดึงจากโปรไฟล์ Login: {salesProfile.firstName} {salesProfile.lastName} · {salesProfile.phone}
-              </p>
-            )}
             <button
               type="submit"
               disabled={saving}
@@ -384,38 +370,9 @@ export default function RealtimeBookingPage() {
               แย่งคิวรถ
             </button>
           </form>
-
-          <div className="mt-4 rounded-lg border border-line bg-[#0b0d11] p-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-soft">สถานะระบบ</p>
-              <span className="rounded-full border border-cyan-300/35 px-2 py-0.5 text-[11px] font-black text-cyan-100">
-                AUTO
-              </span>
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              <CompactMetric icon={<DatabaseZap size={14} />} label="RT" value={dashboard?.vehicleCount || 0} />
-              <CompactMetric icon={<Clock3 size={14} />} label="รอ" value={dashboard?.waiting || 0} />
-              <CompactMetric icon={<Zap size={14} />} label="Match" value={dashboard?.matched || 0} />
-              <CompactMetric icon={<ShieldCheck size={14} />} label="Booked" value={dashboard?.booked || 0} />
-            </div>
-          </div>
         </SectionCard>
 
         <SectionCard title="สถานะคิวแย่งรถ realtime" icon={<Activity size={18} />}>
-          <div className="rounded-lg border border-cyan-300/30 bg-cyan-300/10 p-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-black text-cyan-100">ระบบรอเมลราคา RT อัตโนมัติ</p>
-                <p className="mt-1 text-xs leading-5 text-cyan-100/75">
-                  เมลใหม่เข้าแล้วระบบจะ Match ราคาให้เอง ปุ่ม Sync ถูกซ่อนไว้สำหรับแอดมิน/กรณีฉุกเฉิน
-                </p>
-              </div>
-              <span className="rounded-full border border-cyan-300/40 px-3 py-1 text-xs font-black text-cyan-100">
-                AUTO MODE
-              </span>
-            </div>
-          </div>
-
           <div className="rounded-lg border border-cyan-300/25 bg-cyan-300/5 p-3">
             <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
               <label className="block">
@@ -460,11 +417,6 @@ export default function RealtimeBookingPage() {
                 className="h-12 min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-[#6f7785]"
               />
             </label>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <FilterSummaryPill>Duplicate {dashboard?.duplicated || 0}</FilterSummaryPill>
-            <FilterSummaryPill>ยกเลิก {dashboard?.cancelled || 0}</FilterSummaryPill>
           </div>
 
           <details className="rounded-lg border border-line bg-[#0b0d11] p-3">
