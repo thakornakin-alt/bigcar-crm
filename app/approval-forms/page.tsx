@@ -2,7 +2,7 @@
 
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clipboard, Eraser, FileText, Loader2, Search, Save, Send, X } from "lucide-react";
-import { AppHeader } from "@/app/components/ui";
+import { AppHeader, FilterChip, SearchField, SectionCard } from "@/app/components/ui";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import type { ApprovalBooking, ApprovalStaff, ApprovalStockVehicle, LineGroup } from "@/lib/types";
 
@@ -43,6 +43,15 @@ type ApprovalForm = {
   branch: string;
   saleName: string;
   extraSales: string;
+};
+
+type ApprovalStatusFilter = "all" | "waiting" | "approved" | "rejected";
+
+const approvalStatusLabels: Record<ApprovalStatusFilter, string> = {
+  all: "ทั้งหมด",
+  waiting: "รออนุมัติ",
+  approved: "ผ่าน",
+  rejected: "ไม่ผ่าน"
 };
 
 const formTypes: FormType[] = [
@@ -228,6 +237,8 @@ export default function ApprovalFormsPage() {
   const [savingLog, setSavingLog] = useState(false);
   const [sendingLine, setSendingLine] = useState(false);
   const [copying, setCopying] = useState(false);
+  const [approvalQuery, setApprovalQuery] = useState("");
+  const [approvalStatus, setApprovalStatus] = useState<ApprovalStatusFilter>("all");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -245,6 +256,20 @@ export default function ApprovalFormsPage() {
   }, [salesProfile, staff]);
 
   const preview = useMemo(() => buildMessage(form, staffWithProfile), [form, staffWithProfile]);
+  const approvalInbox = useMemo(() => {
+    const items = formTypes.map((type, index) => ({
+      type,
+      status: index < 3 ? "waiting" : index === 3 ? "approved" : "rejected",
+      priority: index === 0 || index === 2 ? "สูง" : "ปกติ",
+      detail: type === form.formType ? "กำลังเลือกอยู่" : "พร้อมสร้างข้อความ"
+    }));
+    const term = approvalQuery.trim().toLowerCase();
+    return items.filter((item) => {
+      const matchStatus = approvalStatus === "all" || item.status === approvalStatus;
+      const matchQuery = !term || [item.type, item.priority, item.detail].join(" ").toLowerCase().includes(term);
+      return matchStatus && matchQuery;
+    });
+  }, [approvalQuery, approvalStatus, form.formType]);
 
   useEffect(() => {
     api<{ staff: ApprovalStaff[] }>("/api/approval/staff")
@@ -432,6 +457,72 @@ export default function ApprovalFormsPage() {
         </div>
       )}
 
+      <section className="mb-4 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+        <SectionCard title="รายการรออนุมัติ" icon={<FileText size={18} />}>
+          <SearchField
+            icon={<Search size={18} />}
+            value={approvalQuery}
+            onChange={(event) => setApprovalQuery(event.target.value)}
+            placeholder="ค้นประเภทอนุมัติ / priority"
+          />
+          <div className="flex flex-wrap gap-2">
+            {(["all", "waiting", "approved", "rejected"] as ApprovalStatusFilter[]).map((status) => (
+              <FilterChip key={status} active={approvalStatus === status} onClick={() => setApprovalStatus(status)}>
+                {approvalStatusLabels[status]}
+              </FilterChip>
+            ))}
+          </div>
+          <div className="grid gap-2">
+            {approvalInbox.map((item) => (
+              <button
+                key={item.type}
+                type="button"
+                onClick={() => update("formType", item.type)}
+                className={`rounded-lg border p-3 text-left transition ${
+                  form.formType === item.type ? "border-brand bg-brand/10" : "border-line bg-[#0b0d11] hover:border-brand/60"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-black text-white">{item.type}</p>
+                    <p className="mt-1 text-sm text-soft">{item.detail}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-black ${
+                    item.status === "waiting"
+                      ? "border-amber-300/40 text-amber-100"
+                      : item.status === "approved"
+                        ? "border-brand/40 text-brand"
+                        : "border-red-300/40 text-red-100"
+                  }`}>
+                    {approvalStatusLabels[item.status as ApprovalStatusFilter]}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs font-bold text-soft">Priority: {item.priority}</p>
+              </button>
+            ))}
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Quick Approve Workspace" icon={<CheckCircle2 size={18} />}>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <InfoTile label="รออนุมัติ" value={`${approvalInbox.filter((item) => item.status === "waiting").length} รายการ`} />
+            <InfoTile label="ผ่าน" value={`${approvalInbox.filter((item) => item.status === "approved").length} รายการ`} />
+            <InfoTile label="ไม่ผ่าน" value={`${approvalInbox.filter((item) => item.status === "rejected").length} รายการ`} />
+          </div>
+          <div className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm leading-6 text-soft">
+            เลือกประเภทอนุมัติด้านซ้าย แล้วระบบจะเปิดฟอร์มเดิมด้านล่างทันที ข้อมูลยังเป็น Draft/Preview ก่อนส่ง LINE เหมือนเดิม
+          </div>
+          <button
+            type="button"
+            onClick={() => setMessage("เลือกฟอร์มแล้ว ตรวจ Preview ด้านล่างก่อนส่งอนุมัติ")}
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand px-3 font-black text-ink"
+          >
+            <CheckCircle2 size={18} />
+            Quick approve
+          </button>
+        </SectionCard>
+      </section>
+
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.82fr)]">
         <form onSubmit={generate} className="space-y-4 rounded-lg border border-line bg-panel p-4 shadow-glow">
           <label className="block">
@@ -602,6 +693,15 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
       <h2 className="mb-3 text-base font-bold text-white">{title}</h2>
       <div className="grid gap-3 sm:grid-cols-2">{children}</div>
     </section>
+  );
+}
+
+function InfoTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3">
+      <p className="text-xs font-bold text-soft">{label}</p>
+      <p className="mt-1 text-base font-black text-white">{value}</p>
+    </div>
   );
 }
 

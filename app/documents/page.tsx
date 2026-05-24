@@ -1,20 +1,22 @@
 "use client";
 
 import { ChangeEvent, useMemo, useState } from "react";
+import Link from "next/link";
 import { Camera, Download, FileImage, FileSpreadsheet, FileText, Loader2, RotateCcw, Search, Upload } from "lucide-react";
 import { PageContainer, PageTitle, SearchField, SectionCard } from "@/app/components/ui";
 
 type ScanMode = "person" | "company";
 
 const documentItems = [
-  { title: "แบบฟอร์มจอง", type: "PDF", updatedAt: "พร้อมต่อยอด", icon: FileText },
-  { title: "ตารางผ่อน", type: "Export", updatedAt: "จาก Calculator", icon: FileSpreadsheet },
-  { title: "รูปสต๊อก", type: "PNG", updatedAt: "จาก Stock Export", icon: FileImage },
-  { title: "เอกสารสัญญา", type: "Future", updatedAt: "เตรียมรองรับ", icon: FileText }
+  { title: "แบบฟอร์มจอง", type: "PDF", updatedAt: "พร้อมต่อยอด", href: "/booking-reports", icon: FileText },
+  { title: "ตารางผ่อน", type: "Export", updatedAt: "จาก Calculator", href: "/calculator", icon: FileSpreadsheet },
+  { title: "รูปสต๊อก", type: "PNG", updatedAt: "จาก Stock Export", href: "/stock-export", icon: FileImage },
+  { title: "เอกสารสัญญา", type: "Future", updatedAt: "เตรียมรองรับ", href: "/documents", icon: FileText }
 ];
 
 export default function DocumentsPage() {
   const [query, setQuery] = useState("");
+  const [sortMode, setSortMode] = useState<"latest" | "name">("latest");
   const [mode, setMode] = useState<ScanMode>("person");
   const [previewUrl, setPreviewUrl] = useState("");
   const [scanning, setScanning] = useState(false);
@@ -22,9 +24,11 @@ export default function DocumentsPage() {
 
   const filteredDocs = useMemo(() => {
     const term = query.trim().toLowerCase();
-    if (!term) return documentItems;
-    return documentItems.filter((item) => [item.title, item.type, item.updatedAt].join(" ").toLowerCase().includes(term));
-  }, [query]);
+    const filtered = term
+      ? documentItems.filter((item) => [item.title, item.type, item.updatedAt].join(" ").toLowerCase().includes(term))
+      : documentItems;
+    return [...filtered].sort((a, b) => sortMode === "name" ? a.title.localeCompare(b.title, "th") : 0);
+  }, [query, sortMode]);
 
   function handleCardImage(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -69,6 +73,22 @@ export default function DocumentsPage() {
               onChange={(event) => setQuery(event.target.value)}
               placeholder="ค้นชื่อเอกสาร / PDF / Excel / รูปภาพ"
             />
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setSortMode("latest")}
+                className={`min-h-10 rounded-lg border px-3 text-sm font-black ${sortMode === "latest" ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-white"}`}
+              >
+                ล่าสุด
+              </button>
+              <button
+                type="button"
+                onClick={() => setSortMode("name")}
+                className={`min-h-10 rounded-lg border px-3 text-sm font-black ${sortMode === "name" ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-white"}`}
+              >
+                ชื่อเอกสาร
+              </button>
+            </div>
           </SectionCard>
 
           <SectionCard title="รายการเอกสาร" icon={<FileText size={18} />}>
@@ -83,10 +103,10 @@ export default function DocumentsPage() {
                     <p className="font-black text-white">{item.title}</p>
                     <p className="mt-1 text-sm text-soft">{item.type} · {item.updatedAt}</p>
                     <div className="mt-3 grid grid-cols-2 gap-2">
-                      <button type="button" className="min-h-10 rounded-lg border border-line px-3 text-sm font-bold text-white">
+                      <Link href={item.href} className="flex min-h-10 items-center justify-center rounded-lg border border-line px-3 text-sm font-bold text-white">
                         เปิดไฟล์
-                      </button>
-                      <button type="button" className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-3 text-sm font-black text-ink">
+                      </Link>
+                      <button type="button" className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-3 text-sm font-black text-ink disabled:opacity-60" disabled={item.type === "Future"}>
                         <Download size={16} />
                         ดาวน์โหลด
                       </button>
