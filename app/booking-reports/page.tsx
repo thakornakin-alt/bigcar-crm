@@ -208,6 +208,11 @@ export default function BookingReportsPage() {
   const senderEmail = saleEmails[form.saleName] || "";
   const companyWarning = form.buyerType === "company" && attachmentFiles.companyCertificate.length === 0;
   const saleOptions = useMemo(() => uniqueOptions([salesProfile?.firstName || "", blankForm.saleName, "กันตา"]), [salesProfile?.firstName]);
+  const paymentMode = form.paymentType.includes("สด")
+    ? "cash"
+    : form.paymentType.includes("ไฟแนนซ์") || form.paymentType.toLowerCase().includes("finance")
+      ? "finance"
+      : "unset";
 
   useEffect(() => {
     const settings = readSystemSettings();
@@ -759,7 +764,24 @@ export default function BookingReportsPage() {
               <Field label="ส่วนลด" value={form.discount} onChange={(value) => updateMoney("discount", value)} inputMode="numeric" />
             </div>
             <Field label="หมายเหตุราคาที่ขาย" value={form.finalPriceNote} onChange={(value) => update("finalPriceNote", value)} placeholder="เช่น ส่วนลด 4,000" />
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => update("paymentType", "ซื้อสด")}
+                className={`min-h-11 rounded-lg border px-3 text-sm font-black ${paymentMode === "cash" ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-white"}`}
+              >
+                ซื้อสด
+              </button>
+              <button
+                type="button"
+                onClick={() => update("paymentType", "ไฟแนนซ์")}
+                className={`min-h-11 rounded-lg border px-3 text-sm font-black ${paymentMode === "finance" ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-white"}`}
+              >
+                ไฟแนนซ์
+              </button>
+            </div>
             <Field label="การชำระเงิน" value={form.paymentType} onChange={(value) => update("paymentType", value)} placeholder="เงินสด / ไฟแนนซ์" />
+            <PaymentWorkflowHint mode={paymentMode} />
           </SectionCard>
 
           <SectionCard title="การตลาดและ Sale" icon={<Mail size={18} />}>
@@ -1022,6 +1044,30 @@ function OcrField({
         className="mt-1 w-full bg-transparent text-sm font-black text-white outline-none placeholder:text-[#6f7785]"
       />
     </label>
+  );
+}
+
+function PaymentWorkflowHint({ mode }: { mode: "cash" | "finance" | "unset" }) {
+  if (mode === "cash") {
+    return (
+      <div className="rounded-lg border border-brand/35 bg-brand/10 px-3 py-3 text-sm leading-6 text-brand">
+        ซื้อสด: หลังมีรายงานจองแล้ว รถคันนี้ควรเข้า “การเตรียมรถ” ได้ทันที โดยยังไม่บังคับใส่วันรับรถ
+      </div>
+    );
+  }
+
+  if (mode === "finance") {
+    return (
+      <div className="rounded-lg border border-amber-300/35 bg-amber-300/10 px-3 py-3 text-sm leading-6 text-amber-100">
+        ไฟแนนซ์: เคสนี้ควรอยู่สถานะ “รอผลไฟแนนซ์” ก่อน ยังไม่ส่งเข้า “ต้องเตรียมรถ” จนกว่าจะอัปโหลดใบอนุมัติ
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm leading-6 text-soft">
+      เลือกซื้อสดหรือไฟแนนซ์เพื่อให้ทีมเห็น workflow ถัดไปชัดเจนขึ้น
+    </div>
   );
 }
 

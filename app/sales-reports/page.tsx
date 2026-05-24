@@ -629,9 +629,14 @@ export default function SalesReportsPage() {
         title="รายงานขาย"
         subtitle={salesProfile ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname}` : "ค้นรายงานจองเดิม แล้วสร้างรายงานขายแบบ Draft / Preview"}
         actions={
-          <TopMenuButton href="/booking-reports" icon={<ArrowLeft size={18} />}>
-            รายงานจอง
-          </TopMenuButton>
+          <>
+            <TopMenuButton href="/booking-reports" icon={<ArrowLeft size={18} />}>
+              รายงานจอง
+            </TopMenuButton>
+            <TopMenuButton href="/case-closure" icon={<CheckCircle2 size={18} />} variant="primary">
+              ปิดเคส
+            </TopMenuButton>
+          </>
         }
       />
 
