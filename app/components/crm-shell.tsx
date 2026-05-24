@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { ReactNode } from "react";
-import { BarChart3, Car, FileText, Home, Radio, Shield, UploadCloud, Users, Wrench } from "lucide-react";
+import { BarChart3, Calculator, Car, FileText, Home, Radio, Shield, UploadCloud, Users, Wrench } from "lucide-react";
 import { GlobalNav } from "@/app/components/ui";
 import { CrmUserProfile, fullName, roleLabels } from "@/lib/crm-core";
 
 const navItems = [
   { href: "/crm", label: "CRM", icon: Home },
   { href: "/stock-export", label: "สต็อก", icon: Car },
+  { href: "/calculator", label: "ค่างวด", icon: Calculator },
   { href: "/realtime-booking", label: "แย่งคิวรถ", icon: Radio },
   { href: "/booking-reports", label: "รายงานจอง", icon: FileText },
   { href: "/sales-reports", label: "รายงานขาย", icon: FileText },
