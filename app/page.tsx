@@ -4,6 +4,7 @@ import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
   Calculator,
   Car,
+  Bell,
   Check,
   CalendarDays,
   ClipboardCheck,
@@ -19,6 +20,7 @@ import {
   Search,
   Trash2,
   User,
+  Wrench,
   X
 } from "lucide-react";
 import { AppHeader, SectionCard, TopMenuButton } from "@/app/components/ui";
@@ -213,11 +215,28 @@ export default function Home() {
         </SectionCard>
 
         <SectionCard title="Realtime Status" icon={<ClipboardCheck size={18} />}>
-          <StatusLine label="รถใหม่เข้า" value={totalStock === null ? "-" : `${totalStock.toLocaleString("th-TH")} คัน`} />
-          <StatusLine label="Stock Match ใหม่" value="ช่วยแนะนำเท่านั้น" />
-          <StatusLine label="รถต้องเตรียม" value="ดูที่การเตรียมรถ" />
-          <StatusLine label="รอไฟแนนซ์" value="ดูที่อัปโหลดใบอนุมัติ" />
-          <StatusLine label="งานวันนี้" value="แยกหน้าบ้าน/หลังบ้าน" />
+          <StatusLink href="/stock-export" label="รถใหม่เข้า" value={totalStock === null ? "-" : `${totalStock.toLocaleString("th-TH")} คัน`} />
+          <StatusLink href="/stock-matches" label="Stock Match ใหม่" value="ช่วยแนะนำเท่านั้น" />
+          <StatusLink href="/vehicle-prep" label="รถต้องเตรียม" value="ดูที่การเตรียมรถ" />
+          <StatusLink href="/finance-approval" label="รอไฟแนนซ์" value="ดูที่อัปโหลดใบอนุมัติ" />
+          <StatusLink href="/notifications" label="งานวันนี้" value="แยกหน้าบ้าน/หลังบ้าน" />
+        </SectionCard>
+      </section>
+
+      <section className="mb-4 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+        <SectionCard title="งานวันนี้" icon={<Bell size={18} />}>
+          <TodayTask href="/front-office-calendar" label="โทรติดตามลูกค้า" detail="งานหน้าบ้าน · เปิดจากลูกค้ามุ่งหวัง" />
+          <TodayTask href="/finance-approval" label="รอใบอนุมัติไฟแนนซ์" detail="เคสไฟแนนซ์ที่ยังไม่ควรส่งเตรียมรถ" />
+          <TodayTask href="/vehicle-prep" label="งานเตรียมรถค้าง" detail="เช็ก badge ขาดรูป / วันรถกลับ / นัดรับรถ" />
+        </SectionCard>
+
+        <SectionCard title="Stock Match ใหม่" icon={<Wrench size={18} />}>
+          <p className="text-sm leading-6 text-soft">
+            ระบบช่วยแนะนำรถเข้าใหม่ที่ตรงกับลูกค้ามุ่งหวัง แต่ไม่ Auto จอง ไม่ Auto ทัก และไม่เปลี่ยนสถานะเอง
+          </p>
+          <TopMenuButton href="/stock-matches" icon={<Car size={18} />} variant="primary">
+            ดูรายการแนะนำ
+          </TopMenuButton>
         </SectionCard>
       </section>
 
@@ -502,6 +521,24 @@ function StatusLine({ label, value }: { label: string; value: string }) {
       <span className="font-bold text-soft">{label}</span>
       <span className="text-right font-black text-white">{value}</span>
     </div>
+  );
+}
+
+function StatusLink({ href, label, value }: { href: string; label: string; value: string }) {
+  return (
+    <a href={href} className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-line bg-[#0b0d11] px-3 text-sm transition hover:border-brand/60">
+      <span className="font-bold text-soft">{label}</span>
+      <span className="text-right font-black text-white">{value}</span>
+    </a>
+  );
+}
+
+function TodayTask({ href, label, detail }: { href: string; label: string; detail: string }) {
+  return (
+    <a href={href} className="block rounded-lg border border-line bg-[#0b0d11] px-3 py-3 transition hover:border-brand/60">
+      <p className="text-sm font-black text-white">{label}</p>
+      <p className="mt-1 text-xs text-soft">{detail}</p>
+    </a>
   );
 }
 

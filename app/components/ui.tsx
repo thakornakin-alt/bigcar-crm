@@ -184,7 +184,7 @@ export function GlobalNav() {
         </div>
 
         <div className="flex items-center gap-2">
-          <TopMenuButton href="/admin/activity" icon={<Bell size={18} />} iconOnly label="แจ้งเตือน" variant="ghost" />
+          <TopMenuButton href="/notifications" icon={<Bell size={18} />} iconOnly label="แจ้งเตือน" variant="ghost" />
           <SettingsIconButton />
           <button
             type="button"
