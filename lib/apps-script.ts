@@ -55,7 +55,9 @@ type AppsScriptAction =
   | "saveLineWebhookLog"
   | "listLineWebhookLogs"
   | "registerSalesUser"
-  | "loginSalesUser";
+  | "loginSalesUser"
+  | "listSalesUsers"
+  | "updateSalesUser";
 
 type AppsScriptResponse<T> =
   | ({ ok: true } & T)
@@ -239,5 +241,21 @@ export async function registerSalesUser(input: SalesUserRegisterInput) {
 
 export async function loginSalesUser(input: SalesUserLoginInput) {
   const data = await callAppsScript<{ user: SalesUser }>("loginSalesUser", input);
+  return data.user;
+}
+
+export async function listSalesUsers() {
+  const data = await callAppsScript<{ users: SalesUser[] }>("listSalesUsers");
+  return data.users;
+}
+
+export async function updateSalesUser(input: {
+  id: string;
+  role?: SalesUser["role"];
+  locked?: boolean;
+  position?: string;
+  branch?: string;
+}) {
+  const data = await callAppsScript<{ user: SalesUser }>("updateSalesUser", { user: input });
   return data.user;
 }

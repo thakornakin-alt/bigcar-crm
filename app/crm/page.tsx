@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Calculator, Car, FileImage, FileText, Plus, UsersRound } from "lucide-react";
+import { Calculator, Car, FileImage, FileText, Plus, ShieldCheck, UsersRound } from "lucide-react";
 import { CrmShell, MetricCard } from "@/app/components/crm-shell";
 import { SectionCard, TopMenuButton } from "@/app/components/ui";
 import { demoCurrentUser, roleLabels } from "@/lib/crm-core";
@@ -17,6 +17,7 @@ const quickActions = [
 export default function CrmPage() {
   const { user: salesProfile, loading } = useSalesProfile();
   const user = salesProfile || demoCurrentUser;
+  const isAdmin = user.role === "super_admin" || user.role === "admin";
 
   return (
     <CrmShell
@@ -40,6 +41,11 @@ export default function CrmPage() {
                 {action.label}
               </TopMenuButton>
             ))}
+            {isAdmin && (
+              <TopMenuButton href="/admin/users" icon={<ShieldCheck size={18} />}>
+                จัดการผู้ใช้
+              </TopMenuButton>
+            )}
           </div>
         </SectionCard>
 

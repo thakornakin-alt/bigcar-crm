@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { BadgeCheck, LineChart, LogOut, Phone, UserRound } from "lucide-react";
 import { CrmShell } from "@/app/components/crm-shell";
 import { SectionCard } from "@/app/components/ui";
@@ -11,6 +12,7 @@ export default function ProfilePage() {
   const router = useRouter();
   const { user: salesProfile, loading, setUser } = useSalesProfile();
   const user = salesProfile || demoCurrentUser;
+  const isAdmin = user.role === "super_admin" || user.role === "admin";
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -63,6 +65,11 @@ export default function ProfilePage() {
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft"><Phone size={16} className="mb-2 text-brand" /> ใช้ข้อมูลเซลล์อัตโนมัติใน CRM v2</p>
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft"><LineChart size={16} className="mb-2 text-brand" /> ระบบเดิมยังไม่ถูกบังคับล็อกอิน</p>
           </div>
+          {isAdmin && (
+            <Link href="/admin/users" className="flex min-h-12 items-center justify-center rounded-lg bg-brand px-4 font-black text-ink">
+              จัดการผู้ใช้
+            </Link>
+          )}
         </SectionCard>
       </div>
     </CrmShell>
