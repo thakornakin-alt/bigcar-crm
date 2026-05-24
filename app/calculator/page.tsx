@@ -449,7 +449,7 @@ async function exportInstallmentImage({
   contactAvatarUrl: string;
   contactLineQrUrl: string;
 }) {
-  const profileImage = await loadCanvasImage(contactAvatarUrl || "/big-profile.png").catch(() => null);
+  const profileImage = await loadCanvasImage(contactAvatarUrl || "/logo-rdd.png").catch(() => null);
   const lineQrImage = contactLineQrUrl ? await loadCanvasImage(contactLineQrUrl).catch(() => null) : null;
   const canvas = document.createElement("canvas");
   const scale = Math.max(window.devicePixelRatio || 1, 2);

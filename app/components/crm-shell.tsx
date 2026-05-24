@@ -30,11 +30,12 @@ export function CrmShell({
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
         <div className="mt-4 rounded-lg border border-line bg-[#0b0d11] p-3">
           <div
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-brand bg-cover bg-center text-[11px] font-black text-ink"
-            style={user.avatarUrl ? { backgroundImage: `url(${user.avatarUrl})` } : undefined}
-          >
-            {user.avatarUrl ? null : "RDD"}
-          </div>
+            className={`flex h-12 items-center justify-center bg-center ${
+              user.avatarUrl ? "w-12 rounded-full bg-brand bg-cover" : "w-16 rounded-lg bg-white bg-contain bg-no-repeat"
+            }`}
+            style={{ backgroundImage: `url(${user.avatarUrl || "/logo-rdd.png"})` }}
+            aria-hidden="true"
+          />
           <p className="mt-3 text-sm font-bold text-white">{fullName(user)}</p>
           <p className="mt-1 text-xs text-soft">{roleLabels[user.role]} · {user.branch}</p>
         </div>

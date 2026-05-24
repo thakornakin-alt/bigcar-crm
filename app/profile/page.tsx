@@ -128,12 +128,12 @@ export default function ProfilePage() {
         <SectionCard title="ข้อมูลเซลล์" icon={<UserRound size={18} />}>
           <div className="flex items-center gap-3">
             <div
-              className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-brand bg-cover bg-center text-3xl font-black text-ink ring-1 ring-brand/30"
-              style={user.avatarUrl ? { backgroundImage: `url(${user.avatarUrl})` } : undefined}
+              className={`flex h-20 shrink-0 items-center justify-center bg-center ring-1 ring-brand/30 ${
+                user.avatarUrl ? "w-20 rounded-full bg-brand bg-cover" : "w-28 rounded-lg bg-white bg-contain bg-no-repeat"
+              }`}
+              style={{ backgroundImage: `url(${user.avatarUrl || "/logo-rdd.png"})` }}
               aria-label="รูปโปรไฟล์เซลล์"
-            >
-              {!user.avatarUrl ? user.nickname.slice(0, 1) || "U" : null}
-            </div>
+            />
             <div>
               <p className="text-xl font-black text-white">{fullName(user)}</p>
               <p className="mt-1 text-sm text-soft">{user.nickname} · {roleLabels[user.role]}</p>

@@ -88,6 +88,7 @@ export function TopMenuButton({
 export function ProfileIndicator() {
   const { user, loading } = useSalesProfile();
   const name = loading ? "Loading" : user?.nickname || user?.firstName || "RDD";
+  const avatarStyle = { backgroundImage: `url(${user?.avatarUrl || "/logo-rdd.png"})` };
 
   return (
     <Link
@@ -97,12 +98,12 @@ export function ProfileIndicator() {
       title="โปรไฟล์"
     >
       <span
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand bg-cover bg-center text-[11px] font-black text-ink ring-1 ring-brand/30"
-        style={user?.avatarUrl ? { backgroundImage: `url(${user.avatarUrl})` } : undefined}
+        className={`flex h-8 shrink-0 items-center justify-center bg-center ring-1 ring-brand/30 ${
+          user?.avatarUrl ? "w-8 rounded-full bg-brand bg-cover" : "w-10 rounded-md bg-white bg-contain bg-no-repeat"
+        }`}
+        style={avatarStyle}
         aria-hidden="true"
-      >
-        {user?.avatarUrl ? null : <span>RDD</span>}
-      </span>
+      />
       <span className="max-w-[92px] truncate">{name}</span>
     </Link>
   );

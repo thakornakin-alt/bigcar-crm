@@ -255,7 +255,7 @@ async function stockExportContactProfile(user: {
   if (!user) return null;
   const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
   const [avatarImage, lineQrImage] = await Promise.all([
-    user.avatarUrl ? loadStockCanvasImage(user.avatarUrl).catch(() => null) : Promise.resolve(null),
+    loadStockCanvasImage(user.avatarUrl || "/logo-rdd.png").catch(() => null),
     user.lineQrUrl ? loadStockCanvasImage(user.lineQrUrl).catch(() => null) : Promise.resolve(null)
   ]);
   return {
