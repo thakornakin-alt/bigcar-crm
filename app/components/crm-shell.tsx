@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { ReactNode } from "react";
-import { BarChart3, Car, Home, Shield, UserRound } from "lucide-react";
+import { BarChart3, Car, FileText, Home, Radio, Shield, Wrench } from "lucide-react";
 import { GlobalNav } from "@/app/components/ui";
 import { CrmUserProfile, fullName, roleLabels } from "@/lib/crm-core";
 
 const navItems = [
   { href: "/crm", label: "CRM", icon: Home },
   { href: "/stock-export", label: "สต็อก", icon: Car },
-  { href: "/profile", label: "โปรไฟล์", icon: UserRound },
+  { href: "/realtime-booking", label: "แย่งคิวรถ", icon: Radio },
+  { href: "/booking-reports", label: "รายงานจอง", icon: FileText },
+  { href: "/sales-reports", label: "รายงานขาย", icon: FileText },
+  { href: "/vehicle-prep", label: "การเตรียมรถ", icon: Wrench },
   { href: "/admin/crm", label: "Admin", icon: Shield }
 ];
 
@@ -30,25 +33,15 @@ export function CrmShell({
       <div className="lg:grid lg:grid-cols-[230px_1fr] lg:gap-5">
       <aside className="mb-4 hidden rounded-lg border border-line bg-panel p-4 shadow-glow lg:block">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
-        <div className="mt-4 rounded-lg border border-line bg-[#0b0d11] p-3">
-          <div
-            className={`flex h-12 items-center justify-center bg-center ${
-              user.avatarUrl ? "w-12 rounded-full bg-brand bg-cover" : "w-16 rounded-lg bg-white bg-contain bg-no-repeat"
-            }`}
-            style={{ backgroundImage: `url(${user.avatarUrl || "/logo-rdd.png"})` }}
-            aria-hidden="true"
-          />
-          <p className="mt-3 text-sm font-bold text-white">{fullName(user)}</p>
-          <p className="mt-1 text-xs text-soft">{roleLabels[user.role]} · {user.branch}</p>
-        </div>
-        <nav className="mt-4 space-y-2">
+        <p className="mt-1 text-xs text-soft">{fullName(user)} · {roleLabels[user.role]}</p>
+        <nav className="mt-4 grid grid-cols-2 gap-2">
           {navItems.map((item) => {
             const Icon = item.icon;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-bold text-white transition hover:border-brand"
+                className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border border-line bg-[#0b0d11] px-2 text-center text-xs font-bold text-white transition hover:border-brand"
               >
                 <Icon size={18} className="text-brand" />
                 {item.label}

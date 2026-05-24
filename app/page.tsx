@@ -177,7 +177,7 @@ export default function Home() {
   return (
     <main className="mx-auto min-h-screen w-full max-w-3xl px-4 pb-24 pt-5 sm:px-6">
       <AppHeader
-        title="Dashboard"
+        title="Dashboard V3"
         subtitle={
           <span>
             {salesProfile
@@ -190,26 +190,29 @@ export default function Home() {
       />
 
       <section className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <DashboardMetric label="จำนวนรถทั้งหมด" value={totalStock === null ? "-" : `${totalStock.toLocaleString("th-TH")} คัน`} hint="จาก StockInventory" icon={<Car size={18} />} />
-        <DashboardMetric label="รถพร้อมขาย" value="ดูในสต๊อก" hint="กรองสถานะในหน้าสต๊อก" icon={<FileImage size={18} />} />
-        <DashboardMetric label="จองวันนี้" value="Realtime" hint="ดูคิวจองสด" icon={<Radio size={18} />} />
-        <DashboardMetric label="ยอดขายเดือนนี้" value="พร้อมต่อยอด" hint="พื้นที่ KPI" icon={<FileText size={18} />} />
-        <DashboardMetric label="ค่าคอมรวม" value="พร้อมต่อยอด" hint="Commission Board" icon={<Calculator size={18} />} />
+        <DashboardMetric label="ลูกค้ามุ่งหวัง" value={`${totalCustomers.toLocaleString("th-TH")} ราย`} hint="จากระบบลูกค้าเดิม" icon={<User size={18} />} />
+        <DashboardMetric label="ยอดจอง" value="รายงานจอง" hint="ลูกค้าจองจริงเท่านั้น" icon={<FileText size={18} />} />
+        <DashboardMetric label="รถต้องเตรียม" value="เปิดดู" hint="ซื้อสด/ไฟแนนซ์อนุมัติแล้ว" icon={<Car size={18} />} />
+        <DashboardMetric label="รอไฟแนนซ์" value="แยกสถานะ" hint="ยังไม่เริ่มเตรียมรถ" icon={<ClipboardCheck size={18} />} />
+        <DashboardMetric label="ส่งมอบแล้ว" value="พร้อมต่อยอด" hint="ปิดเคส/คอมมิชชั่น" icon={<Calculator size={18} />} />
       </section>
 
       <section className="mb-4 grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
         <SectionCard title="Quick Actions" icon={<Plus size={18} />}>
           <div className="grid gap-2 sm:grid-cols-2">
             <TopMenuButton href="/stock-import" icon={<Car size={18} />} variant="primary">เพิ่มรถ</TopMenuButton>
-            <TopMenuButton href="/realtime-booking" icon={<Radio size={18} />}>ล็อกจอง</TopMenuButton>
-            <TopMenuButton href="/#customers" icon={<User size={18} />}>เพิ่มลูกค้า</TopMenuButton>
+            <TopMenuButton href="/realtime-booking" icon={<Radio size={18} />}>แย่งคิวรถ</TopMenuButton>
+            <TopMenuButton href="/#customers" icon={<User size={18} />}>เพิ่มลูกค้ามุ่งหวัง</TopMenuButton>
             <TopMenuButton href="/calculator" icon={<Calculator size={18} />}>Export ตารางผ่อน</TopMenuButton>
+            <TopMenuButton href="/vehicle-prep" icon={<Car size={18} />}>การเตรียมรถ</TopMenuButton>
+            <TopMenuButton href="/documents" icon={<FileText size={18} />}>อัปโหลดใบอนุมัติไฟแนนซ์</TopMenuButton>
           </div>
         </SectionCard>
 
         <SectionCard title="Realtime Status" icon={<ClipboardCheck size={18} />}>
           <StatusLine label="รถใหม่เข้า" value={totalStock === null ? "-" : `${totalStock.toLocaleString("th-TH")} คัน`} />
-          <StatusLine label="รถติดจอง" value="ดูที่เมนูจอง" />
+          <StatusLine label="Stock Match ใหม่" value="ช่วยแนะนำเท่านั้น" />
+          <StatusLine label="รถต้องเตรียม" value="ดูที่การเตรียมรถ" />
           <StatusLine label="คิวอนุมัติ" value="ดูที่เมนูอนุมัติ" />
         </SectionCard>
       </section>

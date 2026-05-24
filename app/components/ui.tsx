@@ -3,7 +3,7 @@
 import { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Car, CheckSquare, FileText, Home, Menu, Radio, Settings, Users, X } from "lucide-react";
+import { Bell, Car, CheckSquare, FileText, Home, Menu, Radio, Settings, Users, Wrench, X } from "lucide-react";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 
 function classNames(...values: Array<string | false | null | undefined>) {
@@ -117,7 +117,6 @@ export function HeaderUtilities() {
   const pathname = usePathname();
   return (
     <>
-      <ProfileIndicator />
       {pathname !== "/settings" && <SettingsIconButton />}
     </>
   );
@@ -126,15 +125,20 @@ export function HeaderUtilities() {
 const globalNavItems = [
   { href: "/", label: "หน้าแรก", icon: Home },
   { href: "/stock-export", label: "สต๊อก", icon: Car },
-  { href: "/realtime-booking", label: "จอง", icon: Radio },
+  { href: "/realtime-booking", label: "แย่งคิวรถ", icon: Radio },
+  { href: "/booking-reports", label: "รายงานจอง", icon: FileText },
+  { href: "/sales-reports", label: "รายงานขาย", icon: FileText },
+  { href: "/vehicle-prep", label: "การเตรียมรถ", icon: Wrench },
+  { href: "/#customers", label: "ลูกค้ามุ่งหวัง", icon: Users },
   { href: "/approval-forms", label: "อนุมัติ", icon: CheckSquare },
   { href: "/documents", label: "เอกสาร", icon: FileText },
-  { href: "/#customers", label: "ลูกค้า", icon: Users }
+  { href: "/settings", label: "ตั้งค่า", icon: Settings }
 ];
 
 export function GlobalNav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const hasOddMenuCount = globalNavItems.length % 2 === 1;
 
   function isActive(href: string) {
     if (href === "/") return pathname === "/";
@@ -145,15 +149,18 @@ export function GlobalNav() {
   return (
     <nav className="sticky top-0 z-50 mb-5 rounded-lg border border-line bg-[#0b0d11]/95 shadow-glow backdrop-blur">
       <div className="flex min-h-[64px] items-center justify-between gap-3 px-3 sm:px-4">
-        <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="BIG CAR RDD CRM หน้าแรก">
-          <span className="h-10 w-14 shrink-0 rounded-md bg-white bg-contain bg-center bg-no-repeat ring-1 ring-brand/30" style={{ backgroundImage: "url('/logo-rdd.png')" }} />
-          <span className="hidden leading-tight sm:block">
-            <span className="block text-sm font-black tracking-[0.16em] text-white">BIG CAR RDD</span>
-            <span className="block text-[11px] font-bold uppercase tracking-[0.22em] text-brand">CRM</span>
-          </span>
-        </Link>
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <Link href="/" className="flex shrink-0 items-center gap-2" aria-label="BIG CAR RDD CRM หน้าแรก">
+            <span className="h-10 w-14 shrink-0 rounded-md bg-white bg-contain bg-center bg-no-repeat ring-1 ring-brand/30" style={{ backgroundImage: "url('/logo-rdd.png')" }} />
+            <span className="hidden leading-tight xl:block">
+              <span className="block text-sm font-black tracking-[0.16em] text-white">BIG CAR RDD</span>
+              <span className="block text-[11px] font-bold uppercase tracking-[0.22em] text-brand">CRM V3</span>
+            </span>
+          </Link>
+          <ProfileIndicator />
+        </div>
 
-        <div className="hidden flex-1 items-center justify-center gap-1 lg:flex">
+        <div className="hidden flex-1 flex-wrap items-center justify-center gap-1 lg:flex">
           {globalNavItems.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href);
@@ -162,7 +169,7 @@ export function GlobalNav() {
                 key={item.href}
                 href={item.href}
                 className={classNames(
-                  "flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm font-bold transition",
+                  "flex min-h-10 items-center gap-2 rounded-lg px-2.5 text-xs font-bold transition xl:px-3 xl:text-sm",
                   active ? "bg-brand text-ink" : "text-soft hover:bg-panel hover:text-white"
                 )}
               >
@@ -176,7 +183,6 @@ export function GlobalNav() {
         <div className="flex items-center gap-2">
           <TopMenuButton href="/admin/activity" icon={<Bell size={18} />} iconOnly label="แจ้งเตือน" variant="ghost" />
           <SettingsIconButton />
-          <ProfileIndicator />
           <button
             type="button"
             onClick={() => setOpen((current) => !current)}
@@ -189,8 +195,8 @@ export function GlobalNav() {
       </div>
 
       {open && (
-        <div className="grid gap-2 border-t border-line p-3 lg:hidden">
-          {globalNavItems.map((item) => {
+        <div className="grid grid-cols-2 gap-2 border-t border-line p-3 lg:hidden">
+          {globalNavItems.map((item, index) => {
             const Icon = item.icon;
             const active = isActive(item.href);
             return (
@@ -200,6 +206,7 @@ export function GlobalNav() {
                 onClick={() => setOpen(false)}
                 className={classNames(
                   "flex min-h-12 items-center gap-3 rounded-lg border px-3 text-sm font-bold",
+                  hasOddMenuCount && index === 0 ? "col-span-2" : "",
                   active ? "border-brand bg-brand text-ink" : "border-line bg-panel text-white"
                 )}
               >

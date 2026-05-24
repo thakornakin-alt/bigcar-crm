@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BadgeCheck, ImageUp, LineChart, Loader2, LogOut, Phone, QrCode, Save, UserRound } from "lucide-react";
+import { ImageUp, LineChart, Loader2, LogOut, Phone, QrCode, Save, UserRound } from "lucide-react";
 import { CrmShell } from "@/app/components/crm-shell";
 import { SectionCard } from "@/app/components/ui";
 import { demoCurrentUser, fullName, roleLabels } from "@/lib/crm-core";
@@ -124,7 +124,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+      <div className="grid gap-4">
         <SectionCard title="ข้อมูลเซลล์" icon={<UserRound size={18} />}>
           <div className="flex items-center gap-3">
             <div
@@ -142,16 +142,11 @@ export default function ProfilePage() {
           <div className="grid gap-2 text-sm text-soft">
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2">สถานะ: <b className="text-white">{loading ? "กำลังโหลด..." : salesProfile ? "Login แล้ว" : "ใช้ default profile"}</b></p>
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2">Email: <b className="text-white">{user.email}</b></p>
-            <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2">เบอร์: <b className="text-white">{user.phone}</b></p>
-            <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2">LINE ID: <b className="text-white">{user.lineId || "-"}</b></p>
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2">รูปโปรไฟล์: <b className="text-white">{user.avatarUrl ? "มีแล้ว" : "ยังไม่มี"}</b></p>
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2">QR LINE: <b className="text-white">{user.lineQrUrl ? "มีแล้ว" : "ยังไม่มี"}</b></p>
-            <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2">สาขา: <b className="text-white">{user.branch}</b></p>
-            <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2">ตำแหน่ง: <b className="text-white">{user.position}</b></p>
           </div>
-        </SectionCard>
-
-        <SectionCard title="แก้โปรไฟล์ตัวเอง" icon={<BadgeCheck size={18} />}>
+          <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
+            <p className="mb-3 text-sm font-black text-white">แก้ไขข้อมูลได้ทันที</p>
           <form onSubmit={saveProfile} className="grid gap-3 sm:grid-cols-2">
             <ProfileField label="เบอร์โทร" value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value }))} />
             <ProfileField label="LINE ID" value={form.lineId} onChange={(value) => setForm((current) => ({ ...current, lineId: value }))} />
@@ -162,6 +157,7 @@ export default function ProfilePage() {
               บันทึกโปรไฟล์
             </button>
           </form>
+          </div>
           {!salesProfile && (
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft">
               ตอนนี้ยังใช้ default profile ถ้าต้องการแก้ข้อมูลส่วนตัวให้ Login ก่อน

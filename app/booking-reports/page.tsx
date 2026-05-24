@@ -73,6 +73,24 @@ const attachmentLabels: Array<{ key: BookingAttachmentCategory; label: string; h
   { key: "companyCertificate", label: "รูปหนังสือรับรองบริษัท", hint: "จำเป็นเมื่อผู้ซื้อเป็นบริษัท" }
 ];
 
+type OcrPreviewFields = {
+  name: string;
+  idNumber: string;
+  address: string;
+  companyName: string;
+  taxId: string;
+  companyAddress: string;
+};
+
+const blankOcrPreview: OcrPreviewFields = {
+  name: "",
+  idNumber: "",
+  address: "",
+  companyName: "",
+  taxId: "",
+  companyAddress: ""
+};
+
 async function readJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...options,
@@ -180,6 +198,8 @@ export default function BookingReportsPage() {
   const [lineGroups, setLineGroups] = useState<LineGroup[]>([]);
   const [selectedLineGroupId, setSelectedLineGroupId] = useState("");
   const [sendingLine, setSendingLine] = useState(false);
+  const [ocrPreviewUrl, setOcrPreviewUrl] = useState("");
+  const [ocrPreview, setOcrPreview] = useState<OcrPreviewFields>(blankOcrPreview);
 
   const reportText = useMemo(
     () => appendSalesProfileSignature(renderBookingReport({ ...form, reportText: "" }), salesProfile),
@@ -303,6 +323,36 @@ export default function BookingReportsPage() {
 
   function update(field: keyof BookingReportInput, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateOcr(field: keyof OcrPreviewFields, value: string) {
+    setOcrPreview((current) => ({ ...current, [field]: value }));
+  }
+
+  function handleOcrImage(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setOcrPreviewUrl(URL.createObjectURL(file));
+    setOcrPreview({
+      name: form.customerName,
+      idNumber: form.idCard,
+      address: form.address,
+      companyName: form.customerName,
+      taxId: form.idCard,
+      companyAddress: form.address
+    });
+    setMessage("OCR Preview พร้อมตรวจ แก้ไขก่อนกดยืนยัน ระบบยังไม่บันทึกอัตโนมัติ");
+    event.target.value = "";
+  }
+
+  function confirmOcrPreview() {
+    setForm((current) => ({
+      ...current,
+      customerName: current.buyerType === "company" ? ocrPreview.companyName || current.customerName : ocrPreview.name || current.customerName,
+      idCard: current.buyerType === "company" ? ocrPreview.taxId || current.idCard : ocrPreview.idNumber || current.idCard,
+      address: current.buyerType === "company" ? ocrPreview.companyAddress || current.address : ocrPreview.address || current.address
+    }));
+    setMessage("ยืนยัน OCR Preview แล้ว และเติมข้อมูลเข้ารายงานจองให้ตรวจต่อได้");
   }
 
   function updateMoney(field: keyof BookingReportInput, value: string) {
@@ -606,6 +656,61 @@ export default function BookingReportsPage() {
         </div>
       )}
 
+      <section className="mb-4">
+        <SectionCard title="OCR Smart Document" icon={<Camera size={18} />}>
+          <div className="grid gap-3 lg:grid-cols-[0.7fr_1.3fr]">
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand px-3 text-sm font-black text-ink">
+                  <Camera size={18} />
+                  ถ่ายรูป
+                  <input type="file" accept="image/*" capture="environment" onChange={handleOcrImage} className="sr-only" />
+                </label>
+                <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-bold text-white">
+                  <Paperclip size={18} className="text-brand" />
+                  เพิ่มรูป
+                  <input type="file" accept="image/*" onChange={handleOcrImage} className="sr-only" />
+                </label>
+              </div>
+              <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs leading-5 text-soft">
+                รองรับบัตรประชาชน นามบัตร และหนังสือรับรองบริษัท ต้อง Preview และกดยืนยันก่อนเสมอ ไม่มีการ Auto Save
+              </p>
+              {ocrPreviewUrl && (
+                <div className="rounded-lg border border-line bg-[#0b0d11] p-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={ocrPreviewUrl} alt="OCR booking document preview" className="max-h-32 w-full rounded-md object-contain" />
+                </div>
+              )}
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              {form.buyerType === "company" ? (
+                <>
+                  <OcrField label="ชื่อบริษัท" value={ocrPreview.companyName} onChange={(value) => updateOcr("companyName", value)} />
+                  <OcrField label="เลขผู้เสียภาษี" value={ocrPreview.taxId} onChange={(value) => updateOcr("taxId", value)} />
+                  <OcrField label="ที่อยู่บริษัท" value={ocrPreview.companyAddress} onChange={(value) => updateOcr("companyAddress", value)} wide />
+                </>
+              ) : (
+                <>
+                  <OcrField label="ชื่อ-นามสกุล" value={ocrPreview.name} onChange={(value) => updateOcr("name", value)} />
+                  <OcrField label="เลขบัตรประชาชน" value={ocrPreview.idNumber} onChange={(value) => updateOcr("idNumber", value)} />
+                  <OcrField label="ที่อยู่" value={ocrPreview.address} onChange={(value) => updateOcr("address", value)} wide />
+                </>
+              )}
+              <button
+                type="button"
+                onClick={confirmOcrPreview}
+                disabled={!ocrPreviewUrl}
+                className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-3 font-black text-ink disabled:opacity-50 sm:col-span-2"
+              >
+                <CheckCircle2 size={18} />
+                ยืนยันและเติมเข้ารายงานจอง
+              </button>
+            </div>
+          </div>
+        </SectionCard>
+      </section>
+
       <form onSubmit={saveDraft} className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
         <div className="space-y-4">
           <SectionCard title="ข้อมูลลูกค้า" icon={<ClipboardList size={18} />}>
@@ -630,7 +735,7 @@ export default function BookingReportsPage() {
               </button>
             </div>
             <Field label="ชื่อผู้ซื้อ" value={form.customerName} onChange={(value) => update("customerName", value)} required />
-            <Field label="เลขบัตรประชาชน" value={form.idCard} onChange={(value) => update("idCard", value)} inputMode="numeric" />
+            <Field label="เลขบัตรประชาชน / เลขผู้เสียภาษี" value={form.idCard} onChange={(value) => update("idCard", value)} inputMode="tel" />
             <Field label="เบอร์โทร" value={form.phone} onChange={(value) => update("phone", value)} inputMode="tel" />
             <TextArea label="ที่อยู่จัดส่งเอกสาร" value={form.address} onChange={(value) => update("address", value)} rows={3} />
           </SectionCard>
@@ -890,6 +995,31 @@ function TextArea({
         placeholder={placeholder}
         rows={rows}
         className="min-h-24 w-full resize-y rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
+      />
+    </label>
+  );
+}
+
+function OcrField({
+  label,
+  value,
+  onChange,
+  wide = false
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  wide?: boolean;
+}) {
+  return (
+    <label className={`rounded-lg border border-line bg-[#0b0d11] px-3 py-2 ${wide ? "sm:col-span-2" : ""}`}>
+      <span className="text-xs font-bold text-soft">{label}</span>
+      <input
+        type="text"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="ตรวจจากรูปแล้วแก้ไขก่อนยืนยัน"
+        className="mt-1 w-full bg-transparent text-sm font-black text-white outline-none placeholder:text-[#6f7785]"
       />
     </label>
   );

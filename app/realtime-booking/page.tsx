@@ -16,7 +16,7 @@ import {
   XCircle,
   Zap
 } from "lucide-react";
-import { FilterSummaryPill, PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
+import { FilterSummaryPill, PageContainer, PageTitle, SectionCard } from "@/app/components/ui";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import type { RealtimePaymentType, RealtimeQueueStatus } from "@/lib/realtime-booking";
 
@@ -193,7 +193,7 @@ export default function RealtimeBookingPage() {
         await sendLine(data.item, true);
       }
       await loadDashboard();
-      setMessage(data.item.status === "MATCHED" ? "Match ราคา RT สำเร็จ พร้อม Copy ข้อความ" : "บันทึก Waiting Queue แล้ว");
+      setMessage(data.item.status === "MATCHED" ? "Match ราคา RT สำเร็จ พร้อม Copy ข้อความ" : "บันทึกคิวแย่งรถแล้ว");
     } catch (err) {
       setError(err instanceof Error ? err.message : "บันทึกคิวไม่สำเร็จ");
     } finally {
@@ -323,14 +323,11 @@ export default function RealtimeBookingPage() {
   return (
     <PageContainer wide>
       <PageTitle
-        title="จอง"
+        title="แย่งคิวรถ"
         subtitle={
           salesProfile
             ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname}`
-            : "กรอกคิวไว้ก่อน ระบบรอเมลราคา RT แล้ว Match / ส่ง LINE ให้อัตโนมัติ"
-        }
-        actions={
-          <TopMenuButton href="/booking-reports" icon={<Send size={18} />}>รายงานจอง</TopMenuButton>
+            : "ล็อกสิทธิ์รถชั่วคราวเฉพาะกรณีจำเป็น ไม่ใช่รายงานจองจริง"
         }
       />
 
@@ -345,7 +342,10 @@ export default function RealtimeBookingPage() {
       )}
 
       <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-        <SectionCard title="ล็อกจอง" icon={<Zap size={18} />}>
+        <SectionCard title="แย่งคิวรถ" icon={<Zap size={18} />}>
+          <div className="rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-3 py-3 text-sm leading-6 text-cyan-100">
+            ใช้เฉพาะรถฮอตหรือมีหลายเซลล์คุยคันเดียวกัน ระบบนี้เป็นการล็อกสิทธิ์ชั่วคราว ไม่ใช่ลูกค้าจองจริง และไม่บังคับทุกเคสต้องผ่านหน้านี้
+          </div>
           <form onSubmit={handleWaiting} className="space-y-3">
             <Field label="ทะเบียนรถ" value={form.plate} onChange={(value) => setForm((cur) => ({ ...cur, plate: value }))} placeholder="1ขห 9832" autoFocus />
             <Field label="ชื่อ-นามสกุลลูกค้า" value={form.customerName} onChange={(value) => setForm((cur) => ({ ...cur, customerName: value }))} placeholder="วิชาญชัย พรหมโท" />
@@ -381,7 +381,7 @@ export default function RealtimeBookingPage() {
               className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 py-3 text-base font-black text-slate-950 transition hover:bg-cyan-200 disabled:opacity-60"
             >
               {saving ? <Loader2 size={20} className="animate-spin" /> : <Clock3 size={20} />}
-              ล็อกจอง
+              แย่งคิวรถ
             </button>
           </form>
 
@@ -401,7 +401,7 @@ export default function RealtimeBookingPage() {
           </div>
         </SectionCard>
 
-        <SectionCard title="สถานะคิว realtime" icon={<Activity size={18} />}>
+        <SectionCard title="สถานะคิวแย่งรถ realtime" icon={<Activity size={18} />}>
           <div className="rounded-lg border border-cyan-300/30 bg-cyan-300/10 p-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -539,7 +539,7 @@ export default function RealtimeBookingPage() {
               ))
             ) : (
               <div className="rounded-lg border border-line bg-[#0b0d11] px-4 py-8 text-center text-soft">
-                ยังไม่มี Waiting Queue
+                ยังไม่มีคิวแย่งรถ
               </div>
             )}
           </div>

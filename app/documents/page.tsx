@@ -1,11 +1,9 @@
 "use client";
 
-import { ChangeEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Camera, Download, FileImage, FileSpreadsheet, FileText, Loader2, RotateCcw, Search, Upload } from "lucide-react";
-import { PageContainer, PageTitle, SearchField, SectionCard } from "@/app/components/ui";
-
-type ScanMode = "person" | "company";
+import { Download, FileImage, FileSpreadsheet, FileText, Search, Upload } from "lucide-react";
+import { PageContainer, PageTitle, SearchField, SectionCard, TopMenuButton } from "@/app/components/ui";
 
 const documentItems = [
   { title: "แบบฟอร์มจอง", type: "PDF", updatedAt: "พร้อมต่อยอด", href: "/booking-reports", icon: FileText },
@@ -17,10 +15,6 @@ const documentItems = [
 export default function DocumentsPage() {
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState<"latest" | "name">("latest");
-  const [mode, setMode] = useState<ScanMode>("person");
-  const [previewUrl, setPreviewUrl] = useState("");
-  const [scanning, setScanning] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
 
   const filteredDocs = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -29,33 +23,6 @@ export default function DocumentsPage() {
       : documentItems;
     return [...filtered].sort((a, b) => sortMode === "name" ? a.title.localeCompare(b.title, "th") : 0);
   }, [query, sortMode]);
-
-  function handleCardImage(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setConfirmed(false);
-    setScanning(true);
-    const url = URL.createObjectURL(file);
-    window.setTimeout(() => {
-      setPreviewUrl(url);
-      setScanning(false);
-    }, 450);
-  }
-
-  const previewRows =
-    mode === "person"
-      ? [
-          ["ชื่อ", "รอตรวจ OCR"],
-          ["นามสกุล", "รอตรวจ OCR"],
-          ["เลขบัตรประชาชน", "รอตรวจ OCR"],
-          ["วันเกิด", "รอตรวจ OCR"],
-          ["ที่อยู่", "รอตรวจ OCR"]
-        ]
-      : [
-          ["ชื่อบริษัท", "รอตรวจ OCR"],
-          ["เลขผู้เสียภาษี", "รอตรวจ OCR"],
-          ["ที่อยู่บริษัท", "รอตรวจ OCR"]
-        ];
 
   return (
     <PageContainer wide>
@@ -119,79 +86,13 @@ export default function DocumentsPage() {
         </section>
 
         <section className="space-y-4">
-          <SectionCard title="OCR Smart ID Card" icon={<Camera size={18} />}>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setMode("person")}
-                className={`min-h-11 rounded-lg border px-3 text-sm font-black ${mode === "person" ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-white"}`}
-              >
-                บุคคลธรรมดา
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("company")}
-                className={`min-h-11 rounded-lg border px-3 text-sm font-black ${mode === "company" ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-white"}`}
-              >
-                บริษัท
-              </button>
+          <SectionCard title="อัปโหลดเอกสาร" icon={<Upload size={18} />}>
+            <div className="rounded-lg border border-line bg-[#0b0d11] px-4 py-5 text-sm leading-6 text-soft">
+              หน้านี้ใช้รวมเอกสารและไฟล์กลาง ส่วน OCR Smart Document ถูกย้ายไปอยู่ใน “รายงานจอง” ตาม Version 3 เพื่อให้เชื่อมกับข้อมูลลูกค้าจองจริงโดยตรง
             </div>
-
-            <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-brand/50 bg-[#0b0d11] px-4 py-5 text-center">
-              <Camera size={28} className="text-brand" />
-              <span className="font-black text-white">ถ่ายบัตร</span>
-              <span className="text-sm text-soft">เปิดกล้องมือถือหรือเลือกรูป แล้วตรวจ Preview ก่อนบันทึก</span>
-              <input type="file" accept="image/*" capture="environment" onChange={handleCardImage} className="sr-only" />
-            </label>
-
-            {scanning && (
-              <div className="flex min-h-20 items-center justify-center rounded-lg border border-line bg-[#0b0d11] text-soft">
-                <Loader2 size={18} className="mr-2 animate-spin text-brand" />
-                กำลังเตรียม Preview
-              </div>
-            )}
-
-            {previewUrl && !scanning && (
-              <div className="space-y-3 rounded-lg border border-line bg-[#0b0d11] p-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={previewUrl} alt="ภาพบัตรสำหรับ OCR Preview" className="max-h-56 w-full rounded-lg object-contain" />
-                <div className="grid gap-2">
-                  {previewRows.map(([label, value]) => (
-                    <label key={label} className="rounded-lg border border-line bg-panel px-3 py-2">
-                      <span className="text-xs font-bold text-soft">{label}</span>
-                      <input defaultValue={value} className="mt-1 w-full bg-transparent text-sm font-black text-white outline-none" />
-                    </label>
-                  ))}
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPreviewUrl("");
-                      setConfirmed(false);
-                    }}
-                    className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line px-3 font-bold text-white"
-                  >
-                    <RotateCcw size={18} />
-                    สแกนใหม่
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmed(true)}
-                    className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-3 font-black text-ink"
-                  >
-                    <Upload size={18} />
-                    ยืนยัน
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <p className={`rounded-lg border px-3 py-3 text-sm ${confirmed ? "border-brand/40 bg-brand/10 text-brand" : "border-line bg-[#0b0d11] text-soft"}`}>
-              {confirmed
-                ? "ยืนยัน Preview แล้ว: พร้อมต่อยอด Save เข้าระบบใน Phase ถัดไป"
-                : "ระบบนี้ไม่ Auto Save ทันที ต้อง Preview และกดยืนยันก่อนเสมอ"}
-            </p>
+            <TopMenuButton href="/booking-reports" icon={<FileText size={18} />} variant="primary">
+              ไป OCR ในรายงานจอง
+            </TopMenuButton>
           </SectionCard>
         </section>
       </div>
