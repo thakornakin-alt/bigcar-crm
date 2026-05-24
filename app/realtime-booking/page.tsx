@@ -4,7 +4,6 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Activity,
-  ArrowLeft,
   CheckCircle2,
   Clock3,
   Copy,
@@ -324,17 +323,14 @@ export default function RealtimeBookingPage() {
   return (
     <PageContainer wide>
       <PageTitle
-        title="Realtime Booking Queue"
+        title="จอง"
         subtitle={
           salesProfile
             ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname}`
             : "กรอกคิวไว้ก่อน ระบบรอเมลราคา RT แล้ว Match / ส่ง LINE ให้อัตโนมัติ"
         }
         actions={
-          <>
-            <TopMenuButton href="/" icon={<ArrowLeft size={18} />}>หน้าแรก</TopMenuButton>
-            <TopMenuButton href="/booking-reports" icon={<Send size={18} />}>รายงานจอง</TopMenuButton>
-          </>
+          <TopMenuButton href="/booking-reports" icon={<Send size={18} />}>รายงานจอง</TopMenuButton>
         }
       />
 
@@ -349,7 +345,7 @@ export default function RealtimeBookingPage() {
       )}
 
       <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-        <SectionCard title="เพิ่มคิวจองด่วน" icon={<Zap size={18} />}>
+        <SectionCard title="ล็อกจอง" icon={<Zap size={18} />}>
           <form onSubmit={handleWaiting} className="space-y-3">
             <Field label="ทะเบียนรถ" value={form.plate} onChange={(value) => setForm((cur) => ({ ...cur, plate: value }))} placeholder="1ขห 9832" autoFocus />
             <Field label="ชื่อ-นามสกุลลูกค้า" value={form.customerName} onChange={(value) => setForm((cur) => ({ ...cur, customerName: value }))} placeholder="วิชาญชัย พรหมโท" />
@@ -385,7 +381,7 @@ export default function RealtimeBookingPage() {
               className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 py-3 text-base font-black text-slate-950 transition hover:bg-cyan-200 disabled:opacity-60"
             >
               {saving ? <Loader2 size={20} className="animate-spin" /> : <Clock3 size={20} />}
-              เข้าคิวรอราคา RT
+              ล็อกจอง
             </button>
           </form>
 

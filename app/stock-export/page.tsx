@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, Download, FileImage, Filter, Loader2, MessageCircle, Search } from "lucide-react";
+import { CheckCircle2, Download, FileImage, Filter, Loader2, MessageCircle, Search } from "lucide-react";
 import {
   ActiveFilterTag,
   BottomSheet,
@@ -12,7 +12,6 @@ import {
   SearchField,
   SectionCard,
   StickyFilterBar,
-  TopMenuButton
 } from "@/app/components/ui";
 import type { StockVehicle } from "@/lib/types";
 import type { DriveUploadResult, LineGroup } from "@/lib/types";
@@ -644,11 +643,6 @@ export default function StockExportPage() {
           salesProfile
             ? `เลือกสต็อกแล้วส่งต่อได้ทันที · ใช้โปรไฟล์ ${salesProfile.nickname}`
             : "เลือกสต็อกแล้ว Export เป็นรูปสำหรับส่งต่อได้ทันที"
-        }
-        actions={
-          <TopMenuButton href="/" icon={<ArrowLeft size={18} />}>
-            หน้าแรก
-          </TopMenuButton>
         }
       />
 

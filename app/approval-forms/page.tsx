@@ -1,8 +1,8 @@
 "use client";
 
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CheckCircle2, Clipboard, Eraser, FileText, Loader2, Search, Save, Send, X } from "lucide-react";
-import { AppHeader, TopMenuButton } from "@/app/components/ui";
+import { CheckCircle2, Clipboard, Eraser, FileText, Loader2, Search, Save, Send, X } from "lucide-react";
+import { AppHeader } from "@/app/components/ui";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import type { ApprovalBooking, ApprovalStaff, ApprovalStockVehicle, LineGroup } from "@/lib/types";
 
@@ -421,13 +421,8 @@ export default function ApprovalFormsPage() {
   return (
     <main className="mx-auto min-h-screen w-full max-w-5xl px-4 pb-24 pt-5 sm:px-6">
       <AppHeader
-        title="ฟอร์มอนุมัติ"
+        title="อนุมัติ"
         subtitle={salesProfile ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname}` : "Generate ข้อความสำหรับ LINE พร้อมบันทึกประวัติแบบ Draft / Preview"}
-        actions={
-          <TopMenuButton href="/" icon={<ArrowLeft size={18} />}>
-            ลูกค้า
-          </TopMenuButton>
-        }
       />
 
       {(message || error || lookupStatus) && (

@@ -1,8 +1,8 @@
 "use client";
 
-import { ArrowLeft, Calculator, Car, ImageDown, Loader2, RefreshCw } from "lucide-react";
+import { Calculator, Car, ImageDown, Loader2, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { AppHeader, TopMenuButton } from "@/app/components/ui";
+import { AppHeader } from "@/app/components/ui";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import type { InstallmentRow, InterestRate } from "@/lib/types";
 
@@ -178,11 +178,6 @@ export default function CalculatorPage() {
       <AppHeader
         title="คำนวณค่างวด"
         subtitle={salesProfile ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname}` : "ยังไม่ได้ Login จะใช้ข้อมูลบิ๊กเป็นค่าเริ่มต้น"}
-        actions={
-          <TopMenuButton href="/" icon={<ArrowLeft size={18} />}>
-            ลูกค้า
-          </TopMenuButton>
-        }
       />
 
       <section className="mb-4 rounded-lg border border-line bg-panel p-4 shadow-glow">

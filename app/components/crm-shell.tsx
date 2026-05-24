@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ReactNode } from "react";
 import { BarChart3, Car, Home, Shield, UserRound } from "lucide-react";
-import { HeaderUtilities } from "@/app/components/ui";
+import { GlobalNav } from "@/app/components/ui";
 import { CrmUserProfile, fullName, roleLabels } from "@/lib/crm-core";
 
 const navItems = [
@@ -25,7 +25,9 @@ export function CrmShell({
   actions?: ReactNode;
 }) {
   return (
-    <main className="mx-auto min-h-screen w-full max-w-6xl px-4 pb-24 pt-5 sm:px-6 lg:grid lg:grid-cols-[230px_1fr] lg:gap-5">
+    <main className="mx-auto min-h-screen w-full max-w-6xl px-4 pb-24 pt-5 sm:px-6">
+      <GlobalNav />
+      <div className="lg:grid lg:grid-cols-[230px_1fr] lg:gap-5">
       <aside className="mb-4 hidden rounded-lg border border-line bg-panel p-4 shadow-glow lg:block">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
         <div className="mt-4 rounded-lg border border-line bg-[#0b0d11] p-3">
@@ -63,13 +65,11 @@ export function CrmShell({
             <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">{title}</h1>
             {subtitle && <p className="mt-1 text-sm text-soft">{subtitle}</p>}
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {actions}
-            <HeaderUtilities />
-          </div>
+          {actions && <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>}
         </header>
         {children}
       </section>
+      </div>
 
       <nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-4 gap-2 rounded-lg border border-line bg-[#11141a]/95 p-2 shadow-glow backdrop-blur lg:hidden">
         {navItems.map((item) => {

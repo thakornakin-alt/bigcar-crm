@@ -1,9 +1,9 @@
 "use client";
 
-import { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
+import { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Settings, UserRound } from "lucide-react";
+import { Bell, Car, CheckSquare, FileText, Home, Menu, Radio, Settings, Users, X } from "lucide-react";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 
 function classNames(...values: Array<string | false | null | undefined>) {
@@ -28,17 +28,17 @@ export function PageTitle({
   actions?: ReactNode;
 }) {
   return (
-    <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
-      <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
-        <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-soft">{subtitle}</p>}
-      </div>
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        {actions}
-        <HeaderUtilities />
-      </div>
-    </header>
+    <>
+      <GlobalNav />
+      <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">{title}</h1>
+          {subtitle && <p className="mt-1 text-sm text-soft">{subtitle}</p>}
+        </div>
+        {actions && <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>}
+      </header>
+    </>
   );
 }
 
@@ -123,6 +123,97 @@ export function HeaderUtilities() {
   );
 }
 
+const globalNavItems = [
+  { href: "/", label: "หน้าแรก", icon: Home },
+  { href: "/stock-export", label: "สต๊อก", icon: Car },
+  { href: "/realtime-booking", label: "จอง", icon: Radio },
+  { href: "/approval-forms", label: "อนุมัติ", icon: CheckSquare },
+  { href: "/documents", label: "เอกสาร", icon: FileText },
+  { href: "/#customers", label: "ลูกค้า", icon: Users }
+];
+
+export function GlobalNav() {
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+
+  function isActive(href: string) {
+    if (href === "/") return pathname === "/";
+    if (href.startsWith("/#")) return false;
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
+
+  return (
+    <nav className="sticky top-0 z-50 mb-5 rounded-lg border border-line bg-[#0b0d11]/95 shadow-glow backdrop-blur">
+      <div className="flex min-h-[64px] items-center justify-between gap-3 px-3 sm:px-4">
+        <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="BIG CAR RDD CRM หน้าแรก">
+          <span className="h-10 w-14 shrink-0 rounded-md bg-white bg-contain bg-center bg-no-repeat ring-1 ring-brand/30" style={{ backgroundImage: "url('/logo-rdd.png')" }} />
+          <span className="hidden leading-tight sm:block">
+            <span className="block text-sm font-black tracking-[0.16em] text-white">BIG CAR RDD</span>
+            <span className="block text-[11px] font-bold uppercase tracking-[0.22em] text-brand">CRM</span>
+          </span>
+        </Link>
+
+        <div className="hidden flex-1 items-center justify-center gap-1 lg:flex">
+          {globalNavItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={classNames(
+                  "flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm font-bold transition",
+                  active ? "bg-brand text-ink" : "text-soft hover:bg-panel hover:text-white"
+                )}
+              >
+                <Icon size={17} className={active ? "text-ink" : "text-brand"} />
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <TopMenuButton href="/admin/activity" icon={<Bell size={18} />} iconOnly label="แจ้งเตือน" variant="ghost" />
+          <SettingsIconButton />
+          <ProfileIndicator />
+          <button
+            type="button"
+            onClick={() => setOpen((current) => !current)}
+            className="flex h-11 w-11 items-center justify-center rounded-lg border border-line bg-panel text-brand lg:hidden"
+            aria-label={open ? "ปิดเมนู" : "เปิดเมนู"}
+          >
+            {open ? <X size={19} /> : <Menu size={19} />}
+          </button>
+        </div>
+      </div>
+
+      {open && (
+        <div className="grid gap-2 border-t border-line p-3 lg:hidden">
+          {globalNavItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setOpen(false)}
+                className={classNames(
+                  "flex min-h-12 items-center gap-3 rounded-lg border px-3 text-sm font-bold",
+                  active ? "border-brand bg-brand text-ink" : "border-line bg-panel text-white"
+                )}
+              >
+                <Icon size={18} className={active ? "text-ink" : "text-brand"} />
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </nav>
+  );
+}
+
 export function AppHeader({
   title,
   subtitle,
@@ -133,17 +224,17 @@ export function AppHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
-      <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
-        <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">{title}</h1>
-        {subtitle && <div className="mt-1 text-sm text-soft">{subtitle}</div>}
-      </div>
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        {actions}
-        <HeaderUtilities />
-      </div>
-    </header>
+    <>
+      <GlobalNav />
+      <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">{title}</h1>
+          {subtitle && <div className="mt-1 text-sm text-soft">{subtitle}</div>}
+        </div>
+        {actions && <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>}
+      </header>
+    </>
   );
 }
 

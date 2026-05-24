@@ -5,6 +5,7 @@ import {
   Calculator,
   Car,
   Check,
+  ClipboardCheck,
   FileImage,
   FileText,
   Loader2,
@@ -19,7 +20,7 @@ import {
   User,
   X
 } from "lucide-react";
-import { AppHeader, TopMenuButton } from "@/app/components/ui";
+import { AppHeader, SectionCard, TopMenuButton } from "@/app/components/ui";
 import type { Customer, CustomerInput } from "@/lib/types";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 
@@ -51,6 +52,7 @@ export default function Home() {
   const { user: salesProfile } = useSalesProfile();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [totalCustomers, setTotalCustomers] = useState(0);
+  const [totalStock, setTotalStock] = useState<number | null>(null);
   const [form, setForm] = useState<CustomerInput>(blankForm);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Customer | null>(null);
@@ -73,6 +75,9 @@ export default function Home() {
     loadCustomers()
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+    api<{ status: { total: number } }>("/api/stock/status")
+      .then((data) => setTotalStock(data.status.total))
+      .catch(() => setTotalStock(null));
   }, []);
 
   const filteredCustomers = useMemo(() => {
@@ -172,37 +177,66 @@ export default function Home() {
   return (
     <main className="mx-auto min-h-screen w-full max-w-3xl px-4 pb-24 pt-5 sm:px-6">
       <AppHeader
-        title="บันทึกลูกค้า"
+        title="Dashboard"
         subtitle={
           <span>
             {salesProfile
               ? salesProfile.role === "sales" || salesProfile.role === "viewer"
-                ? `แสดงลูกค้าของ ${salesProfile.nickname} เท่านั้น`
-                : `Login เป็น ${salesProfile.nickname} เห็นลูกค้าทั้งหมด`
-              : "ยังไม่ Login จะแสดงข้อมูลเดิมทั้งหมด"}
+                ? `มุมทำงานของ ${salesProfile.nickname}`
+                : `Login เป็น ${salesProfile.nickname} · เห็นภาพรวมทั้งหมด`
+              : "ภาพรวม BIG CAR RDD CRM"}
           </span>
-        }
-        actions={
-          <>
-            <TopMenuButton href="/booking-reports" icon={<FileText size={18} />} variant="primary">
-              จอง
-            </TopMenuButton>
-            <TopMenuButton href="/sales-reports" icon={<FileText size={18} />}>
-              ขาย
-            </TopMenuButton>
-            <TopMenuButton href="/stock-export" icon={<FileImage size={18} />}>
-              รูปสต็อก
-            </TopMenuButton>
-            <TopMenuButton href="/calculator" icon={<Calculator size={18} />}>
-              ค่างวด
-            </TopMenuButton>
-            <TopMenuButton href="/approval-forms" icon={<MessageCircle size={18} />} iconOnly label="ฟอร์มอนุมัติ" />
-            <TopMenuButton href="/realtime-booking" icon={<Radio size={18} />} iconOnly label="Realtime จอง" />
-          </>
         }
       />
 
-      <section className="mb-4 rounded-lg border border-line bg-panel p-4 shadow-glow">
+      <section className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <DashboardMetric label="จำนวนรถทั้งหมด" value={totalStock === null ? "-" : `${totalStock.toLocaleString("th-TH")} คัน`} hint="จาก StockInventory" icon={<Car size={18} />} />
+        <DashboardMetric label="รถพร้อมขาย" value="ดูในสต๊อก" hint="กรองสถานะในหน้าสต๊อก" icon={<FileImage size={18} />} />
+        <DashboardMetric label="จองวันนี้" value="Realtime" hint="ดูคิวจองสด" icon={<Radio size={18} />} />
+        <DashboardMetric label="ยอดขายเดือนนี้" value="พร้อมต่อยอด" hint="พื้นที่ KPI" icon={<FileText size={18} />} />
+        <DashboardMetric label="ค่าคอมรวม" value="พร้อมต่อยอด" hint="Commission Board" icon={<Calculator size={18} />} />
+      </section>
+
+      <section className="mb-4 grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+        <SectionCard title="Quick Actions" icon={<Plus size={18} />}>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <TopMenuButton href="/stock-import" icon={<Car size={18} />} variant="primary">เพิ่มรถ</TopMenuButton>
+            <TopMenuButton href="/realtime-booking" icon={<Radio size={18} />}>ล็อกจอง</TopMenuButton>
+            <TopMenuButton href="/#customers" icon={<User size={18} />}>เพิ่มลูกค้า</TopMenuButton>
+            <TopMenuButton href="/calculator" icon={<Calculator size={18} />}>Export ตารางผ่อน</TopMenuButton>
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Realtime Status" icon={<ClipboardCheck size={18} />}>
+          <StatusLine label="รถใหม่เข้า" value={totalStock === null ? "-" : `${totalStock.toLocaleString("th-TH")} คัน`} />
+          <StatusLine label="รถติดจอง" value="ดูที่เมนูจอง" />
+          <StatusLine label="คิวอนุมัติ" value="ดูที่เมนูอนุมัติ" />
+        </SectionCard>
+      </section>
+
+      <section className="mb-4 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+        <SectionCard title="Activity Feed" icon={<MessageCircle size={18} />}>
+          <ActivityRow title="ระบบพร้อมใช้งาน" detail="Activity Log หลังบ้านเก็บเหตุการณ์สำคัญแล้ว" />
+          <ActivityRow title="โปรไฟล์เซลล์" detail={salesProfile ? `กำลังใช้โปรไฟล์ ${salesProfile.nickname}` : "ยังไม่ได้ Login"} />
+          <ActivityRow title="สต๊อกล่าสุด" detail={totalStock === null ? "รอข้อมูลจาก StockInventory" : `${totalStock.toLocaleString("th-TH")} คันในระบบ`} />
+        </SectionCard>
+
+        <SectionCard title="Future Ready Space" icon={<FileText size={18} />}>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {["กราฟยอดขาย", "KPI", "Team Ranking", "Commission Board"].map((item) => (
+              <div key={item} className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm font-bold text-soft">
+                {item}
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      </section>
+
+      <section id="customers" className="mb-4 rounded-lg border border-line bg-panel p-4 shadow-glow scroll-mt-24">
+        <div className="mb-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Customers</p>
+          <h2 className="mt-1 text-xl font-black text-white">ลูกค้า</h2>
+        </div>
         {salesProfile && (
           <p className="mb-3 rounded-lg border border-brand/30 bg-brand/10 px-3 py-2 text-sm font-semibold text-brand">
             ลูกค้าที่บันทึกใหม่จะเป็น owner: {salesProfile.nickname}
@@ -429,6 +463,47 @@ function Field({
         />
       </span>
     </label>
+  );
+}
+
+function DashboardMetric({
+  label,
+  value,
+  hint,
+  icon
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  icon: ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-line bg-panel p-4 shadow-glow">
+      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-brand/30 bg-brand/10 text-brand">
+        {icon}
+      </div>
+      <p className="text-xs font-bold uppercase tracking-[0.12em] text-soft">{label}</p>
+      <p className="mt-2 text-xl font-black text-white">{value}</p>
+      <p className="mt-1 text-xs text-soft">{hint}</p>
+    </div>
+  );
+}
+
+function StatusLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-line bg-[#0b0d11] px-3 text-sm">
+      <span className="font-bold text-soft">{label}</span>
+      <span className="text-right font-black text-white">{value}</span>
+    </div>
+  );
+}
+
+function ActivityRow({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3">
+      <p className="text-sm font-black text-white">{title}</p>
+      <p className="mt-1 text-sm text-soft">{detail}</p>
+    </div>
   );
 }
 

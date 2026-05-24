@@ -3,7 +3,6 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
-  ArrowLeft,
   Camera,
   CheckCircle2,
   Clipboard,
@@ -589,9 +588,6 @@ export default function BookingReportsPage() {
           <>
             <TopMenuButton href="/sales-reports" icon={<FileText size={18} />} variant="primary">
               ขาย
-            </TopMenuButton>
-            <TopMenuButton href="/" icon={<ArrowLeft size={18} />}>
-              ลูกค้า
             </TopMenuButton>
           </>
         }
