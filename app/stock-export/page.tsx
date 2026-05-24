@@ -52,6 +52,14 @@ type StockExportFileBundle = {
   vehicleCount: number;
 };
 
+type StockExportContact = {
+  name: string;
+  phone: string;
+  lineId: string;
+  avatarImage: HTMLImageElement | null;
+  lineQrImage: HTMLImageElement | null;
+};
+
 type AdvancedStockFilters = {
   location: string;
   year: string;
@@ -233,6 +241,30 @@ function senderName(user: { firstName: string; lastName: string; nickname: strin
   if (!user) return "BIG CAR CRM";
   const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
   return [user.nickname || fullName, user.phone].filter(Boolean).join(" · ") || "BIG CAR CRM";
+}
+
+async function stockExportContactProfile(user: {
+  firstName: string;
+  lastName: string;
+  nickname: string;
+  phone: string;
+  lineId: string;
+  avatarUrl: string;
+  lineQrUrl: string;
+} | null): Promise<StockExportContact | null> {
+  if (!user) return null;
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+  const [avatarImage, lineQrImage] = await Promise.all([
+    user.avatarUrl ? loadStockCanvasImage(user.avatarUrl).catch(() => null) : Promise.resolve(null),
+    user.lineQrUrl ? loadStockCanvasImage(user.lineQrUrl).catch(() => null) : Promise.resolve(null)
+  ]);
+  return {
+    name: user.nickname || fullName || "เซลล์",
+    phone: user.phone || "",
+    lineId: user.lineId || "",
+    avatarImage,
+    lineQrImage
+  };
 }
 
 export default function StockExportPage() {
@@ -553,10 +585,11 @@ export default function StockExportPage() {
     const extension = format === "jpeg" ? "jpg" : "png";
     const files: File[] = [];
     const pdfImages: PdfImage[] = [];
+    const contact = await stockExportContactProfile(salesProfile);
 
     for (const group of exportGroups) {
       for (let index = 0; index < group.pages.length; index += 1) {
-        renderStockTableCanvas(canvas, group.pages[index], exportMode, index + 1, group.pages.length, group.name, group.vehicles.length, exportVehicles.length);
+        renderStockTableCanvas(canvas, group.pages[index], exportMode, index + 1, group.pages.length, group.name, group.vehicles.length, exportVehicles.length, contact);
         if (format === "pdf") {
           const jpegBlob = await canvasToBlob(canvas, "image/jpeg", 0.92);
           pdfImages.push({ bytes: new Uint8Array(await jpegBlob.arrayBuffer()), width: canvas.width, height: canvas.height });
@@ -590,7 +623,8 @@ export default function StockExportPage() {
       const canvas = canvasRef.current;
       if (!canvas) throw new Error("Canvas is not ready");
       const firstGroup = exportGroups[0];
-      renderStockTableCanvas(canvas, firstGroup.pages[0] || firstGroup.vehicles, exportMode, 1, Math.max(firstGroup.pages.length, 1), firstGroup.name, firstGroup.vehicles.length, exportVehicles.length);
+      const contact = await stockExportContactProfile(salesProfile);
+      renderStockTableCanvas(canvas, firstGroup.pages[0] || firstGroup.vehicles, exportMode, 1, Math.max(firstGroup.pages.length, 1), firstGroup.name, firstGroup.vehicles.length, exportVehicles.length, contact);
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
       if (!blob || !navigator.clipboard || typeof ClipboardItem === "undefined") throw new Error("เครื่องนี้ยังไม่รองรับ Copy Image");
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
@@ -1405,7 +1439,8 @@ function renderStockTableCanvas(
   totalPages: number,
   groupName: string,
   groupTotal: number,
-  exportTotal: number
+  exportTotal: number,
+  contact: StockExportContact | null = null
 ) {
   const width = 1800;
   const margin = 44;
@@ -1449,7 +1484,8 @@ function renderStockTableCanvas(
   ctx.textAlign = "right";
   ctx.fillStyle = "#111827";
   ctx.font = "800 30px Arial, Tahoma, sans-serif";
-  ctx.fillText(`หน้า ${page}/${totalPages}`, width - margin - 28, 82);
+  ctx.fillText(`หน้า ${page}/${totalPages}`, contact?.lineQrImage || contact?.avatarImage ? width - margin - 132 : width - margin - 28, 82);
+  drawStockExportContact(ctx, contact, width - margin - 28, 42);
 
   const columns =
     mode === "internal"
@@ -1532,7 +1568,11 @@ function renderStockTableCanvas(
   ctx.textAlign = "left";
   ctx.fillStyle = "#6b7280";
   ctx.font = "600 20px Arial, Tahoma, sans-serif";
-  ctx.fillText("Generated from latest stock", margin, height - 22);
+  ctx.fillText(
+    contact ? `ผู้ติดต่อ ${contact.name}${contact.phone ? ` ${contact.phone}` : ""}${contact.lineId ? ` | LINE ${contact.lineId}` : ""}` : "Generated from latest stock",
+    margin,
+    height - 22
+  );
   ctx.textAlign = "right";
   ctx.fillText(`จำนวนรถทั้งหมด ${exportTotal.toLocaleString("th-TH")} คัน`, width - margin, height - 22);
   ctx.textAlign = "left";
@@ -1563,6 +1603,43 @@ function groupVehiclesForExport(vehicles: StockVehicle[]): StockExportGroup[] {
       pages: chunkVehicles(groupVehicles, maxTableItems)
     }))
     .sort((a, b) => b.vehicles.length - a.vehicles.length || a.name.localeCompare(b.name, "th"));
+}
+
+function drawStockExportContact(ctx: CanvasRenderingContext2D, contact: StockExportContact | null, right: number, top: number) {
+  if (!contact) return;
+  const image = contact.lineQrImage || contact.avatarImage;
+  if (!image) return;
+
+  const size = contact.lineQrImage ? 86 : 70;
+  const left = right - size;
+  ctx.save();
+  ctx.fillStyle = "#ffffff";
+  drawRoundedRect(ctx, left - 8, top - 8, size + 16, size + 16, 14);
+  ctx.fill();
+  ctx.strokeStyle = "#d9e1df";
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  if (contact.lineQrImage) {
+    ctx.drawImage(image, left, top, size, size);
+  } else {
+    ctx.beginPath();
+    ctx.arc(left + size / 2, top + size / 2, size / 2, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(image, left, top, size, size);
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#111827";
+  ctx.font = "800 18px Arial, Tahoma, sans-serif";
+  ctx.fillText(contact.name, left - 16, top + 34);
+  ctx.fillStyle = "#64748b";
+  ctx.font = "700 16px Arial, Tahoma, sans-serif";
+  if (contact.phone) ctx.fillText(contact.phone, left - 16, top + 58);
+  if (contact.lineId) ctx.fillText(`LINE ${contact.lineId}`, left - 16, top + 82);
+  ctx.restore();
 }
 
 function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
@@ -1636,5 +1713,15 @@ function drawWrappedCellText(ctx: CanvasRenderingContext2D, text: string, x: num
 
   visibleLines.forEach((line, index) => {
     drawClippedText(ctx, line, x, y + index * lineHeight, maxWidth);
+  });
+}
+
+function loadStockCanvasImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("โหลดรูปโปรไฟล์ไม่สำเร็จ"));
+    image.src = src;
   });
 }
