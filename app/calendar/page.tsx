@@ -1,69 +1,52 @@
 "use client";
 
-import { CalendarDays, Car, Clock3, Phone, Tag, Wrench } from "lucide-react";
+import { CalendarDays, Car, Clock3, Plus, UserRound, Wrench } from "lucide-react";
 import { PageContainer, PageTitle, SectionCard } from "@/app/components/ui";
 
 const taskTypes = [
-  { label: "ส่งมอบรถ", className: "bg-emerald-300", text: "text-emerald-100", border: "border-emerald-300/35" },
-  { label: "นัดลูกค้า", className: "bg-sky-300", text: "text-sky-100", border: "border-sky-300/35" },
-  { label: "Follow-up", className: "bg-amber-300", text: "text-amber-100", border: "border-amber-300/35" },
-  { label: "งานด่วน", className: "bg-red-300", text: "text-red-100", border: "border-red-300/35" },
-  { label: "งานหลังบ้าน", className: "bg-zinc-300", text: "text-zinc-100", border: "border-zinc-300/35" }
+  { label: "นัดส่งมอบ", className: "bg-emerald-300", text: "text-emerald-100", border: "border-emerald-300/35" },
+  { label: "รถกลับอู่", className: "bg-amber-300", text: "text-amber-100", border: "border-amber-300/35" },
+  { label: "นัดลูกค้า", className: "bg-red-300", text: "text-red-100", border: "border-red-300/35" },
+  { label: "อื่นๆ", className: "bg-zinc-200", text: "text-zinc-100", border: "border-zinc-300/35" }
 ];
 
 const todayTasks = [
-  {
-    time: "09:30",
-    title: "โทรติดตามลูกค้า",
-    detail: "Commuter / งบ 1.1M",
-    type: "Follow-up",
-    icon: Phone
-  },
-  {
-    time: "11:00",
-    title: "นัดดูรถ บางนา",
-    detail: "1นค 2797 · VAN",
-    type: "นัดลูกค้า",
-    icon: Car
-  },
-  {
-    time: "14:00",
-    title: "เช็กงานเตรียมรถ",
-    detail: "รอวันรถกลับจากอู่",
-    type: "งานหลังบ้าน",
-    icon: Wrench
-  },
-  {
-    time: "16:30",
-    title: "ส่งมอบรถ",
-    detail: "ตรวจเอกสารและปิดเคส",
-    type: "ส่งมอบรถ",
-    icon: CalendarDays
-  }
+  { time: "09:30", title: "ติดตามลูกค้า", detail: "ลูกค้ามุ่งหวัง / นัดดูรถ", type: "นัดลูกค้า", icon: UserRound },
+  { time: "11:00", title: "รถกลับอู่", detail: "เลือกทะเบียนเพื่อผูกกับงานรถ", type: "รถกลับอู่", icon: Wrench },
+  { time: "15:00", title: "นัดส่งมอบ", detail: "ตรวจเอกสารและปิดเคส", type: "นัดส่งมอบ", icon: Car },
+  { time: "17:00", title: "งานทั่วไป", detail: "งานด่วน / งานหลังบ้าน / อื่นๆ", type: "อื่นๆ", icon: CalendarDays }
 ];
 
 function typeStyle(type: string) {
-  return taskTypes.find((item) => item.label === type) || taskTypes[0];
+  return taskTypes.find((item) => item.label === type) || taskTypes[3];
 }
 
 export default function CalendarPage() {
   return (
     <PageContainer wide>
-      <PageTitle title="ปฏิทิน" subtitle="งานวันนี้ของทีม" />
+      <PageTitle title="ปฏิทิน" subtitle="ปฏิทินเดียวสำหรับงานลูกค้า งานรถ และงานเซลล์" />
 
       <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
-        <SectionCard title="ประเภทงาน" icon={<Tag size={18} />}>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-            {taskTypes.map((type) => (
-              <div key={type.label} className={`flex min-h-12 items-center gap-3 rounded-lg border ${type.border} bg-[#0b0d11] px-3`}>
-                <span className={`h-2.5 w-2.5 rounded-full ${type.className}`} />
-                <span className={`text-sm font-black ${type.text}`}>{type.label}</span>
-              </div>
-            ))}
+        <SectionCard title="สร้างงาน" icon={<Plus size={18} />}>
+          <div className="grid gap-2">
+            <CalendarInput label="ประเภทงาน" value="นัดส่งมอบ / รถกลับอู่ / นัดลูกค้า / อื่นๆ" />
+            <CalendarInput label="ทะเบียน" value="ใช้กับงานรถ เช่น รถกลับอู่ / นัดรับรถ / นัดส่งมอบ" />
+            <CalendarInput label="รายละเอียด" value="ชื่อลูกค้า เวลา สาขา หรือหมายเหตุ" />
           </div>
+          <button type="button" className="min-h-11 rounded-lg bg-brand px-4 text-sm font-black text-ink">
+            เพิ่มงาน
+          </button>
         </SectionCard>
 
         <SectionCard title="งานวันนี้" icon={<CalendarDays size={18} />}>
+          <div className="mb-3 flex flex-wrap gap-2">
+            {taskTypes.map((type) => (
+              <span key={type.label} className={`inline-flex min-h-8 items-center gap-2 rounded-full border ${type.border} px-3 text-xs font-black ${type.text}`}>
+                <span className={`h-2 w-2 rounded-full ${type.className}`} />
+                {type.label}
+              </span>
+            ))}
+          </div>
           <div className="space-y-2">
             {todayTasks.map((task) => {
               const Icon = task.icon;
@@ -93,5 +76,14 @@ export default function CalendarPage() {
         </SectionCard>
       </div>
     </PageContainer>
+  );
+}
+
+function CalendarInput({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3">
+      <p className="text-xs font-bold text-soft">{label}</p>
+      <p className="mt-1 text-sm font-black text-white">{value}</p>
+    </div>
   );
 }

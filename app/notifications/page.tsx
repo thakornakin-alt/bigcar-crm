@@ -9,7 +9,7 @@ const notifications = [
     plate: "ตัวอย่าง",
     customerName: "ลูกค้าจองจริง",
     owner: "เซลล์เจ้าของเคส",
-    detail: "กดเพื่อเปิดหน้าการเตรียมรถ",
+    detail: "กดเพื่อเปิดหน้ารอส่งมอบ",
     href: "/vehicle-prep",
     icon: Wrench,
     tone: "brand"
@@ -25,9 +25,9 @@ const notifications = [
     tone: "amber"
   },
   {
-    title: "พบรถเข้าใหม่ที่ตรงกับลูกค้าหารถ",
+    title: "พบรถเข้าใหม่ที่ตรงกับลูกค้ามุ่งหวัง",
     plate: "หลายคัน",
-    customerName: "ลูกค้าหารถ",
+    customerName: "ลูกค้ามุ่งหวัง",
     owner: "ระบบแนะนำ",
     detail: "แนะนำเท่านั้น ไม่ Auto จองหรือทักลูกค้า",
     href: "/stock-matches",

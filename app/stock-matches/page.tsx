@@ -5,7 +5,7 @@ import { FilterChip, PageContainer, PageTitle, SearchField, SectionCard, TopMenu
 
 const matchCards = [
   {
-    lead: "ตัวอย่างลูกค้าหารถ",
+    lead: "ตัวอย่างลูกค้ามุ่งหวัง",
     interest: "VAN / Commuter",
     vehicle: "TOYOTA COMMUTER 2.8 AT",
     plate: "ตัวอย่าง",
@@ -29,10 +29,10 @@ export default function StockMatchesPage() {
     <PageContainer wide>
       <PageTitle
         title="Smart Stock Matching"
-        subtitle="ช่วยจับคู่ลูกค้าหารถกับรถเข้าใหม่แบบแนะนำเท่านั้น เซลล์เป็นคนตัดสินใจเอง"
+        subtitle="ช่วยจับคู่ลูกค้ามุ่งหวังกับรถเข้าใหม่แบบแนะนำเท่านั้น เซลล์เป็นคนตัดสินใจเอง"
         actions={
           <TopMenuButton href="/leads" icon={<UserRound size={18} />} variant="primary">
-            ลูกค้าหารถ
+            ลูกค้ามุ่งหวัง
           </TopMenuButton>
         }
       />

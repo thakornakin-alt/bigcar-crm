@@ -182,9 +182,6 @@ export default function CaseClosurePage() {
                 ไม่พบเคสในสถานะนี้
               </div>
             )}
-            <div className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm leading-6 text-soft">
-              ตอนนี้อ่านรายงานขายจริงแล้ว แต่ปุ่มปิดเคสยังเป็น UI shell ยังไม่เปลี่ยนสถานะจริงใน Google Sheet
-            </div>
           </SectionCard>
         </section>
       </div>

@@ -1,31 +1,155 @@
 "use client";
 
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { CalendarDays, Car, Phone, Search, Sparkles, Tag, UserRound } from "lucide-react";
+import { CalendarDays, Car, Loader2, Phone, Save, Search, Sparkles, UserRound } from "lucide-react";
 import { FilterChip, PageContainer, PageTitle, SearchField, SectionCard, TopMenuButton } from "@/app/components/ui";
+import type { Customer, StockVehicle } from "@/lib/types";
 
-const leadStages = ["ทั้งหมด", "ต้องโทรติดตาม", "นัดดูรถ", "รอรถตรงรุ่น", "จองแล้ว"];
+type LeadForm = {
+  name: string;
+  phone: string;
+  vehicleGroup: string;
+  budget: string;
+  comment: string;
+};
 
-const sampleLeads = [
-  {
-    name: "ตัวอย่างลูกค้าหารถ",
-    phone: "091-xxx-xxxx",
-    interest: "Commuter / Van",
-    budget: "900,000 - 1,100,000",
-    owner: "เซลล์เจ้าของเคส",
-    stage: "รอรถตรงรุ่น",
-    nextAction: "โทรติดตามวันนี้"
+const blankForm: LeadForm = {
+  name: "",
+  phone: "",
+  vehicleGroup: "",
+  budget: "",
+  comment: ""
+};
+
+const fallbackGroups = ["VAN", "PICK-UP CAB", "PICK-UP D-CAB", "SUV", "SEDAN", "MPV"];
+const leadStages = ["ทั้งหมด", "ใหม่วันนี้", "ต้องโทรติดตาม", "รอรถตรงรุ่น"];
+
+async function api<T>(url: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options?.headers || {})
+    }
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
+
+function normalizeText(value: string) {
+  return String(value || "").toLowerCase().replace(/\s+/g, "");
+}
+
+function mappedVehicleGroup(value: string, groups: string[]) {
+  const raw = String(value || "").trim();
+  const compact = normalizeText(raw);
+  const exact = groups.find((group) => normalizeText(group) === compact);
+  if (exact) return exact;
+
+  if (/(van|รถตู้|commuter|คอมมิวเตอร์|ตู้)/i.test(raw)) return findGroup(groups, ["van"]) || "VAN";
+  if (/(prerunner|ยกสูง|4wd|ขับ4|โฟวิว|โฟร์วิว|กระบะ|revo|รีโว่)/i.test(raw)) {
+    return findGroup(groups, ["pick-up", "pickup", "cab"]) || "PICK-UP CAB";
   }
-];
+  if (/(suv|fortuner|ฟอร์จูน|ppv)/i.test(raw)) return findGroup(groups, ["suv"]) || "SUV";
+  return raw;
+}
 
-const matchHints = ["รุ่นรถ", "ปีรถ", "สี", "งบประมาณ", "ประเภทการซื้อ", "สาขา", "Tag ความสนใจ"];
+function findGroup(groups: string[], keywords: string[]) {
+  return groups.find((group) => {
+    const text = normalizeText(group);
+    return keywords.every((keyword) => text.includes(normalizeText(keyword)));
+  });
+}
+
+function legacyToday() {
+  const now = new Date();
+  return `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+}
 
 export default function LeadsPage() {
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [vehicleGroups, setVehicleGroups] = useState<string[]>(fallbackGroups);
+  const [form, setForm] = useState<LeadForm>(blankForm);
+  const [query, setQuery] = useState("");
+  const [stage, setStage] = useState("ทั้งหมด");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const today = legacyToday();
+  const newTodayCount = customers.filter((customer) => customer.date === today).length;
+
+  const visibleCustomers = useMemo(() => {
+    const term = normalizeText(query);
+    return customers.filter((customer) => {
+      const matchesQuery = !term || normalizeText([customer.name, customer.phone, customer.car, customer.note].join(" ")).includes(term);
+      const matchesStage = stage === "ทั้งหมด" || (stage === "ใหม่วันนี้" ? customer.date === today : true);
+      return matchesQuery && matchesStage;
+    });
+  }, [customers, query, stage, today]);
+
+  async function loadData() {
+    setLoading(true);
+    setError("");
+    try {
+      const [customerData, stockData] = await Promise.all([
+        api<{ customers: Customer[] }>("/api/customers"),
+        api<{ vehicles: StockVehicle[] }>("/api/stock/list?limit=500").catch(() => ({ vehicles: [] }))
+      ]);
+      setCustomers(customerData.customers || []);
+      const stockGroups = Array.from(
+        new Set((stockData.vehicles || []).map((vehicle) => String(vehicle.vehicleGroup || "").trim()).filter(Boolean))
+      ).sort((a, b) => a.localeCompare(b, "th"));
+      setVehicleGroups(stockGroups.length ? stockGroups : fallbackGroups);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "โหลดลูกค้ามุ่งหวังไม่สำเร็จ");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  function update<K extends keyof LeadForm>(key: K, value: LeadForm[K]) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function saveLead(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const vehicleGroup = mappedVehicleGroup(form.vehicleGroup, vehicleGroups);
+    setSaving(true);
+    setMessage("");
+    setError("");
+    try {
+      await api("/api/customers", {
+        method: "POST",
+        body: JSON.stringify({
+          name: form.name,
+          phone: form.phone,
+          car: vehicleGroup,
+          note: [`งบประมาณ: ${form.budget || "-"}`, form.comment].filter(Boolean).join("\n")
+        })
+      });
+      setForm(blankForm);
+      await loadData();
+      setMessage("บันทึกลูกค้ามุ่งหวังแล้ว");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <PageContainer wide>
       <PageTitle
-        title="ลูกค้าหารถ"
-        subtitle="เก็บลูกค้าที่กำลังหารถ รุ่นที่สนใจ งบประมาณ และงานติดตาม"
+        title="ลูกค้ามุ่งหวัง"
+        subtitle="รวมลูกค้าหารถไว้ในเมนูเดียว ใช้กลุ่มรถเดียวกับสต็อก"
         actions={
           <TopMenuButton href="/calendar" icon={<CalendarDays size={18} />} variant="primary">
             ปฏิทิน
@@ -33,65 +157,85 @@ export default function LeadsPage() {
         }
       />
 
+      {(message || error) && (
+        <div className={`mb-4 rounded-lg border px-4 py-3 text-sm font-semibold ${error ? "border-red-400/40 bg-red-950/30 text-red-100" : "border-brand/40 bg-green-950/30 text-green-100"}`}>
+          {error || message}
+        </div>
+      )}
+
+      <section className="mb-4 grid gap-3 sm:grid-cols-2">
+        <SummaryCard label="ลูกค้ามุ่งหวังทั้งหมด" value={`${customers.length.toLocaleString("th-TH")} ราย`} />
+        <SummaryCard label="ลูกค้าใหม่วันนี้" value={`${newTodayCount.toLocaleString("th-TH")} ราย`} />
+      </section>
+
       <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
         <section className="space-y-4">
-          <SectionCard title="ค้นหาและติดตาม" icon={<Search size={18} />}>
-            <SearchField icon={<Search size={18} />} placeholder="ค้นชื่อลูกค้า / เบอร์ / รุ่นที่สนใจ / LINE ID" />
-            <div className="flex flex-wrap gap-2">
-              {leadStages.map((stage, index) => (
-                <FilterChip key={stage} active={index === 0}>
-                  {stage}
-                </FilterChip>
-              ))}
-            </div>
-          </SectionCard>
-
-          <SectionCard title="เพิ่มลูกค้าหารถ" icon={<UserRound size={18} />}>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <InputPreview label="ชื่อลูกค้า" value="ชื่อ / บริษัท" icon={<UserRound size={16} />} />
-              <InputPreview label="เบอร์โทร" value="091-778-5117" icon={<Phone size={16} />} />
-              <InputPreview label="LINE ID" value="@bigcars" icon={<Tag size={16} />} />
-              <InputPreview label="รุ่นที่สนใจ" value="รุ่น / กลุ่มรถ" icon={<Car size={16} />} />
-              <InputPreview label="งบประมาณ" value="ช่วงราคา" icon={<Sparkles size={16} />} />
-              <InputPreview label="ประเภทการซื้อ" value="ซื้อสด / ไฟแนนซ์" icon={<Tag size={16} />} />
-            </div>
-            <div className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm leading-6 text-soft">
-              ใช้สำหรับเก็บลูกค้าที่ยังหารถอยู่ และช่วยติดตามงานต่อเนื่อง
-            </div>
+          <SectionCard title="เพิ่มลูกค้ามุ่งหวัง" icon={<UserRound size={18} />}>
+            <form onSubmit={saveLead} className="space-y-3">
+              <Field label="ชื่อ" value={form.name} onChange={(value) => update("name", value)} icon={<UserRound size={16} />} required />
+              <Field label="เบอร์" value={form.phone} onChange={(value) => update("phone", value)} icon={<Phone size={16} />} inputMode="tel" required />
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">กลุ่มรถยนต์</span>
+                <span className="flex min-h-12 items-center gap-3 rounded-lg border border-line bg-[#0b0d11] px-3 focus-within:border-brand">
+                  <Car size={16} className="text-brand" />
+                  <input
+                    value={form.vehicleGroup}
+                    onChange={(event) => update("vehicleGroup", event.target.value)}
+                    list="lead-vehicle-groups"
+                    placeholder="เช่น รีโว่ยกสูง / Van / Prerunner"
+                    className="h-12 w-full bg-transparent text-white outline-none placeholder:text-[#6f7785]"
+                    required
+                  />
+                </span>
+                <datalist id="lead-vehicle-groups">
+                  {vehicleGroups.map((group) => <option key={group} value={group} />)}
+                </datalist>
+              </label>
+              <Field label="งบประมาณ" value={form.budget} onChange={(value) => update("budget", value)} icon={<Sparkles size={16} />} placeholder="เช่น 800,000 - 1,000,000" />
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">คอมเม้นเพิ่มเติม</span>
+                <textarea
+                  value={form.comment}
+                  onChange={(event) => update("comment", event.target.value)}
+                  rows={4}
+                  placeholder="รายละเอียดที่ต้องติดตาม"
+                  className="min-h-28 w-full rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
+                />
+              </label>
+              <button type="submit" disabled={saving} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 font-black text-ink disabled:opacity-60">
+                {saving ? <Loader2 size={19} className="animate-spin" /> : <Save size={19} />}
+                บันทึกลูกค้ามุ่งหวัง
+              </button>
+            </form>
           </SectionCard>
         </section>
 
         <section className="space-y-4">
-          <SectionCard title="รายการลูกค้าที่ต้องตาม" icon={<UserRound size={18} />}>
-            {sampleLeads.map((lead) => (
-              <div key={lead.name} className="rounded-lg border border-line bg-[#0b0d11] p-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-lg font-black text-white">{lead.name}</p>
-                    <p className="mt-1 text-sm text-soft">{lead.phone} · {lead.interest}</p>
-                    <p className="mt-1 text-xs text-soft">งบประมาณ: {lead.budget}</p>
-                  </div>
-                  <span className="rounded-full border border-brand/40 px-2.5 py-1 text-xs font-black text-brand">{lead.stage}</span>
-                </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <InfoLine label="เจ้าของเคส" value={lead.owner} />
-                  <InfoLine label="งานถัดไป" value={lead.nextAction} />
-                </div>
-              </div>
-            ))}
-          </SectionCard>
-
-          <SectionCard title="Smart Stock Matching" icon={<Sparkles size={18} />}>
-            <p className="text-sm leading-6 text-soft">
-              ระบบจะช่วยแนะนำรถเข้าใหม่ที่ตรงกับลูกค้าเท่านั้น เซลล์ยังเป็นคนตัดสินใจเองทุกครั้ง
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {matchHints.map((hint) => (
-                <div key={hint} className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm font-bold text-white">
-                  {hint}
-                </div>
+          <SectionCard title="ค้นหาและติดตาม" icon={<Search size={18} />}>
+            <SearchField icon={<Search size={18} />} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ค้นชื่อ / เบอร์ / กลุ่มรถ / คอมเม้น" />
+            <div className="flex flex-wrap gap-2">
+              {leadStages.map((item) => (
+                <FilterChip key={item} active={stage === item} onClick={() => setStage(item)}>
+                  {item}
+                </FilterChip>
               ))}
             </div>
+            {loading ? (
+              <div className="flex min-h-32 items-center justify-center rounded-lg border border-line bg-[#0b0d11] text-soft">
+                <Loader2 size={22} className="mr-2 animate-spin text-brand" />
+                Loading
+              </div>
+            ) : visibleCustomers.length ? (
+              <div className="space-y-2">
+                {visibleCustomers.map((customer) => (
+                  <LeadCard key={`${customer.no}-${customer.rowIndex}`} customer={customer} />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-line bg-[#0b0d11] px-4 py-8 text-center text-soft">
+                ไม่พบลูกค้ามุ่งหวัง
+              </div>
+            )}
           </SectionCard>
         </section>
       </div>
@@ -99,23 +243,63 @@ export default function LeadsPage() {
   );
 }
 
-function InputPreview({ label, value, icon }: { label: string; value: string; icon: ReactNode }) {
+function Field({
+  label,
+  value,
+  onChange,
+  icon,
+  placeholder,
+  required,
+  inputMode
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  icon: ReactNode;
+  placeholder?: string;
+  required?: boolean;
+  inputMode?: "text" | "tel";
+}) {
   return (
-    <div className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3">
-      <p className="mb-1 flex items-center gap-2 text-xs font-bold text-soft">
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">{label}</span>
+      <span className="flex min-h-12 items-center gap-3 rounded-lg border border-line bg-[#0b0d11] px-3 focus-within:border-brand">
         <span className="text-brand">{icon}</span>
-        {label}
-      </p>
-      <p className="text-sm font-black text-white">{value}</p>
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          required={required}
+          inputMode={inputMode}
+          type="text"
+          className="h-12 w-full bg-transparent text-white outline-none placeholder:text-[#6f7785]"
+        />
+      </span>
+    </label>
+  );
+}
+
+function LeadCard({ customer }: { customer: Customer }) {
+  return (
+    <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-lg font-black text-white">{customer.name}</p>
+          <p className="mt-1 text-sm text-soft">{customer.phone} · {customer.car}</p>
+          <p className="mt-1 text-xs text-soft">วันที่บันทึก: {customer.date || "-"}</p>
+        </div>
+        <span className="rounded-full border border-brand/40 px-2.5 py-1 text-xs font-black text-brand">Lead</span>
+      </div>
+      {customer.note && <p className="mt-3 whitespace-pre-line rounded-lg border border-line bg-black/20 px-3 py-2 text-sm leading-6 text-soft">{customer.note}</p>}
     </div>
   );
 }
 
-function InfoLine({ label, value }: { label: string; value: string }) {
+function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-line bg-black/20 px-3 py-2">
-      <p className="text-xs text-soft">{label}</p>
-      <p className="mt-1 text-sm font-bold text-white">{value}</p>
+    <div className="rounded-lg border border-line bg-panel p-4 shadow-glow">
+      <p className="text-xs font-bold uppercase tracking-[0.12em] text-soft">{label}</p>
+      <p className="mt-2 text-2xl font-black text-white">{value}</p>
     </div>
   );
 }

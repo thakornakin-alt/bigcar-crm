@@ -481,12 +481,12 @@ export default function ApprovalFormsPage() {
               </div>
               {lookupDebug && (
                 <div className="mt-3 rounded-lg border border-line bg-[#080a0d] p-3 text-xs text-soft">
-                  <p className="font-semibold text-white">ตรวจข้อมูลที่ระบบดึงกลับมา</p>
+                  <p className="font-semibold text-white">ข้อมูลที่พบ</p>
                   <div className="mt-2 grid gap-1">
-                    <p>เจอ Stock: <span className="text-white">{lookupDebug.vehicle ? "ใช่" : "ไม่เจอ"}</span></p>
+                    <p>ข้อมูลสต็อก: <span className="text-white">{lookupDebug.vehicle ? "พบ" : "ไม่พบ"}</span></p>
                     <p>เลขตัวถัง/Vin: <span className="break-all text-white">{lookupDebug.vehicle?.vin || "-"}</span></p>
                     <p>รุ่น: <span className="text-white">{lookupDebug.vehicle?.model || "-"}</span></p>
-                    <p>เจอ Booking: <span className="text-white">{lookupDebug.booking ? "ใช่" : "ไม่เจอ"}</span></p>
+                    <p>ข้อมูลจอง: <span className="text-white">{lookupDebug.booking ? "พบ" : "ไม่พบ"}</span></p>
                   </div>
                 </div>
               )}

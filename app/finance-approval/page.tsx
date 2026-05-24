@@ -1,8 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, FileText, FileUp, Loader2, RefreshCw, Search, ShieldCheck, UploadCloud } from "lucide-react";
+import { CheckCircle2, FileUp, Loader2, RefreshCw, Search, UploadCloud } from "lucide-react";
 import { FilterChip, PageContainer, PageTitle, SearchField, SectionCard, TopMenuButton } from "@/app/components/ui";
 import type { ReportHistoryItem } from "@/lib/types";
 
@@ -16,14 +15,6 @@ type FinanceCase = {
   status: "รอผลไฟแนนซ์";
   booking: ReportHistoryItem;
 };
-
-const rules = [
-  "แสดงเฉพาะเคสไฟแนนซ์ที่ยังรอผล",
-  "ไม่แสดงเคสซื้อสด",
-  "ไม่แสดงเคสที่มีรายงานขายแล้ว",
-  "ไม่แสดงเคสปิดแล้วหรืออยู่ในถังขยะ",
-  "เมื่ออนุมัติแล้วจึงส่งเข้า การเตรียมรถ"
-];
 
 async function api<T>(url: string): Promise<T> {
   const response = await fetch(url, { cache: "no-store" });
@@ -86,6 +77,7 @@ export default function FinanceApprovalPage() {
   const [reports, setReports] = useState<ReportHistoryItem[]>([]);
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [manualPlate, setManualPlate] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -123,8 +115,8 @@ export default function FinanceApprovalPage() {
   return (
     <PageContainer wide>
       <PageTitle
-        title="อัปโหลดใบอนุมัติไฟแนนซ์"
-        subtitle="ดึงจากรายงานจองจริงและแสดงเฉพาะเคสไฟแนนซ์ที่ยังรอผล ยังไม่เปลี่ยนสถานะจริงจนกว่าจะต่อ logic บันทึก"
+        title="รอผลไฟแนนซ์"
+        subtitle="เพิ่มใบอนุมัติ PO แล้วเลือกทะเบียนที่เกี่ยวข้อง"
         actions={
           <>
             <button
@@ -136,7 +128,7 @@ export default function FinanceApprovalPage() {
               Refresh
             </button>
             <TopMenuButton href="/vehicle-prep" icon={<CheckCircle2 size={18} />} variant="primary">
-              การเตรียมรถ
+              รอส่งมอบ
             </TopMenuButton>
           </>
         }
@@ -156,22 +148,20 @@ export default function FinanceApprovalPage() {
             <div className="rounded-lg border border-dashed border-brand/40 bg-brand/10 px-4 py-6 text-center">
               <FileUp size={28} className="mx-auto text-brand" />
               <p className="mt-3 text-lg font-black text-white">เพิ่มไฟล์ใบอนุมัติ</p>
-              <p className="mt-1 text-sm leading-6 text-soft">รองรับ PDF / รูปภาพ / เอกสารไฟแนนซ์ในอนาคต</p>
+              <p className="mt-1 text-sm leading-6 text-soft">PDF / รูปภาพ / เอกสารไฟแนนซ์</p>
               <button type="button" className="mt-4 min-h-11 rounded-lg bg-brand px-4 text-sm font-black text-ink">
                 เลือกไฟล์
               </button>
             </div>
-            <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm leading-6 text-soft">
-              ตอนนี้ผูกรายการทะเบียนจริงแล้ว แต่ปุ่มอัปโหลดและเปลี่ยนสถานะยังเป็น UI shell เพื่อไม่กระทบ Drive/Google Sheet เดิม
-            </p>
-          </SectionCard>
-
-          <SectionCard title="กฎการแสดงทะเบียน" icon={<ShieldCheck size={18} />}>
-            <div className="grid gap-2">
-              {rules.map((rule) => (
-                <RuleItem key={rule}>{rule}</RuleItem>
-              ))}
-            </div>
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">หรือระบุทะเบียนเอง</span>
+              <input
+                value={manualPlate}
+                onChange={(event) => setManualPlate(event.target.value)}
+                placeholder="เช่น 1ขห 9832"
+                className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
+              />
+            </label>
           </SectionCard>
         </section>
 
@@ -186,7 +176,7 @@ export default function FinanceApprovalPage() {
             <div className="flex flex-wrap gap-2">
               <FilterChip active>รอผลไฟแนนซ์</FilterChip>
               <FilterChip disabled>อนุมัติแล้ว</FilterChip>
-              <FilterChip disabled>ไม่ผ่านไฟแนนซ์</FilterChip>
+              <FilterChip disabled>ไม่ผ่าน</FilterChip>
             </div>
             {loading ? (
               <div className="flex min-h-32 items-center justify-center rounded-lg border border-line bg-[#0b0d11] text-soft">
@@ -254,15 +244,6 @@ function InfoBox({ label, value }: { label: string; value: string }) {
     <div className="rounded-lg border border-line bg-black/20 px-3 py-2">
       <p className="text-xs text-soft">{label}</p>
       <p className="mt-1 text-sm font-black text-white">{value}</p>
-    </div>
-  );
-}
-
-function RuleItem({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm font-bold text-white">
-      <CheckCircle2 size={16} className="text-brand" />
-      {children}
     </div>
   );
 }

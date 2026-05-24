@@ -4,7 +4,7 @@ import { CalendarDays, Camera, FileSignature, PhoneCall, UserRound } from "lucid
 import { FilterChip, PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
 
 const frontOfficeTasks = [
-  { time: "09:30", title: "โทรติดตามลูกค้า", detail: "ลูกค้าหารถ / รุ่นที่สนใจ", icon: PhoneCall },
+  { time: "09:30", title: "โทรติดตามลูกค้า", detail: "ลูกค้ามุ่งหวัง / รุ่นที่สนใจ", icon: PhoneCall },
   { time: "11:00", title: "นัดดูรถ", detail: "เปิดจากเคสลูกค้า", icon: UserRound },
   { time: "14:00", title: "ถ่ายรูปส่งลูกค้า", detail: "งานหน้าบ้านเท่านั้น", icon: Camera },
   { time: "16:00", title: "นัดเซ็นเอกสาร", detail: "เชื่อมรายงานจองในอนาคต", icon: FileSignature }
@@ -18,7 +18,7 @@ export default function FrontOfficeCalendarPage() {
         subtitle="ใช้สำหรับงานลูกค้า นัดหมาย และ Follow-up เท่านั้น แยกจากงานเตรียมรถหลังบ้าน"
         actions={
           <TopMenuButton href="/leads" icon={<UserRound size={18} />} variant="primary">
-            ลูกค้าหารถ
+            ลูกค้ามุ่งหวัง
           </TopMenuButton>
         }
       />

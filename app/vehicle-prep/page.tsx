@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Car, CheckCircle2, FileImage, Loader2, RefreshCw, Wrench } from "lucide-react";
+import { CalendarDays, Car, CheckCircle2, Download, Loader2, RefreshCw, Wrench } from "lucide-react";
 import { FilterChip, PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
 import type { ReportHistoryItem } from "@/lib/types";
 
@@ -19,14 +19,14 @@ type VehiclePrepCase = {
   paymentMode: PaymentMode;
   paymentLabel: string;
   financeStatus: string;
-  prepStatus: "ต้องเตรียมรถ" | "รอผลไฟแนนซ์";
+  prepStatus: "รอส่งมอบ" | "รอผลไฟแนนซ์";
   deliveryDate: string;
   booking: ReportHistoryItem;
   sales?: ReportHistoryItem;
   badges: string[];
 };
 
-const checklist = ["รูปใบเคลม", "รูปลอกลาย", "วันสั่งงาน", "วันรถไปอู่", "วันรถกลับ", "นัดรับรถ", "คาดการณ์วันรถกลับ", "เงื่อนไขการขาย"];
+const checklist = ["ลอกลาย", "สปารถ", "เปลี่ยนน้ำมันเครื่อง", "ล้างรถ"];
 
 async function api<T>(url: string): Promise<T> {
   const response = await fetch(url, { cache: "no-store" });
@@ -92,12 +92,12 @@ function buildPrepCases(reports: ReportHistoryItem[]): VehiclePrepCase[] {
       const deliveryDate = sales ? extractLineValue(sales.reportText, ["วันรับรถ"]) : "";
       const branch = sales ? extractLineValue(sales.reportText, ["สาขา"]) : "";
       const isFinanceWaiting = paymentMode === "finance" && !sales;
-      const prepStatus: VehiclePrepCase["prepStatus"] = isFinanceWaiting ? "รอผลไฟแนนซ์" : "ต้องเตรียมรถ";
+      const prepStatus: VehiclePrepCase["prepStatus"] = isFinanceWaiting ? "รอผลไฟแนนซ์" : "รอส่งมอบ";
       const badges = [
         paymentLabel(paymentMode),
         sales ? "มีรายงานขายแล้ว" : "ยังไม่มีรายงานขาย",
         deliveryDate ? `นัดรับรถ ${deliveryDate}` : "ยังไม่ได้นัดรับรถ",
-        isFinanceWaiting ? "รอใบอนุมัติไฟแนนซ์" : "พร้อมติดตามงานเตรียมรถ"
+        isFinanceWaiting ? "รอใบอนุมัติไฟแนนซ์" : "รอส่งมอบ"
       ];
 
       return {
@@ -109,7 +109,7 @@ function buildPrepCases(reports: ReportHistoryItem[]): VehiclePrepCase[] {
         branch: branch || "-",
         paymentMode,
         paymentLabel: paymentLabel(paymentMode),
-        financeStatus: isFinanceWaiting ? "รอผลไฟแนนซ์" : "พร้อมเตรียมรถ",
+        financeStatus: isFinanceWaiting ? "รอผลไฟแนนซ์" : "รอส่งมอบ",
         prepStatus,
         deliveryDate: deliveryDate || "-",
         booking,
@@ -123,11 +123,12 @@ function buildPrepCases(reports: ReportHistoryItem[]): VehiclePrepCase[] {
 export default function VehiclePrepPage() {
   const [reports, setReports] = useState<ReportHistoryItem[]>([]);
   const [filter, setFilter] = useState<PrepFilter>("ready");
+  const [expandedId, setExpandedId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const cases = useMemo(() => buildPrepCases(reports), [reports]);
-  const readyCases = cases.filter((item) => item.prepStatus === "ต้องเตรียมรถ");
+  const readyCases = cases.filter((item) => item.prepStatus === "รอส่งมอบ");
   const financeWaitingCases = cases.filter((item) => item.prepStatus === "รอผลไฟแนนซ์");
   const visibleCases = filter === "ready" ? readyCases : filter === "finance_waiting" ? financeWaitingCases : cases;
 
@@ -152,8 +153,8 @@ export default function VehiclePrepPage() {
   return (
     <PageContainer wide>
       <PageTitle
-        title="การเตรียมรถ"
-        subtitle="งานเตรียมส่งมอบ"
+        title="รอส่งมอบ"
+        subtitle="ทะเบียนที่ต้องติดตามจนส่งมอบเสร็จ"
         actions={
           <>
             <button
@@ -164,8 +165,8 @@ export default function VehiclePrepPage() {
               {loading ? <Loader2 size={17} className="animate-spin text-brand" /> : <RefreshCw size={17} className="text-brand" />}
               Refresh
             </button>
-            <TopMenuButton href="/case-closure" icon={<CheckCircle2 size={18} />} variant="primary">
-              ปิดเคส
+            <TopMenuButton href="/calendar" icon={<CalendarDays size={18} />} variant="primary">
+              ปฏิทิน
             </TopMenuButton>
           </>
         }
@@ -174,20 +175,17 @@ export default function VehiclePrepPage() {
       {error && <div className="mb-4 rounded-lg border border-amber-300/40 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">{error}</div>}
 
       <section className="mb-4 grid gap-3 sm:grid-cols-3">
-        <SummaryCard label="ต้องเตรียมรถ" value={`${readyCases.length.toLocaleString("th-TH")} คัน`} />
-        <SummaryCard label="รอไฟแนนซ์" value={`${financeWaitingCases.length.toLocaleString("th-TH")} คัน`} />
-        <SummaryCard label="รายงานจอง Active" value={`${cases.length.toLocaleString("th-TH")} เคส`} />
+        <SummaryCard label="รอส่งมอบ" value={`${readyCases.length.toLocaleString("th-TH")} คัน`} />
+        <SummaryCard label="รอผลไฟแนนซ์" value={`${financeWaitingCases.length.toLocaleString("th-TH")} คัน`} />
+        <SummaryCard label="เคส Active" value={`${cases.length.toLocaleString("th-TH")} เคส`} />
       </section>
 
       <div className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
-        <SectionCard title="สถานะเตรียมรถ" icon={<Wrench size={18} />}>
+        <SectionCard title="รายการรอส่งมอบ" icon={<Wrench size={18} />}>
           <div className="flex flex-wrap gap-2">
-            <FilterChip active={filter === "ready"} onClick={() => setFilter("ready")}>ต้องเตรียมรถ</FilterChip>
+            <FilterChip active={filter === "ready"} onClick={() => setFilter("ready")}>รอส่งมอบ</FilterChip>
             <FilterChip active={filter === "finance_waiting"} onClick={() => setFilter("finance_waiting")}>รอผลไฟแนนซ์</FilterChip>
             <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>ทั้งหมด</FilterChip>
-          </div>
-          <div className="rounded-lg border border-amber-300/35 bg-amber-300/10 px-3 py-3 text-sm leading-6 text-amber-100">
-            รถไฟแนนซ์ที่ยังไม่มีรายงานขาย/อนุมัติ จะไม่ขึ้นปนใน “ต้องเตรียมรถ” เพื่อไม่บังคับเตรียมรถเร็วเกินจริง
           </div>
 
           {loading ? (
@@ -196,7 +194,14 @@ export default function VehiclePrepPage() {
               Loading
             </div>
           ) : visibleCases.length ? (
-            visibleCases.map((item) => <PrepCaseCard key={`${item.id}-${item.plate}`} item={item} />)
+            visibleCases.map((item) => (
+              <PrepCaseCard
+                key={`${item.id}-${item.plate}`}
+                item={item}
+                expanded={expandedId === item.id}
+                onToggle={() => setExpandedId((current) => current === item.id ? "" : item.id)}
+              />
+            ))
           ) : (
             <div className="rounded-lg border border-line bg-[#0b0d11] px-4 py-8 text-center text-soft">
               ยังไม่มีรถในสถานะนี้จากรายงานจอง
@@ -204,7 +209,7 @@ export default function VehiclePrepPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="Checklist งานเตรียมรถ" icon={<CheckCircle2 size={18} />}>
+        <SectionCard title="Preview งานส่งมอบ" icon={<CheckCircle2 size={18} />}>
           <div className="grid gap-2 sm:grid-cols-2">
             {checklist.map((item) => (
               <div key={item} className="flex min-h-12 items-center gap-3 rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-bold text-white">
@@ -216,12 +221,9 @@ export default function VehiclePrepPage() {
             ))}
           </div>
           <div className="grid gap-2 sm:grid-cols-3">
-            <InfoTile icon={<CalendarDays size={18} />} label="ปฏิทินหลังบ้าน" value="เชื่อมงานอู่/รถกลับ" />
-            <InfoTile icon={<FileImage size={18} />} label="รูปงานเคลม" value="เตรียมรองรับอัปโหลด" />
+            <InfoTile icon={<CalendarDays size={18} />} label="ปฏิทินใหญ่" value="รถกลับ / นัดรับ / ส่งมอบ" />
+            <InfoTile icon={<Download size={18} />} label="Export PNG" value="สรุปงานส่งมอบ" />
             <InfoTile icon={<Car size={18} />} label="ปิดเคส" value="หลังส่งมอบแล้ว" />
-          </div>
-          <div className="rounded-lg border border-brand/30 bg-brand/10 px-3 py-3 text-sm leading-6 text-brand">
-            ตอนนี้หน้านี้อ่านข้อมูลจริงจากรายงานจอง/รายงานขายแล้ว แต่ยังไม่เขียนสถานะใหม่ลง Google Sheet
           </div>
         </SectionCard>
       </div>
@@ -229,32 +231,46 @@ export default function VehiclePrepPage() {
   );
 }
 
-function PrepCaseCard({ item }: { item: VehiclePrepCase }) {
+function PrepCaseCard({ item, expanded, onToggle }: { item: VehiclePrepCase; expanded: boolean; onToggle: () => void }) {
   return (
     <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-lg font-black text-white">{item.plate}</p>
-          <p className="mt-1 text-sm text-soft">{item.model} · {item.customerName}</p>
-          <p className="mt-1 text-xs text-soft">เจ้าของเคส: {item.owner || "-"}</p>
+          <p className="mt-1 text-sm text-soft">{item.customerName}</p>
         </div>
-        <span className={`rounded-full border px-2.5 py-1 text-xs font-black ${item.prepStatus === "ต้องเตรียมรถ" ? "border-brand/40 text-brand" : "border-amber-300/40 text-amber-100"}`}>
+        <span className={`rounded-full border px-2.5 py-1 text-xs font-black ${item.prepStatus === "รอส่งมอบ" ? "border-brand/40 text-brand" : "border-amber-300/40 text-amber-100"}`}>
           {item.financeStatus}
         </span>
       </div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <InfoRow label="ประเภทการซื้อ" value={item.paymentLabel} />
-        <InfoRow label="วันรับรถ" value={item.deliveryDate} />
-        <InfoRow label="สาขา" value={item.branch} />
-        <InfoRow label="รายงานขาย" value={item.sales ? "พบแล้ว" : "ยังไม่มี"} />
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {item.badges.map((badge) => (
-          <span key={badge} className="rounded-full border border-amber-300/35 px-2.5 py-1 text-xs font-bold text-amber-100">
-            {badge}
-          </span>
-        ))}
-      </div>
+      <button type="button" onClick={onToggle} className="mt-3 min-h-10 w-full rounded-lg border border-line bg-panel px-3 text-sm font-black text-white">
+        {expanded ? "ซ่อนรายละเอียด" : "ดูรายละเอียด"}
+      </button>
+      {expanded && (
+        <>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <InfoRow label="รุ่นรถ" value={item.model} />
+            <InfoRow label="ประเภทการซื้อ" value={item.paymentLabel} />
+            <InfoRow label="วันส่งอู่" value="-" />
+            <InfoRow label="วันรถกลับจากอู่" value="-" />
+            <InfoRow label="วันนัดส่งมอบ" value={item.deliveryDate} />
+            <InfoRow label="แจ้งเตือนปฏิทิน" value="เชื่อมปฏิทินใหญ่" />
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {checklist.map((item) => (
+              <label key={item} className="flex min-h-10 items-center gap-2 rounded-lg border border-line bg-black/20 px-3 text-sm font-bold text-white">
+                <input type="checkbox" className="h-4 w-4 accent-brand" />
+                {item}
+              </label>
+            ))}
+          </div>
+          <textarea
+            rows={3}
+            placeholder="อื่นๆ"
+            className="mt-3 min-h-20 w-full rounded-lg border border-line bg-black/20 px-3 py-2 text-sm text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
+          />
+        </>
+      )}
     </div>
   );
 }

@@ -18,7 +18,7 @@ export default function BackOfficeCalendarPage() {
         subtitle="ใช้สำหรับงานเตรียมรถ งานอู่ เคลม ลอกลาย รถกลับ และนัดรับรถ ไม่ปนกับงานลูกค้า"
         actions={
           <TopMenuButton href="/vehicle-prep" icon={<Wrench size={18} />} variant="primary">
-            การเตรียมรถ
+            รอส่งมอบ
           </TopMenuButton>
         }
       />
@@ -33,7 +33,7 @@ export default function BackOfficeCalendarPage() {
             <FilterChip>งานค้าง</FilterChip>
           </div>
           <div className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm leading-6 text-soft">
-            หน้านี้เตรียมเชื่อมกับ การเตรียมรถ, Dashboard งานวันนี้ และ Notification Bell
+            หน้านี้เตรียมเชื่อมกับ รอส่งมอบ, Dashboard งานวันนี้ และ Notification Bell
           </div>
         </SectionCard>
 

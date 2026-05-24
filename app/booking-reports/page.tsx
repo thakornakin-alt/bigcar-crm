@@ -1051,7 +1051,7 @@ function PaymentWorkflowHint({ mode }: { mode: "cash" | "finance" | "unset" }) {
   if (mode === "cash") {
     return (
       <div className="rounded-lg border border-brand/35 bg-brand/10 px-3 py-3 text-sm leading-6 text-brand">
-        ซื้อสด: หลังมีรายงานจองแล้ว รถคันนี้ควรเข้า “การเตรียมรถ” ได้ทันที โดยยังไม่บังคับใส่วันรับรถ
+        ซื้อสด: หลังมีรายงานจองแล้ว รถคันนี้เข้า “รอส่งมอบ” ได้ทันที
       </div>
     );
   }
@@ -1059,7 +1059,7 @@ function PaymentWorkflowHint({ mode }: { mode: "cash" | "finance" | "unset" }) {
   if (mode === "finance") {
     return (
       <div className="rounded-lg border border-amber-300/35 bg-amber-300/10 px-3 py-3 text-sm leading-6 text-amber-100">
-        ไฟแนนซ์: เคสนี้ควรอยู่สถานะ “รอผลไฟแนนซ์” ก่อน ยังไม่ส่งเข้า “ต้องเตรียมรถ” จนกว่าจะอัปโหลดใบอนุมัติ
+        ไฟแนนซ์: เคสนี้อยู่ “รอผลไฟแนนซ์” ก่อน จนกว่าจะอัปโหลดใบอนุมัติ
       </div>
     );
   }
