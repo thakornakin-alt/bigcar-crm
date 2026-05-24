@@ -24,6 +24,7 @@ import { PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/comp
 import { bookingLineGroupStorageKey, defaultSystemSettings, readSystemSettings } from "@/lib/client-settings";
 import { normalizeCarYear } from "@/lib/format";
 import { useSalesProfile } from "@/lib/use-sales-profile";
+import { appendSalesProfileSignature } from "@/lib/sales-profile-signature";
 import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, DriveAttachment, DriveUploadResult, LineGroup, StockVehicle } from "@/lib/types";
 
 const saleEmails: Record<string, string> = {
@@ -183,7 +184,10 @@ export default function BookingReportsPage() {
   const [selectedLineGroupId, setSelectedLineGroupId] = useState("");
   const [sendingLine, setSendingLine] = useState(false);
 
-  const reportText = useMemo(() => renderBookingReport({ ...form, reportText: "" }), [form]);
+  const reportText = useMemo(
+    () => appendSalesProfileSignature(renderBookingReport({ ...form, reportText: "" }), salesProfile),
+    [form, salesProfile]
+  );
   const senderEmail = saleEmails[form.saleName] || "";
   const companyWarning = form.buyerType === "company" && attachmentFiles.companyCertificate.length === 0;
   const saleOptions = useMemo(() => uniqueOptions([salesProfile?.firstName || "", blankForm.saleName, "กันตา"]), [salesProfile?.firstName]);

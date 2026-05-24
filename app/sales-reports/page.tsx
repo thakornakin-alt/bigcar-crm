@@ -7,6 +7,7 @@ import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
 import { defaultSystemSettings, readSystemSettings, salesLineGroupStorageKey } from "@/lib/client-settings";
 import { normalizeCarYear } from "@/lib/format";
 import { useSalesProfile } from "@/lib/use-sales-profile";
+import { appendSalesProfileSignature } from "@/lib/sales-profile-signature";
 import type { BookingAttachment, BookingReport, DriveAttachment, DriveUploadResult, LineGroup, SalesReportInput } from "@/lib/types";
 
 type SalesAttachmentCategory =
@@ -220,7 +221,10 @@ export default function SalesReportsPage() {
   const [selectedLineGroupId, setSelectedLineGroupId] = useState("");
   const [sendingLine, setSendingLine] = useState(false);
 
-  const reportText = useMemo(() => renderSalesReport({ ...form, reportText: "" }), [form]);
+  const reportText = useMemo(
+    () => appendSalesProfileSignature(renderSalesReport({ ...form, reportText: "" }), salesProfile),
+    [form, salesProfile]
+  );
   const suggestedEmailSubject = useMemo(
     () => ["รายงานขาย", form.customerName, form.model, form.plate].filter(Boolean).join(" - "),
     [form.customerName, form.model, form.plate]
