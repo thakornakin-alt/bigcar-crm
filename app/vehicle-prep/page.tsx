@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { CalendarDays, Car, CheckCircle2, FileImage, Wrench } from "lucide-react";
-import { FilterChip, PageContainer, PageTitle, SectionCard } from "@/app/components/ui";
+import { FilterChip, PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
 
 const prepItems = [
   {
@@ -24,6 +24,11 @@ export default function VehiclePrepPage() {
       <PageTitle
         title="การเตรียมรถ"
         subtitle="ศูนย์กลางงานเตรียมส่งมอบ แสดงเฉพาะซื้อสดที่จองแล้ว หรือไฟแนนซ์ที่อนุมัติแล้ว"
+        actions={
+          <TopMenuButton href="/case-closure" icon={<CheckCircle2 size={18} />} variant="primary">
+            ปิดเคส
+          </TopMenuButton>
+        }
       />
 
       <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
@@ -73,6 +78,9 @@ export default function VehiclePrepPage() {
             <InfoTile icon={<CalendarDays size={18} />} label="ปฏิทินหลังบ้าน" value="เชื่อมงานอู่/รถกลับ" />
             <InfoTile icon={<FileImage size={18} />} label="รูปงานเคลม" value="เตรียมรองรับอัปโหลด" />
             <InfoTile icon={<Car size={18} />} label="ปิดเคส" value="หลังส่งมอบแล้ว" />
+          </div>
+          <div className="rounded-lg border border-brand/30 bg-brand/10 px-3 py-3 text-sm leading-6 text-brand">
+            เมื่อส่งมอบแล้ว ให้ไปปิดเคสเพื่อไม่ให้รถคันนั้นขึ้นในงาน Active หรือแจ้งเตือนอีก
           </div>
         </SectionCard>
       </div>

@@ -211,6 +211,7 @@ export default function Home() {
             <TopMenuButton href="/finance-approval" icon={<FileText size={18} />}>อัปโหลดใบอนุมัติไฟแนนซ์</TopMenuButton>
             <TopMenuButton href="/front-office-calendar" icon={<CalendarDays size={18} />}>ปฏิทินหน้าบ้าน</TopMenuButton>
             <TopMenuButton href="/back-office-calendar" icon={<CalendarDays size={18} />}>ปฏิทินหลังบ้าน</TopMenuButton>
+            <TopMenuButton href="/case-closure" icon={<Check size={18} />}>ปิดเคส / ส่งมอบแล้ว</TopMenuButton>
           </div>
         </SectionCard>
 
@@ -220,6 +221,7 @@ export default function Home() {
           <StatusLink href="/vehicle-prep" label="รถต้องเตรียม" value="ดูที่การเตรียมรถ" />
           <StatusLink href="/finance-approval" label="รอไฟแนนซ์" value="ดูที่อัปโหลดใบอนุมัติ" />
           <StatusLink href="/notifications" label="งานวันนี้" value="แยกหน้าบ้าน/หลังบ้าน" />
+          <StatusLink href="/case-closure" label="ส่งมอบแล้ว" value="ปิดเคส/ย้อนหลัง" />
         </SectionCard>
       </section>
 
