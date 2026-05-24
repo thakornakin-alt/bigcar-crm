@@ -3,6 +3,7 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, Clipboard, Eraser, FileText, Loader2, Search, Save, Send, X } from "lucide-react";
+import { useSalesProfile } from "@/lib/use-sales-profile";
 import type { ApprovalBooking, ApprovalStaff, ApprovalStockVehicle, LineGroup } from "@/lib/types";
 
 type FormType =
@@ -213,6 +214,7 @@ ${plateLines}
 }
 
 export default function ApprovalFormsPage() {
+  const { user: salesProfile } = useSalesProfile();
   const [form, setForm] = useState<ApprovalForm>(blankForm);
   const [staff, setStaff] = useState<ApprovalStaff[]>([]);
   const [lineGroups, setLineGroups] = useState<LineGroup[]>([]);
@@ -229,7 +231,20 @@ export default function ApprovalFormsPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  const preview = useMemo(() => buildMessage(form, staff), [form, staff]);
+  const staffWithProfile = useMemo(() => {
+    if (!salesProfile) return staff;
+    const nickname = salesProfile.nickname || salesProfile.firstName || blankForm.saleName;
+    const profileStaff: ApprovalStaff = {
+      nickname,
+      fullName: [salesProfile.firstName, salesProfile.lastName].filter(Boolean).join(" ").trim() || nickname,
+      phone: salesProfile.phone,
+      team: "พี่ลีฟ",
+      branch: salesProfile.branch || blankForm.branch
+    };
+    return [profileStaff, ...staff.filter((item) => item.nickname !== nickname)];
+  }, [salesProfile, staff]);
+
+  const preview = useMemo(() => buildMessage(form, staffWithProfile), [form, staffWithProfile]);
 
   useEffect(() => {
     api<{ staff: ApprovalStaff[] }>("/api/approval/staff")
@@ -242,6 +257,19 @@ export default function ApprovalFormsPage() {
       })
       .catch(() => setLineGroups([]));
   }, []);
+
+  useEffect(() => {
+    if (!salesProfile) return;
+    setForm((current) => ({
+      ...current,
+      saleName:
+        !current.saleName || current.saleName === blankForm.saleName
+          ? salesProfile.nickname || salesProfile.firstName || current.saleName
+          : current.saleName,
+      branch: current.branch || salesProfile.branch || blankForm.branch,
+      location: current.location || salesProfile.branch || blankForm.location
+    }));
+  }, [salesProfile]);
 
   function update<K extends keyof ApprovalForm>(field: K, value: ApprovalForm[K]) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -377,7 +405,13 @@ export default function ApprovalFormsPage() {
   }
 
   function clearForm() {
-    setForm({ ...blankForm, formType: form.formType });
+    setForm({
+      ...blankForm,
+      formType: form.formType,
+      saleName: salesProfile?.nickname || salesProfile?.firstName || blankForm.saleName,
+      branch: salesProfile?.branch || blankForm.branch,
+      location: salesProfile?.branch || blankForm.location
+    });
     setLookupStatus("");
     setLookupDebug(null);
     setMessage("");
@@ -390,7 +424,11 @@ export default function ApprovalFormsPage() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
           <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">ฟอร์มอนุมัติ</h1>
-          <p className="mt-1 text-sm text-soft">Generate ข้อความสำหรับ LINE พร้อมบันทึกประวัติแบบ Draft / Preview</p>
+          <p className="mt-1 text-sm text-soft">
+            {salesProfile
+              ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname} (${salesProfile.phone})`
+              : "Generate ข้อความสำหรับ LINE พร้อมบันทึกประวัติแบบ Draft / Preview"}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/report-history" className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white">
@@ -457,7 +495,7 @@ export default function ApprovalFormsPage() {
             <Panel title="ข้อมูลปรับสภาพ">
               <Field label="ประเภทซื้อ" value={form.purchaseType} onChange={(value) => update("purchaseType", value)} placeholder="ซื้อสด / จัดไฟแนนซ์" />
               <Field label="สถานที่จอด" value={form.parkingLocation} onChange={(value) => update("parkingLocation", value)} />
-              <StaffSelect label="เซลล์" value={form.saleName} staff={staff} onChange={(value) => update("saleName", value)} />
+              <StaffSelect label="เซลล์" value={form.saleName} staff={staffWithProfile} onChange={(value) => update("saleName", value)} />
             </Panel>
           )}
 
@@ -474,7 +512,7 @@ export default function ApprovalFormsPage() {
                 <Field label="ชั้นประกัน" value={form.insuranceClass} onChange={(value) => update("insuranceClass", value)} />
                 <Field label="ทุนประกัน" value={form.insuranceCapital} onChange={(value) => update("insuranceCapital", value)} inputMode="tel" />
                 <Field label="สถานที่" value={form.location} onChange={(value) => update("location", value)} />
-                <StaffSelect label="เซลล์" value={form.saleName} staff={staff} onChange={(value) => update("saleName", value)} />
+                <StaffSelect label="เซลล์" value={form.saleName} staff={staffWithProfile} onChange={(value) => update("saleName", value)} />
               </Panel>
             </>
           )}
@@ -509,7 +547,7 @@ export default function ApprovalFormsPage() {
                 </select>
               </label>
               <TextArea label="ทะเบียนหลายคัน" value={form.plates} onChange={(value) => update("plates", value)} placeholder="กรอกทะเบียน คันละ 1 บรรทัด" />
-              <StaffSelect label="เซลล์หลัก" value={form.saleName} staff={staff} onChange={(value) => update("saleName", value)} />
+              <StaffSelect label="เซลล์หลัก" value={form.saleName} staff={staffWithProfile} onChange={(value) => update("saleName", value)} />
               <TextArea label="เซลล์เพิ่มเติม" value={form.extraSales} onChange={(value) => update("extraSales", value)} placeholder="กรอกเพิ่มได้หลายคน คนละ 1 บรรทัด" />
             </Panel>
           )}
