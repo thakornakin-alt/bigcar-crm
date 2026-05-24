@@ -1,9 +1,9 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Database, FileSpreadsheet, Loader2, Upload } from "lucide-react";
 import * as XLSX from "xlsx";
+import { PageContainer, PageTitle, TopMenuButton } from "@/app/components/ui";
 import type { StockImportResult, StockImportStatus, StockVehicle } from "@/lib/types";
 
 type RawRow = Record<string, unknown>;
@@ -298,21 +298,16 @@ export default function StockImportPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-5xl px-4 pb-24 pt-5 sm:px-6">
-      <header className="mb-5 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">Import Stock</h1>
-          <p className="mt-1 text-sm text-soft">อ่าน Excel/CSV ครั้งเดียว แล้วบันทึกเข้า StockInventory สำหรับค้นทะเบียนเร็ว</p>
-        </div>
-        <Link
-          href="/booking-reports"
-          className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
-        >
-          <ArrowLeft size={18} className="text-brand" aria-hidden="true" />
-          รายงานจอง
-        </Link>
-      </header>
+    <PageContainer wide>
+      <PageTitle
+        title="อัปโหลดสต็อก"
+        subtitle="อ่าน Excel/CSV ครั้งเดียว แล้วบันทึกเข้า StockInventory สำหรับค้นทะเบียนเร็ว"
+        actions={
+          <TopMenuButton href="/settings" icon={<ArrowLeft size={18} />}>
+            กลับ
+          </TopMenuButton>
+        }
+      />
 
       {(message || error) && (
         <div
@@ -498,7 +493,7 @@ export default function StockImportPage() {
           )}
         </section>
       </div>
-    </main>
+    </PageContainer>
   );
 }
 

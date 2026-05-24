@@ -1,8 +1,8 @@
 "use client";
 
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { ArrowLeft, CheckCircle2, Clipboard, Cloud, Eye, FileText, Loader2, Mail, RotateCcw, Search, Trash2 } from "lucide-react";
+import { PageContainer, PageTitle, TopMenuButton } from "@/app/components/ui";
 import type { ReportHistoryItem, ReportHistoryType } from "@/lib/types";
 
 type FilterType = "all" | ReportHistoryType | "trash";
@@ -135,28 +135,24 @@ export default function ReportHistoryPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-5xl px-4 pb-24 pt-5 sm:px-6">
-      <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">ประวัติรายงาน</h1>
-          <p className="mt-1 text-sm text-soft">ค้นรายงานจอง/รายงานขายย้อนหลัง ดู Drive, Draft และข้อความรายงาน</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/booking-reports" className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white">
-            <FileText size={18} className="text-brand" />
-            จอง
-          </Link>
-          <Link href="/sales-reports" className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white">
-            <FileText size={18} className="text-brand" />
-            ขาย
-          </Link>
-          <Link href="/" className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white">
-            <ArrowLeft size={18} className="text-brand" />
-            ลูกค้า
-          </Link>
-        </div>
-      </header>
+    <PageContainer wide>
+      <PageTitle
+        title="ประวัติรายงาน"
+        subtitle="ค้นรายงานจอง/รายงานขายย้อนหลัง ดู Drive, Draft และข้อความรายงาน"
+        actions={
+          <>
+            <TopMenuButton href="/booking-reports" icon={<FileText size={18} />}>
+              จอง
+            </TopMenuButton>
+            <TopMenuButton href="/sales-reports" icon={<FileText size={18} />}>
+              ขาย
+            </TopMenuButton>
+            <TopMenuButton href="/settings" icon={<ArrowLeft size={18} />}>
+              กลับ
+            </TopMenuButton>
+          </>
+        }
+      />
 
       {(message || error) && (
         <div className={`mb-4 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${error ? "border-amber-400/40 bg-amber-950/30 text-amber-100" : "border-brand/40 bg-green-950/30 text-green-100"}`}>
@@ -330,7 +326,7 @@ export default function ReportHistoryPage() {
           </section>
         </aside>
       </section>
-    </main>
+    </PageContainer>
   );
 }
 

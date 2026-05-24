@@ -109,8 +109,8 @@ export default function LineSettingsPage() {
         title="ตั้งค่า LINE"
         subtitle="รับ groupId จาก webhook และทดสอบส่งข้อความเข้า LINE กลุ่ม"
         actions={
-          <TopMenuButton href="/" icon={<ArrowLeft size={18} />}>
-            ลูกค้า
+          <TopMenuButton href="/settings" icon={<ArrowLeft size={18} />}>
+            กลับ
           </TopMenuButton>
         }
       />
