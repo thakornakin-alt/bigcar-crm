@@ -18,6 +18,7 @@ import {
   Zap
 } from "lucide-react";
 import { FilterSummaryPill, PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
+import { useSalesProfile } from "@/lib/use-sales-profile";
 import type { RealtimePaymentType, RealtimeQueueStatus } from "@/lib/realtime-booking";
 
 type QueueItem = {
@@ -83,6 +84,12 @@ const blankForm = {
   saleName: "ฐากร บิ๊ก ทีมพี่ลีฟ"
 };
 
+function profileSaleName(user: { firstName: string; nickname: string; position: string } | null) {
+  if (!user) return blankForm.saleName;
+  const team = user.position && user.position !== "Sales" ? user.position : "ทีมพี่ลีฟ";
+  return [user.firstName, user.nickname, team].filter(Boolean).join(" ").trim() || blankForm.saleName;
+}
+
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...options,
@@ -113,6 +120,7 @@ function time(value?: string) {
 }
 
 export default function RealtimeBookingPage() {
+  const { user: salesProfile } = useSalesProfile();
   const [form, setForm] = useState(blankForm);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [saving, setSaving] = useState(false);
@@ -145,6 +153,14 @@ export default function RealtimeBookingPage() {
     }, 3000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!salesProfile) return;
+    setForm((current) => ({
+      ...current,
+      saleName: !current.saleName || current.saleName === blankForm.saleName ? profileSaleName(salesProfile) : current.saleName
+    }));
+  }, [salesProfile]);
 
   const filteredQueue = useMemo(() => {
     const term = query.trim().toLowerCase().replace(/\s+/g, "");
@@ -309,7 +325,11 @@ export default function RealtimeBookingPage() {
     <PageContainer wide>
       <PageTitle
         title="Realtime Booking Queue"
-        subtitle="กรอกคิวไว้ก่อน ระบบรอเมลราคา RT แล้ว Match / ส่ง LINE ให้อัตโนมัติ"
+        subtitle={
+          salesProfile
+            ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname} (${salesProfile.phone})`
+            : "กรอกคิวไว้ก่อน ระบบรอเมลราคา RT แล้ว Match / ส่ง LINE ให้อัตโนมัติ"
+        }
         actions={
           <>
             <TopMenuButton href="/" icon={<ArrowLeft size={18} />}>หน้าแรก</TopMenuButton>
@@ -354,6 +374,11 @@ export default function RealtimeBookingPage() {
               </div>
             </label>
             <Field label="เซลส์เจ้าของเคส" value={form.saleName} onChange={(value) => setForm((cur) => ({ ...cur, saleName: value }))} />
+            {salesProfile && (
+              <p className="rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-100">
+                ดึงจากโปรไฟล์ Login: {salesProfile.firstName} {salesProfile.lastName} · {salesProfile.phone}
+              </p>
+            )}
             <button
               type="submit"
               disabled={saving}
