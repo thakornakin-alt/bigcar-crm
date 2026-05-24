@@ -3,7 +3,7 @@
 import { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Car, CheckSquare, FileText, Home, Menu, Radio, Settings, Users, Wrench, X } from "lucide-react";
+import { Bell, CalendarDays, Car, CheckSquare, FileText, Home, Menu, Radio, Settings, UploadCloud, Users, Wrench, X } from "lucide-react";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 
 function classNames(...values: Array<string | false | null | undefined>) {
@@ -129,7 +129,10 @@ const globalNavItems = [
   { href: "/booking-reports", label: "รายงานจอง", icon: FileText },
   { href: "/sales-reports", label: "รายงานขาย", icon: FileText },
   { href: "/vehicle-prep", label: "การเตรียมรถ", icon: Wrench },
-  { href: "/#customers", label: "ลูกค้ามุ่งหวัง", icon: Users },
+  { href: "/leads", label: "ลูกค้ามุ่งหวัง", icon: Users },
+  { href: "/finance-approval", label: "ไฟแนนซ์", icon: UploadCloud },
+  { href: "/front-office-calendar", label: "ปฏิทินหน้าบ้าน", icon: CalendarDays },
+  { href: "/back-office-calendar", label: "ปฏิทินหลังบ้าน", icon: CalendarDays },
   { href: "/approval-forms", label: "อนุมัติ", icon: CheckSquare },
   { href: "/documents", label: "เอกสาร", icon: FileText },
   { href: "/settings", label: "ตั้งค่า", icon: Settings }

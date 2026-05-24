@@ -5,6 +5,7 @@ import {
   Calculator,
   Car,
   Check,
+  CalendarDays,
   ClipboardCheck,
   FileImage,
   FileText,
@@ -202,10 +203,12 @@ export default function Home() {
           <div className="grid gap-2 sm:grid-cols-2">
             <TopMenuButton href="/stock-import" icon={<Car size={18} />} variant="primary">เพิ่มรถ</TopMenuButton>
             <TopMenuButton href="/realtime-booking" icon={<Radio size={18} />}>แย่งคิวรถ</TopMenuButton>
-            <TopMenuButton href="/#customers" icon={<User size={18} />}>เพิ่มลูกค้ามุ่งหวัง</TopMenuButton>
+            <TopMenuButton href="/leads" icon={<User size={18} />}>เพิ่มลูกค้ามุ่งหวัง</TopMenuButton>
             <TopMenuButton href="/calculator" icon={<Calculator size={18} />}>Export ตารางผ่อน</TopMenuButton>
             <TopMenuButton href="/vehicle-prep" icon={<Car size={18} />}>การเตรียมรถ</TopMenuButton>
-            <TopMenuButton href="/documents" icon={<FileText size={18} />}>อัปโหลดใบอนุมัติไฟแนนซ์</TopMenuButton>
+            <TopMenuButton href="/finance-approval" icon={<FileText size={18} />}>อัปโหลดใบอนุมัติไฟแนนซ์</TopMenuButton>
+            <TopMenuButton href="/front-office-calendar" icon={<CalendarDays size={18} />}>ปฏิทินหน้าบ้าน</TopMenuButton>
+            <TopMenuButton href="/back-office-calendar" icon={<CalendarDays size={18} />}>ปฏิทินหลังบ้าน</TopMenuButton>
           </div>
         </SectionCard>
 
@@ -213,7 +216,8 @@ export default function Home() {
           <StatusLine label="รถใหม่เข้า" value={totalStock === null ? "-" : `${totalStock.toLocaleString("th-TH")} คัน`} />
           <StatusLine label="Stock Match ใหม่" value="ช่วยแนะนำเท่านั้น" />
           <StatusLine label="รถต้องเตรียม" value="ดูที่การเตรียมรถ" />
-          <StatusLine label="คิวอนุมัติ" value="ดูที่เมนูอนุมัติ" />
+          <StatusLine label="รอไฟแนนซ์" value="ดูที่อัปโหลดใบอนุมัติ" />
+          <StatusLine label="งานวันนี้" value="แยกหน้าบ้าน/หลังบ้าน" />
         </SectionCard>
       </section>
 

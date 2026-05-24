@@ -7,6 +7,7 @@ import { PageContainer, PageTitle, SearchField, SectionCard, TopMenuButton } fro
 
 const documentItems = [
   { title: "แบบฟอร์มจอง", type: "PDF", updatedAt: "พร้อมต่อยอด", href: "/booking-reports", icon: FileText },
+  { title: "ใบอนุมัติไฟแนนซ์", type: "Upload", updatedAt: "แยกตาม Version 3", href: "/finance-approval", icon: Upload },
   { title: "ตารางผ่อน", type: "Export", updatedAt: "จาก Calculator", href: "/calculator", icon: FileSpreadsheet },
   { title: "รูปสต๊อก", type: "PNG", updatedAt: "จาก Stock Export", href: "/stock-export", icon: FileImage },
   { title: "เอกสารสัญญา", type: "Future", updatedAt: "เตรียมรองรับ", href: "/documents", icon: FileText }
