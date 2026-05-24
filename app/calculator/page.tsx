@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft, Calculator, Car, ImageDown, Loader2, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useSalesProfile } from "@/lib/use-sales-profile";
 import type { InstallmentRow, InterestRate } from "@/lib/types";
 
 const vehicleTypes = ["รถเก๋ง/กระบะ 4 ประตู", "รถกระบะ/รถตู้"];
@@ -74,6 +75,7 @@ function calculatePayment(financeAmount: number, rate: number | null, months: nu
 }
 
 export default function CalculatorPage() {
+  const { user: salesProfile } = useSalesProfile();
   const [rates, setRates] = useState<InterestRate[]>(defaultInterestRates);
   const [rateSource, setRateSource] = useState<"default" | "sheet">("default");
   const [vehicleType, setVehicleType] = useState(vehicleTypes[0]);
@@ -157,7 +159,10 @@ export default function CalculatorPage() {
         actualYear,
         carPrice: price,
         rate: selectedRate,
-        rows
+        rows,
+        contactName: salesProfile?.nickname || salesProfile?.firstName || "บิ๊ก",
+        contactPhone: salesProfile?.phone || "091-778-5117",
+        contactLineId: salesProfile?.lineId || "@bigcars"
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "บันทึกรูปไม่สำเร็จ");
@@ -172,6 +177,9 @@ export default function CalculatorPage() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
           <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">คำนวณค่างวด</h1>
+          <p className="mt-1 text-sm text-soft">
+            {salesProfile ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname} (${salesProfile.phone})` : "ยังไม่ได้ Login จะใช้ข้อมูลบิ๊กเป็นค่าเริ่มต้น"}
+          </p>
         </div>
         <Link
           href="/"
@@ -205,6 +213,11 @@ export default function CalculatorPage() {
                 : "ใช้ดอกเบี้ยตั้งต้นจาก Excel"
               : "ไม่พบตารางดอกเบี้ยสำหรับตัวเลือกนี้"}
           </span>
+          {salesProfile && (
+            <span className="rounded-full border border-brand/30 bg-brand/10 px-3 py-1 text-xs font-bold text-brand">
+              Export: {salesProfile.nickname} · {salesProfile.phone}
+            </span>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -423,13 +436,19 @@ async function exportInstallmentImage({
   actualYear,
   carPrice,
   rate,
-  rows
+  rows,
+  contactName,
+  contactPhone,
+  contactLineId
 }: {
   carModel: string;
   actualYear: string;
   carPrice: number;
   rate: InterestRate;
   rows: InstallmentRow[];
+  contactName: string;
+  contactPhone: string;
+  contactLineId: string;
 }) {
   const profileImage = await loadCanvasImage("/big-profile.png").catch(() => null);
   const canvas = document.createElement("canvas");
@@ -478,8 +497,8 @@ async function exportInstallmentImage({
 
   ctx.fillStyle = "#22c55e";
   ctx.font = "700 28px Arial, sans-serif";
-  ctx.fillText("บิ๊ก 091-778-5117", 56, 124);
-  ctx.fillText("Line: @bigcars", 56, 162);
+  ctx.fillText(`${contactName || "บิ๊ก"} ${contactPhone || "091-778-5117"}`, 56, 124);
+  ctx.fillText(`Line: ${contactLineId || "@bigcars"}`, 56, 162);
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "700 34px Arial, sans-serif";
