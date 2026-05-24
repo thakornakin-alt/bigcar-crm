@@ -1,8 +1,8 @@
 "use client";
 
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { ArrowLeft, CheckCircle2, Clipboard, Eraser, FileText, Loader2, Search, Save, Send, X } from "lucide-react";
+import { AppHeader, TopMenuButton } from "@/app/components/ui";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import type { ApprovalBooking, ApprovalStaff, ApprovalStockVehicle, LineGroup } from "@/lib/types";
 
@@ -420,27 +420,15 @@ export default function ApprovalFormsPage() {
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-5xl px-4 pb-24 pt-5 sm:px-6">
-      <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">ฟอร์มอนุมัติ</h1>
-          <p className="mt-1 text-sm text-soft">
-            {salesProfile
-              ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname} (${salesProfile.phone})`
-              : "Generate ข้อความสำหรับ LINE พร้อมบันทึกประวัติแบบ Draft / Preview"}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/report-history" className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white">
-            <FileText size={18} className="text-brand" />
-            ประวัติ
-          </Link>
-          <Link href="/" className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white">
-            <ArrowLeft size={18} className="text-brand" />
+      <AppHeader
+        title="ฟอร์มอนุมัติ"
+        subtitle={salesProfile ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname}` : "Generate ข้อความสำหรับ LINE พร้อมบันทึกประวัติแบบ Draft / Preview"}
+        actions={
+          <TopMenuButton href="/" icon={<ArrowLeft size={18} />}>
             ลูกค้า
-          </Link>
-        </div>
-      </header>
+          </TopMenuButton>
+        }
+      />
 
       {(message || error || lookupStatus) && (
         <div className={`mb-4 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${error ? "border-red-400/40 bg-red-950/30 text-red-100" : "border-brand/40 bg-green-950/30 text-green-100"}`}>

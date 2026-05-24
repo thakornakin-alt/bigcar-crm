@@ -1,14 +1,12 @@
 "use client";
 
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import {
   Calculator,
   Car,
   Check,
   FileImage,
   FileText,
-  History,
   Loader2,
   MessageCircle,
   Pencil,
@@ -17,12 +15,11 @@ import {
   Radio,
   Save,
   Search,
-  Settings,
   Trash2,
-  Upload,
   User,
   X
 } from "lucide-react";
+import { AppHeader, TopMenuButton } from "@/app/components/ui";
 import type { Customer, CustomerInput } from "@/lib/types";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 
@@ -174,91 +171,36 @@ export default function Home() {
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-3xl px-4 pb-24 pt-5 sm:px-6">
-      <header className="mb-5 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">บันทึกลูกค้า</h1>
-          <p className="mt-1 text-sm text-soft">
+      <AppHeader
+        title="บันทึกลูกค้า"
+        subtitle={
+          <span>
             {salesProfile
               ? salesProfile.role === "sales" || salesProfile.role === "viewer"
                 ? `แสดงลูกค้าของ ${salesProfile.nickname} เท่านั้น`
                 : `Login เป็น ${salesProfile.nickname} เห็นลูกค้าทั้งหมด`
               : "ยังไม่ Login จะแสดงข้อมูลเดิมทั้งหมด"}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href="/booking-reports"
-            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
-          >
-            <FileText size={18} className="text-brand" aria-hidden="true" />
-            รายงานจอง
-          </Link>
-          <Link
-            href="/stock-import"
-            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
-          >
-            <Upload size={18} className="text-brand" aria-hidden="true" />
-            Stock
-          </Link>
-          <Link
-            href="/stock-export"
-            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
-          >
-            <FileImage size={18} className="text-brand" aria-hidden="true" />
-            รูปสต็อก
-          </Link>
-          <Link
-            href="/sales-reports"
-            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
-          >
-            <FileText size={18} className="text-brand" aria-hidden="true" />
-            รายงานขาย
-          </Link>
-          <Link
-            href="/report-history"
-            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
-          >
-            <History size={18} className="text-brand" aria-hidden="true" />
-            ประวัติ
-          </Link>
-          <Link
-            href="/approval-forms"
-            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
-          >
-            <MessageCircle size={18} className="text-brand" aria-hidden="true" />
-            ฟอร์มอนุมัติ
-          </Link>
-          <Link
-            href="/realtime-booking"
-            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
-          >
-            <Radio size={18} className="text-brand" aria-hidden="true" />
-            Realtime จอง
-          </Link>
-          <Link
-            href="/line-settings"
-            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
-          >
-            <MessageCircle size={18} className="text-brand" aria-hidden="true" />
-            LINE
-          </Link>
-          <Link
-            href="/settings"
-            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
-          >
-            <Settings size={18} className="text-brand" aria-hidden="true" />
-            ตั้งค่า
-          </Link>
-          <Link
-            href="/calculator"
-            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
-          >
-            <Calculator size={18} className="text-brand" aria-hidden="true" />
-            ค่างวด
-          </Link>
-        </div>
-      </header>
+          </span>
+        }
+        actions={
+          <>
+            <TopMenuButton href="/booking-reports" icon={<FileText size={18} />} variant="primary">
+              จอง
+            </TopMenuButton>
+            <TopMenuButton href="/sales-reports" icon={<FileText size={18} />}>
+              ขาย
+            </TopMenuButton>
+            <TopMenuButton href="/stock-export" icon={<FileImage size={18} />}>
+              รูปสต็อก
+            </TopMenuButton>
+            <TopMenuButton href="/calculator" icon={<Calculator size={18} />}>
+              ค่างวด
+            </TopMenuButton>
+            <TopMenuButton href="/approval-forms" icon={<MessageCircle size={18} />} iconOnly label="ฟอร์มอนุมัติ" />
+            <TopMenuButton href="/realtime-booking" icon={<Radio size={18} />} iconOnly label="Realtime จอง" />
+          </>
+        }
+      />
 
       <section className="mb-4 rounded-lg border border-line bg-panel p-4 shadow-glow">
         {salesProfile && (

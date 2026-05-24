@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ReactNode } from "react";
 import { BarChart3, Car, Home, Shield, UserRound } from "lucide-react";
+import { HeaderUtilities } from "@/app/components/ui";
 import { CrmUserProfile, fullName, roleLabels } from "@/lib/crm-core";
 
 const navItems = [
@@ -28,8 +29,11 @@ export function CrmShell({
       <aside className="mb-4 hidden rounded-lg border border-line bg-panel p-4 shadow-glow lg:block">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
         <div className="mt-4 rounded-lg border border-line bg-[#0b0d11] p-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand text-lg font-black text-ink">
-            {user.nickname.slice(0, 1) || "U"}
+          <div
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-brand bg-cover bg-center text-[11px] font-black text-ink"
+            style={user.avatarUrl ? { backgroundImage: `url(${user.avatarUrl})` } : undefined}
+          >
+            {user.avatarUrl ? null : "RDD"}
           </div>
           <p className="mt-3 text-sm font-bold text-white">{fullName(user)}</p>
           <p className="mt-1 text-xs text-soft">{roleLabels[user.role]} · {user.branch}</p>
@@ -52,13 +56,16 @@ export function CrmShell({
       </aside>
 
       <section className="min-w-0">
-        <header className="mb-5 flex flex-wrap items-center justify-between gap-4">
-          <div>
+        <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">BIG CAR CRM V2</p>
             <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">{title}</h1>
             {subtitle && <p className="mt-1 text-sm text-soft">{subtitle}</p>}
           </div>
-          {actions}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {actions}
+            <HeaderUtilities />
+          </div>
         </header>
         {children}
       </section>

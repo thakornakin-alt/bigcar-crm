@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { ArrowLeft, CheckCircle2, FlaskConical, History, Loader2, MessageCircle, Save, Settings, Shield, UserRound } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FlaskConical, History, Loader2, MessageCircle, Save, Settings, Shield, Upload, UserRound } from "lucide-react";
 import { PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
 import {
   BigCarSystemSettings,
@@ -149,6 +149,15 @@ export default function SettingsPage() {
             )}
             <TopMenuButton href="/auth" icon={<Shield size={18} />}>
               Auth Preview
+            </TopMenuButton>
+            <TopMenuButton href="/stock-import" icon={<Upload size={18} />}>
+              อัปโหลดสต็อก
+            </TopMenuButton>
+            <TopMenuButton href="/report-history" icon={<History size={18} />}>
+              ประวัติ
+            </TopMenuButton>
+            <TopMenuButton href="/line-settings" icon={<MessageCircle size={18} />}>
+              LINE Status
             </TopMenuButton>
           </div>
         </SectionCard>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, Download, FileImage, Filter, Loader2, MessageCircle, Search, Upload } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Download, FileImage, Filter, Loader2, MessageCircle, Search } from "lucide-react";
 import {
   ActiveFilterTag,
   BottomSheet,
@@ -642,18 +642,13 @@ export default function StockExportPage() {
         title="สร้างรูปสต็อก"
         subtitle={
           salesProfile
-            ? `เลือกสต็อกแล้วส่งต่อได้ทันที · ใช้โปรไฟล์ ${salesProfile.nickname} (${salesProfile.phone})`
+            ? `เลือกสต็อกแล้วส่งต่อได้ทันที · ใช้โปรไฟล์ ${salesProfile.nickname}`
             : "เลือกสต็อกแล้ว Export เป็นรูปสำหรับส่งต่อได้ทันที"
         }
         actions={
-          <>
-            <TopMenuButton href="/stock-import" icon={<Upload size={18} />}>
-              Import
-            </TopMenuButton>
-            <TopMenuButton href="/" icon={<ArrowLeft size={18} />}>
-              หน้าแรก
-            </TopMenuButton>
-          </>
+          <TopMenuButton href="/" icon={<ArrowLeft size={18} />}>
+            หน้าแรก
+          </TopMenuButton>
         }
       />
 

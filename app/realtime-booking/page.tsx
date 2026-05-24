@@ -327,7 +327,7 @@ export default function RealtimeBookingPage() {
         title="Realtime Booking Queue"
         subtitle={
           salesProfile
-            ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname} (${salesProfile.phone})`
+            ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname}`
             : "กรอกคิวไว้ก่อน ระบบรอเมลราคา RT แล้ว Match / ส่ง LINE ให้อัตโนมัติ"
         }
         actions={

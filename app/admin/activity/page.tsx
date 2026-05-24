@@ -63,7 +63,7 @@ export default function AdminActivityPage() {
         <PageTitle
           title="ไม่มีสิทธิ์เข้าถึง"
           subtitle="Activity Log สำหรับ Admin และ Super Admin เท่านั้น"
-          actions={<TopMenuButton href="/settings" icon={<ArrowLeft size={18} />}>ตั้งค่า</TopMenuButton>}
+          actions={<TopMenuButton href="/settings" icon={<ArrowLeft size={18} />}>กลับ</TopMenuButton>}
         />
         <SectionCard title="Restricted" icon={<ShieldAlert size={18} />}>
           <p className="text-sm leading-6 text-soft">เมนูนี้ถูกซ่อนไว้สำหรับดูประวัติหลังบ้าน ไม่แสดงให้เซลล์ทั่วไปใช้งานครับ</p>
@@ -80,7 +80,7 @@ export default function AdminActivityPage() {
         actions={
           <>
             <TopMenuButton href="/settings" icon={<ArrowLeft size={18} />}>
-              ตั้งค่า
+              กลับ
             </TopMenuButton>
             <button
               type="button"

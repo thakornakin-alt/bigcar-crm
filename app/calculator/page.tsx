@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { ArrowLeft, Calculator, Car, ImageDown, Loader2, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { AppHeader, TopMenuButton } from "@/app/components/ui";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import type { InstallmentRow, InterestRate } from "@/lib/types";
 
@@ -175,22 +175,15 @@ export default function CalculatorPage() {
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-5xl px-4 pb-24 pt-5 sm:px-6">
-      <header className="mb-5 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">คำนวณค่างวด</h1>
-          <p className="mt-1 text-sm text-soft">
-            {salesProfile ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname} (${salesProfile.phone})` : "ยังไม่ได้ Login จะใช้ข้อมูลบิ๊กเป็นค่าเริ่มต้น"}
-          </p>
-        </div>
-        <Link
-          href="/"
-          className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
-        >
-          <ArrowLeft size={18} className="text-brand" aria-hidden="true" />
-          ลูกค้า
-        </Link>
-      </header>
+      <AppHeader
+        title="คำนวณค่างวด"
+        subtitle={salesProfile ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname}` : "ยังไม่ได้ Login จะใช้ข้อมูลบิ๊กเป็นค่าเริ่มต้น"}
+        actions={
+          <TopMenuButton href="/" icon={<ArrowLeft size={18} />}>
+            ลูกค้า
+          </TopMenuButton>
+        }
+      />
 
       <section className="mb-4 rounded-lg border border-line bg-panel p-4 shadow-glow">
         <div className="grid gap-3 md:grid-cols-2">
@@ -217,7 +210,7 @@ export default function CalculatorPage() {
           </span>
           {salesProfile && (
             <span className="rounded-full border border-brand/30 bg-brand/10 px-3 py-1 text-xs font-bold text-brand">
-              Export: {salesProfile.nickname} · {salesProfile.phone}
+              Export: {salesProfile.nickname}
             </span>
           )}
           <button

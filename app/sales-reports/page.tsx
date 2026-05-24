@@ -1,8 +1,8 @@
 "use client";
 
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
-import { ArrowLeft, Camera, CheckCircle2, Clipboard, Cloud, Eye, FileText, History, ImagePlus, Loader2, Mail, Save, Search, Send, X } from "lucide-react";
+import { ArrowLeft, Camera, CheckCircle2, Clipboard, Cloud, Eye, FileText, ImagePlus, Loader2, Mail, Save, Search, Send, X } from "lucide-react";
+import { AppHeader, TopMenuButton } from "@/app/components/ui";
 import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
 import { defaultSystemSettings, readSystemSettings, salesLineGroupStorageKey } from "@/lib/client-settings";
 import { normalizeCarYear } from "@/lib/format";
@@ -625,23 +625,15 @@ export default function SalesReportsPage() {
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-5xl px-4 pb-24 pt-5 sm:px-6">
-      <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">รายงานขาย</h1>
-          <p className="mt-1 text-sm text-soft">{salesProfile ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname} (${salesProfile.phone})` : "ค้นรายงานจองเดิม แล้วสร้างรายงานขายแบบ Draft / Preview"}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/booking-reports" className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white">
-            <ArrowLeft size={18} className="text-brand" />
+      <AppHeader
+        title="รายงานขาย"
+        subtitle={salesProfile ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname}` : "ค้นรายงานจองเดิม แล้วสร้างรายงานขายแบบ Draft / Preview"}
+        actions={
+          <TopMenuButton href="/booking-reports" icon={<ArrowLeft size={18} />}>
             รายงานจอง
-          </Link>
-          <Link href="/report-history" className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white">
-            <History size={18} className="text-brand" />
-            ประวัติ
-          </Link>
-        </div>
-      </header>
+          </TopMenuButton>
+        }
+      />
 
       {(message || error) && (
         <div className={`mb-4 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${error ? "border-amber-400/40 bg-amber-950/30 text-amber-100" : "border-brand/40 bg-green-950/30 text-green-100"}`}>

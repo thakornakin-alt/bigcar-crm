@@ -10,14 +10,12 @@ import {
   ClipboardList,
   Cloud,
   FileText,
-  History,
   Loader2,
   Mail,
   Paperclip,
   Save,
   Send,
-  Search,
-  Upload
+  Search
 } from "lucide-react";
 import { buildDefaultBookingSubject, renderBookingReport } from "@/lib/booking-report";
 import { PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
@@ -586,17 +584,11 @@ export default function BookingReportsPage() {
     <PageContainer wide>
       <PageTitle
         title="รายงานจอง"
-        subtitle={salesProfile ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname} (${salesProfile.phone})` : "บันทึก Draft, สร้าง Gmail Draft และส่งข้อความเข้า LINE"}
+        subtitle={salesProfile ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname}` : "บันทึก Draft, สร้าง Gmail Draft และส่งข้อความเข้า LINE"}
         actions={
           <>
-            <TopMenuButton href="/stock-import" icon={<Upload size={18} />}>
-              Stock
-            </TopMenuButton>
-            <TopMenuButton href="/sales-reports" icon={<FileText size={18} />}>
+            <TopMenuButton href="/sales-reports" icon={<FileText size={18} />} variant="primary">
               ขาย
-            </TopMenuButton>
-            <TopMenuButton href="/report-history" icon={<History size={18} />}>
-              ประวัติ
             </TopMenuButton>
             <TopMenuButton href="/" icon={<ArrowLeft size={18} />}>
               ลูกค้า

@@ -1,5 +1,10 @@
+"use client";
+
 import { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Settings, UserRound } from "lucide-react";
+import { useSalesProfile } from "@/lib/use-sales-profile";
 
 function classNames(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
@@ -23,13 +28,16 @@ export function PageTitle({
   actions?: ReactNode;
 }) {
   return (
-    <header className="mb-5 flex flex-wrap items-center justify-between gap-4">
-      <div>
+    <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
+      <div className="min-w-0 flex-1">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
         <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-soft">{subtitle}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {actions}
+        <HeaderUtilities />
+      </div>
     </header>
   );
 }
@@ -37,22 +45,104 @@ export function PageTitle({
 export function TopMenuButton({
   href,
   icon,
-  children
+  children,
+  variant = "secondary",
+  iconOnly = false,
+  label
 }: {
   href: string;
   icon: ReactNode;
-  children: ReactNode;
+  children?: ReactNode;
+  variant?: "primary" | "secondary" | "danger" | "ghost";
+  iconOnly?: boolean;
+  label?: string;
 }) {
+  const variantClass =
+    variant === "primary"
+      ? "border-brand bg-brand text-ink hover:border-brand"
+      : variant === "danger"
+        ? "border-red-400/40 bg-red-950/20 text-red-100 hover:border-red-300"
+        : variant === "ghost"
+          ? "border-line/70 bg-[#0b0d11] text-soft hover:border-brand/60 hover:text-white"
+          : "border-line bg-panel text-white hover:border-brand/60";
+
   return (
     <Link
       href={href}
-      className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-white transition hover:border-brand/60"
+      aria-label={label || (typeof children === "string" ? children : undefined)}
+      title={label || (typeof children === "string" ? children : undefined)}
+      className={classNames(
+        "flex min-h-11 items-center justify-center gap-2 rounded-lg border text-sm font-bold transition",
+        iconOnly ? "h-11 w-11 px-0" : "px-3",
+        variantClass
+      )}
     >
-      <span className="flex h-[18px] w-[18px] items-center justify-center text-brand" aria-hidden="true">
+      <span className={classNames("flex h-[18px] w-[18px] items-center justify-center", variant === "primary" ? "text-ink" : "text-brand")} aria-hidden="true">
         {icon}
       </span>
-      {children}
+      {!iconOnly && children}
     </Link>
+  );
+}
+
+export function ProfileIndicator() {
+  const { user, loading } = useSalesProfile();
+  const name = loading ? "Loading" : user?.nickname || user?.firstName || "RDD";
+
+  return (
+    <Link
+      href="/profile"
+      className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-panel px-2.5 text-sm font-black text-white transition hover:border-brand/60"
+      aria-label="โปรไฟล์"
+      title="โปรไฟล์"
+    >
+      <span
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand bg-cover bg-center text-[11px] font-black text-ink ring-1 ring-brand/30"
+        style={user?.avatarUrl ? { backgroundImage: `url(${user.avatarUrl})` } : undefined}
+        aria-hidden="true"
+      >
+        {user?.avatarUrl ? null : <span>RDD</span>}
+      </span>
+      <span className="max-w-[92px] truncate">{name}</span>
+    </Link>
+  );
+}
+
+export function SettingsIconButton() {
+  return <TopMenuButton href="/settings" icon={<Settings size={18} />} iconOnly label="Settings" variant="ghost" />;
+}
+
+export function HeaderUtilities() {
+  const pathname = usePathname();
+  return (
+    <>
+      <ProfileIndicator />
+      {pathname !== "/settings" && <SettingsIconButton />}
+    </>
+  );
+}
+
+export function AppHeader({
+  title,
+  subtitle,
+  actions
+}: {
+  title: string;
+  subtitle?: ReactNode;
+  actions?: ReactNode;
+}) {
+  return (
+    <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
+        <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">{title}</h1>
+        {subtitle && <div className="mt-1 text-sm text-soft">{subtitle}</div>}
+      </div>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {actions}
+        <HeaderUtilities />
+      </div>
+    </header>
   );
 }
 
