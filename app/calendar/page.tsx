@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { forwardRef, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, Car, ChevronLeft, ChevronRight, Clock3, Plus, Trash2, UserRound, Wrench } from "lucide-react";
 import { FilterChip, PageContainer, PageTitle, SectionCard } from "@/app/components/ui";
 import type { CalendarEvent, CalendarEventType } from "@/lib/calendar-events";
@@ -92,11 +92,13 @@ async function api<T>(url: string, init?: RequestInit) {
 }
 
 export default function CalendarPage() {
+  const titleInputRef = useRef<HTMLInputElement>(null);
   const [month, setMonth] = useState(() => monthStart(new Date()));
   const [selectedDate, setSelectedDate] = useState(todayKey);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [vehicleOptions, setVehicleOptions] = useState<CalendarVehicleOption[]>([]);
   const [form, setForm] = useState<CalendarForm>(() => emptyForm(todayKey));
+  const [titleManuallyEdited, setTitleManuallyEdited] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState("");
@@ -171,6 +173,7 @@ export default function CalendarPage() {
       });
       setEvents((current) => [...current, data.event].sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)));
       setForm(emptyForm(form.date));
+      setTitleManuallyEdited(false);
       setMessage("เพิ่มงานลงปฏิทินแล้ว");
     } catch (err) {
       setError(err instanceof Error ? err.message : "เพิ่มงานไม่สำเร็จ");
@@ -182,18 +185,43 @@ export default function CalendarPage() {
   function selectVehicle(bookingId: string) {
     const vehicle = vehicleOptions.find((item) => item.bookingId === bookingId);
     if (!vehicle) {
-      setForm((current) => ({ ...current, plate: "", customerName: "" }));
+      updateFormWithAutoTitle({ plate: "", customerName: "" });
       return;
     }
 
-    const defaultTitle = typeMeta(form.type).label;
-    setForm((current) => ({
-      ...current,
-      title: current.title || `${defaultTitle} ${vehicle.plate}`,
+    updateFormWithAutoTitle({
       plate: vehicle.plate,
       customerName: vehicle.customerName,
-      detail: current.detail || [vehicle.model, vehicle.owner].filter(Boolean).join("\n")
-    }));
+      detail: form.detail || [vehicle.model, vehicle.owner].filter(Boolean).join("\n")
+    });
+  }
+
+  function autoTitle(next: CalendarForm) {
+    if (next.type === "other") return "";
+    return [typeMeta(next.type).label, next.plate, next.customerName].filter(Boolean).join(" ").trim();
+  }
+
+  function updateFormWithAutoTitle(patch: Partial<CalendarForm>) {
+    setForm((current) => {
+      const next = { ...current, ...patch };
+      return titleManuallyEdited ? next : { ...next, title: autoTitle(next) };
+    });
+  }
+
+  function updateEventType(type: CalendarEventType) {
+    setTitleManuallyEdited(false);
+    setForm((current) => {
+      const next = { ...current, type };
+      return { ...next, title: autoTitle(next) };
+    });
+    if (type === "other") {
+      window.setTimeout(() => titleInputRef.current?.focus(), 0);
+    }
+  }
+
+  function updateTitle(value: string) {
+    setTitleManuallyEdited(true);
+    setForm((current) => ({ ...current, title: value }));
   }
 
   async function deleteEvent(id: string) {
@@ -298,24 +326,24 @@ export default function CalendarPage() {
         <div className="space-y-4">
           <SectionCard title="สร้างงาน" icon={<Plus size={18} />}>
             <form onSubmit={saveEvent} className="space-y-3">
-              <div className="grid gap-2 sm:grid-cols-2">
-                <CalendarField label="ชื่องาน" value={form.title} onChange={(value) => setForm((current) => ({ ...current, title: value }))} placeholder="เช่น นัดส่งมอบ / ติดตามลูกค้า" />
-                <CalendarField label="วันที่" type="date" value={form.date} onChange={(value) => setForm((current) => ({ ...current, date: value }))} />
-                <CalendarField label="เวลา" type="time" value={form.time} onChange={(value) => setForm((current) => ({ ...current, time: value }))} />
-                <VehicleSelect vehicles={vehicleOptions} value={form.plate} onSelect={selectVehicle} />
-                <CalendarField label="ทะเบียน" value={form.plate} onChange={(value) => setForm((current) => ({ ...current, plate: value }))} placeholder="พิมพ์เองได้ ถ้าเป็นงานทั่วไป" />
-                <CalendarField label="ลูกค้า" value={form.customerName} onChange={(value) => setForm((current) => ({ ...current, customerName: value }))} placeholder="ชื่อลูกค้า (ถ้ามี)" />
-              </div>
-
               <div>
                 <p className="mb-2 text-xs font-bold text-soft">ประเภทงาน</p>
                 <div className="grid grid-cols-2 gap-2">
                   {eventTypes.map((type) => (
-                    <FilterChip key={type.value} active={form.type === type.value} onClick={() => setForm((current) => ({ ...current, type: type.value }))}>
+                    <FilterChip key={type.value} active={form.type === type.value} onClick={() => updateEventType(type.value)}>
                       {type.label}
                     </FilterChip>
                   ))}
                 </div>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <CalendarField ref={titleInputRef} label="ชื่องาน" value={form.title} onChange={updateTitle} placeholder="เช่น นัดส่งมอบ / ติดตามลูกค้า" />
+                <CalendarField label="วันที่" type="date" value={form.date} onChange={(value) => setForm((current) => ({ ...current, date: value }))} />
+                <CalendarField label="เวลา" type="time" value={form.time} onChange={(value) => setForm((current) => ({ ...current, time: value }))} />
+                <VehicleSelect vehicles={vehicleOptions} value={form.plate} onSelect={selectVehicle} />
+                <CalendarField label="ทะเบียน" value={form.plate} onChange={(value) => updateFormWithAutoTitle({ plate: value })} placeholder="พิมพ์เองได้ ถ้าเป็นงานทั่วไป" />
+                <CalendarField label="ลูกค้า" value={form.customerName} onChange={(value) => updateFormWithAutoTitle({ customerName: value })} placeholder="ชื่อลูกค้า (ถ้ามี)" />
               </div>
 
               <label className="block">
@@ -409,23 +437,24 @@ function buildMonthGrid(date: Date) {
   return cells;
 }
 
-function CalendarField({
-  label,
-  value,
-  onChange,
-  placeholder,
-  type = "text"
-}: {
+const CalendarField = forwardRef<HTMLInputElement, {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   type?: "text" | "date" | "time";
-}) {
+}>(function CalendarField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text"
+}, ref) {
   return (
     <label className="block">
       <span className="text-xs font-bold text-soft">{label}</span>
       <input
+        ref={ref}
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -434,7 +463,7 @@ function CalendarField({
       />
     </label>
   );
-}
+});
 
 function VehicleSelect({
   vehicles,
