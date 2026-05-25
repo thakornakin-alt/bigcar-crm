@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { updateSalesUser } from "@/lib/apps-script";
 import { recordActivity } from "@/lib/activity-log";
 import { salesProfileCookieName, setSalesProfileCookie, verifySalesProfileToken } from "@/lib/auth-session";
+import { saveSalesProfile } from "@/lib/sales-profile-store";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ export async function PATCH(request: Request) {
       position: String(body.position ?? currentUser.position ?? "").trim(),
       branch: String(body.branch ?? currentUser.branch ?? "").trim()
     });
+    await saveSalesProfile(nextUser);
 
     const response = NextResponse.json({ user: nextUser });
     setSalesProfileCookie(response, nextUser);

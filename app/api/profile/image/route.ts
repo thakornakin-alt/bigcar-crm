@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { updateSalesUser, uploadProfileImage } from "@/lib/apps-script";
 import { recordActivity } from "@/lib/activity-log";
 import { salesProfileCookieName, setSalesProfileCookie, verifySalesProfileToken } from "@/lib/auth-session";
+import { saveSalesProfile } from "@/lib/sales-profile-store";
 import type { ProfileImageKind } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
       avatarUrl: kind === "avatar" ? imageUrl : currentUser.avatarUrl,
       lineQrUrl: kind === "lineQr" ? imageUrl : currentUser.lineQrUrl
     });
+    await saveSalesProfile(nextUser);
 
     const response = NextResponse.json({ image: { ...uploaded, url: imageUrl }, user: nextUser }, { status: 201 });
     setSalesProfileCookie(response, nextUser);

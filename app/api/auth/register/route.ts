@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { registerSalesUser } from "@/lib/apps-script";
 import { recordActivity } from "@/lib/activity-log";
 import { setSalesProfileCookie } from "@/lib/auth-session";
+import { saveSalesProfile } from "@/lib/sales-profile-store";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ export async function POST(request: Request) {
       position: String(body.position || "Sales").trim(),
       branch: String(body.branch || "").trim()
     });
+    await saveSalesProfile(user);
     const response = NextResponse.json({ user });
     setSalesProfileCookie(response, user);
     await recordActivity(user, {
