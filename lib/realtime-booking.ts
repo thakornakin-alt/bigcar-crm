@@ -103,10 +103,19 @@ function getPriceMaxAgeMs() {
 
 export function getRealtimeBookingSubjectPatterns() {
   const raw = process.env.REALTIME_BOOKING_GMAIL_SUBJECT;
-  const value = raw === undefined ? "Pricing and Status Update" : raw;
+  const value = raw === undefined ? "Pricing and Status Update|Status Update|RT|ราคา" : raw;
   return value
     .split(/[,\n|]/)
     .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function getRealtimeBookingSenderPatterns() {
+  const raw = process.env.REALTIME_BOOKING_GMAIL_SENDER || process.env.REALTIME_BOOKING_GMAIL_SENDER_DOMAIN;
+  const value = raw === undefined ? "sitinada.p@tgh.co.th|tgh.co.th|segroup.co.th" : raw;
+  return value
+    .split(/[,\n|]/)
+    .map((item) => item.trim().toLowerCase())
     .filter(Boolean);
 }
 
@@ -120,6 +129,13 @@ export function isRealtimeBookingSubjectAllowed(subject: string) {
   if (!patterns.length) return true;
   const normalizedSubject = String(subject || "").toLowerCase();
   return patterns.some((pattern) => normalizedSubject.includes(pattern.toLowerCase()));
+}
+
+export function isRealtimeBookingSenderAllowed(sender: string) {
+  const patterns = getRealtimeBookingSenderPatterns();
+  if (!patterns.length) return true;
+  const normalizedSender = String(sender || "").toLowerCase();
+  return patterns.some((pattern) => normalizedSender.includes(pattern));
 }
 
 export function listRealtimeQueue() {
@@ -264,7 +280,7 @@ export function ingestVehiclePrices(input: {
   const receivedAt = input.receivedAt || new Date().toISOString();
   const parsedAt = new Date().toISOString();
 
-  const validSubject = isRealtimeBookingSubjectAllowed(input.subject);
+  const validSubject = isRealtimeBookingSubjectAllowed(input.subject) || isRealtimeBookingSenderAllowed(input.sender);
 
   if (!validSubject) {
     const ignored: MailLog = {

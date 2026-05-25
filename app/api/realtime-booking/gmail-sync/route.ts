@@ -7,7 +7,16 @@ export const runtime = "nodejs";
 function validateSecret(request: Request) {
   const expected = process.env.REALTIME_BOOKING_WEBHOOK_SECRET;
   if (!expected) return true;
-  return request.headers.get("x-realtime-booking-secret") === expected;
+  if (request.headers.get("x-realtime-booking-secret") === expected) return true;
+
+  const origin = request.headers.get("origin");
+  if (!origin) return false;
+
+  try {
+    return new URL(origin).host === new URL(request.url).host;
+  } catch {
+    return false;
+  }
 }
 
 export async function POST(request: Request) {

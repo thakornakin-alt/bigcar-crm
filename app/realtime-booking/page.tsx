@@ -66,6 +66,13 @@ type DashboardData = {
   mailLogs: MailLog[];
 };
 
+type GmailSyncResult = {
+  checked: number;
+  processed: unknown[];
+  skipped?: unknown[];
+  error?: string;
+};
+
 type LineGroup = {
   groupId: string;
   type: string;
@@ -130,6 +137,11 @@ export default function RealtimeBookingPage() {
   const [lineGroups, setLineGroups] = useState<LineGroup[]>([]);
   const [lineTargetId, setLineTargetId] = useState("");
   const [autoSendLine, setAutoSendLine] = useState(false);
+  const [gmailStatus, setGmailStatus] = useState<{
+    state: "idle" | "checking" | "ok" | "error";
+    text: string;
+    checkedAt?: string;
+  }>({ state: "idle", text: "กำลังรอรอบตรวจ Gmail" });
 
   async function loadDashboard() {
     const data = await api<DashboardData>("/api/realtime-booking/dashboard");
@@ -149,6 +161,18 @@ export default function RealtimeBookingPage() {
       loadDashboard().catch(() => undefined);
     }, 3000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    syncRealGmail(true).catch(() => undefined);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        syncRealGmail(true).catch(() => undefined);
+      }
+    }, 15000);
+    return () => window.clearInterval(timer);
+    // syncRealGmail intentionally reads current UI state on each tick; keeping one timer avoids duplicate polling.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -230,13 +254,16 @@ export default function RealtimeBookingPage() {
     }
   }
 
-  async function syncRealGmail() {
+  async function syncRealGmail(silent = false) {
     setGmailSyncing(true);
-    setError("");
-    setMessage("");
+    setGmailStatus({ state: "checking", text: "กำลังตรวจ Gmail...", checkedAt: new Date().toISOString() });
+    if (!silent) {
+      setError("");
+      setMessage("");
+    }
 
     try {
-      const result = await api<{ checked: number; processed: unknown[] }>("/api/realtime-booking/gmail-sync", {
+      const result = await api<GmailSyncResult>("/api/realtime-booking/gmail-sync", {
         method: "POST",
         body: JSON.stringify({ maxResults: 5 })
       });
@@ -244,9 +271,18 @@ export default function RealtimeBookingPage() {
       if (autoSendLine && lineTargetId) {
         await sendPendingMatched(latest);
       }
-      setMessage(`Sync Gmail จริงแล้ว: ตรวจ ${result.checked} เมล / process ${result.processed.length} รายการ`);
+      setGmailStatus({
+        state: "ok",
+        text: `ตรวจ ${result.checked} เมล / ใช้ได้ ${result.processed.length} / ข้าม ${(result.skipped || []).length}`,
+        checkedAt: new Date().toISOString()
+      });
+      if (!silent) {
+        setMessage(`Sync Gmail จริงแล้ว: ตรวจ ${result.checked} เมล / process ${result.processed.length} รายการ`);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sync Gmail จริงไม่สำเร็จ");
+      const nextError = err instanceof Error ? err.message : "Sync Gmail จริงไม่สำเร็จ";
+      setGmailStatus({ state: "error", text: nextError, checkedAt: new Date().toISOString() });
+      if (!silent) setError(nextError);
     } finally {
       setGmailSyncing(false);
     }
@@ -373,6 +409,30 @@ export default function RealtimeBookingPage() {
         </SectionCard>
 
         <SectionCard title="สถานะคิวแย่งรถ realtime" icon={<Activity size={18} />}>
+          <div
+            className={`rounded-lg border p-3 text-sm ${
+              gmailStatus.state === "error"
+                ? "border-red-300/35 bg-red-300/10 text-red-100"
+                : gmailStatus.state === "checking"
+                  ? "border-cyan-300/35 bg-cyan-300/10 text-cyan-100"
+                  : "border-green-300/25 bg-green-300/10 text-green-100"
+            }`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 font-bold">
+                {gmailStatus.state === "checking" ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
+                ตรวจ Gmail อัตโนมัติทุก 15 วิ
+              </div>
+              <span className="text-xs text-soft">{gmailStatus.checkedAt ? time(gmailStatus.checkedAt) : "-"}</span>
+            </div>
+            <p className="mt-1 leading-5">{gmailStatus.text}</p>
+            {gmailStatus.state === "error" && gmailStatus.text.includes("Missing environment variable") && (
+              <p className="mt-2 rounded-md border border-red-300/25 bg-black/20 p-2 text-xs leading-5">
+                ยังไม่ได้ตั้งค่า Gmail env บนเครื่อง/บน Vercel ให้ครบ: GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN
+              </p>
+            )}
+          </div>
+
           <div className="rounded-lg border border-cyan-300/25 bg-cyan-300/5 p-3">
             <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
               <label className="block">
@@ -433,7 +493,7 @@ export default function RealtimeBookingPage() {
               </button>
               <button
                 type="button"
-                onClick={syncRealGmail}
+                onClick={() => syncRealGmail()}
                 disabled={gmailSyncing}
                 className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-brand/40 bg-brand/10 px-4 font-bold text-brand"
               >

@@ -1,7 +1,9 @@
 import * as XLSX from "xlsx";
 import {
+  getRealtimeBookingSenderPatterns,
   getRealtimeBookingSubjectPatterns,
   ingestVehiclePrices,
+  isRealtimeBookingSenderAllowed,
   isRealtimeBookingSubjectAllowed
 } from "@/lib/realtime-booking";
 
@@ -114,17 +116,27 @@ async function gmailFetch<T>(path: string, token: string) {
   return (await response.json()) as T;
 }
 
-function isAllowedMessage(message: GmailMessage) {
+function messageDecision(message: GmailMessage) {
   const subject = headerValue(message, "Subject");
   const from = headerValue(message, "From");
   const to = [headerValue(message, "To"), headerValue(message, "Cc")].join(" ");
-  const senderDomain = process.env.REALTIME_BOOKING_GMAIL_SENDER_DOMAIN || "";
   const recipientContains = process.env.REALTIME_BOOKING_GMAIL_RECIPIENT_CONTAINS || "";
+  const subjectAllowed = isRealtimeBookingSubjectAllowed(subject);
+  const senderAllowed = isRealtimeBookingSenderAllowed(from);
 
-  if (!isRealtimeBookingSubjectAllowed(subject)) return false;
-  if (senderDomain && !from.toLowerCase().includes(senderDomain.toLowerCase())) return false;
-  if (recipientContains && !to.toLowerCase().includes(recipientContains.toLowerCase())) return false;
-  return true;
+  if (!subjectAllowed && !senderAllowed) {
+    return {
+      allowed: false,
+      reason: `subject/sender ไม่ตรงเงื่อนไข (${getRealtimeBookingSubjectPatterns().join(" / ")} | ${getRealtimeBookingSenderPatterns().join(" / ")})`,
+      subject,
+      from,
+      to
+    };
+  }
+  if (recipientContains && !to.toLowerCase().includes(recipientContains.toLowerCase())) {
+    return { allowed: false, reason: `recipient ไม่ตรง ${recipientContains}`, subject, from, to };
+  }
+  return { allowed: true, reason: "", subject, from, to };
 }
 
 function parseWorkbook(buffer: Buffer) {
@@ -183,14 +195,24 @@ export async function syncRealtimeBookingFromGmail(input: { query?: string; maxR
   const messageIds = list.messages || [];
 
   const processed = [];
+  const skipped = [];
 
   for (const summary of messageIds) {
     const message = await gmailFetch<GmailMessage>(`/messages/${encodeURIComponent(summary.id)}?format=full`, token);
-    if (!isAllowedMessage(message)) continue;
+    const decision = messageDecision(message);
+    if (!decision.allowed) {
+      skipped.push({
+        messageId: message.id,
+        subject: decision.subject,
+        sender: decision.from,
+        reason: decision.reason
+      });
+      continue;
+    }
 
-    const subject = headerValue(message, "Subject");
-    const sender = headerValue(message, "From");
-    const recipient = [headerValue(message, "To"), headerValue(message, "Cc")].filter(Boolean).join(", ");
+    const subject = decision.subject;
+    const sender = decision.from;
+    const recipient = [decision.to].filter(Boolean).join(", ");
     const receivedAt = message.internalDate ? new Date(Number(message.internalDate)).toISOString() : new Date().toISOString();
     const attachments: ParsedAttachment[] = [];
 
@@ -223,7 +245,9 @@ export async function syncRealtimeBookingFromGmail(input: { query?: string; maxR
     ok: true,
     query,
     subjectPatterns,
+    senderPatterns: getRealtimeBookingSenderPatterns(),
     checked: messageIds.length,
-    processed
+    processed,
+    skipped
   };
 }
