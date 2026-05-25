@@ -1,199 +1,334 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Car, Copy, Gauge, Loader2, MapPin, RefreshCw, Search, Send, Tag } from "lucide-react";
-import { FilterChip, PageContainer, PageTitle, SearchField, SectionCard } from "@/app/components/ui";
-import type { StockVehicle } from "@/lib/types";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  Activity,
+  CheckCircle2,
+  Clock3,
+  Copy,
+  Loader2,
+  Mail,
+  Search,
+  Send,
+  XCircle,
+  Zap
+} from "lucide-react";
+import { PageContainer, PageTitle, SectionCard } from "@/app/components/ui";
+import { useSalesProfile } from "@/lib/use-sales-profile";
+import type { RealtimePaymentType, RealtimeQueueStatus } from "@/lib/realtime-booking";
 
-type StockListResponse = {
-  vehicles: StockVehicle[];
-  total: number;
-  warning?: string;
+type QueueItem = {
+  id: string;
+  plate: string;
+  customerName: string;
+  discount: number;
+  paymentType: RealtimePaymentType;
+  saleName: string;
+  waitingOrder: number;
+  status: RealtimeQueueStatus;
+  createdAt: string;
+  matchedAt?: string;
+  rtPrice?: number;
+  finalPrice?: number;
+  bookingText?: string;
+  note?: string;
+  lineStatus?: "not_sent" | "sent" | "failed";
+  lineSentAt?: string;
+  lineTargetId?: string;
+  lineError?: string;
 };
 
-type PriceFilter = {
-  min: string;
-  max: string;
+type MailLog = {
+  id: string;
+  subject: string;
+  sender: string;
+  recipient: string;
+  receivedAt: string;
+  status: string;
+  vehicleCount: number;
+  matchedCount: number;
+  durationMs: number;
+  error?: string;
 };
 
-function normalize(value: unknown) {
-  return String(value ?? "").trim();
+type DashboardData = {
+  vehicleCount: number;
+  waiting: number;
+  matched: number;
+  booked: number;
+  duplicated: number;
+  cancelled: number;
+  onlineUsers: number;
+  lastSyncAt: string;
+  latestMail: MailLog | null;
+  queue: QueueItem[];
+  mailLogs: MailLog[];
+};
+
+type LineGroup = {
+  groupId: string;
+  type: string;
+  name: string;
+  lastSeenAt: string;
+};
+
+const blankForm = {
+  plate: "",
+  customerName: "",
+  discount: "10000",
+  paymentType: "finance" as RealtimePaymentType,
+  saleName: "ฐากร บิ๊ก ทีมพี่ลีฟ"
+};
+
+function profileSaleName(user: { firstName: string; nickname: string; position: string } | null) {
+  if (!user) return blankForm.saleName;
+  const team = user.position && user.position !== "Sales" ? user.position : "ทีมพี่ลีฟ";
+  return [user.firstName, user.nickname, team].filter(Boolean).join(" ").trim() || blankForm.saleName;
 }
 
-function searchable(value: unknown) {
-  return normalize(value).toLowerCase().replace(/\s+/g, "");
-}
-
-function formatMoney(value: unknown) {
-  const raw = normalize(value).replace(/[^\d.]/g, "");
-  const number = Number(raw);
-  if (!number) return "-";
-  return `${new Intl.NumberFormat("th-TH", { maximumFractionDigits: 0 }).format(number)} บาท`;
-}
-
-function numericPrice(value: unknown) {
-  const number = Number(normalize(value).replace(/[^\d.]/g, ""));
-  return Number.isFinite(number) ? number : 0;
-}
-
-function vehicleName(vehicle: StockVehicle) {
-  return [vehicle.brand, vehicle.model].map(normalize).filter(Boolean).join(" ") || "-";
-}
-
-function compactPlate(value: string) {
-  return value.replace(/\s+/g, "");
-}
-
-function uniqueOptions(values: Array<string | undefined>) {
-  return Array.from(new Set(values.map((value) => normalize(value)).filter(Boolean))).sort((a, b) => a.localeCompare(b, "th"));
-}
-
-function vehicleText(vehicle: StockVehicle) {
-  return [
-    vehicle.plate,
-    compactPlate(vehicle.plate || ""),
-    vehicle.brand,
-    vehicle.model,
-    vehicle.year,
-    vehicle.color,
-    vehicle.salePrice,
-    vehicle.parkingLocation,
-    vehicle.status,
-    vehicle.gear,
-    vehicle.mileage,
-    vehicle.vehicleGroup
-  ]
-    .map(searchable)
-    .join("");
-}
-
-function copyMessage(vehicle: StockVehicle) {
-  return [
-    "ข้อมูลรถ",
-    `ทะเบียน: ${vehicle.plate || "-"}`,
-    `รุ่น: ${vehicleName(vehicle)}`,
-    `ปีจด: ${vehicle.year || "-"}`,
-    `สี: ${vehicle.color || "-"}`,
-    `เกียร์: ${vehicle.gear || "-"}`,
-    `เลขไมล์: ${vehicle.mileage || "-"}`,
-    `ราคาเสนอขาย RT: ${formatMoney(vehicle.salePrice)}`,
-    `สถานะ: ${vehicle.status || "-"}`,
-    `Location: ${vehicle.parkingLocation || "-"}`,
-    `กลุ่มรถยนต์: ${vehicle.vehicleGroup || "-"}`
-  ].join("\n");
-}
-
-async function readJson<T>(url: string): Promise<T> {
-  const response = await fetch(url);
+async function api<T>(url: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options?.headers || {})
+    }
+  });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "โหลดข้อมูลไม่สำเร็จ");
+  if (!response.ok) throw new Error(data.error || "Request failed");
   return data;
 }
 
-export default function FastVehicleSearchPage() {
-  const [vehicles, setVehicles] = useState<StockVehicle[]>([]);
-  const [query, setQuery] = useState("");
-  const [groupFilter, setGroupFilter] = useState("ทั้งหมด");
-  const [statusFilter, setStatusFilter] = useState("ทั้งหมด");
-  const [locationFilter, setLocationFilter] = useState("ทั้งหมด");
-  const [priceFilter, setPriceFilter] = useState<PriceFilter>({ min: "", max: "" });
-  const [loading, setLoading] = useState(true);
+function money(value?: number) {
+  if (!value) return "-";
+  return new Intl.NumberFormat("th-TH", { maximumFractionDigits: 0 }).format(value);
+}
+
+function time(value?: string) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("th-TH", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    day: "2-digit",
+    month: "2-digit"
+  }).format(new Date(value));
+}
+
+export default function RealtimeBookingPage() {
+  const { user: salesProfile } = useSalesProfile();
+  const [form, setForm] = useState(blankForm);
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [gmailSyncing, setGmailSyncing] = useState(false);
+  const [sendingLineId, setSendingLineId] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [copiedPlate, setCopiedPlate] = useState("");
+  const [query, setQuery] = useState("");
+  const [lineGroups, setLineGroups] = useState<LineGroup[]>([]);
+  const [lineTargetId, setLineTargetId] = useState("");
+  const [autoSendLine, setAutoSendLine] = useState(false);
 
-  async function loadStock() {
-    setLoading(true);
-    setError("");
-    setMessage("");
-    try {
-      const data = await readJson<StockListResponse>("/api/stock/list?limit=1000");
-      setVehicles(data.vehicles || []);
-      if (data.warning) setMessage(data.warning);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "โหลดสต็อกไม่สำเร็จ");
-      setVehicles([]);
-    } finally {
-      setLoading(false);
-    }
+  async function loadDashboard() {
+    const data = await api<DashboardData>("/api/realtime-booking/dashboard");
+    setDashboard(data);
+    return data;
   }
 
   useEffect(() => {
-    loadStock();
+    loadDashboard().catch((err) => setError(err.message));
+    api<{ groups: LineGroup[] }>("/api/line/groups")
+      .then((data) => {
+        setLineGroups(data.groups || []);
+        if (data.groups?.[0]?.groupId) setLineTargetId(data.groups[0].groupId);
+      })
+      .catch(() => undefined);
+    const timer = window.setInterval(() => {
+      loadDashboard().catch(() => undefined);
+    }, 3000);
+    return () => window.clearInterval(timer);
   }, []);
 
-  const groups = useMemo(() => uniqueOptions(vehicles.map((vehicle) => vehicle.vehicleGroup)), [vehicles]);
-  const statuses = useMemo(() => uniqueOptions(vehicles.map((vehicle) => vehicle.status)), [vehicles]);
-  const locations = useMemo(() => uniqueOptions(vehicles.map((vehicle) => vehicle.parkingLocation)), [vehicles]);
+  useEffect(() => {
+    if (!salesProfile) return;
+    setForm((current) => ({
+      ...current,
+      saleName: !current.saleName || current.saleName === blankForm.saleName ? profileSaleName(salesProfile) : current.saleName
+    }));
+  }, [salesProfile]);
 
-  const filteredVehicles = useMemo(() => {
-    const term = searchable(query);
-    const minPrice = Number(priceFilter.min.replace(/[^\d.]/g, ""));
-    const maxPrice = Number(priceFilter.max.replace(/[^\d.]/g, ""));
+  const filteredQueue = useMemo(() => {
+    const term = query.trim().toLowerCase().replace(/\s+/g, "");
+    const queue = dashboard?.queue || [];
+    if (!term) return queue;
+    return queue.filter((item) =>
+      [item.plate, item.customerName, item.saleName, item.status]
+        .join("")
+        .toLowerCase()
+        .replace(/\s+/g, "")
+        .includes(term)
+    );
+  }, [dashboard?.queue, query]);
 
-    return vehicles.filter((vehicle) => {
-      if (term && !vehicleText(vehicle).includes(term)) return false;
-      if (groupFilter !== "ทั้งหมด" && normalize(vehicle.vehicleGroup) !== groupFilter) return false;
-      if (statusFilter !== "ทั้งหมด" && normalize(vehicle.status) !== statusFilter) return false;
-      if (locationFilter !== "ทั้งหมด" && normalize(vehicle.parkingLocation) !== locationFilter) return false;
+  async function handleWaiting(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    setMessage("");
 
-      const price = numericPrice(vehicle.salePrice);
-      if (minPrice && price < minPrice) return false;
-      if (maxPrice && price > maxPrice) return false;
-
-      return true;
-    });
-  }, [vehicles, query, groupFilter, statusFilter, locationFilter, priceFilter]);
-
-  const visibleVehicles = filteredVehicles.slice(0, 80);
-
-  function clearFilters() {
-    setQuery("");
-    setGroupFilter("ทั้งหมด");
-    setStatusFilter("ทั้งหมด");
-    setLocationFilter("ทั้งหมด");
-    setPriceFilter({ min: "", max: "" });
-    setCopiedPlate("");
+    try {
+      const data = await api<{ item: QueueItem }>("/api/realtime-booking/waiting", {
+        method: "POST",
+        body: JSON.stringify({
+          ...form,
+          discount: Number(form.discount || 0)
+        })
+      });
+      setForm((current) => ({ ...current, plate: "", customerName: "" }));
+      if (autoSendLine && data.item.status === "MATCHED" && lineTargetId) {
+        await sendLine(data.item, true);
+      }
+      await loadDashboard();
+      setMessage(data.item.status === "MATCHED" ? "Match ราคา RT สำเร็จ พร้อม Copy ข้อความ" : "บันทึกคิวแย่งรถแล้ว");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "บันทึกคิวไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  async function copyVehicle(vehicle: StockVehicle) {
-    const text = copyMessage(vehicle);
+  async function simulateMailSync() {
+    setSyncing(true);
+    setError("");
+    setMessage("");
+
+    try {
+      await api("/api/realtime-booking/prices", {
+        method: "POST",
+        body: JSON.stringify({
+          subject: "Pricing and Status Update",
+          sender: "rdd-pricing@segroup.co.th",
+          recipient: "retail-bangna@bigcarrdd.local",
+          rows: [
+            { plate: "1ขห 9832", rtPrice: 764000 },
+            { plate: "1นข 4313", rtPrice: 912000 },
+            { plate: "3ฒศ 4326", rtPrice: 324000 }
+          ]
+        })
+      });
+      const latest = await loadDashboard();
+      if (autoSendLine && lineTargetId) {
+        await sendPendingMatched(latest);
+      }
+      setMessage("จำลอง Gmail Push + Parse ราคา RT แล้ว");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sync ราคาไม่สำเร็จ");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function syncRealGmail() {
+    setGmailSyncing(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const result = await api<{ checked: number; processed: unknown[] }>("/api/realtime-booking/gmail-sync", {
+        method: "POST",
+        body: JSON.stringify({ maxResults: 5 })
+      });
+      const latest = await loadDashboard();
+      if (autoSendLine && lineTargetId) {
+        await sendPendingMatched(latest);
+      }
+      setMessage(`Sync Gmail จริงแล้ว: ตรวจ ${result.checked} เมล / process ${result.processed.length} รายการ`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sync Gmail จริงไม่สำเร็จ");
+    } finally {
+      setGmailSyncing(false);
+    }
+  }
+
+  async function copyText(text?: string) {
+    if (!text) return;
     await navigator.clipboard.writeText(text);
-    setCopiedPlate(vehicle.plate || "");
-    setMessage(`คัดลอกข้อมูล ${vehicle.plate || vehicleName(vehicle)} แล้ว`);
+    setMessage("Copy ข้อความจองแล้ว");
   }
 
-  async function shareVehicle(vehicle: StockVehicle) {
-    const text = copyMessage(vehicle);
-    if (navigator.share) {
-      await navigator.share({ text });
+  async function markBooked(item: QueueItem) {
+    try {
+      await api("/api/realtime-booking/book", {
+        method: "POST",
+        body: JSON.stringify({ id: item.id })
+      });
+      await loadDashboard();
+      setMessage(`Lock จองทะเบียน ${item.plate} แล้ว`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Lock จองไม่สำเร็จ");
+    }
+  }
+
+  async function sendLine(item: QueueItem, silent = false) {
+    if (!lineTargetId) {
+      setError("กรุณาเลือก LINE group ก่อนส่ง");
       return;
     }
-    await copyVehicle(vehicle);
+
+    setSendingLineId(item.id);
+    setError("");
+    if (!silent) setMessage("");
+
+    try {
+      await api("/api/realtime-booking/send-line", {
+        method: "POST",
+        body: JSON.stringify({ id: item.id, targetId: lineTargetId })
+      });
+      await loadDashboard();
+      if (!silent) setMessage(`ส่ง LINE สำหรับทะเบียน ${item.plate} แล้ว`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ส่ง LINE ไม่สำเร็จ");
+    } finally {
+      setSendingLineId("");
+    }
+  }
+
+  async function sendPendingMatched(data: DashboardData) {
+    const pending = data.queue.filter((item) => item.status === "MATCHED" && item.lineStatus !== "sent" && item.bookingText);
+    for (const item of pending.slice(0, 5)) {
+      await sendLine(item, true);
+    }
+  }
+
+  async function cancelQueue(item: QueueItem) {
+    const confirmed = window.confirm(`ยกเลิกคิวทะเบียน ${item.plate} ใช่ไหม?`);
+    if (!confirmed) return;
+
+    try {
+      await api("/api/realtime-booking/cancel", {
+        method: "POST",
+        body: JSON.stringify({ id: item.id, reason: "ยกเลิกโดยเซลส์" })
+      });
+      await loadDashboard();
+      setMessage(`ยกเลิกคิวทะเบียน ${item.plate} แล้ว`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ยกเลิกคิวไม่สำเร็จ");
+    }
   }
 
   return (
     <PageContainer wide>
       <PageTitle
         title="แย่งคิวรถ"
-        subtitle="ค้นหารถเร็วพิเศษ แล้วคัดลอกข้อมูลไปส่งต่อในช่องทางจริง"
-        actions={
-          <button
-            type="button"
-            onClick={loadStock}
-            disabled={loading}
-            className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-bold text-white transition hover:border-brand disabled:opacity-60"
-          >
-            {loading ? <Loader2 size={18} className="animate-spin text-brand" /> : <RefreshCw size={18} className="text-brand" />}
-            รีเฟรช
-          </button>
-        }
+        subtitle="คิวรถ realtime"
       />
 
       {(message || error) && (
         <div
           className={`mb-4 rounded-lg border px-4 py-3 text-sm font-semibold ${
-            error ? "border-red-400/40 bg-red-950/30 text-red-100" : "border-brand/40 bg-brand/10 text-brand"
+            error ? "border-red-400/40 bg-red-950/30 text-red-100" : "border-cyan-300/40 bg-cyan-950/25 text-cyan-100"
           }`}
         >
           {error || message}
@@ -201,186 +336,313 @@ export default function FastVehicleSearchPage() {
       )}
 
       <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-        <SectionCard title="ค้นหารถ" icon={<Search size={18} />}>
-          <SearchField
-            icon={<Search size={18} />}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="ทะเบียน / รุ่น / กลุ่มรถ / สถานะ / ราคา / Location"
-            autoFocus
-          />
-
-          <div className="grid gap-2 sm:grid-cols-2">
+        <SectionCard title="แย่งคิวรถ" icon={<Zap size={18} />}>
+          <form onSubmit={handleWaiting} className="space-y-3">
+            <Field label="ทะเบียนรถ" value={form.plate} onChange={(value) => setForm((cur) => ({ ...cur, plate: value }))} placeholder="1ขห 9832" autoFocus />
+            <Field label="ชื่อ-นามสกุลลูกค้า" value={form.customerName} onChange={(value) => setForm((cur) => ({ ...cur, customerName: value }))} placeholder="วิชาญชัย พรหมโท" />
+            <Field label="ส่วนลด" value={form.discount} onChange={(value) => setForm((cur) => ({ ...cur, discount: value.replace(/\D/g, "") }))} placeholder="10000" inputMode="numeric" />
             <label className="block">
-              <span className="mb-1.5 block text-xs font-bold text-soft">ราคาต่ำสุด</span>
-              <input
-                value={priceFilter.min}
-                onChange={(event) => setPriceFilter((current) => ({ ...current, min: event.target.value.replace(/[^\d]/g, "") }))}
-                inputMode="numeric"
-                placeholder="เช่น 300000"
-                className="h-11 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-semibold text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-bold text-soft">ราคาสูงสุด</span>
-              <input
-                value={priceFilter.max}
-                onChange={(event) => setPriceFilter((current) => ({ ...current, max: event.target.value.replace(/[^\d]/g, "") }))}
-                inputMode="numeric"
-                placeholder="เช่น 900000"
-                className="h-11 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-semibold text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
-              />
-            </label>
-          </div>
-
-          <FilterBlock title="กลุ่มรถยนต์">
-            <FilterChip active={groupFilter === "ทั้งหมด"} onClick={() => setGroupFilter("ทั้งหมด")}>ทั้งหมด</FilterChip>
-            {groups.map((group) => (
-              <FilterChip key={group} active={groupFilter === group} onClick={() => setGroupFilter(group)}>
-                {group}
-              </FilterChip>
-            ))}
-          </FilterBlock>
-
-          <FilterBlock title="สถานะ">
-            <FilterChip active={statusFilter === "ทั้งหมด"} onClick={() => setStatusFilter("ทั้งหมด")}>ทั้งหมด</FilterChip>
-            {statuses.map((status) => (
-              <FilterChip key={status} active={statusFilter === status} onClick={() => setStatusFilter(status)}>
-                {status}
-              </FilterChip>
-            ))}
-          </FilterBlock>
-
-          <FilterBlock title="สถานที่">
-            <FilterChip active={locationFilter === "ทั้งหมด"} onClick={() => setLocationFilter("ทั้งหมด")}>ทั้งหมด</FilterChip>
-            {locations.map((location) => (
-              <FilterChip key={location} active={locationFilter === location} onClick={() => setLocationFilter(location)}>
-                {location}
-              </FilterChip>
-            ))}
-          </FilterBlock>
-
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-[#0b0d11] px-3 py-2">
-            <p className="text-sm font-bold text-white">
-              พบ {filteredVehicles.length.toLocaleString("th-TH")} คัน
-              <span className="ml-2 text-xs text-soft">จากสต็อก {vehicles.length.toLocaleString("th-TH")} คัน</span>
-            </p>
-            <button type="button" onClick={clearFilters} className="min-h-9 rounded-lg border border-line px-3 text-sm font-bold text-soft transition hover:border-brand hover:text-white">
-              ล้าง
-            </button>
-          </div>
-        </SectionCard>
-
-        <SectionCard title="ผลลัพธ์พร้อมส่งต่อ" icon={<Car size={18} />}>
-          {loading ? (
-            <div className="flex min-h-[280px] items-center justify-center rounded-lg border border-line bg-[#0b0d11] text-soft">
-              <Loader2 size={22} className="mr-2 animate-spin text-brand" />
-              กำลังโหลดสต็อก
-            </div>
-          ) : visibleVehicles.length ? (
-            <>
-              <div className="space-y-2">
-                {visibleVehicles.map((vehicle) => (
-                  <VehicleCard
-                    key={`${vehicle.plate}-${vehicle.vin || vehicle.model}`}
-                    vehicle={vehicle}
-                    copied={copiedPlate === vehicle.plate}
-                    onCopy={() => copyVehicle(vehicle)}
-                    onShare={() => shareVehicle(vehicle)}
-                  />
+              <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">ช่องทางชำระเงิน</span>
+              <div className="grid grid-cols-2 gap-2">
+                {(["finance", "cash"] as RealtimePaymentType[]).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setForm((cur) => ({ ...cur, paymentType: type }))}
+                    className={`min-h-12 rounded-lg border px-3 text-sm font-bold ${
+                      form.paymentType === type
+                        ? "border-cyan-300 bg-cyan-300 text-slate-950"
+                        : "border-line bg-[#0b0d11] text-soft"
+                    }`}
+                  >
+                    {type === "finance" ? "ไฟแนนซ์" : "เงินสด"}
+                  </button>
                 ))}
               </div>
-              {filteredVehicles.length > visibleVehicles.length && (
-                <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-center text-sm font-semibold text-soft">
-                  แสดง 80 คันแรก กรองให้แคบลงเพื่อค้นเร็วขึ้น
-                </p>
-              )}
-            </>
-          ) : (
-            <div className="rounded-lg border border-line bg-[#0b0d11] px-4 py-10 text-center">
-              <p className="text-lg font-black text-white">ไม่พบรถตามเงื่อนไข</p>
-              <p className="mt-1 text-sm text-soft">ลองค้นเลขท้ายทะเบียน รุ่น หรือเลือกตัวกรองให้น้อยลง</p>
+            </label>
+            <Field label="เซลส์เจ้าของเคส" value={form.saleName} onChange={(value) => setForm((cur) => ({ ...cur, saleName: value }))} />
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 py-3 text-base font-black text-slate-950 transition hover:bg-cyan-200 disabled:opacity-60"
+            >
+              {saving ? <Loader2 size={20} className="animate-spin" /> : <Clock3 size={20} />}
+              แย่งคิวรถ
+            </button>
+          </form>
+        </SectionCard>
+
+        <SectionCard title="สถานะคิวแย่งรถ realtime" icon={<Activity size={18} />}>
+          <div className="rounded-lg border border-cyan-300/25 bg-cyan-300/5 p-3">
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">กลุ่ม LINE แจ้งผล</span>
+                <select
+                  value={lineTargetId}
+                  onChange={(event) => setLineTargetId(event.target.value)}
+                  className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none focus:border-cyan-300"
+                >
+                  <option value="">เลือกกลุ่ม LINE</option>
+                  {lineGroups.map((group) => (
+                    <option key={group.groupId} value={group.groupId}>
+                      {group.name || group.groupId}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex min-h-12 items-center gap-3 rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-bold text-white sm:mt-6">
+                <input
+                  type="checkbox"
+                  checked={autoSendLine}
+                  onChange={(event) => setAutoSendLine(event.target.checked)}
+                  className="h-5 w-5 accent-cyan-300"
+                />
+                ส่ง LINE อัตโนมัติเมื่อ Match
+              </label>
             </div>
-          )}
+            {!lineGroups.length && (
+              <p className="mt-2 text-xs text-amber-100">
+                ยังไม่พบกลุ่ม LINE จากระบบ ตั้งค่าที่หน้า LINE ก่อน หรือเชิญ LINE OA เข้ากลุ่มแล้วส่งข้อความในกลุ่มหนึ่งครั้ง
+              </p>
+            )}
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+            <label className="flex min-h-12 items-center gap-3 rounded-lg border border-line bg-[#0b0d11] px-3">
+              <Search size={20} className="text-cyan-300" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="ค้นเลขท้ายทะเบียน / ลูกค้า / เซลส์"
+                className="h-12 min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-[#6f7785]"
+              />
+            </label>
+          </div>
+
+          <details className="rounded-lg border border-line bg-[#0b0d11] p-3">
+            <summary className="cursor-pointer text-sm font-bold text-soft">เครื่องมือแอดมิน / ทดสอบระบบ</summary>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={simulateMailSync}
+                disabled={syncing}
+                className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-cyan-300/40 bg-cyan-300/10 px-4 font-bold text-cyan-100"
+              >
+                {syncing ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
+                จำลองเมลราคา
+              </button>
+              <button
+                type="button"
+                onClick={syncRealGmail}
+                disabled={gmailSyncing}
+                className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-brand/40 bg-brand/10 px-4 font-bold text-brand"
+              >
+                {gmailSyncing ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
+                Sync Gmail เอง
+              </button>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-soft">
+              ใช้เฉพาะตอนทดสอบหรือกรณี Gmail Push ไม่มา หน้าใช้งานจริงให้รอระบบอัตโนมัติ
+            </p>
+
+            <div className="mt-4 rounded-lg border border-line bg-black/20 p-3">
+              <p className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-soft">ประวัติเมลราคา</p>
+              {(dashboard?.mailLogs || []).length ? (
+                <div className="space-y-2">
+                  {dashboard?.mailLogs.slice(0, 5).map((log) => (
+                    <div key={log.id} className="rounded-lg border border-line bg-[#0b0d11] p-3 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-bold text-white">{log.subject}</p>
+                        <span className="rounded-full border border-cyan-300/40 px-2 py-1 text-xs font-bold text-cyan-100">{log.status}</span>
+                      </div>
+                      <p className="mt-1 text-soft">{log.sender} / {time(log.receivedAt)}</p>
+                      <p className="mt-2 text-[#dbe7f3]">รถ {log.vehicleCount} คัน / match {log.matchedCount} คิว / {log.durationMs} ms</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-lg border border-line bg-[#0b0d11] p-3 text-sm text-soft">ยังไม่มี log เมล</p>
+              )}
+            </div>
+
+            <div className="mt-3 rounded-lg border border-line bg-black/20 p-3">
+              <p className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-soft">โหมดความเร็ว</p>
+              <ul className="space-y-1.5 text-xs leading-5 text-[#dbe7f3]">
+                <li>หลัก: Gmail Push/Webhook เมื่อเมลใหม่เข้า ระบบ Match ทันที</li>
+                <li>สำรอง: ปุ่ม Sync Gmail เอง ใช้กรณี Gmail Push ไม่มา</li>
+                <li>กันพลาด: ราคา RT เก่ากว่าเวลาที่กดคิวจะไม่ถูกนำมา Match</li>
+                <li>ส่งต่อ: เปิด “ส่ง LINE อัตโนมัติเมื่อ Match” เพื่อไม่ต้องกดเอง</li>
+              </ul>
+            </div>
+          </details>
+
+          <div className="space-y-2">
+            {filteredQueue.length ? (
+              filteredQueue.map((item) => (
+                <QueueCard
+                  key={item.id}
+                  item={item}
+                  onCopy={() => copyText(item.bookingText)}
+                  onBooked={() => markBooked(item)}
+                  onCancel={() => cancelQueue(item)}
+                  onSendLine={() => sendLine(item)}
+                  sendingLine={sendingLineId === item.id}
+                />
+              ))
+            ) : (
+              <div className="rounded-lg border border-line bg-[#0b0d11] px-4 py-8 text-center text-soft">
+                ยังไม่มีคิวแย่งรถ
+              </div>
+            )}
+          </div>
         </SectionCard>
       </div>
     </PageContainer>
   );
 }
 
-function FilterBlock({ title, children }: { title: string; children: ReactNode }) {
+function CompactMetric({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
   return (
-    <section>
-      <p className="mb-2 text-xs font-black uppercase tracking-[0.16em] text-soft">{title}</p>
-      <div className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible">{children}</div>
-    </section>
+    <div className="rounded-md border border-line bg-panel/70 px-2 py-2 text-center">
+      <div className="mx-auto mb-1 flex h-6 w-6 items-center justify-center rounded-md border border-cyan-300/25 bg-cyan-300/10 text-cyan-200">
+        {icon}
+      </div>
+      <p className="text-lg font-black leading-none text-white">{value}</p>
+      <p className="mt-1 truncate text-[11px] font-bold text-soft">{label}</p>
+    </div>
   );
 }
 
-function VehicleCard({
-  vehicle,
-  copied,
-  onCopy,
-  onShare
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  inputMode,
+  autoFocus
 }: {
-  vehicle: StockVehicle;
-  copied: boolean;
-  onCopy: () => void;
-  onShare: () => void;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  inputMode?: "text" | "numeric";
+  autoFocus?: boolean;
 }) {
   return (
-    <article className="rounded-lg border border-line bg-[#0b0d11] p-3 transition hover:border-brand/60">
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">{label}</span>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        inputMode={inputMode}
+        autoFocus={autoFocus}
+        className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none placeholder:text-[#6f7785] focus:border-cyan-300"
+      />
+    </label>
+  );
+}
+
+function QueueCard({
+  item,
+  onCopy,
+  onBooked,
+  onCancel,
+  onSendLine,
+  sendingLine
+}: {
+  item: QueueItem;
+  onCopy: () => void;
+  onBooked: () => void;
+  onCancel: () => void;
+  onSendLine: () => void;
+  sendingLine: boolean;
+}) {
+  const statusStyle =
+    item.status === "MATCHED"
+      ? "border-cyan-300/40 bg-cyan-300/10 text-cyan-100"
+      : item.status === "BOOKED"
+        ? "border-green-300/40 bg-green-300/10 text-green-100"
+        : item.status === "CANCELLED"
+          ? "border-red-300/40 bg-red-300/10 text-red-100"
+        : item.status === "DUPLICATED"
+          ? "border-amber-300/40 bg-amber-300/10 text-amber-100"
+          : "border-line bg-[#121720] text-soft";
+
+  return (
+    <article className="rounded-lg border border-line bg-[#0b0d11] p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div>
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-xl font-black text-white">{vehicle.plate || "-"}</p>
-            {vehicle.status && <span className="rounded-full border border-brand/35 bg-brand/10 px-2.5 py-1 text-xs font-black text-brand">{vehicle.status}</span>}
+            <p className="text-xl font-black text-white">{item.plate}</p>
+            <span className={`rounded-full border px-2.5 py-1 text-xs font-black ${statusStyle}`}>{item.status}</span>
+            <span className="rounded-full border border-line px-2.5 py-1 text-xs text-soft">#{item.waitingOrder}</span>
           </div>
-          <p className="mt-1 line-clamp-2 text-sm font-bold text-[#dbe7f3]">{vehicleName(vehicle)}</p>
+          <p className="mt-1 text-sm text-soft">{item.customerName} / {item.saleName}</p>
         </div>
         <div className="text-right">
-          <p className="text-xs font-bold text-soft">ราคา RT</p>
-          <p className="text-lg font-black text-brand">{formatMoney(vehicle.salePrice)}</p>
+          <p className="text-sm text-soft">RT</p>
+          <p className="text-lg font-black text-cyan-200">{money(item.rtPrice)}</p>
         </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-soft sm:grid-cols-4">
-        <Info icon={<Tag size={15} />} label="กลุ่ม" value={vehicle.vehicleGroup || "-"} />
-        <Info icon={<MapPin size={15} />} label="Location" value={vehicle.parkingLocation || "-"} />
-        <Info icon={<Gauge size={15} />} label="ไมล์" value={vehicle.mileage || "-"} />
-        <Info icon={<Car size={15} />} label="ปี/เกียร์" value={[vehicle.year, vehicle.gear].filter(Boolean).join(" / ") || "-"} />
-      </div>
+      {item.note && <p className="mt-2 rounded-lg border border-amber-300/30 bg-amber-300/10 p-2 text-sm text-amber-100">{item.note}</p>}
+      {item.lineStatus && item.lineStatus !== "not_sent" && (
+        <p
+          className={`mt-2 rounded-lg border p-2 text-sm ${
+            item.lineStatus === "sent"
+              ? "border-green-300/30 bg-green-300/10 text-green-100"
+              : "border-red-300/30 bg-red-300/10 text-red-100"
+          }`}
+        >
+          LINE: {item.lineStatus === "sent" ? `ส่งแล้ว ${time(item.lineSentAt)}` : item.lineError || "ส่งไม่สำเร็จ"}
+        </p>
+      )}
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      {item.bookingText && (
+        <pre className="mt-3 whitespace-pre-wrap rounded-lg border border-line bg-black/30 p-3 text-sm leading-6 text-[#e8eef7]">
+          {item.bookingText}
+        </pre>
+      )}
+
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <button
           type="button"
           onClick={onCopy}
-          className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-3 text-sm font-black text-ink transition hover:bg-[#31e176]"
+          disabled={!item.bookingText}
+          className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 font-bold text-white disabled:opacity-40"
         >
           <Copy size={18} />
-          {copied ? "คัดลอกแล้ว" : "คัดลอก"}
+          Copy
         </button>
         <button
           type="button"
-          onClick={onShare}
-          className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-bold text-white transition hover:border-brand"
+          onClick={onSendLine}
+          disabled={!item.bookingText || sendingLine}
+          className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-cyan-300/40 bg-cyan-300/10 px-3 font-bold text-cyan-100 disabled:opacity-40"
         >
-          <Send size={18} className="text-brand" />
-          ส่งต่อ
+          {sendingLine ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+          LINE
+        </button>
+        <button
+          type="button"
+          onClick={onBooked}
+          disabled={item.status !== "MATCHED"}
+          className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-cyan-300 px-3 font-black text-slate-950 disabled:opacity-40"
+        >
+          <CheckCircle2 size={18} />
+          Lock Booked
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={item.status === "BOOKED" || item.status === "CANCELLED"}
+          className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-red-300/35 bg-red-300/10 px-3 font-bold text-red-100 disabled:opacity-40"
+        >
+          <XCircle size={18} />
+          Cancel
         </button>
       </div>
     </article>
-  );
-}
-
-function Info({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-line bg-black/20 px-2.5 py-2">
-      <p className="flex items-center gap-1.5 text-[11px] font-bold text-soft">
-        <span className="text-brand">{icon}</span>
-        {label}
-      </p>
-      <p className="mt-1 truncate font-bold text-white">{value}</p>
-    </div>
   );
 }
