@@ -55,8 +55,11 @@ export default function SettingsPage() {
   useEffect(() => {
     setSettings(readSystemSettings());
     loadGroups().catch((err) => setError(err.message));
-    checkStorage().catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (isAdmin) checkStorage().catch(() => undefined);
+  }, [isAdmin]);
 
   async function loadGroups() {
     setLoadingGroups(true);
@@ -152,52 +155,54 @@ export default function SettingsPage() {
         </div>
       )}
 
-      <div className="mb-4">
-        <SectionCard title="สถานะฐานข้อมูล" icon={<Database size={18} />}>
-          <div
-            className={`rounded-lg border px-4 py-3 ${
-              storageStatus?.ok
-                ? "border-brand/40 bg-brand/10"
-                : "border-amber-300/40 bg-amber-950/20"
-            }`}
-          >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-black text-white">
-                  {storageStatus?.info.provider === "supabase" ? "Supabase" : "Local JSON"}
-                  <span className={`ml-2 rounded-full border px-2 py-0.5 text-xs ${
-                    storageStatus?.ok ? "border-brand/40 text-brand" : "border-amber-300/40 text-amber-100"
-                  }`}>
-                    {storageStatus?.ok ? "พร้อมใช้งาน" : "ต้องตรวจสอบ"}
-                  </span>
-                </p>
-                <p className="mt-1 text-xs leading-5 text-soft">
-                  {storageStatus?.info.provider === "supabase"
-                    ? `Table: ${storageStatus.info.table || "big_car_crm_store"}`
-                    : `Path: ${storageStatus?.info.dataDir || ".data"}`}
-                </p>
-                {storageStatus?.error && <p className="mt-1 text-xs text-red-100">{storageStatus.error}</p>}
+      {isAdmin && (
+        <div className="mb-4">
+          <SectionCard title="สถานะฐานข้อมูล" icon={<Database size={18} />}>
+            <div
+              className={`rounded-lg border px-4 py-3 ${
+                storageStatus?.ok
+                  ? "border-brand/40 bg-brand/10"
+                  : "border-amber-300/40 bg-amber-950/20"
+              }`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black text-white">
+                    {storageStatus?.info.provider === "supabase" ? "Supabase" : "Local JSON"}
+                    <span className={`ml-2 rounded-full border px-2 py-0.5 text-xs ${
+                      storageStatus?.ok ? "border-brand/40 text-brand" : "border-amber-300/40 text-amber-100"
+                    }`}>
+                      {storageStatus?.ok ? "พร้อมใช้งาน" : "ต้องตรวจสอบ"}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-soft">
+                    {storageStatus?.info.provider === "supabase"
+                      ? `Table: ${storageStatus.info.table || "big_car_crm_store"}`
+                      : `Path: ${storageStatus?.info.dataDir || ".data"}`}
+                  </p>
+                  {storageStatus?.error && <p className="mt-1 text-xs text-red-100">{storageStatus.error}</p>}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => checkStorage().catch((err) => setError(err.message))}
+                  disabled={checkingStorage}
+                  className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line px-3 text-sm font-bold text-white disabled:opacity-60"
+                >
+                  {checkingStorage ? <Loader2 size={16} className="animate-spin text-brand" /> : <Database size={16} className="text-brand" />}
+                  ตรวจอีกครั้ง
+                </button>
+                <a
+                  href="/api/system/export"
+                  className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-3 text-sm font-black text-ink"
+                >
+                  <Download size={16} />
+                  Backup JSON
+                </a>
               </div>
-              <button
-                type="button"
-                onClick={() => checkStorage().catch((err) => setError(err.message))}
-                disabled={checkingStorage}
-                className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line px-3 text-sm font-bold text-white disabled:opacity-60"
-              >
-                {checkingStorage ? <Loader2 size={16} className="animate-spin text-brand" /> : <Database size={16} className="text-brand" />}
-                ตรวจอีกครั้ง
-              </button>
-              <a
-                href="/api/system/export"
-                className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-3 text-sm font-black text-ink"
-              >
-                <Download size={16} />
-                Backup JSON
-              </a>
             </div>
-          </div>
-        </SectionCard>
-      </div>
+          </SectionCard>
+        </div>
+      )}
 
       <div className="mb-4">
         <SectionCard title="ระบบทดลอง CRM v2" icon={<FlaskConical size={18} />}>
