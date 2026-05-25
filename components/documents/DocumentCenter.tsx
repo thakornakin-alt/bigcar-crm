@@ -4,6 +4,7 @@ import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { Download, Eye, FileImage, FileText, Loader2, Save, Search, Upload } from "lucide-react";
 import { FilterChip, PageContainer, PageTitle, SearchField, SectionCard, TopMenuButton } from "@/app/components/ui";
 import type { DocumentTemplateConfig, DocumentTemplateId } from "@/lib/documents/document-types";
+import { documentFileToOcrPayloads, mergeOcrRecords } from "@/lib/ocr/client-document-ocr";
 
 type DocumentHistoryItem = {
   id: string;
@@ -49,17 +50,26 @@ const draftKey = "bigcar-document-drafts-v1";
 
 const emptyDocumentData: DocumentData = {
   customerName: "",
+  idCard: "",
   phone: "",
+  address: "",
+  customerAddress: "",
   plateNumber: "",
   plate: "",
+  carBrand: "",
   carModel: "",
   year: "",
   color: "",
   mileage: "",
   price: "",
   salePrice: "",
+  bookingPrice: "",
+  paymentType: "",
+  deliveryDate: "",
+  deliveryLocation: "",
   saleName: "",
   sellerName: "",
+  signatureName: "",
   bookingDate: "",
   status: "",
   pdiStatus: "",
@@ -72,13 +82,20 @@ const emptyDocumentData: DocumentData = {
 
 const editableFields: Array<{ key: string; label: string; optional?: boolean }> = [
   { key: "customerName", label: "ชื่อลูกค้า" },
+  { key: "idCard", label: "เลขบัตร / เลขผู้เสียภาษี" },
   { key: "phone", label: "เบอร์โทร", optional: true },
+  { key: "address", label: "ที่อยู่", optional: true },
   { key: "plate", label: "ทะเบียน" },
+  { key: "carBrand", label: "ยี่ห้อรถ" },
   { key: "carModel", label: "รุ่นรถยนต์" },
   { key: "year", label: "ปีจด" },
   { key: "color", label: "สี" },
   { key: "mileage", label: "เลขไมล์" },
   { key: "salePrice", label: "ราคาเสนอขายRT" },
+  { key: "bookingPrice", label: "เงินจอง", optional: true },
+  { key: "paymentType", label: "ประเภทการชำระ", optional: true },
+  { key: "deliveryDate", label: "วันที่ส่งมอบ", optional: true },
+  { key: "deliveryLocation", label: "สถานที่ส่งมอบ", optional: true },
   { key: "sellerName", label: "ชื่อผู้ขาย" },
   { key: "bookingDate", label: "วันที่จอง/ขาย" },
   { key: "status", label: "สถานะ" },
@@ -128,21 +145,38 @@ function money(value: unknown) {
   return n.toLocaleString("th-TH", { maximumFractionDigits: 0 });
 }
 
+function normalizePaymentType(value: unknown) {
+  const raw = text(value).toLowerCase();
+  if (!raw) return "";
+  if (raw.includes("สด") || raw.includes("cash")) return "cash";
+  if (raw.includes("ไฟแนนซ์") || raw.includes("finance")) return "finance";
+  return text(value);
+}
+
 function mapReportToDocument(report: ReportRecord): DocumentData {
-  const model = [firstText(report, ["brand"]), firstText(report, ["model"])].filter(Boolean).join(" ");
+  const brand = firstText(report, ["brand", "ยี่ห้อรถ", "ยี่ห้อ"]);
+  const model = [brand, firstText(report, ["model"])].filter(Boolean).join(" ");
+  const paymentType = normalizePaymentType(firstText(report, ["paymentType", "ประเภทการซื้อ", "การชำระเงิน"]));
   return {
     ...emptyDocumentData,
     customerName: firstText(report, ["customerName", "ชื่อลูกค้า"]),
+    idCard: firstText(report, ["idCard", "เลขบัตรประชาชน", "เลขผู้เสียภาษี"]),
     phone: firstText(report, ["phone", "เบอร์โทร"]),
+    address: firstText(report, ["address", "ที่อยู่"]),
+    customerAddress: firstText(report, ["address", "ที่อยู่"]),
     plate: firstText(report, ["plate", "ทะเบียน"]),
     plateNumber: firstText(report, ["plate", "ทะเบียน"]),
+    carBrand: brand,
     carModel: model || firstText(report, ["carModel", "รุ่นรถยนต์", "model"]),
     year: firstText(report, ["year", "ปีจด"]),
     color: firstText(report, ["color", "สี"]),
     salePrice: money(firstText(report, ["salePrice", "ราคาเสนอขายRT", "finalPrice"])),
     price: money(firstText(report, ["salePrice", "ราคาเสนอขายRT", "finalPrice"])),
+    bookingPrice: money(firstText(report, ["bookingPrice", "เงินจอง"])),
+    paymentType,
     sellerName: firstText(report, ["saleName", "ชื่อผู้ขาย"]),
     saleName: firstText(report, ["saleName", "ชื่อผู้ขาย"]),
+    signatureName: firstText(report, ["customerName", "ชื่อลูกค้า"]),
     bookingDate: firstText(report, ["createdAt", "วันที่จอง/ขาย"]),
     status: firstText(report, ["status", "สถานะ"])
   };
@@ -154,6 +188,7 @@ function mergeVehicleData(current: DocumentData, vehicle: VehicleRecord): Docume
     ...current,
     plate: firstText(vehicle, ["plate", "ทะเบียน"]) || current.plate,
     plateNumber: firstText(vehicle, ["plate", "ทะเบียน"]) || current.plateNumber,
+    carBrand: firstText(vehicle, ["brand", "ยี่ห้อรถ", "ยี่ห้อ"]) || current.carBrand,
     carModel: model || current.carModel,
     year: firstText(vehicle, ["year", "ปีจด"]) || current.year,
     color: firstText(vehicle, ["color", "สี"]) || current.color,
@@ -176,7 +211,10 @@ function mapOcrResultToDocument(result: Record<string, unknown>): DocumentData {
   return {
     ...emptyDocumentData,
     customerName: firstText(result, ["name", "companyName", "customerName"]),
+    idCard: firstText(result, ["idNumber", "taxId", "idCard"]),
     phone: firstText(result, ["phone"]),
+    address: firstText(result, ["address", "companyAddress"]),
+    customerAddress: firstText(result, ["address", "companyAddress"]),
     plate: firstText(result, ["plate"]) || (plateMatch ? plateMatch[0] : ""),
     plateNumber: firstText(result, ["plate"]) || (plateMatch ? plateMatch[0] : ""),
     carModel: firstText(result, ["model", "carModel"]),
@@ -187,49 +225,6 @@ function mapOcrResultToDocument(result: Record<string, unknown>): DocumentData {
     status: firstText(result, ["status"]),
     vin: firstText(result, ["vin"]),
     engineNo: firstText(result, ["engineNo"])
-  };
-}
-
-function fileToBase64(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
-    reader.onerror = () => reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
-    reader.readAsDataURL(file);
-  });
-}
-
-async function pdfFirstPageToImagePayload(file: File) {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/legacy/build/pdf.worker.mjs`;
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const pdf = await pdfjs.getDocument({
-    data: bytes,
-    isEvalSupported: false
-  } as Parameters<typeof pdfjs.getDocument>[0]).promise;
-  const page = await pdf.getPage(1);
-  const viewport = page.getViewport({ scale: 2.4 });
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("เครื่องนี้ไม่รองรับการแปลง PDF เป็นภาพ");
-  canvas.width = Math.ceil(viewport.width);
-  canvas.height = Math.ceil(viewport.height);
-  await page.render({ canvas, canvasContext: context, viewport }).promise;
-  const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
-  return {
-    base64: dataUrl.split(",")[1] || "",
-    mimeType: "image/jpeg"
-  };
-}
-
-async function documentFileToOcrPayload(file: File) {
-  if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
-    return pdfFirstPageToImagePayload(file);
-  }
-  if (!file.type.startsWith("image/")) throw new Error("รองรับ OCR จากรูปภาพหรือ PDF เท่านั้น");
-  return {
-    base64: await fileToBase64(file),
-    mimeType: file.type
   };
 }
 
@@ -302,7 +297,22 @@ export function DocumentCenter() {
       const blob = await api<Blob>("/api/documents/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ templateId, data: { ...data, customerName: data.customerName, plate: data.plate || data.plateNumber, carModel: data.carModel, salePrice: data.salePrice || data.price, sellerName: data.sellerName || data.saleName } })
+        body: JSON.stringify({
+          templateId,
+          data: {
+            ...data,
+            customerName: data.customerName,
+            customerAddress: data.customerAddress || data.address,
+            plate: data.plate || data.plateNumber,
+            carBrand: data.carBrand,
+            carModel: data.carModel,
+            salePrice: data.salePrice || data.price,
+            price: data.price || data.salePrice,
+            paymentType: normalizePaymentType(data.paymentType),
+            sellerName: data.sellerName || data.saleName,
+            signatureName: data.signatureName || data.customerName
+          }
+        })
       });
       const url = URL.createObjectURL(blob);
       if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -376,15 +386,25 @@ export function DocumentCenter() {
     setError("");
     setMessage("");
     try {
-      const payload = await documentFileToOcrPayload(file);
-      const res = await api<{ result: Record<string, unknown> }>("/api/ocr/document", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, buyerType: "individual" })
-      });
-      setData((current) => ({ ...current, ...mapOcrResultToDocument(res.result) }));
+      const ocrPayload = await documentFileToOcrPayloads(file);
+      const results = [];
+      for (const [index, payload] of ocrPayload.payloads.entries()) {
+        setMessage(ocrPayload.sourceType === "pdf" ? `กำลัง OCR PDF หน้า ${index + 1}/${ocrPayload.processedPages}` : "กำลัง OCR รูปภาพ");
+        const res = await api<{ result: Record<string, unknown> }>("/api/ocr/document", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...payload, buyerType: "individual" })
+        });
+        results.push(res.result);
+      }
+      const merged = mergeOcrRecords(results);
+      setData((current) => ({ ...current, ...mapOcrResultToDocument(merged) }));
       setTab("create");
-      setMessage(file.type === "application/pdf" ? "แปลง PDF หน้าแรกและอ่าน OCR แล้ว กรุณาตรวจข้อมูลก่อน Export" : "อ่าน OCR แล้ว กรุณาตรวจและแก้ไขก่อน Export");
+      setMessage(
+        ocrPayload.sourceType === "pdf"
+          ? `อ่าน OCR PDF แล้ว ${ocrPayload.processedPages}/${ocrPayload.pageCount} หน้า กรุณาตรวจข้อมูลก่อน Export`
+          : "อ่าน OCR แล้ว กรุณาตรวจและแก้ไขก่อน Export"
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "OCR ไม่สำเร็จ");
     } finally {
@@ -478,11 +498,31 @@ export function DocumentCenter() {
             <SectionCard title="ข้อมูลก่อน Export" icon={<FileText size={18} />}>
               <div className="grid gap-3 sm:grid-cols-2">
                 {editableFields.map((field) => (
-                  <label key={field.key} className={field.key === "pdiNote" ? "sm:col-span-2" : ""}>
+                  <label key={field.key} className={["address", "pdiNote"].includes(field.key) ? "sm:col-span-2" : ""}>
                     <span className="mb-1.5 block text-sm font-bold text-[#dce2eb]">{field.label}{field.optional ? " (optional)" : ""}</span>
                     <input value={data[field.key] || ""} onChange={(event) => update(field.key, event.target.value)} className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none focus:border-brand" />
                   </label>
                 ))}
+              </div>
+              <div className="rounded-lg border border-brand/30 bg-green-950/20 p-3">
+                <p className="text-sm font-black text-brand">ข้อมูลที่จะเติมลงเอกสาร</p>
+                <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+                  {[
+                    ["ลูกค้า", data.customerName],
+                    ["เลขบัตร", data.idCard],
+                    ["ทะเบียน", data.plate],
+                    ["รถ", [data.carBrand, data.carModel, data.year].filter(Boolean).join(" ")],
+                    ["ราคา", data.salePrice || data.price],
+                    ["เงินจอง", data.bookingPrice],
+                    ["ผู้ขาย", data.sellerName || data.saleName],
+                    ["วันที่จอง", data.bookingDate]
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex min-w-0 justify-between gap-3 rounded-md bg-black/20 px-3 py-2">
+                      <span className="shrink-0 text-soft">{label}</span>
+                      <span className="min-w-0 truncate font-bold text-white">{value || "ยังไม่ระบุ"}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
               <div className="grid gap-2 sm:grid-cols-4">
                 <button type="button" onClick={() => generatePdf(false)} disabled={working} className="min-h-11 rounded-lg border border-brand/40 bg-brand/10 px-3 font-black text-brand disabled:opacity-60">Preview PDF</button>
@@ -492,7 +532,26 @@ export function DocumentCenter() {
               </div>
             </SectionCard>
             <SectionCard title="Preview" icon={<Eye size={18} />}>
-              {previewUrl ? <iframe title="Document preview" src={previewUrl} className="h-[70vh] w-full rounded-lg border border-line bg-white" /> : <div className="rounded-lg border border-dashed border-line p-8 text-center text-soft">กด Preview PDF เพื่อดูเอกสารก่อน Export</div>}
+              {previewUrl ? (
+                <div className="space-y-3">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <a href={previewUrl} target="_blank" rel="noreferrer" className="flex min-h-11 items-center justify-center rounded-lg bg-brand px-3 font-black text-ink">
+                      เปิด Preview เต็มหน้า
+                    </a>
+                    <a href={previewUrl} download={`document-preview-${Date.now()}.pdf`} className="flex min-h-11 items-center justify-center rounded-lg border border-line px-3 font-bold text-white">
+                      ดาวน์โหลด PDF
+                    </a>
+                  </div>
+                  <object data={previewUrl} type="application/pdf" className="h-[70vh] w-full rounded-lg border border-line bg-white">
+                    <iframe title="Document preview" src={previewUrl} className="h-[70vh] w-full rounded-lg border border-line bg-white" />
+                  </object>
+                  <p className="text-xs leading-5 text-soft">ถ้ามือถือไม่แสดง Preview ในกรอบ ให้กด “เปิด Preview เต็มหน้า” ด้านบน</p>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-line p-8 text-center text-soft">
+                  กรอกหรือเลือกรายงานจองด้านบน แล้วกด Preview PDF เพื่อดูเอกสารก่อน Export
+                </div>
+              )}
             </SectionCard>
           </section>
         </div>
@@ -501,12 +560,12 @@ export function DocumentCenter() {
       {!loading && tab === "ocr" ? (
         <SectionCard title="OCR Scanner" icon={<Upload size={18} />}>
           <p className="rounded-lg border border-line bg-[#0b0d11] p-3 text-sm leading-6 text-soft">
-            OCR รองรับรูปภาพและ PDF โดยระบบจะแปลง PDF หน้าแรกเป็นภาพก่อนอ่านข้อมูล กรุณาตรวจและแก้ไขข้อมูลก่อน Export ทุกครั้ง
+            OCR รองรับรูปภาพและ PDF หลายหน้า โดยใช้ PDF worker ที่อยู่ในระบบ ไม่พึ่ง CDN กรุณาตรวจและแก้ไขข้อมูลก่อน Export ทุกครั้ง
           </p>
           <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-brand/50 bg-brand/10 p-4 text-center text-brand">
             <Upload size={26} />
             <span className="mt-2 font-black">อัปโหลด / ถ่ายรูปเอกสาร</span>
-            <span className="mt-1 text-xs text-soft">รองรับรูปภาพและ PDF หน้าแรก</span>
+            <span className="mt-1 text-xs text-soft">รองรับรูปภาพและ PDF สูงสุด 12 หน้าแรก</span>
             <input type="file" accept="image/*,application/pdf" capture="environment" onChange={handleOcrFile} className="hidden" />
           </label>
           {working ? <p className="text-sm text-soft"><Loader2 className="mr-2 inline animate-spin text-brand" />กำลัง OCR...</p> : null}

@@ -20,6 +20,7 @@ import { buildDefaultBookingSubject, renderBookingReport } from "@/lib/booking-r
 import { PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
 import { bookingLineGroupStorageKey, defaultSystemSettings, readSystemSettings } from "@/lib/client-settings";
 import { normalizeCarYear } from "@/lib/format";
+import { documentFileToOcrPayloads, imagePayloadToDataUrl, isPdfFile, mergeOcrRecords } from "@/lib/ocr/client-document-ocr";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import { appendSalesProfileSignature } from "@/lib/sales-profile-signature";
 import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, DriveAttachment, DriveUploadResult, LineGroup, StockVehicle } from "@/lib/types";
@@ -343,37 +344,42 @@ export default function BookingReportsPage() {
   async function handleOcrImage(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    const uploadFile = await compressBookingImage(file);
-    setOcrPreviewUrl(URL.createObjectURL(uploadFile));
+    const uploadFile = isPdfFile(file) ? file : await compressBookingImage(file);
     setOcrPreview(blankOcrPreview);
     setOcrReading(true);
-    setOcrStatus("กำลังอ่านเอกสารจากรูป...");
+    setOcrStatus(isPdfFile(file) ? "กำลังแปลง PDF และอ่าน OCR..." : "กำลังอ่านเอกสารจากรูป...");
     setMessage("");
     setError("");
     event.target.value = "";
 
     try {
-      const base64 = await fileToBase64(uploadFile);
-      const data = await readJson<{ result: OcrPreviewFields }>("/api/ocr/document", {
-        method: "POST",
-        body: JSON.stringify({
-          base64,
-          mimeType: uploadFile.type || "image/jpeg",
-          buyerType: form.buyerType
-        })
-      });
+      const ocrPayload = await documentFileToOcrPayloads(uploadFile);
+      if (ocrPayload.payloads[0]) setOcrPreviewUrl(imagePayloadToDataUrl(ocrPayload.payloads[0]));
+      const results: Record<string, unknown>[] = [];
+      for (const [index, payload] of ocrPayload.payloads.entries()) {
+        setOcrStatus(ocrPayload.sourceType === "pdf" ? `กำลัง OCR PDF หน้า ${index + 1}/${ocrPayload.processedPages}` : "กำลังอ่านเอกสารจากรูป...");
+        const data = await readJson<{ result: OcrPreviewFields }>("/api/ocr/document", {
+          method: "POST",
+          body: JSON.stringify({
+            ...payload,
+            buyerType: form.buyerType
+          })
+        });
+        results.push(data.result);
+      }
+      const result = mergeOcrRecords(results) as OcrPreviewFields;
 
       setOcrPreview({
-        name: data.result.name || form.customerName,
-        idNumber: data.result.idNumber || form.idCard,
-        birthDate: data.result.birthDate || "",
-        address: data.result.address || form.address,
-        companyName: data.result.companyName || form.customerName,
-        taxId: data.result.taxId || form.idCard,
-        companyAddress: data.result.companyAddress || form.address,
-        rawText: data.result.rawText || ""
+        name: result.name || form.customerName,
+        idNumber: result.idNumber || form.idCard,
+        birthDate: result.birthDate || "",
+        address: result.address || form.address,
+        companyName: result.companyName || form.customerName,
+        taxId: result.taxId || form.idCard,
+        companyAddress: result.companyAddress || form.address,
+        rawText: result.rawText || ""
       });
-      setOcrStatus("อ่าน OCR สำเร็จ ตรวจข้อมูลก่อนกดยืนยัน");
+      setOcrStatus(ocrPayload.sourceType === "pdf" ? `อ่าน OCR PDF สำเร็จ ${ocrPayload.processedPages}/${ocrPayload.pageCount} หน้า` : "อ่าน OCR สำเร็จ ตรวจข้อมูลก่อนกดยืนยัน");
       setMessage("OCR อ่านข้อมูลแล้ว กรุณาตรวจและกดยืนยันก่อนเติมเข้ารายงานจอง");
     } catch (err) {
       setOcrPreview({
@@ -723,12 +729,12 @@ export default function BookingReportsPage() {
                 </label>
                 <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-bold text-white">
                   <Paperclip size={18} className="text-brand" />
-                  เพิ่มรูป
-                  <input type="file" accept="image/*" onChange={handleOcrImage} className="sr-only" />
+                  เพิ่มไฟล์
+                  <input type="file" accept="image/*,application/pdf" onChange={handleOcrImage} className="sr-only" />
                 </label>
               </div>
               <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs leading-5 text-soft">
-                รองรับบัตรประชาชน นามบัตร และหนังสือรับรองบริษัท ต้อง Preview และกดยืนยันก่อนเสมอ ไม่มีการ Auto Save
+                รองรับบัตรประชาชน นามบัตร หนังสือรับรองบริษัท และ PDF หลายหน้า ต้อง Preview และกดยืนยันก่อนเสมอ ไม่มีการ Auto Save
               </p>
               {ocrStatus && (
                 <p className={`rounded-lg border px-3 py-2 text-xs font-bold leading-5 ${ocrReading ? "border-brand/40 bg-brand/10 text-brand" : "border-line bg-[#0b0d11] text-soft"}`}>
