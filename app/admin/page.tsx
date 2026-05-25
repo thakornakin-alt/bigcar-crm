@@ -185,7 +185,12 @@ export default function SiteAdminPage() {
             </section>
             <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.045]">
               <div className="aspect-[4/3] bg-black/30">
-                {coverPreview ? <img src={coverPreview} alt="preview" className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center text-white/38">Preview รูป</div>}
+                {coverPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={coverPreview} alt="preview" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="grid h-full place-items-center text-white/38">Preview รูป</div>
+                )}
               </div>
               <div className="p-4">
                 <p className="text-xl font-black">{draft.brand || "ยี่ห้อ"} {draft.model || "รุ่น"}</p>

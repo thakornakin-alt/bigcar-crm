@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { ReactNode } from "react";
 import { MapPin, Phone, ShieldCheck } from "lucide-react";
 import { siteConfig, siteNavItems } from "@/lib/site/config";
@@ -57,10 +58,13 @@ export function Hero() {
   return (
     <section className="relative overflow-hidden">
       <div className="absolute inset-0">
-        <img
+        <Image
           src="https://images.unsplash.com/photo-1542362567-b07e54358753?auto=format&fit=crop&w=1800&q=80"
           alt="รถหมดสัญญาเช่า BIG CAR RDD"
-          className="h-full w-full object-cover opacity-42"
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover opacity-42"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-[#07080a]/45 via-[#07080a]/70 to-[#07080a]" />
       </div>
@@ -117,8 +121,15 @@ export function CarCard({ car, priority = false }: { car: PublicCar; priority?: 
   return (
     <article className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.045] shadow-[0_24px_90px_rgba(0,0,0,0.3)]">
       <Link href={`/cars/${car.slug}`} className="block">
-        <div className="aspect-[4/3] overflow-hidden bg-white/5">
-          <img src={car.coverImage} alt={`${car.brand} ${car.model} ${car.year}`} loading={priority ? "eager" : "lazy"} className="h-full w-full object-cover transition duration-500 hover:scale-105" />
+        <div className="relative aspect-[4/3] overflow-hidden bg-white/5">
+          <Image
+            src={car.coverImage}
+            alt={`${car.brand} ${car.model} ${car.year}`}
+            fill
+            priority={priority}
+            sizes="(min-width: 768px) 33vw, 100vw"
+            className="object-cover transition duration-500 hover:scale-105"
+          />
         </div>
       </Link>
       <div className="space-y-4 p-4">

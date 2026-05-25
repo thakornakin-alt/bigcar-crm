@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { CarCard, SectionHeading, SiteSection, SiteShell } from "@/app/components/site";
@@ -54,11 +55,15 @@ export default async function CarDetailPage({ params }: CarDetailProps) {
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-3">
             <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.045]">
-              <img src={car.coverImage} alt={`${car.brand} ${car.model}`} className="aspect-[4/3] w-full object-cover" />
+              <div className="relative aspect-[4/3]">
+                <Image src={car.coverImage} alt={`${car.brand} ${car.model}`} fill priority sizes="(min-width: 1024px) 55vw, 100vw" className="object-cover" />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               {car.images.slice(1, 5).map((image) => (
-                <img key={image} src={image} alt={`${car.brand} ${car.model}`} className="aspect-[4/3] rounded-2xl border border-white/10 object-cover" loading="lazy" />
+                <div key={image} className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-white/10">
+                  <Image src={image} alt={`${car.brand} ${car.model}`} fill sizes="(min-width: 1024px) 28vw, 50vw" className="object-cover" />
+                </div>
               ))}
             </div>
           </div>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { SectionHeading, SiteSection, SiteShell } from "@/app/components/site";
 import { getArticleBySlug, listArticles } from "@/lib/site/service";
@@ -34,7 +35,9 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
     <SiteShell>
       <SiteSection className="pt-8">
         <SectionHeading eyebrow="Article" title={article.title} subtitle={article.description} />
-        <img src={article.coverImage} alt={article.title} className="mb-8 aspect-[16/8] w-full rounded-3xl border border-white/10 object-cover" />
+        <div className="relative mb-8 aspect-[16/8] overflow-hidden rounded-3xl border border-white/10">
+          <Image src={article.coverImage} alt={article.title} fill priority sizes="100vw" className="object-cover" />
+        </div>
         <article className="mx-auto max-w-3xl space-y-8">
           {article.sections.map((section) => (
             <section key={section.heading}>
