@@ -59,7 +59,7 @@ export const documentTemplates: DocumentTemplateConfig[] = [
     title: "สัญญาซื้อขายรถยนต์",
     description: "สัญญาซื้อขายรถยนต์พร้อมรายละเอียดผู้ซื้อและรถ",
     fileName: "contract.pdf",
-    backgroundPath: "public/document-templates/contract.jpg",
+    backgroundPath: "public/document-templates/contract.pdf",
     fields: {
       transactionDate: { page: 1, x: 466, y: 727, fontSize: 10, type: "date" },
       customerName: { page: 1, x: 377, y: 679, fontSize: 10 },
@@ -82,7 +82,7 @@ export const documentTemplates: DocumentTemplateConfig[] = [
     title: "รายละเอียดการชำระเงิน / ใบรับเงินชั่วคราว",
     description: "ใบรับเงินชั่วคราวและรายละเอียดการชำระเงิน",
     fileName: "payment-receipt.pdf",
-    backgroundPath: "public/document-templates/payment-receipt.jpg",
+    backgroundPath: "public/document-templates/payment-receipt.pdf",
     fields: {
       transactionDate: { page: 1, x: 432, y: 750, fontSize: 10, type: "date" },
       customerName: { page: 1, x: 84, y: 692, fontSize: 10 },
@@ -115,6 +115,176 @@ export const documentTemplates: DocumentTemplateConfig[] = [
       email: { page: 1, x: 80, y: 492, fontSize: 10 },
       occupation: { page: 1, x: 100, y: 649, fontSize: 10 },
       transactionDate: { page: 1, x: 450, y: 760, fontSize: 10, type: "date" }
+    }
+  },
+  {
+    id: "power-of-attorney",
+    title: "หนังสือมอบอำนาจ",
+    description: "เอกสารมอบอำนาจสำหรับงานโอน/ดำเนินการแทน",
+    fileName: "power-of-attorney.pdf",
+    backgroundPath: "public/document-templates/power-of-attorney.pdf",
+    fields: {
+      transactionDate: { page: 1, x: 430, y: 730, fontSize: 10, type: "date" },
+      customerName: { page: 1, x: 130, y: 650, fontSize: 10 },
+      idCard: { page: 1, x: 335, y: 650, fontSize: 10 },
+      address: { page: 1, x: 90, y: 625, fontSize: 9, width: 430 },
+      phone: { page: 1, x: 420, y: 600, fontSize: 10 },
+      plate: { page: 1, x: 180, y: 520, fontSize: 10 },
+      carBrand: { page: 1, x: 285, y: 520, fontSize: 10 },
+      carModel: { page: 1, x: 360, y: 520, fontSize: 10 },
+      signatureName: { page: 1, x: 175, y: 170, fontSize: 10 }
+    }
+  },
+  {
+    id: "kyc-secap-juristic",
+    title: "KYC Secap นิติบุคคล",
+    description: "แบบฟอร์ม KYC Secap สำหรับลูกค้านิติบุคคล",
+    fileName: "kyc-secap-juristic.pdf",
+    backgroundPath: "public/document-templates/kyc-secap-juristic.pdf",
+    fields: {
+      customerName: { page: 1, x: 120, y: 690, fontSize: 10 },
+      idCard: { page: 1, x: 370, y: 690, fontSize: 10 },
+      address: { page: 1, x: 90, y: 590, fontSize: 9, width: 430 },
+      phone: { page: 1, x: 170, y: 520, fontSize: 10 },
+      email: { page: 1, x: 90, y: 495, fontSize: 10 }
+    }
+  },
+  {
+    id: "kyc-secap-personal",
+    title: "KYC Secap บุคคลธรรมดา",
+    description: "แบบฟอร์ม KYC Secap สำหรับลูกค้าบุคคลธรรมดา",
+    fileName: "kyc-secap-personal.pdf",
+    backgroundPath: "public/document-templates/kyc-secap-personal.pdf",
+    fields: {
+      customerName: { page: 1, x: 120, y: 690, fontSize: 10 },
+      idCard: { page: 1, x: 370, y: 690, fontSize: 10 },
+      occupation: { page: 1, x: 110, y: 650, fontSize: 10 },
+      address: { page: 1, x: 90, y: 590, fontSize: 9, width: 430 },
+      phone: { page: 1, x: 170, y: 520, fontSize: 10 },
+      email: { page: 1, x: 90, y: 495, fontSize: 10 }
+    }
+  },
+  {
+    id: "kyc-rdd-personal-old",
+    title: "KYC รถดีเด็ด บุคคลธรรมดา",
+    description: "แบบฟอร์ม KYC รถดีเด็ดสำหรับบุคคลธรรมดา",
+    fileName: "kyc-rdd-personal-old.pdf",
+    backgroundPath: "public/document-templates/kyc-rdd-personal-old.pdf",
+    fields: {
+      customerName: { page: 1, x: 120, y: 690, fontSize: 10 },
+      idCard: { page: 1, x: 370, y: 690, fontSize: 10 },
+      address: { page: 1, x: 90, y: 590, fontSize: 9, width: 430 },
+      phone: { page: 1, x: 170, y: 520, fontSize: 10 },
+      email: { page: 1, x: 90, y: 495, fontSize: 10 }
+    }
+  },
+  {
+    id: "kyc-rdd-juristic",
+    title: "RDD KYC นิติบุคคล",
+    description: "แบบฟอร์ม KYC RDD สำหรับลูกค้านิติบุคคล",
+    fileName: "kyc-rdd-juristic.pdf",
+    backgroundPath: "public/document-templates/kyc-rdd-juristic.pdf",
+    fields: {
+      customerName: { page: 1, x: 120, y: 690, fontSize: 10 },
+      idCard: { page: 1, x: 370, y: 690, fontSize: 10 },
+      address: { page: 1, x: 90, y: 590, fontSize: 9, width: 430 },
+      phone: { page: 1, x: 170, y: 520, fontSize: 10 },
+      email: { page: 1, x: 90, y: 495, fontSize: 10 }
+    }
+  },
+  {
+    id: "pdpa-right-request",
+    title: "แบบคำขอใช้สิทธิข้อมูลส่วนบุคคล RDD",
+    description: "แบบคำขอการใช้สิทธิของเจ้าของข้อมูลส่วนบุคคล",
+    fileName: "pdpa-right-request.pdf",
+    backgroundPath: "public/document-templates/pdpa-right-request.pdf",
+    fields: {
+      transactionDate: { page: 1, x: 430, y: 730, fontSize: 10, type: "date" },
+      customerName: { page: 1, x: 130, y: 650, fontSize: 10 },
+      idCard: { page: 1, x: 350, y: 650, fontSize: 10 },
+      address: { page: 1, x: 90, y: 610, fontSize: 9, width: 430 },
+      phone: { page: 1, x: 170, y: 570, fontSize: 10 },
+      email: { page: 1, x: 90, y: 545, fontSize: 10 }
+    }
+  },
+  {
+    id: "kyc-rdd-personal",
+    title: "แบบฟอร์ม A KYC บุคคลธรรมดา RDD",
+    description: "แบบฟอร์ม A KYC บุคคลธรรมดา RDD",
+    fileName: "kyc-rdd-personal.pdf",
+    backgroundPath: "public/document-templates/kyc-rdd-personal.pdf",
+    fields: {
+      customerName: { page: 1, x: 120, y: 690, fontSize: 10 },
+      idCard: { page: 1, x: 370, y: 690, fontSize: 10 },
+      occupation: { page: 1, x: 110, y: 650, fontSize: 10 },
+      address: { page: 1, x: 90, y: 590, fontSize: 9, width: 430 },
+      phone: { page: 1, x: 170, y: 520, fontSize: 10 },
+      email: { page: 1, x: 90, y: 495, fontSize: 10 }
+    }
+  },
+  {
+    id: "transfer-request-rdd",
+    title: "แบบคำขอโอนและรับโอน RDD",
+    description: "แบบฟอร์มกรอกคำขอโอนและรับโอน",
+    fileName: "transfer-request-rdd.pdf",
+    backgroundPath: "public/document-templates/transfer-request-rdd.pdf",
+    fields: {
+      customerName: { page: 1, x: 120, y: 690, fontSize: 10 },
+      idCard: { page: 1, x: 365, y: 690, fontSize: 10 },
+      address: { page: 1, x: 90, y: 640, fontSize: 9, width: 430 },
+      plate: { page: 1, x: 140, y: 560, fontSize: 10 },
+      carBrand: { page: 1, x: 250, y: 560, fontSize: 10 },
+      carModel: { page: 1, x: 330, y: 560, fontSize: 10 },
+      vin: { page: 1, x: 145, y: 535, fontSize: 9 },
+      signatureName: { page: 1, x: 165, y: 160, fontSize: 10 }
+    }
+  },
+  {
+    id: "booking-refund",
+    title: "แบบฟอร์มคืนเงินจอง",
+    description: "แบบฟอร์มสำหรับคืนเงินจองลูกค้า",
+    fileName: "booking-refund.pdf",
+    backgroundPath: "public/document-templates/booking-refund.pdf",
+    fields: {
+      transactionDate: { page: 1, x: 430, y: 730, fontSize: 10, type: "date" },
+      customerName: { page: 1, x: 130, y: 650, fontSize: 10 },
+      phone: { page: 1, x: 390, y: 650, fontSize: 10 },
+      plate: { page: 1, x: 150, y: 585, fontSize: 10 },
+      bookingPrice: { page: 1, x: 360, y: 585, fontSize: 10 },
+      sellerName: { page: 1, x: 150, y: 520, fontSize: 10 },
+      signatureName: { page: 1, x: 165, y: 160, fontSize: 10 }
+    }
+  },
+  {
+    id: "transport-transfer",
+    title: "ใบคำขอโอนขนส่ง",
+    description: "ใบคำขอโอนขนส่งสำหรับงานทะเบียน",
+    fileName: "transport-transfer.pdf",
+    backgroundPath: "public/document-templates/transport-transfer.pdf",
+    fields: {
+      customerName: { page: 1, x: 130, y: 670, fontSize: 10 },
+      idCard: { page: 1, x: 350, y: 670, fontSize: 10 },
+      address: { page: 1, x: 90, y: 625, fontSize: 9, width: 430 },
+      plate: { page: 1, x: 150, y: 560, fontSize: 10 },
+      carBrand: { page: 1, x: 250, y: 560, fontSize: 10 },
+      carModel: { page: 1, x: 330, y: 560, fontSize: 10 },
+      vin: { page: 1, x: 145, y: 535, fontSize: 9 },
+      signatureName: { page: 1, x: 165, y: 160, fontSize: 10 }
+    }
+  },
+  {
+    id: "document-cover",
+    title: "ใบปะหน้าส่งเอกสาร",
+    description: "ใบปะหน้าส่งเอกสารสำหรับส่งต่อภายใน/ภายนอก",
+    fileName: "document-cover.pdf",
+    backgroundPath: "public/document-templates/document-cover.pdf",
+    fields: {
+      transactionDate: { page: 1, x: 430, y: 730, fontSize: 10, type: "date" },
+      customerName: { page: 1, x: 130, y: 650, fontSize: 10 },
+      phone: { page: 1, x: 390, y: 650, fontSize: 10 },
+      plate: { page: 1, x: 150, y: 600, fontSize: 10 },
+      carModel: { page: 1, x: 250, y: 600, fontSize: 10 },
+      sellerName: { page: 1, x: 130, y: 550, fontSize: 10 }
     }
   }
 ];

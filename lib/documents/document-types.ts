@@ -3,7 +3,18 @@ export type DocumentTemplateId =
   | "sale-summary"
   | "contract"
   | "payment-receipt"
-  | "customer-form";
+  | "customer-form"
+  | "power-of-attorney"
+  | "kyc-secap-juristic"
+  | "kyc-secap-personal"
+  | "kyc-rdd-personal-old"
+  | "kyc-rdd-juristic"
+  | "pdpa-right-request"
+  | "kyc-rdd-personal"
+  | "transfer-request-rdd"
+  | "booking-refund"
+  | "transport-transfer"
+  | "document-cover";
 
 export type DocumentFieldType = "text" | "checkbox" | "date";
 

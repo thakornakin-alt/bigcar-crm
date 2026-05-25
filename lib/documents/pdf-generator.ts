@@ -51,15 +51,28 @@ export async function generateFilledDocumentPdf(input: {
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
 
-  const page = pdf.addPage([A4_WIDTH, A4_HEIGHT]);
   const backgroundBytes = await readFile(absoluteAssetPath(template.backgroundPath));
-  const backgroundImage = await pdf.embedJpg(backgroundBytes);
-  page.drawImage(backgroundImage, {
-    x: 0,
-    y: 0,
-    width: A4_WIDTH,
-    height: A4_HEIGHT
-  });
+  const isPdfTemplate = template.backgroundPath.toLowerCase().endsWith(".pdf");
+  const page = pdf.addPage([A4_WIDTH, A4_HEIGHT]);
+
+  if (isPdfTemplate) {
+    const sourcePdf = await PDFDocument.load(backgroundBytes, { ignoreEncryption: true });
+    const [embeddedPage] = await pdf.embedPdf(sourcePdf, [0]);
+    page.drawPage(embeddedPage, {
+      x: 0,
+      y: 0,
+      width: A4_WIDTH,
+      height: A4_HEIGHT
+    });
+  } else {
+    const backgroundImage = await pdf.embedJpg(backgroundBytes);
+    page.drawImage(backgroundImage, {
+      x: 0,
+      y: 0,
+      width: A4_WIDTH,
+      height: A4_HEIGHT
+    });
+  }
 
   let font;
   try {
