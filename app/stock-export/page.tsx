@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Columns3, Download, FileImage, Filter, Loader2, MessageCircle, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import {
   ActiveFilterTag,
@@ -16,6 +16,7 @@ import type { StockVehicle } from "@/lib/types";
 import type { DriveUploadResult, LineGroup } from "@/lib/types";
 import { salesLineGroupStorageKey } from "@/lib/client-settings";
 import { useSalesProfile } from "@/lib/use-sales-profile";
+import { hasStockFieldData, realStockFieldLabels, stockRawValue } from "@/lib/stock/stock-field-aliases";
 
 type StockListResponse = {
   vehicles: StockVehicle[];
@@ -59,17 +60,29 @@ type StockExportContact = {
 };
 
 type AdvancedStockFilters = {
-  brands: string[];
   models: string[];
   years: string[];
-  productionYears: string[];
+  reportReturnFrom: string;
+  reportReturnTo: string;
+  bookingSaleFrom: string;
+  bookingSaleTo: string;
   colors: string[];
+  colorGroups: string[];
   gears: string[];
   statuses: string[];
-  sources: string[];
   ownerships: string[];
-  finances: string[];
+  projects: string[];
+  campaigns: string[];
+  agingGroups: string[];
+  agings: string[];
+  closedSales: string[];
+  inspections: string[];
+  extendedWarranties: string[];
+  pdiStatuses: string[];
   locations: string[];
+  vehicleGroups: string[];
+  customerName: string;
+  sellerName: string;
   plate: string;
   vin: string;
   engineNo: string;
@@ -77,37 +90,45 @@ type AdvancedStockFilters = {
   mileageMax: string;
   priceMin: string;
   priceMax: string;
-  importedFrom: string;
-  importedTo: string;
 };
 
 const emptyAdvancedFilters: AdvancedStockFilters = {
-  brands: [],
   models: [],
   years: [],
-  productionYears: [],
+  reportReturnFrom: "",
+  reportReturnTo: "",
+  bookingSaleFrom: "",
+  bookingSaleTo: "",
   colors: [],
+  colorGroups: [],
   gears: [],
   statuses: [],
-  sources: [],
   ownerships: [],
-  finances: [],
+  projects: [],
+  campaigns: [],
+  agingGroups: [],
+  agings: [],
+  closedSales: [],
+  inspections: [],
+  extendedWarranties: [],
+  pdiStatuses: [],
   locations: [],
+  vehicleGroups: [],
+  customerName: "",
+  sellerName: "",
   plate: "",
   vin: "",
   engineNo: "",
   mileageMin: "",
   mileageMax: "",
   priceMin: "",
-  priceMax: "",
-  importedFrom: "",
-  importedTo: ""
+  priceMax: ""
 };
 
-type SortField = "brand" | "model" | "year" | "productionYear" | "price" | "mileage" | "status" | "location" | "importedAt";
+type SortField = "location" | "ownership" | "reportReturnDate" | "agingGroup" | "aging" | "customerName" | "vehicleGroup" | "plate" | "colorGroup" | "project" | "campaign" | "closedSales" | "inspection" | "extendedWarranty" | "status" | "sellerName" | "bookingSaleDate" | "year" | "model" | "gear" | "color" | "mileage" | "price" | "pdiStatus" | "pdiNote";
 type SortDirection = "asc" | "desc";
 type SortRule = { id: string; field: SortField; direction: SortDirection };
-type ExtraColumnKey = "mileage" | "vin" | "engineNo" | "productionYear" | "importedAt" | "parkingLocation" | "source" | "ownership" | "finance" | "pdiNote" | "updatedAt";
+type ExtraColumnKey = "ownership" | "reportReturnDate" | "agingGroup" | "aging" | "customerName" | "vehicleGroup" | "colorGroup" | "project" | "campaign" | "closedSales" | "inspection" | "extendedWarranty" | "status" | "sellerName" | "bookingSaleDate" | "pdiStatus" | "pdiNote" | "vin" | "engineNo" | "financeName";
 type FilterPreset = { id: string; name: string; filters: AdvancedStockFilters; statuses: string[]; groups: string[]; pdi: PdiRemarkFilter; sorts: SortRule[]; columns: ExtraColumnKey[] };
 
 async function api<T>(url: string): Promise<T> {
@@ -257,17 +278,25 @@ function matchesAdvancedFilters(vehicle: StockVehicle, filters: AdvancedStockFil
 
 function matchesAdvancedFiltersExcept(vehicle: StockVehicle, filters: AdvancedStockFilters, except: (keyof AdvancedStockFilters)[]) {
   const ignored = new Set<keyof AdvancedStockFilters>(except);
-  if (!ignored.has("brands") && filters.brands.length && !filters.brands.includes(vehicle.brand || "")) return false;
   if (!ignored.has("models") && filters.models.length && !filters.models.includes(vehicleTitle(vehicle))) return false;
   if (!ignored.has("years") && filters.years.length && !filters.years.includes(vehicle.year || "")) return false;
-  if (!ignored.has("productionYears") && filters.productionYears.length && !filters.productionYears.includes(productionYear(vehicle))) return false;
   if (!ignored.has("colors") && filters.colors.length && !filters.colors.includes(vehicle.color || "")) return false;
+  if (!ignored.has("colorGroups") && filters.colorGroups.length && !filters.colorGroups.includes(stockRawValue(vehicle, "colorGroup"))) return false;
   if (!ignored.has("gears") && filters.gears.length && !filters.gears.includes(vehicle.gear || "")) return false;
   if (!ignored.has("statuses") && filters.statuses.length && !filters.statuses.includes(stockStatus(vehicle))) return false;
-  if (!ignored.has("sources") && filters.sources.length && !filters.sources.includes(vehicle.source || "")) return false;
   if (!ignored.has("ownerships") && filters.ownerships.length && !filters.ownerships.includes(vehicle.ownership || "")) return false;
-  if (!ignored.has("finances") && filters.finances.length && !filters.finances.includes(financeName(vehicle))) return false;
+  if (!ignored.has("projects") && filters.projects.length && !filters.projects.includes(vehicle.project || "")) return false;
+  if (!ignored.has("campaigns") && filters.campaigns.length && !filters.campaigns.includes(vehicle.campaign || "")) return false;
+  if (!ignored.has("agingGroups") && filters.agingGroups.length && !filters.agingGroups.includes(stockRawValue(vehicle, "agingGroup"))) return false;
+  if (!ignored.has("agings") && filters.agings.length && !filters.agings.includes(stockRawValue(vehicle, "aging"))) return false;
+  if (!ignored.has("closedSales") && filters.closedSales.length && !filters.closedSales.includes(stockRawValue(vehicle, "closedSales"))) return false;
+  if (!ignored.has("inspections") && filters.inspections.length && !filters.inspections.includes(stockRawValue(vehicle, "inspection"))) return false;
+  if (!ignored.has("extendedWarranties") && filters.extendedWarranties.length && !filters.extendedWarranties.includes(stockRawValue(vehicle, "extendedWarranty"))) return false;
+  if (!ignored.has("pdiStatuses") && filters.pdiStatuses.length && !filters.pdiStatuses.includes(stockRawValue(vehicle, "pdiStatus"))) return false;
   if (!ignored.has("locations") && filters.locations.length && !filters.locations.includes(vehicle.parkingLocation || "")) return false;
+  if (!ignored.has("vehicleGroups") && filters.vehicleGroups.length && !filters.vehicleGroups.includes(stockVehicleGroup(vehicle) || "")) return false;
+  if (!ignored.has("customerName") && filters.customerName && !normalizeText(stockRawValue(vehicle, "customerName")).includes(normalizeText(filters.customerName))) return false;
+  if (!ignored.has("sellerName") && filters.sellerName && !normalizeText(stockRawValue(vehicle, "sellerName")).includes(normalizeText(filters.sellerName))) return false;
   if (!ignored.has("plate") && filters.plate && !normalizePlate(vehicle.plate).includes(normalizePlate(filters.plate))) return false;
   if (!ignored.has("vin") && filters.vin && !normalizeText(vehicle.vin || "").includes(normalizeText(filters.vin))) return false;
   if (!ignored.has("engineNo") && filters.engineNo && !normalizeText(engineNo(vehicle)).includes(normalizeText(filters.engineNo))) return false;
@@ -284,25 +313,47 @@ function matchesAdvancedFiltersExcept(vehicle: StockVehicle, filters: AdvancedSt
   if (!ignored.has("priceMin") && priceMin && price < priceMin) return false;
   if (!ignored.has("priceMax") && priceMax && price > priceMax) return false;
 
-  const imported = dateValue(importedAt(vehicle));
-  const importedFrom = dateValue(filters.importedFrom);
-  const importedTo = dateValue(filters.importedTo);
-  if (!ignored.has("importedFrom") && importedFrom && imported && imported < importedFrom) return false;
-  if (!ignored.has("importedTo") && importedTo && imported && imported > importedTo + 86400000 - 1) return false;
+  const reportReturn = dateValue(stockRawValue(vehicle, "reportReturnDate"));
+  const reportReturnFrom = dateValue(filters.reportReturnFrom);
+  const reportReturnTo = dateValue(filters.reportReturnTo);
+  if (!ignored.has("reportReturnFrom") && reportReturnFrom && reportReturn && reportReturn < reportReturnFrom) return false;
+  if (!ignored.has("reportReturnTo") && reportReturnTo && reportReturn && reportReturn > reportReturnTo + 86400000 - 1) return false;
+
+  const bookingSale = dateValue(stockRawValue(vehicle, "bookingSaleDate"));
+  const bookingSaleFrom = dateValue(filters.bookingSaleFrom);
+  const bookingSaleTo = dateValue(filters.bookingSaleTo);
+  if (!ignored.has("bookingSaleFrom") && bookingSaleFrom && bookingSale && bookingSale < bookingSaleFrom) return false;
+  if (!ignored.has("bookingSaleTo") && bookingSaleTo && bookingSale && bookingSale > bookingSaleTo + 86400000 - 1) return false;
 
   return true;
 }
 
 function sortVehicleValue(vehicle: StockVehicle, field: SortField) {
-  if (field === "brand") return vehicle.brand || "";
+  if (field === "location") return stockRawValue(vehicle, "location");
+  if (field === "ownership") return stockRawValue(vehicle, "ownership");
+  if (field === "reportReturnDate") return dateValue(stockRawValue(vehicle, "reportReturnDate"));
+  if (field === "agingGroup") return stockRawValue(vehicle, "agingGroup");
+  if (field === "aging") return Number(stockRawValue(vehicle, "aging") || 0);
+  if (field === "customerName") return stockRawValue(vehicle, "customerName");
+  if (field === "vehicleGroup") return stockRawValue(vehicle, "vehicleGroup");
+  if (field === "plate") return stockRawValue(vehicle, "plate");
+  if (field === "colorGroup") return stockRawValue(vehicle, "colorGroup");
+  if (field === "project") return stockRawValue(vehicle, "project");
+  if (field === "campaign") return stockRawValue(vehicle, "campaign");
+  if (field === "closedSales") return stockRawValue(vehicle, "closedSales");
+  if (field === "inspection") return stockRawValue(vehicle, "inspection");
+  if (field === "extendedWarranty") return stockRawValue(vehicle, "extendedWarranty");
+  if (field === "sellerName") return stockRawValue(vehicle, "sellerName");
+  if (field === "bookingSaleDate") return dateValue(stockRawValue(vehicle, "bookingSaleDate"));
   if (field === "model") return vehicleTitle(vehicle);
   if (field === "year") return Number(vehicle.year || 0);
-  if (field === "productionYear") return Number(productionYear(vehicle) || 0);
   if (field === "price") return parseNumeric(vehicle.salePrice);
   if (field === "mileage") return parseNumeric(vehicle.mileage);
   if (field === "status") return stockStatus(vehicle);
-  if (field === "location") return vehicle.parkingLocation || "";
-  if (field === "importedAt") return dateValue(importedAt(vehicle));
+  if (field === "gear") return stockRawValue(vehicle, "gear");
+  if (field === "color") return stockRawValue(vehicle, "color");
+  if (field === "pdiStatus") return stockRawValue(vehicle, "pdiStatus");
+  if (field === "pdiNote") return stockRawValue(vehicle, "pdiNote");
   return "";
 }
 
@@ -323,33 +374,32 @@ function sortVehicles(vehicles: StockVehicle[], rules: SortRule[]) {
 }
 
 function defaultColumnValue(vehicle: StockVehicle, key: ExtraColumnKey) {
-  if (key === "mileage") return formatMileage(vehicle.mileage);
   if (key === "vin") return vehicle.vin || "-";
   if (key === "engineNo") return engineNo(vehicle) || "-";
-  if (key === "productionYear") return productionYear(vehicle) || "-";
-  if (key === "importedAt") return importedAt(vehicle) || "-";
-  if (key === "parkingLocation") return vehicle.parkingLocation || "-";
-  if (key === "source") return vehicle.source || "-";
-  if (key === "ownership") return vehicle.ownership || "-";
-  if (key === "finance") return financeName(vehicle) || "-";
+  if (key === "financeName") return financeName(vehicle) || "-";
   if (key === "pdiNote") return pdiRemarkText(stockPdiRemark(vehicle));
-  if (key === "updatedAt") return updatedAt(vehicle) || "-";
-  return "-";
+  return stockRawValue(vehicle, key) || "-";
 }
 
 function normalizeAdvancedFilters(value: Partial<AdvancedStockFilters> | null | undefined): AdvancedStockFilters {
   const arrayKeys: Array<keyof AdvancedStockFilters> = [
-    "brands",
     "models",
     "years",
-    "productionYears",
     "colors",
+    "colorGroups",
     "gears",
     "statuses",
-    "sources",
     "ownerships",
-    "finances",
-    "locations"
+    "projects",
+    "campaigns",
+    "agingGroups",
+    "agings",
+    "closedSales",
+    "inspections",
+    "extendedWarranties",
+    "pdiStatuses",
+    "locations",
+    "vehicleGroups"
   ];
   const next = { ...emptyAdvancedFilters, ...(value || {}) };
   arrayKeys.forEach((key) => {
@@ -360,35 +410,60 @@ function normalizeAdvancedFilters(value: Partial<AdvancedStockFilters> | null | 
 }
 
 const sortFieldLabels: Record<SortField, string> = {
-  brand: "ยี่ห้อ",
-  model: "รุ่น",
-  year: "ปีจด",
-  productionYear: "ปีผลิต",
-  price: "ราคา",
-  mileage: "เลขไมล์",
-  status: "สถานะ",
-  location: "สถานที่จอด",
-  importedAt: "วันที่เข้า"
+  location: realStockFieldLabels.location,
+  ownership: realStockFieldLabels.ownership,
+  reportReturnDate: realStockFieldLabels.reportReturnDate,
+  agingGroup: realStockFieldLabels.agingGroup,
+  aging: realStockFieldLabels.aging,
+  customerName: realStockFieldLabels.customerName,
+  vehicleGroup: realStockFieldLabels.vehicleGroup,
+  plate: realStockFieldLabels.plate,
+  colorGroup: realStockFieldLabels.colorGroup,
+  project: realStockFieldLabels.project,
+  campaign: realStockFieldLabels.campaign,
+  closedSales: realStockFieldLabels.closedSales,
+  inspection: realStockFieldLabels.inspection,
+  extendedWarranty: realStockFieldLabels.extendedWarranty,
+  status: realStockFieldLabels.status,
+  sellerName: realStockFieldLabels.sellerName,
+  bookingSaleDate: realStockFieldLabels.bookingSaleDate,
+  year: realStockFieldLabels.year,
+  model: realStockFieldLabels.model,
+  gear: realStockFieldLabels.gear,
+  color: realStockFieldLabels.color,
+  mileage: realStockFieldLabels.mileage,
+  price: realStockFieldLabels.salePrice,
+  pdiStatus: realStockFieldLabels.pdiStatus,
+  pdiNote: realStockFieldLabels.pdiNote
 };
 
 const extraColumnLabels: Record<ExtraColumnKey, string> = {
-  mileage: "เลขไมล์",
-  vin: "เลขตัวถัง",
-  engineNo: "เลขเครื่อง",
-  productionYear: "ปีผลิต",
-  importedAt: "วันที่รถเข้า",
-  parkingLocation: "สถานที่จอด",
-  source: "แหล่งที่มา",
-  ownership: "ไฟแนนซ์/กรรมสิทธิ์",
-  finance: "ไฟแนนซ์",
-  pdiNote: "หมายเหตุ",
-  updatedAt: "วันที่อัปเดตล่าสุด"
+  ownership: realStockFieldLabels.ownership,
+  reportReturnDate: realStockFieldLabels.reportReturnDate,
+  agingGroup: realStockFieldLabels.agingGroup,
+  aging: realStockFieldLabels.aging,
+  customerName: realStockFieldLabels.customerName,
+  vehicleGroup: realStockFieldLabels.vehicleGroup,
+  colorGroup: realStockFieldLabels.colorGroup,
+  project: realStockFieldLabels.project,
+  campaign: realStockFieldLabels.campaign,
+  closedSales: realStockFieldLabels.closedSales,
+  inspection: realStockFieldLabels.inspection,
+  extendedWarranty: realStockFieldLabels.extendedWarranty,
+  status: realStockFieldLabels.status,
+  sellerName: realStockFieldLabels.sellerName,
+  bookingSaleDate: realStockFieldLabels.bookingSaleDate,
+  pdiStatus: realStockFieldLabels.pdiStatus,
+  pdiNote: realStockFieldLabels.pdiNote,
+  vin: realStockFieldLabels.vin,
+  engineNo: realStockFieldLabels.engineNo,
+  financeName: realStockFieldLabels.financeName
 };
 
 type StockExportColumn = { key: string; label: string; width: number; extraKey?: ExtraColumnKey };
 
 function stockExportExtraColumns(mode: ExportMode, selectedColumns: ExtraColumnKey[]) {
-  const baseIncluded = new Set<ExtraColumnKey>(["mileage", "parkingLocation"]);
+  const baseIncluded = new Set<ExtraColumnKey>(["vehicleGroup"]);
   if (mode === "internal") baseIncluded.add("pdiNote");
   return selectedColumns.filter((key) => {
     if (baseIncluded.has(key)) return false;
@@ -400,9 +475,9 @@ function stockExportExtraColumns(mode: ExportMode, selectedColumns: ExtraColumnK
 function extraColumnExportWidth(key: ExtraColumnKey) {
   if (key === "vin") return 260;
   if (key === "engineNo") return 220;
-  if (key === "source" || key === "ownership" || key === "finance") return 170;
-  if (key === "importedAt" || key === "updatedAt") return 180;
-  if (key === "productionYear") return 120;
+  if (key === "customerName" || key === "sellerName") return 220;
+  if (key === "reportReturnDate" || key === "bookingSaleDate") return 180;
+  if (key === "closedSales" || key === "extendedWarranty") return 180;
   return 160;
 }
 
@@ -583,19 +658,36 @@ export default function StockExportPage() {
     };
 
     return {
-      brands: uniqueSorted(optionValues(["brands"]).map((vehicle) => vehicle.brand || "")),
       models: uniqueSorted(optionValues(["models"]).map((vehicle) => vehicleTitle(vehicle))),
       years: uniqueSorted(optionValues(["years"]).map((vehicle) => vehicle.year || "")),
-      productionYears: uniqueSorted(optionValues(["productionYears"]).map((vehicle) => productionYear(vehicle))),
       colors: uniqueSorted(optionValues(["colors"]).map((vehicle) => vehicle.color || "")),
+      colorGroups: uniqueSorted(optionValues(["colorGroups"]).map((vehicle) => stockRawValue(vehicle, "colorGroup"))),
       gears: uniqueSorted(optionValues(["gears"]).map((vehicle) => vehicle.gear || "")),
       statuses: uniqueSorted(optionValues(["statuses"]).map((vehicle) => stockStatus(vehicle))),
-      sources: uniqueSorted(optionValues(["sources"]).map((vehicle) => vehicle.source || "")),
       ownerships: uniqueSorted(optionValues(["ownerships"]).map((vehicle) => vehicle.ownership || "")),
-      finances: uniqueSorted(optionValues(["finances"]).map((vehicle) => financeName(vehicle))),
-      locations: uniqueSorted(optionValues(["locations"]).map((vehicle) => vehicle.parkingLocation || ""))
+      projects: uniqueSorted(optionValues(["projects"]).map((vehicle) => vehicle.project || "")),
+      campaigns: uniqueSorted(optionValues(["campaigns"]).map((vehicle) => vehicle.campaign || "")),
+      agingGroups: uniqueSorted(optionValues(["agingGroups"]).map((vehicle) => stockRawValue(vehicle, "agingGroup"))),
+      agings: uniqueSorted(optionValues(["agings"]).map((vehicle) => stockRawValue(vehicle, "aging"))),
+      closedSales: uniqueSorted(optionValues(["closedSales"]).map((vehicle) => stockRawValue(vehicle, "closedSales"))),
+      inspections: uniqueSorted(optionValues(["inspections"]).map((vehicle) => stockRawValue(vehicle, "inspection"))),
+      extendedWarranties: uniqueSorted(optionValues(["extendedWarranties"]).map((vehicle) => stockRawValue(vehicle, "extendedWarranty"))),
+      pdiStatuses: uniqueSorted(optionValues(["pdiStatuses"]).map((vehicle) => stockRawValue(vehicle, "pdiStatus"))),
+      locations: uniqueSorted(optionValues(["locations"]).map((vehicle) => vehicle.parkingLocation || "")),
+      vehicleGroups: uniqueSorted(optionValues(["vehicleGroups"]).map((vehicle) => stockVehicleGroup(vehicle) || ""))
     };
   }, [advancedFilters, groupMatchedVehicles]);
+
+  const availableExtraColumns = useMemo(() => {
+    const keys = Object.keys(extraColumnLabels) as ExtraColumnKey[];
+    return keys.filter((key) => {
+      if (key === "pdiNote") return exportMode === "internal" && vehicles.some((vehicle) => hasPdiRemark(stockPdiRemark(vehicle)));
+      if (key === "vin") return hasStockFieldData(vehicles, "vin");
+      if (key === "engineNo") return hasStockFieldData(vehicles, "engineNo");
+      if (key === "financeName") return hasStockFieldData(vehicles, "financeName");
+      return hasStockFieldData(vehicles, key);
+    });
+  }, [exportMode, vehicles]);
 
   const advancedFilterCount = useMemo(() => countAdvancedFilters(advancedFilters), [advancedFilters]);
 
@@ -741,7 +833,7 @@ export default function StockExportPage() {
   }
 
   function addSortRule() {
-    setSortRules((current) => [...current, { id: `sort-${Date.now()}`, field: "brand", direction: "asc" }]);
+    setSortRules((current) => [...current, { id: `sort-${Date.now()}`, field: "location", direction: "asc" }]);
   }
 
   function updateSortRule(id: string, patch: Partial<SortRule>) {
@@ -1023,23 +1115,30 @@ export default function StockExportPage() {
                     {group}
                   </ActiveFilterTag>
                 ))}
-                {advancedFilters.brands.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("brands")}>ยี่ห้อ: {advancedFilters.brands.join(", ")}</ActiveFilterTag>}
                 {advancedFilters.models.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("models")}>รุ่น: {advancedFilters.models.join(", ")}</ActiveFilterTag>}
                 {advancedFilters.years.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("years")}>ปีจด: {advancedFilters.years.join(", ")}</ActiveFilterTag>}
-                {advancedFilters.productionYears.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("productionYears")}>ปีผลิต: {advancedFilters.productionYears.join(", ")}</ActiveFilterTag>}
                 {advancedFilters.colors.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("colors")}>สี: {advancedFilters.colors.join(", ")}</ActiveFilterTag>}
+                {advancedFilters.colorGroups.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("colorGroups")}>กลุ่มสี: {advancedFilters.colorGroups.join(", ")}</ActiveFilterTag>}
                 {advancedFilters.gears.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("gears")}>เกียร์: {advancedFilters.gears.join(", ")}</ActiveFilterTag>}
                 {advancedFilters.statuses.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("statuses")}>สถานะเสริม: {advancedFilters.statuses.join(", ")}</ActiveFilterTag>}
-                {advancedFilters.sources.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("sources")}>แหล่งที่มา: {advancedFilters.sources.join(", ")}</ActiveFilterTag>}
-                {advancedFilters.ownerships.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("ownerships")}>บริษัท/ไฟแนนซ์: {advancedFilters.ownerships.join(", ")}</ActiveFilterTag>}
-                {advancedFilters.finances.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("finances")}>ไฟแนนซ์: {advancedFilters.finances.join(", ")}</ActiveFilterTag>}
-                {advancedFilters.locations.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("locations")}>สถานที่จอด: {advancedFilters.locations.join(", ")}</ActiveFilterTag>}
+                {advancedFilters.ownerships.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("ownerships")}>กรรมสิทธิ์: {advancedFilters.ownerships.join(", ")}</ActiveFilterTag>}
+                {advancedFilters.projects.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("projects")}>PROJECT: {advancedFilters.projects.join(", ")}</ActiveFilterTag>}
+                {advancedFilters.campaigns.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("campaigns")}>CAMPAIGN: {advancedFilters.campaigns.join(", ")}</ActiveFilterTag>}
+                {advancedFilters.locations.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("locations")}>Location: {advancedFilters.locations.join(", ")}</ActiveFilterTag>}
+                {advancedFilters.vehicleGroups.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("vehicleGroups")}>กลุ่มรถยนต์: {advancedFilters.vehicleGroups.join(", ")}</ActiveFilterTag>}
+                {advancedFilters.customerName && <ActiveFilterTag onRemove={() => clearAdvancedFilter("customerName")}>ชื่อลูกค้า: {advancedFilters.customerName}</ActiveFilterTag>}
+                {advancedFilters.sellerName && <ActiveFilterTag onRemove={() => clearAdvancedFilter("sellerName")}>ชื่อผู้ขาย: {advancedFilters.sellerName}</ActiveFilterTag>}
                 {advancedFilters.plate && <ActiveFilterTag onRemove={() => clearAdvancedFilter("plate")}>ทะเบียน: {advancedFilters.plate}</ActiveFilterTag>}
                 {advancedFilters.vin && <ActiveFilterTag onRemove={() => clearAdvancedFilter("vin")}>เลขตัวถัง: {advancedFilters.vin}</ActiveFilterTag>}
                 {advancedFilters.engineNo && <ActiveFilterTag onRemove={() => clearAdvancedFilter("engineNo")}>เลขเครื่อง: {advancedFilters.engineNo}</ActiveFilterTag>}
-                {advancedFilters.importedFrom || advancedFilters.importedTo ? (
-                  <ActiveFilterTag onRemove={() => setAdvancedFilters((current) => ({ ...current, importedFrom: "", importedTo: "" }))}>
-                    วันที่เข้า: {advancedFilters.importedFrom || "เริ่มต้น"}-{advancedFilters.importedTo || "ล่าสุด"}
+                {advancedFilters.reportReturnFrom || advancedFilters.reportReturnTo ? (
+                  <ActiveFilterTag onRemove={() => setAdvancedFilters((current) => ({ ...current, reportReturnFrom: "", reportReturnTo: "" }))}>
+                    วันที่รับรายงานคืน: {advancedFilters.reportReturnFrom || "เริ่มต้น"}-{advancedFilters.reportReturnTo || "ล่าสุด"}
+                  </ActiveFilterTag>
+                ) : null}
+                {advancedFilters.bookingSaleFrom || advancedFilters.bookingSaleTo ? (
+                  <ActiveFilterTag onRemove={() => setAdvancedFilters((current) => ({ ...current, bookingSaleFrom: "", bookingSaleTo: "" }))}>
+                    วันที่จอง/ขาย: {advancedFilters.bookingSaleFrom || "เริ่มต้น"}-{advancedFilters.bookingSaleTo || "ล่าสุด"}
                   </ActiveFilterTag>
                 ) : null}
                 {sortRules.length > 0 && <ActiveFilterTag onRemove={() => setSortRules([])}>Sort: {sortRules.map((rule) => `${sortFieldLabels[rule.field]} ${rule.direction === "asc" ? "น้อย→มาก" : "มาก→น้อย"}`).join(" / ")}</ActiveFilterTag>}
@@ -1391,42 +1490,68 @@ export default function StockExportPage() {
           </div>
         }
       >
-        <MultiFilter label="ยี่ห้อ" values={advancedFilters.brands} options={advancedOptions.brands} onToggle={(value) => toggleAdvancedValue("brands", value)} onClear={() => clearAdvancedFilter("brands")} />
-        <MultiFilter label="รุ่นรถยนต์" values={advancedFilters.models} options={advancedOptions.models} onToggle={(value) => toggleAdvancedValue("models", value)} onClear={() => clearAdvancedFilter("models")} />
-        <div className="grid gap-3 sm:grid-cols-2">
-          <MultiFilter label="ปีจด" values={advancedFilters.years} options={advancedOptions.years} onToggle={(value) => toggleAdvancedValue("years", value)} onClear={() => clearAdvancedFilter("years")} />
-          <MultiFilter label="ปีผลิต" values={advancedFilters.productionYears} options={advancedOptions.productionYears} onToggle={(value) => toggleAdvancedValue("productionYears", value)} onClear={() => clearAdvancedFilter("productionYears")} />
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <MultiFilter label="สี" values={advancedFilters.colors} options={advancedOptions.colors} onToggle={(value) => toggleAdvancedValue("colors", value)} onClear={() => clearAdvancedFilter("colors")} />
-          <MultiFilter label="เกียร์" values={advancedFilters.gears} options={advancedOptions.gears} onToggle={(value) => toggleAdvancedValue("gears", value)} onClear={() => clearAdvancedFilter("gears")} />
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <MultiFilter label="สถานะรถ" values={advancedFilters.statuses} options={advancedOptions.statuses} onToggle={(value) => toggleAdvancedValue("statuses", value)} onClear={() => clearAdvancedFilter("statuses")} />
-          <MultiFilter label="สถานที่จอด" values={advancedFilters.locations} options={advancedOptions.locations} onToggle={(value) => toggleAdvancedValue("locations", value)} onClear={() => clearAdvancedFilter("locations")} />
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <MultiFilter label="แหล่งที่มา" values={advancedFilters.sources} options={advancedOptions.sources} onToggle={(value) => toggleAdvancedValue("sources", value)} onClear={() => clearAdvancedFilter("sources")} />
-          <MultiFilter label="บริษัท / ไฟแนนซ์" values={advancedFilters.ownerships} options={advancedOptions.ownerships} onToggle={(value) => toggleAdvancedValue("ownerships", value)} onClear={() => clearAdvancedFilter("ownerships")} />
-        </div>
-        <MultiFilter label="ไฟแนนซ์" values={advancedFilters.finances} options={advancedOptions.finances} onToggle={(value) => toggleAdvancedValue("finances", value)} onClear={() => clearAdvancedFilter("finances")} />
-        <div className="grid gap-3 sm:grid-cols-3">
-          <AdvancedTextField label="ทะเบียน" value={advancedFilters.plate} onChange={(value) => setAdvancedFilter("plate", value)} placeholder="contains" />
-          <AdvancedTextField label="เลขตัวถัง" value={advancedFilters.vin} onChange={(value) => setAdvancedFilter("vin", value)} placeholder="contains" />
-          <AdvancedTextField label="เลขเครื่อง" value={advancedFilters.engineNo} onChange={(value) => setAdvancedFilter("engineNo", value)} placeholder="contains" />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <AdvancedTextField label="เลขไมล์ต่ำสุด" value={advancedFilters.mileageMin} onChange={(value) => setAdvancedFilter("mileageMin", value)} placeholder="เช่น 50000" inputMode="numeric" />
-          <AdvancedTextField label="เลขไมล์สูงสุด" value={advancedFilters.mileageMax} onChange={(value) => setAdvancedFilter("mileageMax", value)} placeholder="เช่น 150000" inputMode="numeric" />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <AdvancedTextField label="ราคาต่ำสุด" value={advancedFilters.priceMin} onChange={(value) => setAdvancedFilter("priceMin", value)} placeholder="เช่น 300000" inputMode="numeric" />
-          <AdvancedTextField label="ราคาสูงสุด" value={advancedFilters.priceMax} onChange={(value) => setAdvancedFilter("priceMax", value)} placeholder="เช่น 800000" inputMode="numeric" />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <AdvancedTextField label="วันที่เข้า จาก" value={advancedFilters.importedFrom} onChange={(value) => setAdvancedFilter("importedFrom", value)} inputType="date" />
-          <AdvancedTextField label="วันที่เข้า ถึง" value={advancedFilters.importedTo} onChange={(value) => setAdvancedFilter("importedTo", value)} inputType="date" />
-        </div>
+        <FilterAccordion title="ข้อมูลรถ" defaultOpen>
+          <MultiFilter label="Location" values={advancedFilters.locations} options={advancedOptions.locations} onToggle={(value) => toggleAdvancedValue("locations", value)} onClear={() => clearAdvancedFilter("locations")} />
+          <MultiFilter label="กลุ่มรถยนต์" values={advancedFilters.vehicleGroups} options={advancedOptions.vehicleGroups} onToggle={(value) => toggleAdvancedValue("vehicleGroups", value)} onClear={() => clearAdvancedFilter("vehicleGroups")} />
+          <MultiFilter label="รุ่นรถยนต์" values={advancedFilters.models} options={advancedOptions.models} onToggle={(value) => toggleAdvancedValue("models", value)} onClear={() => clearAdvancedFilter("models")} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <AdvancedTextField label="ทะเบียน" value={advancedFilters.plate} onChange={(value) => setAdvancedFilter("plate", value)} placeholder="contains" />
+            {hasStockFieldData(vehicles, "vin") ? <AdvancedTextField label="เลขตัวถัง (optional)" value={advancedFilters.vin} onChange={(value) => setAdvancedFilter("vin", value)} placeholder="contains" /> : null}
+            {hasStockFieldData(vehicles, "engineNo") ? <AdvancedTextField label="เลขเครื่อง (optional)" value={advancedFilters.engineNo} onChange={(value) => setAdvancedFilter("engineNo", value)} placeholder="contains" /> : null}
+          </div>
+        </FilterAccordion>
+        <FilterAccordion title="ราคา / ไมล์ / ปี">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <MultiFilter label="ปีจด" values={advancedFilters.years} options={advancedOptions.years} onToggle={(value) => toggleAdvancedValue("years", value)} onClear={() => clearAdvancedFilter("years")} />
+            <MultiFilter label="สี" values={advancedFilters.colors} options={advancedOptions.colors} onToggle={(value) => toggleAdvancedValue("colors", value)} onClear={() => clearAdvancedFilter("colors")} />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <MultiFilter label="กลุ่มสี" values={advancedFilters.colorGroups} options={advancedOptions.colorGroups} onToggle={(value) => toggleAdvancedValue("colorGroups", value)} onClear={() => clearAdvancedFilter("colorGroups")} />
+            <MultiFilter label="เกียร์" values={advancedFilters.gears} options={advancedOptions.gears} onToggle={(value) => toggleAdvancedValue("gears", value)} onClear={() => clearAdvancedFilter("gears")} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <AdvancedTextField label="เลขไมล์ต่ำสุด" value={advancedFilters.mileageMin} onChange={(value) => setAdvancedFilter("mileageMin", value)} placeholder="เช่น 50000" inputMode="numeric" />
+            <AdvancedTextField label="เลขไมล์สูงสุด" value={advancedFilters.mileageMax} onChange={(value) => setAdvancedFilter("mileageMax", value)} placeholder="เช่น 150000" inputMode="numeric" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <AdvancedTextField label="ราคาเสนอขายRT ต่ำสุด" value={advancedFilters.priceMin} onChange={(value) => setAdvancedFilter("priceMin", value)} placeholder="เช่น 300000" inputMode="numeric" />
+            <AdvancedTextField label="ราคาเสนอขายRT สูงสุด" value={advancedFilters.priceMax} onChange={(value) => setAdvancedFilter("priceMax", value)} placeholder="เช่น 800000" inputMode="numeric" />
+          </div>
+        </FilterAccordion>
+        <FilterAccordion title="สถานะ">
+          <MultiFilter label="สถานะ" values={advancedFilters.statuses} options={advancedOptions.statuses} onToggle={(value) => toggleAdvancedValue("statuses", value)} onClear={() => clearAdvancedFilter("statuses")} />
+          <MultiFilter label="กรรมสิทธิ์" values={advancedFilters.ownerships} options={advancedOptions.ownerships} onToggle={(value) => toggleAdvancedValue("ownerships", value)} onClear={() => clearAdvancedFilter("ownerships")} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <MultiFilter label="PROJECT" values={advancedFilters.projects} options={advancedOptions.projects} onToggle={(value) => toggleAdvancedValue("projects", value)} onClear={() => clearAdvancedFilter("projects")} />
+            <MultiFilter label="CAMPAIGN" values={advancedFilters.campaigns} options={advancedOptions.campaigns} onToggle={(value) => toggleAdvancedValue("campaigns", value)} onClear={() => clearAdvancedFilter("campaigns")} />
+          </div>
+        </FilterAccordion>
+        <FilterAccordion title="ลูกค้า / ผู้ขาย">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <AdvancedTextField label="ชื่อลูกค้า" value={advancedFilters.customerName} onChange={(value) => setAdvancedFilter("customerName", value)} placeholder="contains" />
+            <AdvancedTextField label="ชื่อผู้ขาย" value={advancedFilters.sellerName} onChange={(value) => setAdvancedFilter("sellerName", value)} placeholder="contains" />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <MultiFilter label="Closed Sales" values={advancedFilters.closedSales} options={advancedOptions.closedSales} onToggle={(value) => toggleAdvancedValue("closedSales", value)} onClear={() => clearAdvancedFilter("closedSales")} />
+            <MultiFilter label="กลุ่มAging" values={advancedFilters.agingGroups} options={advancedOptions.agingGroups} onToggle={(value) => toggleAdvancedValue("agingGroups", value)} onClear={() => clearAdvancedFilter("agingGroups")} />
+          </div>
+          <MultiFilter label="Aging" values={advancedFilters.agings} options={advancedOptions.agings} onToggle={(value) => toggleAdvancedValue("agings", value)} onClear={() => clearAdvancedFilter("agings")} />
+        </FilterAccordion>
+        <FilterAccordion title="วันที่">
+          <div className="grid grid-cols-2 gap-2">
+            <AdvancedTextField label="วันที่รับรายงานคืน จาก" value={advancedFilters.reportReturnFrom} onChange={(value) => setAdvancedFilter("reportReturnFrom", value)} inputType="date" />
+            <AdvancedTextField label="วันที่รับรายงานคืน ถึง" value={advancedFilters.reportReturnTo} onChange={(value) => setAdvancedFilter("reportReturnTo", value)} inputType="date" />
+            <AdvancedTextField label="วันที่จอง/ขาย จาก" value={advancedFilters.bookingSaleFrom} onChange={(value) => setAdvancedFilter("bookingSaleFrom", value)} inputType="date" />
+            <AdvancedTextField label="วันที่จอง/ขาย ถึง" value={advancedFilters.bookingSaleTo} onChange={(value) => setAdvancedFilter("bookingSaleTo", value)} inputType="date" />
+          </div>
+        </FilterAccordion>
+        <FilterAccordion title="PDI / Inspection / Warranty">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <MultiFilter label="Inspection" values={advancedFilters.inspections} options={advancedOptions.inspections} onToggle={(value) => toggleAdvancedValue("inspections", value)} onClear={() => clearAdvancedFilter("inspections")} />
+            <MultiFilter label="Extended Warranty" values={advancedFilters.extendedWarranties} options={advancedOptions.extendedWarranties} onToggle={(value) => toggleAdvancedValue("extendedWarranties", value)} onClear={() => clearAdvancedFilter("extendedWarranties")} />
+          </div>
+          <MultiFilter label="สถานะปรับสภาพ PDI" values={advancedFilters.pdiStatuses} options={advancedOptions.pdiStatuses} onToggle={(value) => toggleAdvancedValue("pdiStatuses", value)} onClear={() => clearAdvancedFilter("pdiStatuses")} />
+        </FilterAccordion>
         <SortPanel rules={sortRules} onAdd={addSortRule} onUpdate={updateSortRule} onRemove={removeSortRule} onClear={() => setSortRules([])} />
         <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
           <p className="mb-2 text-sm font-bold text-white">Save Filter Preset</p>
@@ -1467,7 +1592,7 @@ export default function StockExportPage() {
           ค่าเริ่มต้นยังเหมือนเดิม คอลัมน์เสริมจะแสดงเฉพาะในรายการรถด้านล่างเมื่อคุณติ๊กเลือก
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
-          {(Object.keys(extraColumnLabels) as ExtraColumnKey[]).map((key) => (
+          {availableExtraColumns.length ? availableExtraColumns.map((key) => (
             <label key={key} className={`flex min-h-11 items-center gap-3 rounded-lg border px-3 text-sm font-bold ${extraColumns.includes(key) ? "border-brand bg-brand/10 text-brand" : "border-line bg-[#0b0d11] text-white"}`}>
               <input
                 type="checkbox"
@@ -1477,7 +1602,11 @@ export default function StockExportPage() {
               />
               {extraColumnLabels[key]}
             </label>
-          ))}
+          )) : (
+            <p className="rounded-lg border border-dashed border-line bg-[#0b0d11] p-4 text-center text-sm text-soft sm:col-span-2">
+              ยังไม่พบคอลัมน์เสริมจากไฟล์สต็อกจริงในข้อมูลที่โหลดมา
+            </p>
+          )}
         </div>
         {extraColumns.length ? (
           <button type="button" onClick={() => setExtraColumns([])} className="min-h-10 rounded-lg border border-line px-3 text-sm font-bold text-white">
@@ -1566,6 +1695,23 @@ function buildPdfFromJpegs(images: PdfImage[]) {
     return copy.buffer;
   });
   return new Blob(blobParts, { type: "application/pdf" });
+}
+
+function FilterAccordion({ title, children, defaultOpen = false }: { title: string; children: ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className="overflow-hidden rounded-lg border border-line bg-[#0b0d11]">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="flex min-h-12 w-full items-center justify-between gap-3 px-3 text-left font-black text-white"
+      >
+        <span>{title}</span>
+        <span className="text-brand">{open ? "−" : "+"}</span>
+      </button>
+      {open ? <div className="space-y-3 border-t border-line p-3">{children}</div> : null}
+    </section>
+  );
 }
 
 function MultiFilter({
