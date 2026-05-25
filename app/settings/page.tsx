@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { ArrowLeft, CheckCircle2, Database, FlaskConical, History, Loader2, MessageCircle, Save, Settings, Shield, Upload, UserRound } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Database, Download, FlaskConical, History, Loader2, MessageCircle, Save, Settings, Shield, Upload, UserRound } from "lucide-react";
 import { PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
 import {
   BigCarSystemSettings,
@@ -187,6 +187,13 @@ export default function SettingsPage() {
                 {checkingStorage ? <Loader2 size={16} className="animate-spin text-brand" /> : <Database size={16} className="text-brand" />}
                 ตรวจอีกครั้ง
               </button>
+              <a
+                href="/api/system/export"
+                className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-3 text-sm font-black text-ink"
+              >
+                <Download size={16} />
+                Backup JSON
+              </a>
             </div>
           </div>
         </SectionCard>
