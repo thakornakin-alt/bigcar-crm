@@ -385,6 +385,59 @@ const extraColumnLabels: Record<ExtraColumnKey, string> = {
   updatedAt: "วันที่อัปเดตล่าสุด"
 };
 
+type StockExportColumn = { key: string; label: string; width: number; extraKey?: ExtraColumnKey };
+
+function stockExportExtraColumns(mode: ExportMode, selectedColumns: ExtraColumnKey[]) {
+  const baseIncluded = new Set<ExtraColumnKey>(["mileage", "parkingLocation"]);
+  if (mode === "internal") baseIncluded.add("pdiNote");
+  return selectedColumns.filter((key) => {
+    if (baseIncluded.has(key)) return false;
+    if (mode === "customer" && key === "pdiNote") return false;
+    return true;
+  });
+}
+
+function extraColumnExportWidth(key: ExtraColumnKey) {
+  if (key === "vin") return 260;
+  if (key === "engineNo") return 220;
+  if (key === "source" || key === "ownership" || key === "finance") return 170;
+  if (key === "importedAt" || key === "updatedAt") return 180;
+  if (key === "productionYear") return 120;
+  return 160;
+}
+
+function stockExportColumns(mode: ExportMode, selectedColumns: ExtraColumnKey[]): StockExportColumn[] {
+  const columns: StockExportColumn[] =
+    mode === "internal"
+      ? [
+          { key: "location", label: "Location", width: 120 },
+          { key: "plate", label: "ทะเบียน", width: 130 },
+          { key: "year", label: "ปีจด", width: 82 },
+          { key: "model", label: "รุ่นรถยนต์", width: 370 },
+          { key: "gear", label: "เกียร์", width: 70 },
+          { key: "color", label: "สี", width: 110 },
+          { key: "mileage", label: "เลขไมล์", width: 120 },
+          { key: "price", label: "ราคาเสนอขายRT", width: 160 },
+          { key: "pdi", label: "หมายเหตุ PDI", width: 550 }
+        ]
+      : [
+          { key: "location", label: "Location", width: 165 },
+          { key: "plate", label: "ทะเบียน", width: 150 },
+          { key: "year", label: "ปีจด", width: 120 },
+          { key: "model", label: "รุ่นรถยนต์", width: 620 },
+          { key: "gear", label: "เกียร์", width: 95 },
+          { key: "color", label: "สี", width: 190 },
+          { key: "mileage", label: "เลขไมล์", width: 170 },
+          { key: "price", label: "ราคาเสนอขายRT", width: 202 }
+        ];
+
+  stockExportExtraColumns(mode, selectedColumns).forEach((key) => {
+    columns.push({ key: `extra:${key}`, label: extraColumnLabels[key], width: extraColumnExportWidth(key), extraKey: key });
+  });
+
+  return columns;
+}
+
 function safeFilePart(value: string) {
   return String(value || "stock")
     .replace(/[\\/:*?"<>|#\[\]]/g, " ")
@@ -846,7 +899,7 @@ export default function StockExportPage() {
 
     for (const group of exportGroups) {
       for (let index = 0; index < group.pages.length; index += 1) {
-        renderStockTableCanvas(canvas, group.pages[index], exportMode, index + 1, group.pages.length, group.name, group.vehicles.length, exportVehicles.length, contact);
+        renderStockTableCanvas(canvas, group.pages[index], exportMode, index + 1, group.pages.length, group.name, group.vehicles.length, exportVehicles.length, contact, extraColumns);
         if (format === "pdf") {
           const jpegBlob = await canvasToBlob(canvas, "image/jpeg", 0.92);
           pdfImages.push({ bytes: new Uint8Array(await jpegBlob.arrayBuffer()), width: canvas.width, height: canvas.height });
@@ -881,7 +934,7 @@ export default function StockExportPage() {
       if (!canvas) throw new Error("Canvas is not ready");
       const firstGroup = exportGroups[0];
       const contact = await stockExportContactProfile(salesProfile);
-      renderStockTableCanvas(canvas, firstGroup.pages[0] || firstGroup.vehicles, exportMode, 1, Math.max(firstGroup.pages.length, 1), firstGroup.name, firstGroup.vehicles.length, exportVehicles.length, contact);
+      renderStockTableCanvas(canvas, firstGroup.pages[0] || firstGroup.vehicles, exportMode, 1, Math.max(firstGroup.pages.length, 1), firstGroup.name, firstGroup.vehicles.length, exportVehicles.length, contact, extraColumns);
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
       if (!blob || !navigator.clipboard || typeof ClipboardItem === "undefined") throw new Error("เครื่องนี้ยังไม่รองรับ Copy Image");
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
@@ -1173,7 +1226,7 @@ export default function StockExportPage() {
           </SectionCard>
 
         <SectionCard title="Preview รูป" icon={<FileImage size={18} />}>
-          <StockPreview vehicles={exportVehicles} mode={exportMode} pageCount={exportPageCount} groupCount={exportGroups.length} />
+          <StockPreview vehicles={exportVehicles} mode={exportMode} pageCount={exportPageCount} groupCount={exportGroups.length} extraColumns={extraColumns} />
           <div className="grid gap-2 rounded-lg border border-line bg-[#0b0d11] p-3 sm:grid-cols-[1fr_auto]">
             <label>
               <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">ส่งรูปสต็อกเข้า LINE กลุ่ม</span>
@@ -1757,10 +1810,20 @@ function ExportPlanSummary({ groups, pageCount, vehicleCount }: { groups: StockE
   );
 }
 
-function StockPreview({ vehicles, mode, pageCount, groupCount }: { vehicles: StockVehicle[]; mode: ExportMode; pageCount: number; groupCount: number }) {
-  const headers = mode === "internal"
-    ? ["Location", "ทะเบียน", "ปีจด", "รุ่นรถยนต์", "เกียร์", "สี", "เลขไมล์", "ราคาเสนอขายRT", "หมายเหตุ PDI"]
-    : ["Location", "ทะเบียน", "ปีจด", "รุ่นรถยนต์", "เกียร์", "สี", "เลขไมล์", "ราคาเสนอขายRT"];
+function StockPreview({
+  vehicles,
+  mode,
+  pageCount,
+  groupCount,
+  extraColumns
+}: {
+  vehicles: StockVehicle[];
+  mode: ExportMode;
+  pageCount: number;
+  groupCount: number;
+  extraColumns: ExtraColumnKey[];
+}) {
+  const columns = stockExportColumns(mode, extraColumns);
 
   return (
     <div className="overflow-hidden rounded-lg border border-line bg-[#f6f8f7] text-[#111827] shadow-glow">
@@ -1773,12 +1836,12 @@ function StockPreview({ vehicles, mode, pageCount, groupCount }: { vehicles: Sto
         </p>
       </div>
       <div className="overflow-x-auto">
-        <table className={`w-full border-collapse text-[11px] ${mode === "internal" ? "min-w-[1080px]" : "min-w-[760px]"}`}>
+        <table className="w-full min-w-max border-collapse text-[11px]">
           <thead>
             <tr className="bg-[#17211d] text-white">
-              {headers.map((header) => (
-                <th key={header} className={`border border-[#2d3a35] px-2 py-2 font-bold ${header === "หมายเหตุ PDI" ? "bg-[#7c4a03] text-left" : "text-left"}`}>
-                  {header}
+              {columns.map((column) => (
+                <th key={column.key} className={`border border-[#2d3a35] px-2 py-2 font-bold ${column.key === "pdi" ? "bg-[#7c4a03] text-left" : "text-left"}`}>
+                  {column.label}
                 </th>
               ))}
             </tr>
@@ -1786,19 +1849,23 @@ function StockPreview({ vehicles, mode, pageCount, groupCount }: { vehicles: Sto
           <tbody>
             {vehicles.slice(0, 8).map((vehicle) => (
               <tr key={vehicle.plate} className="bg-white">
-                <td className="border border-[#dce3e1] px-2 py-1">{shortLocation(vehicle.parkingLocation)}</td>
-                <td className="border border-[#dce3e1] px-2 py-1 text-center font-bold">{vehicle.plate || "-"}</td>
-                <td className="border border-[#dce3e1] px-2 py-1 text-center">{vehicle.year || "-"}</td>
-                <td className="border border-[#dce3e1] px-2 py-1">{vehicleTitle(vehicle)}</td>
-                <td className="border border-[#dce3e1] px-2 py-1 text-center">{vehicle.gear || "-"}</td>
-                <td className="border border-[#dce3e1] px-2 py-1 text-center">{vehicle.color || "-"}</td>
-                <td className="border border-[#dce3e1] px-2 py-1 text-right">{formatMileage(vehicle.mileage).replace(" กม.", "")}</td>
-                <td className="border border-[#dce3e1] bg-[#e6fbf3] px-2 py-1 text-right text-sm font-black">{formatPrice(vehicle.salePrice).replace(" บาท", "")}</td>
-                {mode === "internal" ? (
-                  <td className={`max-w-[320px] border border-[#dce3e1] px-2 py-1 text-left leading-5 ${hasPdiRemark(stockPdiRemark(vehicle)) ? "bg-[#fff7ed] font-semibold text-[#7c2d12]" : "text-[#64748b]"}`}>
-                    {pdiRemarkText(stockPdiRemark(vehicle))}
-                  </td>
-                ) : null}
+                {columns.map((column) => {
+                  const value = previewColumnValue(vehicle, column, mode);
+                  return (
+                    <td
+                      key={`${vehicle.plate}-${column.key}`}
+                      className={`border border-[#dce3e1] px-2 py-1 ${
+                        column.key === "price"
+                          ? "bg-[#e6fbf3] text-right text-sm font-black"
+                          : column.key === "pdi"
+                            ? hasPdiRemark(stockPdiRemark(vehicle)) ? "bg-[#fff7ed] text-left font-semibold text-[#7c2d12]" : "text-left text-[#64748b]"
+                            : column.key === "mileage" ? "text-right" : column.key === "model" || column.key === "location" ? "text-left" : "text-center"
+                      }`}
+                    >
+                      {value}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
@@ -1807,6 +1874,20 @@ function StockPreview({ vehicles, mode, pageCount, groupCount }: { vehicles: Sto
       {!vehicles.length ? <p className="p-6 text-center text-sm text-[#475569]">เลือกสต็อกเพื่อดู Preview</p> : null}
     </div>
   );
+}
+
+function previewColumnValue(vehicle: StockVehicle, column: StockExportColumn, mode: ExportMode) {
+  if (column.extraKey) return defaultColumnValue(vehicle, column.extraKey);
+  if (column.key === "location") return shortLocation(vehicle.parkingLocation);
+  if (column.key === "plate") return vehicle.plate || "-";
+  if (column.key === "year") return vehicle.year || "-";
+  if (column.key === "model") return vehicleTitle(vehicle);
+  if (column.key === "gear") return vehicle.gear || "-";
+  if (column.key === "color") return vehicle.color || "-";
+  if (column.key === "mileage") return formatMileage(vehicle.mileage).replace(" กม.", "");
+  if (column.key === "price") return formatPrice(vehicle.salePrice).replace(" บาท", "");
+  if (column.key === "pdi" && mode === "internal") return pdiRemarkText(stockPdiRemark(vehicle));
+  return "-";
 }
 
 function renderStockTableCanvas(
@@ -1818,9 +1899,9 @@ function renderStockTableCanvas(
   groupName: string,
   groupTotal: number,
   exportTotal: number,
-  contact: StockExportContact | null = null
+  contact: StockExportContact | null = null,
+  extraColumns: ExtraColumnKey[] = []
 ) {
-  const width = 1800;
   const margin = 44;
   const headerHeight = 126;
   const tableTop = 166;
@@ -1828,6 +1909,9 @@ function renderStockTableCanvas(
   const footerHeight = 60;
   const rows = vehicles.slice(0, maxTableItems);
   const headerRowHeight = 56;
+  const columns = stockExportColumns(mode, extraColumns);
+  const tableWidth = columns.reduce((total, column) => total + column.width, 0);
+  const width = Math.max(1800, tableWidth + margin * 2);
   const height = tableTop + headerRowHeight + rows.length * rowHeight + footerHeight;
   const ratio = window.devicePixelRatio || 1;
   canvas.width = width * ratio;
@@ -1865,30 +1949,6 @@ function renderStockTableCanvas(
   ctx.fillText(`หน้า ${page}/${totalPages}`, contact?.lineQrImage || contact?.avatarImage ? width - margin - 132 : width - margin - 28, 82);
   drawStockExportContact(ctx, contact, width - margin - 28, 42);
 
-  const columns =
-    mode === "internal"
-      ? [
-          { key: "location", label: "Location", width: 120 },
-          { key: "plate", label: "ทะเบียน", width: 130 },
-          { key: "year", label: "ปีจด", width: 82 },
-          { key: "model", label: "รุ่นรถยนต์", width: 370 },
-          { key: "gear", label: "เกียร์", width: 70 },
-          { key: "color", label: "สี", width: 110 },
-          { key: "mileage", label: "เลขไมล์", width: 120 },
-          { key: "price", label: "ราคาเสนอขายRT", width: 160 },
-          { key: "pdi", label: "หมายเหตุ PDI", width: 550 }
-        ]
-      : [
-          { key: "location", label: "Location", width: 165 },
-          { key: "plate", label: "ทะเบียน", width: 150 },
-          { key: "year", label: "ปีจด", width: 120 },
-          { key: "model", label: "รุ่นรถยนต์", width: 620 },
-          { key: "gear", label: "เกียร์", width: 95 },
-          { key: "color", label: "สี", width: 190 },
-          { key: "mileage", label: "เลขไมล์", width: 170 },
-          { key: "price", label: "ราคาเสนอขายRT", width: 202 }
-        ];
-
   let x = margin;
   ctx.font = "800 23px Arial, Tahoma, sans-serif";
   columns.forEach((column) => {
@@ -1919,21 +1979,24 @@ function renderStockTableCanvas(
 
     x = margin;
     columns.forEach((column) => {
+      if (column.extraKey) values[column.key] = defaultColumnValue(vehicle, column.extraKey);
       ctx.fillStyle = column.key === "price" ? "#e8fbf2" : rowIndex % 2 ? "#fbfcfc" : "#ffffff";
       ctx.fillRect(x, rowY, column.width, rowHeight);
       ctx.strokeStyle = "#dce3e1";
       ctx.lineWidth = 1;
       ctx.strokeRect(x, rowY, column.width, rowHeight);
       ctx.fillStyle = "#111827";
-      ctx.font = column.key === "price" ? "900 24px Arial, Tahoma, sans-serif" : column.key === "pdi" ? "600 18px Arial, Tahoma, sans-serif" : mode === "internal" ? "600 19px Arial, Tahoma, sans-serif" : "600 21px Arial, Tahoma, sans-serif";
-      ctx.textAlign = column.key === "price" || column.key === "mileage" ? "right" : column.key === "model" || column.key === "location" || column.key === "pdi" ? "left" : "center";
+      ctx.font = column.key === "price" ? "900 24px Arial, Tahoma, sans-serif" : column.key === "pdi" ? "600 18px Arial, Tahoma, sans-serif" : column.extraKey ? "600 18px Arial, Tahoma, sans-serif" : mode === "internal" ? "600 19px Arial, Tahoma, sans-serif" : "600 21px Arial, Tahoma, sans-serif";
+      ctx.textAlign = column.key === "price" || column.key === "mileage" ? "right" : column.key === "model" || column.key === "location" || column.key === "pdi" || column.extraKey === "vin" || column.extraKey === "engineNo" ? "left" : "center";
       const textX =
-        column.key === "price" || column.key === "mileage" ? x + column.width - 14 : column.key === "model" || column.key === "location" || column.key === "pdi" ? x + 14 : x + column.width / 2;
+        column.key === "price" || column.key === "mileage" ? x + column.width - 14 : column.key === "model" || column.key === "location" || column.key === "pdi" || column.extraKey === "vin" || column.extraKey === "engineNo" ? x + 14 : x + column.width / 2;
       if (column.key === "model") {
         drawWrappedCellText(ctx, values[column.key], textX, rowY + 23, column.width - 28, 25, 2);
       } else if (column.key === "pdi") {
         ctx.fillStyle = hasPdiRemark(stockPdiRemark(vehicle)) ? "#7c2d12" : "#6b7280";
         drawWrappedCellText(ctx, values[column.key], textX, rowY + 24, column.width - 28, 24, 3);
+      } else if (column.extraKey === "vin" || column.extraKey === "engineNo") {
+        drawWrappedCellText(ctx, values[column.key], textX, rowY + 23, column.width - 28, 23, 2);
       } else if (column.key === "location" || column.key === "color") {
         drawBadgeCellText(ctx, values[column.key], textX, rowY + Math.floor(rowHeight / 2), column.width - 24);
       } else {
