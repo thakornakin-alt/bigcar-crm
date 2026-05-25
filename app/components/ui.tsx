@@ -123,7 +123,7 @@ export function HeaderUtilities() {
 }
 
 const globalNavItems = [
-  { href: "/", label: "หน้าแรก", icon: Home },
+  { href: "/dashboard", label: "หน้าแรก", icon: Home },
   { href: "/stock-export", label: "สต๊อก", icon: Car },
   { href: "/calculator", label: "ค่างวด", icon: Calculator },
   { href: "/realtime-booking", label: "แย่งคิวรถ", icon: Radio },
@@ -153,7 +153,7 @@ export function GlobalNav() {
     <nav className="sticky top-0 z-50 mb-5 rounded-lg border border-line bg-[#0b0d11]/95 shadow-glow backdrop-blur">
       <div className="flex min-h-[64px] items-center justify-between gap-3 px-3 sm:px-4">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-          <Link href="/" className="flex shrink-0 items-center gap-2" aria-label="BIG CAR RDD CRM หน้าแรก">
+          <Link href="/dashboard" className="flex shrink-0 items-center gap-2" aria-label="BIG CAR RDD CRM หน้าแรก">
             <span className="h-10 w-14 shrink-0 rounded-md bg-white bg-contain bg-center bg-no-repeat ring-1 ring-brand/30" style={{ backgroundImage: "url('/logo-rdd.png')" }} />
             <span className="hidden leading-tight xl:block">
               <span className="block text-sm font-black tracking-[0.16em] text-white">BIG CAR RDD</span>
