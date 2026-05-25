@@ -11,20 +11,38 @@ type LeadForm = {
   name: string;
   phone: string;
   vehicleGroup: string;
+  desiredModel: string;
   budget: string;
   comment: string;
+  status: SalesLead["status"];
+  nextFollowUpDate: string;
 };
 
 const blankForm: LeadForm = {
   name: "",
   phone: "",
   vehicleGroup: "",
+  desiredModel: "",
   budget: "",
-  comment: ""
+  comment: "",
+  status: "new",
+  nextFollowUpDate: ""
 };
 
 const fallbackGroups = ["VAN", "PICK-UP CAB", "PICK-UP D-CAB", "SUV", "SEDAN", "MPV"];
-const leadStages = ["ทั้งหมด", "ใหม่วันนี้", "ต้องโทรติดตาม", "รอรถตรงรุ่น"];
+const leadStages = [
+  { key: "all", label: "ทั้งหมด" },
+  { key: "today", label: "ใหม่วันนี้" },
+  { key: "follow_up", label: "ต้องติดตาม" },
+  { key: "waiting_stock", label: "รอรถตรงรุ่น" }
+] as const;
+
+const leadStatusOptions: Array<{ value: NonNullable<SalesLead["status"]>; label: string }> = [
+  { value: "new", label: "ลูกค้าใหม่" },
+  { value: "follow_up", label: "ต้องติดตาม" },
+  { value: "waiting_stock", label: "รอรถตรงรุ่น" },
+  { value: "closed", label: "ปิดเคส" }
+];
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -74,7 +92,7 @@ export default function LeadsPage() {
   const [vehicleGroups, setVehicleGroups] = useState<string[]>(fallbackGroups);
   const [form, setForm] = useState<LeadForm>(blankForm);
   const [query, setQuery] = useState("");
-  const [stage, setStage] = useState("ทั้งหมด");
+  const [stage, setStage] = useState<(typeof leadStages)[number]["key"]>("all");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -86,8 +104,10 @@ export default function LeadsPage() {
   const visibleLeads = useMemo(() => {
     const term = normalizeText(query);
     return leads.filter((lead) => {
-      const matchesQuery = !term || normalizeText([lead.name, lead.phone, lead.vehicleGroup, lead.budget, lead.comment].join(" ")).includes(term);
-      const matchesStage = stage === "ทั้งหมด" || (stage === "ใหม่วันนี้" ? lead.date === today : true);
+      const matchesQuery = !term || normalizeText([lead.name, lead.phone, lead.vehicleGroup, lead.desiredModel, lead.budget, lead.comment].join(" ")).includes(term);
+      const matchesStage =
+        stage === "all" ||
+        (stage === "today" ? lead.date === today : lead.status === stage);
       return matchesQuery && matchesStage;
     });
   }, [leads, query, stage, today]);
@@ -133,8 +153,11 @@ export default function LeadsPage() {
           name: form.name,
           phone: form.phone,
           vehicleGroup,
+          desiredModel: form.desiredModel,
           budget: form.budget,
-          comment: form.comment
+          comment: form.comment,
+          status: form.status,
+          nextFollowUpDate: form.nextFollowUpDate
         })
       });
       setForm(blankForm);
@@ -193,7 +216,31 @@ export default function LeadsPage() {
                   {vehicleGroups.map((group) => <option key={group} value={group} />)}
                 </datalist>
               </label>
+              <Field label="รุ่นที่สนใจ" value={form.desiredModel} onChange={(value) => update("desiredModel", value)} icon={<Car size={16} />} placeholder="เช่น รีโว่ยกสูง / Commuter / Fortuner" />
               <Field label="งบประมาณ" value={form.budget} onChange={(value) => update("budget", value)} icon={<Sparkles size={16} />} placeholder="เช่น 800,000 - 1,000,000" />
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">สถานะติดตาม</span>
+                  <select
+                    value={form.status}
+                    onChange={(event) => update("status", event.target.value as LeadForm["status"])}
+                    className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none focus:border-brand"
+                  >
+                    {leadStatusOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">วันติดตามถัดไป</span>
+                  <input
+                    type="date"
+                    value={form.nextFollowUpDate}
+                    onChange={(event) => update("nextFollowUpDate", event.target.value)}
+                    className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none focus:border-brand"
+                  />
+                </label>
+              </div>
               <label className="block">
                 <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">คอมเม้นเพิ่มเติม</span>
                 <textarea
@@ -217,8 +264,8 @@ export default function LeadsPage() {
             <SearchField icon={<Search size={18} />} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ค้นชื่อ / เบอร์ / กลุ่มรถ / คอมเม้น" />
             <div className="flex flex-wrap gap-2">
               {leadStages.map((item) => (
-                <FilterChip key={item} active={stage === item} onClick={() => setStage(item)}>
-                  {item}
+                <FilterChip key={item.key} active={stage === item.key} onClick={() => setStage(item.key)}>
+                  {item.label}
                 </FilterChip>
               ))}
             </div>
@@ -288,19 +335,30 @@ function LeadCard({ lead }: { lead: SalesLead }) {
         <div>
           <p className="text-lg font-black text-white">{lead.name}</p>
           <p className="mt-1 text-sm text-soft">{lead.phone} · {lead.vehicleGroup}</p>
+          {lead.desiredModel && <p className="mt-1 text-xs font-bold text-brand">สนใจ: {lead.desiredModel}</p>}
           <p className="mt-1 text-xs text-soft">วันที่บันทึก: {lead.date || "-"}</p>
         </div>
-        <span className="rounded-full border border-brand/40 px-2.5 py-1 text-xs font-black text-brand">Lead</span>
+        <span className="rounded-full border border-brand/40 px-2.5 py-1 text-xs font-black text-brand">{statusLabel(lead.status)}</span>
       </div>
       {(lead.budget || lead.comment) && (
         <p className="mt-3 whitespace-pre-line rounded-lg border border-line bg-black/20 px-3 py-2 text-sm leading-6 text-soft">
           {lead.budget ? `งบประมาณ: ${lead.budget}` : ""}
           {lead.budget && lead.comment ? "\n" : ""}
           {lead.comment}
+          {lead.nextFollowUpDate ? `\nติดตามถัดไป: ${formatThaiDate(lead.nextFollowUpDate)}` : ""}
         </p>
       )}
     </div>
   );
+}
+
+function statusLabel(status?: SalesLead["status"]) {
+  return leadStatusOptions.find((option) => option.value === status)?.label || "ลูกค้าใหม่";
+}
+
+function formatThaiDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  return new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric" }).format(new Date(`${value}T00:00:00`));
 }
 
 function SummaryCard({ label, value }: { label: string; value: string }) {

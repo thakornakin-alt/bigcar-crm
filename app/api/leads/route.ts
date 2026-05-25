@@ -27,8 +27,11 @@ export async function POST(request: Request) {
       name: body.name,
       phone: body.phone,
       vehicleGroup: body.vehicleGroup,
+      desiredModel: body.desiredModel,
       budget: body.budget,
       comment: body.comment,
+      status: body.status,
+      nextFollowUpDate: body.nextFollowUpDate,
       ownerId: currentUser?.id || "",
       ownerName: currentUser ? salesUserOwnerName(currentUser) : ""
     });

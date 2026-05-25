@@ -4,11 +4,16 @@ export type SalesLeadInput = {
   name: string;
   phone: string;
   vehicleGroup: string;
+  desiredModel?: string;
   budget: string;
   comment: string;
+  status?: SalesLeadStatus;
+  nextFollowUpDate?: string;
   ownerId?: string;
   ownerName?: string;
 };
+
+export type SalesLeadStatus = "new" | "follow_up" | "waiting_stock" | "closed";
 
 export type SalesLead = SalesLeadInput & {
   id: string;
@@ -64,15 +69,37 @@ function cleanLead(input: SalesLeadInput): SalesLeadInput {
     name: String(input.name || "").trim(),
     phone: String(input.phone || "").trim(),
     vehicleGroup: String(input.vehicleGroup || "").trim(),
+    desiredModel: String(input.desiredModel || "").trim(),
     budget: String(input.budget || "").trim(),
     comment: String(input.comment || "").trim(),
+    status: normalizeLeadStatus(input.status),
+    nextFollowUpDate: cleanIsoDate(input.nextFollowUpDate),
     ownerId: String(input.ownerId || "").trim(),
     ownerName: String(input.ownerName || "").trim()
   };
 }
 
+function normalizeLeadStatus(value?: string): SalesLeadStatus {
+  if (value === "follow_up" || value === "waiting_stock" || value === "closed") return value;
+  return "new";
+}
+
+function cleanIsoDate(value?: string) {
+  const date = String(value || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "";
+}
+
+function normalizeLead(lead: SalesLead): SalesLead {
+  return {
+    ...lead,
+    desiredModel: String(lead.desiredModel || "").trim(),
+    status: normalizeLeadStatus(lead.status),
+    nextFollowUpDate: cleanIsoDate(lead.nextFollowUpDate)
+  };
+}
+
 export async function listSalesLeads() {
-  return (await readStore()).leads.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return (await readStore()).leads.map(normalizeLead).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export async function addSalesLead(input: SalesLeadInput) {
