@@ -51,6 +51,8 @@ export default function SettingsPage() {
   const [addingGroup, setAddingGroup] = useState(false);
   const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
   const [checkingStorage, setCheckingStorage] = useState(false);
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [restoring, setRestoring] = useState(false);
 
   useEffect(() => {
     setSettings(readSystemSettings());
@@ -78,6 +80,33 @@ export default function SettingsPage() {
       setStorageStatus(data);
     } finally {
       setCheckingStorage(false);
+    }
+  }
+
+  async function restoreBackup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+
+    try {
+      if (!isAdmin) throw new Error("ไม่มีสิทธิ์ Restore Backup");
+      if (!restoreFile) throw new Error("กรุณาเลือกไฟล์ Backup JSON");
+      if (!window.confirm("Restore Backup จะเขียนทับข้อมูล Calendar, Leads, Vehicle Prep และ Sales Profiles ที่อยู่ใน Storage ปัจจุบัน ต้องการทำต่อหรือไม่?")) return;
+
+      setRestoring(true);
+      const text = await restoreFile.text();
+      const payload = JSON.parse(text);
+      const data = await api<{ ok: true; restoredKeys: string[] }>("/api/system/restore", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      setMessage(`Restore สำเร็จ ${data.restoredKeys.length} ชุดข้อมูล`);
+      setRestoreFile(null);
+      await checkStorage().catch(() => undefined);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Restore Backup ไม่สำเร็จ");
+    } finally {
+      setRestoring(false);
     }
   }
 
@@ -199,6 +228,28 @@ export default function SettingsPage() {
                   Backup JSON
                 </a>
               </div>
+              <form onSubmit={restoreBackup} className="mt-4 rounded-lg border border-line bg-[#0b0d11] p-3">
+                <p className="text-sm font-black text-white">Restore Backup JSON</p>
+                <p className="mt-1 text-xs leading-5 text-soft">
+                  ใช้เฉพาะกรณีย้ายเครื่องหรือกู้ข้อมูล ระบบจะรับเฉพาะไฟล์ Backup ของ BIG CAR RDD CRM
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                  <input
+                    type="file"
+                    accept="application/json,.json"
+                    onChange={(event) => setRestoreFile(event.target.files?.[0] || null)}
+                    className="min-h-11 rounded-lg border border-line bg-panel px-3 py-2 text-sm font-bold text-white file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-sm file:font-black file:text-ink"
+                  />
+                  <button
+                    type="submit"
+                    disabled={restoring || !restoreFile}
+                    className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-amber-300/40 px-3 text-sm font-black text-amber-100 disabled:opacity-50"
+                  >
+                    {restoring ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                    Restore
+                  </button>
+                </div>
+              </form>
             </div>
           </SectionCard>
         </div>
