@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CalendarDays, Car, ChevronLeft, ChevronRight, Clock3, Plus, Trash2, UserRound, Wrench } from "lucide-react";
 import { FilterChip, PageContainer, PageTitle, SectionCard } from "@/app/components/ui";
 import type { CalendarEvent, CalendarEventType } from "@/lib/calendar-events";
+import type { CalendarVehicleOption } from "@/lib/vehicle-prep-cases";
 
 type CalendarForm = {
   title: string;
@@ -94,6 +95,7 @@ export default function CalendarPage() {
   const [month, setMonth] = useState(() => monthStart(new Date()));
   const [selectedDate, setSelectedDate] = useState(todayKey);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [vehicleOptions, setVehicleOptions] = useState<CalendarVehicleOption[]>([]);
   const [form, setForm] = useState<CalendarForm>(() => emptyForm(todayKey));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -125,6 +127,12 @@ export default function CalendarPage() {
       cancelled = true;
     };
   }, [from, to]);
+
+  useEffect(() => {
+    api<{ vehicles: CalendarVehicleOption[] }>("/api/vehicle-prep/calendar-options")
+      .then((data) => setVehicleOptions(data.vehicles || []))
+      .catch(() => setVehicleOptions([]));
+  }, []);
 
   const eventsByDate = useMemo(() => {
     return events.reduce<Record<string, CalendarEvent[]>>((acc, event) => {
@@ -169,6 +177,23 @@ export default function CalendarPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function selectVehicle(bookingId: string) {
+    const vehicle = vehicleOptions.find((item) => item.bookingId === bookingId);
+    if (!vehicle) {
+      setForm((current) => ({ ...current, plate: "", customerName: "" }));
+      return;
+    }
+
+    const defaultTitle = typeMeta(form.type).label;
+    setForm((current) => ({
+      ...current,
+      title: current.title || `${defaultTitle} ${vehicle.plate}`,
+      plate: vehicle.plate,
+      customerName: vehicle.customerName,
+      detail: current.detail || [vehicle.model, vehicle.owner].filter(Boolean).join("\n")
+    }));
   }
 
   async function deleteEvent(id: string) {
@@ -277,7 +302,8 @@ export default function CalendarPage() {
                 <CalendarField label="ชื่องาน" value={form.title} onChange={(value) => setForm((current) => ({ ...current, title: value }))} placeholder="เช่น นัดส่งมอบ / ติดตามลูกค้า" />
                 <CalendarField label="วันที่" type="date" value={form.date} onChange={(value) => setForm((current) => ({ ...current, date: value }))} />
                 <CalendarField label="เวลา" type="time" value={form.time} onChange={(value) => setForm((current) => ({ ...current, time: value }))} />
-                <CalendarField label="ทะเบียน" value={form.plate} onChange={(value) => setForm((current) => ({ ...current, plate: value }))} placeholder="ถ้าเป็นงานรถให้ใส่ทะเบียน" />
+                <VehicleSelect vehicles={vehicleOptions} value={form.plate} onSelect={selectVehicle} />
+                <CalendarField label="ทะเบียน" value={form.plate} onChange={(value) => setForm((current) => ({ ...current, plate: value }))} placeholder="พิมพ์เองได้ ถ้าเป็นงานทั่วไป" />
                 <CalendarField label="ลูกค้า" value={form.customerName} onChange={(value) => setForm((current) => ({ ...current, customerName: value }))} placeholder="ชื่อลูกค้า (ถ้ามี)" />
               </div>
 
@@ -406,6 +432,37 @@ function CalendarField({
         placeholder={placeholder}
         className="mt-1 min-h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-semibold text-white outline-none transition placeholder:text-[#6f7785] focus:border-brand"
       />
+    </label>
+  );
+}
+
+function VehicleSelect({
+  vehicles,
+  value,
+  onSelect
+}: {
+  vehicles: CalendarVehicleOption[];
+  value: string;
+  onSelect: (bookingId: string) => void;
+}) {
+  const selected = vehicles.find((vehicle) => vehicle.plate === value);
+
+  return (
+    <label className="block">
+      <span className="text-xs font-bold text-soft">ทะเบียนรอส่งมอบ</span>
+      <select
+        value={selected?.bookingId || ""}
+        onChange={(event) => onSelect(event.target.value)}
+        className="mt-1 min-h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-semibold text-white outline-none transition focus:border-brand"
+      >
+        <option value="">เลือกจากรถที่รอส่งมอบ</option>
+        {vehicles.map((vehicle) => (
+          <option key={vehicle.bookingId} value={vehicle.bookingId}>
+            {vehicle.plate} · {vehicle.customerName || "-"} · {vehicle.model}
+          </option>
+        ))}
+      </select>
+      {!vehicles.length && <p className="mt-1 text-[11px] text-soft">ยังไม่มีทะเบียนในรอส่งมอบ</p>}
     </label>
   );
 }
