@@ -3,8 +3,6 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { Bell, CalendarDays, Check, ClipboardCheck, FileText, User } from "lucide-react";
 import { AppHeader } from "@/app/components/ui";
-import type { ReportHistoryItem } from "@/lib/types";
-import type { SalesLead } from "@/lib/leads";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 
 async function api<T>(url: string): Promise<T> {
@@ -14,21 +12,37 @@ async function api<T>(url: string): Promise<T> {
   return data;
 }
 
+type DashboardMetrics = {
+  leads: number;
+  newLeadsToday: number;
+  bookings: number;
+  financeWaiting: number;
+  waitingDelivery: number;
+  delivered: number;
+  todayEvents: number;
+};
+
+const blankMetrics: DashboardMetrics = {
+  leads: 0,
+  newLeadsToday: 0,
+  bookings: 0,
+  financeWaiting: 0,
+  waitingDelivery: 0,
+  delivered: 0,
+  todayEvents: 0
+};
+
 export default function Home() {
   const { user: salesProfile } = useSalesProfile();
-  const [leads, setLeads] = useState<SalesLead[]>([]);
-  const [reports, setReports] = useState<ReportHistoryItem[]>([]);
+  const [metrics, setMetrics] = useState<DashboardMetrics>(blankMetrics);
 
   useEffect(() => {
-    api<{ leads: SalesLead[]; total?: number }>("/api/leads")
-      .then((data) => setLeads(data.leads || []))
-      .catch(() => setLeads([]));
-    api<{ reports: ReportHistoryItem[] }>("/api/reports/history?type=all")
-      .then((data) => setReports(data.reports || []))
-      .catch(() => setReports([]));
+    api<{ metrics: DashboardMetrics }>("/api/dashboard/metrics")
+      .then((data) => setMetrics(data.metrics || blankMetrics))
+      .catch(() => setMetrics(blankMetrics));
   }, []);
 
-  const dashboard = useMemo(() => buildDashboardMetrics(leads, reports), [leads, reports]);
+  const dashboard = useMemo(() => formatDashboardMetrics(metrics), [metrics]);
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-3xl px-4 pb-24 pt-5 sm:px-6">
@@ -51,7 +65,7 @@ export default function Home() {
         <BentoCard href="/finance-approval" label="รอผลไฟแนนซ์" value={dashboard.financeWaiting} icon={<ClipboardCheck size={18} />} />
         <BentoCard href="/vehicle-prep" label="รอส่งมอบ" value={dashboard.waitingDelivery} icon={<CalendarDays size={18} />} />
         <BentoCard href="/case-closure" label="ส่งมอบแล้ว" value={dashboard.delivered} icon={<Check size={18} />} />
-        <BentoCard href="/calendar" label="งานวันนี้" value="เปิดปฏิทิน" icon={<Bell size={18} />} wide />
+        <BentoCard href="/calendar" label="งานวันนี้" value={dashboard.todayEvents} icon={<Bell size={18} />} wide />
       </section>
 
       <section className="rounded-lg border border-line bg-panel/80 p-4 shadow-glow">
@@ -106,56 +120,14 @@ function BentoCard({
   );
 }
 
-function buildDashboardMetrics(leads: SalesLead[], reports: ReportHistoryItem[]) {
-  const activeReports = reports.filter((report) => report.status !== "deleted");
-  const bookings = activeReports.filter((report) => report.type === "booking");
-  const sales = activeReports.filter((report) => report.type === "sales");
-  const salesPlateKeys = new Set(sales.map((report) => normalizePlate(report.plate)).filter(Boolean));
-  const waitingDeliverySales = sales.filter((report) => report.status !== "closed" && report.status !== "delivered").length;
-  const waitingDeliveryBookings = bookings.filter((report) => {
-    const plate = normalizePlate(report.plate);
-    if (salesPlateKeys.has(plate)) return false;
-    if (isFinanceBooking(report)) return report.status === "finance_approved";
-    return true;
-  }).length;
-  const financeWaiting = bookings.filter((report) => isFinanceBooking(report) && report.status !== "finance_approved" && !salesPlateKeys.has(normalizePlate(report.plate))).length;
-  const waitingDelivery = waitingDeliverySales + waitingDeliveryBookings;
-  const delivered = sales.filter((report) => report.status === "closed" || report.status === "delivered").length;
-  const today = legacyToday();
-  const newLeadsToday = leads.filter((lead) => String(lead.date || "") === today).length;
-
+function formatDashboardMetrics(metrics: DashboardMetrics) {
   return {
-    leads: leads.length.toLocaleString("th-TH"),
-    newLeadsToday: newLeadsToday.toLocaleString("th-TH"),
-    bookings: bookings.length.toLocaleString("th-TH"),
-    financeWaiting: financeWaiting.toLocaleString("th-TH"),
-    waitingDelivery: waitingDelivery.toLocaleString("th-TH"),
-    delivered: delivered.toLocaleString("th-TH")
+    leads: metrics.leads.toLocaleString("th-TH"),
+    newLeadsToday: metrics.newLeadsToday.toLocaleString("th-TH"),
+    bookings: metrics.bookings.toLocaleString("th-TH"),
+    financeWaiting: metrics.financeWaiting.toLocaleString("th-TH"),
+    waitingDelivery: metrics.waitingDelivery.toLocaleString("th-TH"),
+    delivered: metrics.delivered.toLocaleString("th-TH"),
+    todayEvents: metrics.todayEvents ? `${metrics.todayEvents.toLocaleString("th-TH")} งาน` : "เปิดปฏิทิน"
   };
-}
-
-function legacyToday() {
-  const now = new Date();
-  return `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
-}
-
-function normalizePlate(value: string) {
-  return String(value || "").replace(/\s+/g, "").toUpperCase();
-}
-
-function extractLineValue(text: string, labels: string[]) {
-  const lines = String(text || "").split(/\r?\n/);
-  for (const line of lines) {
-    const compact = line.replace(/\*/g, "").trim();
-    for (const label of labels) {
-      if (compact.startsWith(label)) return compact.slice(label.length).replace(/^[:：\s-]+/, "").trim();
-    }
-  }
-  return "";
-}
-
-function isFinanceBooking(report: ReportHistoryItem) {
-  const payment = extractLineValue(report.reportText, ["การชำระเงิน"]);
-  const source = `${payment} ${report.reportText}`.toLowerCase();
-  return source.includes("ไฟแนนซ์") || source.includes("finance");
 }
