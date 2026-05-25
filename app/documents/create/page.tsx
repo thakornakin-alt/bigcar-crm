@@ -1,0 +1,417 @@
+"use client";
+
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Download, Eye, FileText, Loader2, Printer, Save, Search } from "lucide-react";
+import { FilterChip, PageContainer, PageTitle, SearchField, SectionCard, TopMenuButton } from "@/app/components/ui";
+import type { DocumentTemplateConfig, DocumentTemplateId } from "@/lib/documents/document-types";
+
+type Customer = {
+  no?: string;
+  name: string;
+  phone: string;
+  car?: string;
+  note?: string;
+};
+
+type Vehicle = {
+  plate: string;
+  brand?: string;
+  model?: string;
+  year?: string;
+  color?: string;
+  salePrice?: string;
+  vin?: string;
+  parkingLocation?: string;
+  mileage?: string;
+};
+
+type DocumentFormData = Record<string, string>;
+
+const initialData: DocumentFormData = {
+  customerName: "",
+  idCard: "",
+  phone: "",
+  address: "",
+  email: "",
+  occupation: "",
+  transactionPlace: "",
+  transactionDate: "",
+  age: "",
+  houseNo: "",
+  villageNo: "",
+  road: "",
+  subDistrict: "",
+  district: "",
+  province: "",
+  carBrand: "",
+  carModel: "",
+  year: "",
+  productionYear: "",
+  color: "",
+  plate: "",
+  vin: "",
+  engineNo: "",
+  salePrice: "",
+  bookingPrice: "",
+  financeAmount: "",
+  installment: "",
+  deliveryLocation: "",
+  deliveryDate: "",
+  bookingDate: "",
+  paymentType: "finance",
+  sellerName: "",
+  sellerPhone: "",
+  sellerLineId: "",
+  approverName: "",
+  signatureName: ""
+};
+
+const fieldLabels: Record<string, string> = {
+  customerName: "ชื่อ-นามสกุล",
+  idCard: "เลขบัตรประชาชน",
+  phone: "เบอร์โทร",
+  address: "ที่อยู่",
+  email: "อีเมล",
+  occupation: "อาชีพ",
+  transactionPlace: "สถานที่ทำรายการ",
+  transactionDate: "วันที่ทำรายการ",
+  age: "อายุ",
+  houseNo: "บ้านเลขที่",
+  villageNo: "หมู่ที่",
+  road: "ถนน",
+  subDistrict: "ตำบล/แขวง",
+  district: "อำเภอ/เขต",
+  province: "จังหวัด",
+  carBrand: "ยี่ห้อ",
+  carModel: "รุ่น",
+  year: "ปีจด",
+  productionYear: "ปีผลิต",
+  color: "สี",
+  plate: "ทะเบียน",
+  vin: "เลขตัวถัง",
+  engineNo: "เลขเครื่อง",
+  salePrice: "ราคาเสนอขาย",
+  bookingPrice: "เงินจอง",
+  financeAmount: "ยอดจัด",
+  installment: "ค่างวด",
+  deliveryLocation: "สถานที่ส่งมอบ",
+  deliveryDate: "วันที่ส่งมอบ",
+  bookingDate: "วันที่ใบจอง",
+  paymentType: "ช่องทางชำระ",
+  sellerName: "ชื่อเซลล์",
+  sellerPhone: "เบอร์เซลล์",
+  sellerLineId: "LINE ID",
+  approverName: "ผู้อนุมัติ",
+  signatureName: "ชื่อผู้ลงนาม"
+};
+
+async function api<T>(url: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(url, options);
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Request failed");
+    return data;
+  }
+  if (!response.ok) throw new Error("Request failed");
+  return (await response.blob()) as T;
+}
+
+function todayInput() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function money(value?: string) {
+  const n = Number(String(value || "").replace(/[^\d.]/g, ""));
+  if (!Number.isFinite(n) || n <= 0) return value || "";
+  return new Intl.NumberFormat("th-TH", { maximumFractionDigits: 0 }).format(n);
+}
+
+function vehicleLabel(vehicle: Vehicle) {
+  return [vehicle.plate, vehicle.brand, vehicle.model, vehicle.year].filter(Boolean).join(" / ");
+}
+
+export default function DocumentCreatePage() {
+  const [templates, setTemplates] = useState<DocumentTemplateConfig[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [templateId, setTemplateId] = useState<DocumentTemplateId>("sale-summary");
+  const [customerQuery, setCustomerQuery] = useState("");
+  const [vehicleQuery, setVehicleQuery] = useState("");
+  const [data, setData] = useState<DocumentFormData>({ ...initialData, transactionDate: todayInput(), bookingDate: todayInput() });
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [savingHistory, setSavingHistory] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api<{ templates: DocumentTemplateConfig[] }>("/api/documents/templates")
+      .then((res) => setTemplates(res.templates || []))
+      .catch((err) => setError(err.message));
+    api<{ customers: Customer[] }>("/api/customers")
+      .then((res) => setCustomers(res.customers || []))
+      .catch(() => undefined);
+    api<{ vehicles: Vehicle[] }>("/api/stock/list?limit=1000")
+      .then((res) => setVehicles(res.vehicles || []))
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  const selectedTemplate = templates.find((template) => template.id === templateId);
+  const visibleFields = useMemo(() => {
+    const fields = selectedTemplate ? Object.keys(selectedTemplate.fields) : [];
+    const core = [
+      "customerName",
+      "phone",
+      "idCard",
+      "address",
+      "plate",
+      "carBrand",
+      "carModel",
+      "year",
+      "color",
+      "vin",
+      "salePrice",
+      "bookingPrice",
+      "financeAmount",
+      "deliveryLocation",
+      "sellerName",
+      "approverName"
+    ];
+    return Array.from(new Set([...fields, ...core])).filter((key) => key in fieldLabels);
+  }, [selectedTemplate]);
+
+  const filteredCustomers = useMemo(() => {
+    const term = customerQuery.trim().toLowerCase();
+    return customers
+      .filter((customer) => !term || [customer.name, customer.phone, customer.car].join(" ").toLowerCase().includes(term))
+      .slice(0, 8);
+  }, [customers, customerQuery]);
+
+  const filteredVehicles = useMemo(() => {
+    const term = vehicleQuery.trim().toLowerCase().replace(/\s+/g, "");
+    return vehicles
+      .filter((vehicle) => {
+        const hay = [vehicle.plate, vehicle.brand, vehicle.model, vehicle.year, vehicle.color, vehicle.parkingLocation].join("").toLowerCase().replace(/\s+/g, "");
+        return !term || hay.includes(term);
+      })
+      .slice(0, 8);
+  }, [vehicles, vehicleQuery]);
+
+  function update(key: string, value: string) {
+    setData((current) => ({ ...current, [key]: value }));
+  }
+
+  function selectCustomer(customer: Customer) {
+    setData((current) => ({
+      ...current,
+      customerName: customer.name || current.customerName,
+      phone: customer.phone || current.phone,
+      carModel: current.carModel || customer.car || "",
+      signatureName: customer.name || current.signatureName
+    }));
+    setCustomerQuery(customer.name);
+  }
+
+  function selectVehicle(vehicle: Vehicle) {
+    setData((current) => ({
+      ...current,
+      plate: vehicle.plate || current.plate,
+      carBrand: vehicle.brand || current.carBrand,
+      carModel: vehicle.model || current.carModel,
+      year: vehicle.year || current.year,
+      color: vehicle.color || current.color,
+      vin: vehicle.vin || current.vin,
+      salePrice: money(vehicle.salePrice) || current.salePrice,
+      deliveryLocation: vehicle.parkingLocation || current.deliveryLocation
+    }));
+    setVehicleQuery(vehicleLabel(vehicle));
+  }
+
+  async function generatePdf(download = false) {
+    setLoading(true);
+    setError("");
+    setMessage("");
+    try {
+      if (!selectedTemplate) throw new Error("กรุณาเลือกประเภทเอกสาร");
+      const blob = await api<Blob>("/api/documents/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ templateId, data })
+      });
+      const url = URL.createObjectURL(blob);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(url);
+      if (download) {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${selectedTemplate.fileName.replace(/\.pdf$/i, "")}-${data.plate || Date.now()}.pdf`;
+        link.click();
+      }
+      setMessage("สร้าง PDF สำเร็จ");
+      return url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "สร้าง PDF ไม่สำเร็จ");
+      return "";
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function printPdf() {
+    const url = previewUrl || await generatePdf(false);
+    if (!url) return;
+    const frame = document.createElement("iframe");
+    frame.style.position = "fixed";
+    frame.style.right = "0";
+    frame.style.bottom = "0";
+    frame.style.width = "0";
+    frame.style.height = "0";
+    frame.src = url;
+    document.body.appendChild(frame);
+    frame.onload = () => {
+      frame.contentWindow?.focus();
+      frame.contentWindow?.print();
+      setTimeout(() => frame.remove(), 1000);
+    };
+  }
+
+  async function saveHistory() {
+    setSavingHistory(true);
+    setError("");
+    try {
+      if (!selectedTemplate) throw new Error("กรุณาเลือกประเภทเอกสาร");
+      await api("/api/documents/history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          templateId,
+          templateTitle: selectedTemplate.title,
+          customerName: data.customerName,
+          plate: data.plate,
+          vehicleLabel: [data.carBrand, data.carModel, data.year].filter(Boolean).join(" "),
+          fileName: selectedTemplate.fileName,
+          referencePath: `document://${templateId}/${data.plate || "no-plate"}`
+        })
+      });
+      setMessage("บันทึกประวัติเอกสารแล้ว");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "บันทึกประวัติไม่สำเร็จ");
+    } finally {
+      setSavingHistory(false);
+    }
+  }
+
+  return (
+    <PageContainer wide>
+      <PageTitle
+        title="สร้างเอกสาร PDF"
+        subtitle="เลือกข้อมูลลูกค้าและรถ แล้วเติมลงแบบฟอร์ม A4 อัตโนมัติ"
+        actions={<TopMenuButton href="/documents/templates" icon={<FileText size={18} />}>ตั้งค่า Template</TopMenuButton>}
+      />
+
+      {(message || error) && (
+        <div className={`mb-4 rounded-lg border px-4 py-3 text-sm font-bold ${error ? "border-red-400/40 bg-red-950/30 text-red-100" : "border-brand/40 bg-brand/10 text-brand"}`}>
+          {error || message}
+        </div>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+        <section className="space-y-4">
+          <SectionCard title="ประเภทเอกสาร" icon={<FileText size={18} />}>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {templates.map((template) => (
+                <FilterChip key={template.id} active={template.id === templateId} onClick={() => setTemplateId(template.id)}>
+                  {template.title}
+                </FilterChip>
+              ))}
+            </div>
+          </SectionCard>
+
+          <SectionCard title="เลือกลูกค้า" icon={<Search size={18} />}>
+            <SearchField value={customerQuery} onChange={(event) => setCustomerQuery(event.target.value)} placeholder="ค้นชื่อลูกค้า / เบอร์ / รุ่นที่สนใจ" />
+            <div className="grid gap-2">
+              {filteredCustomers.map((customer) => (
+                <button key={`${customer.no}-${customer.phone}`} type="button" onClick={() => selectCustomer(customer)} className="rounded-lg border border-line bg-[#0b0d11] p-3 text-left transition hover:border-brand">
+                  <p className="font-black text-white">{customer.name}</p>
+                  <p className="mt-1 text-sm text-soft">{customer.phone || "-"} · {customer.car || "-"}</p>
+                </button>
+              ))}
+            </div>
+          </SectionCard>
+
+          <SectionCard title="เลือกรถ" icon={<Search size={18} />}>
+            <SearchField value={vehicleQuery} onChange={(event) => setVehicleQuery(event.target.value)} placeholder="ค้นทะเบียน / รุ่น / ปี / Location" />
+            <div className="grid gap-2">
+              {filteredVehicles.map((vehicle) => (
+                <button key={`${vehicle.plate}-${vehicle.vin}`} type="button" onClick={() => selectVehicle(vehicle)} className="rounded-lg border border-line bg-[#0b0d11] p-3 text-left transition hover:border-brand">
+                  <p className="font-black text-white">{vehicle.plate || "ไม่ระบุทะเบียน"}</p>
+                  <p className="mt-1 text-sm text-soft">{[vehicle.brand, vehicle.model, vehicle.year].filter(Boolean).join(" ")} · {vehicle.salePrice ? `${money(vehicle.salePrice)} บาท` : "-"}</p>
+                </button>
+              ))}
+            </div>
+          </SectionCard>
+        </section>
+
+        <section className="space-y-4">
+          <SectionCard title="ข้อมูลที่จะเติม" icon={<FileText size={18} />}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {visibleFields.map((key) => (
+                <label key={key} className={key === "address" ? "sm:col-span-2" : ""}>
+                  <span className="mb-1.5 block text-sm font-bold text-[#dce2eb]">{fieldLabels[key] || key}</span>
+                  {key === "paymentType" ? (
+                    <select value={data[key] || ""} onChange={(event) => update(key, event.target.value)} className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none focus:border-brand">
+                      <option value="finance">จัดไฟแนนซ์</option>
+                      <option value="cash">ซื้อสด</option>
+                    </select>
+                  ) : (
+                    <input
+                      type={key.toLowerCase().includes("date") ? "date" : "text"}
+                      value={data[key] || ""}
+                      onChange={(event) => update(key, event.target.value)}
+                      className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
+                    />
+                  )}
+                </label>
+              ))}
+            </div>
+            <div className="grid gap-2 sm:grid-cols-4">
+              <button type="button" onClick={() => generatePdf(false)} disabled={loading} className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-brand/40 bg-brand/10 px-3 font-black text-brand disabled:opacity-60">
+                {loading ? <Loader2 size={18} className="animate-spin" /> : <Eye size={18} />}
+                Preview PDF
+              </button>
+              <button type="button" onClick={() => generatePdf(true)} disabled={loading} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-3 font-black text-ink disabled:opacity-60">
+                <Download size={18} />
+                Download
+              </button>
+              <button type="button" onClick={printPdf} className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-3 font-bold text-white">
+                <Printer size={18} />
+                Print
+              </button>
+              <button type="button" onClick={saveHistory} disabled={savingHistory} className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-3 font-bold text-white disabled:opacity-60">
+                {savingHistory ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                Save History
+              </button>
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Preview PDF" icon={<Eye size={18} />}>
+            {previewUrl ? (
+              <iframe title="PDF Preview" src={previewUrl} className="h-[72vh] w-full rounded-lg border border-line bg-white" />
+            ) : (
+              <div className="rounded-lg border border-dashed border-line bg-[#0b0d11] px-4 py-10 text-center text-soft">
+                กด Preview PDF เพื่อดูเอกสารก่อนพิมพ์หรือดาวน์โหลด
+              </div>
+            )}
+          </SectionCard>
+        </section>
+      </div>
+    </PageContainer>
+  );
+}

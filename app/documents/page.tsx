@@ -1,20 +1,46 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Download, FileImage, FileSpreadsheet, FileText, Search, Upload } from "lucide-react";
+import { Download, FileImage, FileSpreadsheet, FileText, Plus, Search, SlidersHorizontal, Upload } from "lucide-react";
 import { PageContainer, PageTitle, SearchField, SectionCard, TopMenuButton } from "@/app/components/ui";
 
 const documentItems = [
+  { title: "สร้างเอกสาร PDF อัตโนมัติ", type: "Auto Fill PDF", updatedAt: "จาก Template บริษัท", href: "/documents/create", icon: Plus },
+  { title: "ตั้งค่า Template PDF", type: "Calibration", updatedAt: "ปรับ x/y field", href: "/documents/templates", icon: SlidersHorizontal },
   { title: "แบบฟอร์มจอง", type: "PDF", updatedAt: "รายงานจอง", href: "/booking-reports", icon: FileText },
   { title: "ใบอนุมัติไฟแนนซ์", type: "Upload", updatedAt: "รอผลไฟแนนซ์", href: "/finance-approval", icon: Upload },
   { title: "ตารางผ่อน", type: "Export", updatedAt: "จาก Calculator", href: "/calculator", icon: FileSpreadsheet },
   { title: "รูปสต๊อก", type: "PNG", updatedAt: "จาก Stock Export", href: "/stock-export", icon: FileImage }
 ];
 
+type DocumentHistoryItem = {
+  id: string;
+  templateTitle: string;
+  createdAt: string;
+  customerName: string;
+  plate: string;
+  vehicleLabel: string;
+  createdBy: string;
+};
+
+async function api<T>(url: string): Promise<T> {
+  const response = await fetch(url);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
+
 export default function DocumentsPage() {
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState<"latest" | "name">("latest");
+  const [history, setHistory] = useState<DocumentHistoryItem[]>([]);
+
+  useEffect(() => {
+    api<{ history: DocumentHistoryItem[] }>("/api/documents/history")
+      .then((data) => setHistory(data.history || []))
+      .catch(() => undefined);
+  }, []);
 
   const filteredDocs = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -90,9 +116,33 @@ export default function DocumentsPage() {
             <div className="rounded-lg border border-line bg-[#0b0d11] px-4 py-5 text-sm leading-6 text-soft">
               OCR และเอกสารลูกค้าอยู่ในรายงานจอง เพื่อให้ไฟล์ผูกกับเคสและค้นกลับง่าย
             </div>
+            <TopMenuButton href="/documents/create" icon={<Plus size={18} />} variant="primary">
+              สร้างเอกสาร PDF
+            </TopMenuButton>
+            <TopMenuButton href="/documents/templates" icon={<SlidersHorizontal size={18} />}>
+              ตั้งค่า Template
+            </TopMenuButton>
             <TopMenuButton href="/booking-reports" icon={<FileText size={18} />} variant="primary">
               ไป OCR ในรายงานจอง
             </TopMenuButton>
+          </SectionCard>
+
+          <SectionCard title="ประวัติเอกสารล่าสุด" icon={<FileText size={18} />}>
+            {history.length ? (
+              <div className="space-y-2">
+                {history.slice(0, 8).map((item) => (
+                  <div key={item.id} className="rounded-lg border border-line bg-[#0b0d11] p-3">
+                    <p className="font-black text-white">{item.templateTitle}</p>
+                    <p className="mt-1 text-sm text-soft">{item.customerName || "-"} · {item.plate || "-"} · {item.vehicleLabel || "-"}</p>
+                    <p className="mt-1 text-xs text-soft">สร้างโดย {item.createdBy || "-"} · {new Date(item.createdAt).toLocaleString("th-TH")}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-line bg-[#0b0d11] px-4 py-6 text-center text-sm text-soft">
+                ยังไม่มีประวัติการสร้างเอกสาร
+              </div>
+            )}
           </SectionCard>
         </section>
       </div>
