@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { ArrowLeft, CheckCircle2, FlaskConical, History, Loader2, MessageCircle, Save, Settings, Shield, Upload, UserRound } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Database, FlaskConical, History, Loader2, MessageCircle, Save, Settings, Shield, Upload, UserRound } from "lucide-react";
 import { PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
 import {
   BigCarSystemSettings,
@@ -11,6 +11,18 @@ import {
 } from "@/lib/client-settings";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import type { LineGroup } from "@/lib/types";
+
+type StorageStatus = {
+  ok: boolean;
+  info: {
+    provider: string;
+    dataDir?: string;
+    table?: string;
+  };
+  checkedAt: string;
+  previousCheckedAt?: string;
+  error?: string;
+};
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -37,10 +49,13 @@ export default function SettingsPage() {
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [saving, setSaving] = useState(false);
   const [addingGroup, setAddingGroup] = useState(false);
+  const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
+  const [checkingStorage, setCheckingStorage] = useState(false);
 
   useEffect(() => {
     setSettings(readSystemSettings());
     loadGroups().catch((err) => setError(err.message));
+    checkStorage().catch(() => undefined);
   }, []);
 
   async function loadGroups() {
@@ -50,6 +65,16 @@ export default function SettingsPage() {
       setGroups(data.groups);
     } finally {
       setLoadingGroups(false);
+    }
+  }
+
+  async function checkStorage() {
+    setCheckingStorage(true);
+    try {
+      const data = await api<StorageStatus>("/api/system/storage-status");
+      setStorageStatus(data);
+    } finally {
+      setCheckingStorage(false);
     }
   }
 
@@ -126,6 +151,46 @@ export default function SettingsPage() {
           <span>{error || message}</span>
         </div>
       )}
+
+      <div className="mb-4">
+        <SectionCard title="สถานะฐานข้อมูล" icon={<Database size={18} />}>
+          <div
+            className={`rounded-lg border px-4 py-3 ${
+              storageStatus?.ok
+                ? "border-brand/40 bg-brand/10"
+                : "border-amber-300/40 bg-amber-950/20"
+            }`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black text-white">
+                  {storageStatus?.info.provider === "supabase" ? "Supabase" : "Local JSON"}
+                  <span className={`ml-2 rounded-full border px-2 py-0.5 text-xs ${
+                    storageStatus?.ok ? "border-brand/40 text-brand" : "border-amber-300/40 text-amber-100"
+                  }`}>
+                    {storageStatus?.ok ? "พร้อมใช้งาน" : "ต้องตรวจสอบ"}
+                  </span>
+                </p>
+                <p className="mt-1 text-xs leading-5 text-soft">
+                  {storageStatus?.info.provider === "supabase"
+                    ? `Table: ${storageStatus.info.table || "big_car_crm_store"}`
+                    : `Path: ${storageStatus?.info.dataDir || ".data"}`}
+                </p>
+                {storageStatus?.error && <p className="mt-1 text-xs text-red-100">{storageStatus.error}</p>}
+              </div>
+              <button
+                type="button"
+                onClick={() => checkStorage().catch((err) => setError(err.message))}
+                disabled={checkingStorage}
+                className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line px-3 text-sm font-bold text-white disabled:opacity-60"
+              >
+                {checkingStorage ? <Loader2 size={16} className="animate-spin text-brand" /> : <Database size={16} className="text-brand" />}
+                ตรวจอีกครั้ง
+              </button>
+            </div>
+          </div>
+        </SectionCard>
+      </div>
 
       <div className="mb-4">
         <SectionCard title="ระบบทดลอง CRM v2" icon={<FlaskConical size={18} />}>
