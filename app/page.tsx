@@ -138,6 +138,12 @@ export default function LoginHomePage() {
 
             <div className="mt-5 border-t border-line pt-4">
               <Link
+                href="/auth"
+                className="mb-2 flex min-h-11 items-center justify-center rounded-xl border border-brand/35 bg-brand/10 px-4 text-sm font-black text-brand transition hover:border-brand"
+              >
+                สมัครบัญชีใหม่
+              </Link>
+              <Link
                 href="/dashboard"
                 className="flex min-h-12 items-center justify-center rounded-xl border border-line bg-[#0b0d11] px-4 text-sm font-black text-white transition hover:border-brand/60"
               >
