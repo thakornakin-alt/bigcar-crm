@@ -199,6 +199,40 @@ function fileToBase64(file: File) {
   });
 }
 
+async function pdfFirstPageToImagePayload(file: File) {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/legacy/build/pdf.worker.mjs`;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const pdf = await pdfjs.getDocument({
+    data: bytes,
+    isEvalSupported: false
+  } as Parameters<typeof pdfjs.getDocument>[0]).promise;
+  const page = await pdf.getPage(1);
+  const viewport = page.getViewport({ scale: 2.4 });
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("เครื่องนี้ไม่รองรับการแปลง PDF เป็นภาพ");
+  canvas.width = Math.ceil(viewport.width);
+  canvas.height = Math.ceil(viewport.height);
+  await page.render({ canvas, canvasContext: context, viewport }).promise;
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+  return {
+    base64: dataUrl.split(",")[1] || "",
+    mimeType: "image/jpeg"
+  };
+}
+
+async function documentFileToOcrPayload(file: File) {
+  if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+    return pdfFirstPageToImagePayload(file);
+  }
+  if (!file.type.startsWith("image/")) throw new Error("รองรับ OCR จากรูปภาพหรือ PDF เท่านั้น");
+  return {
+    base64: await fileToBase64(file),
+    mimeType: file.type
+  };
+}
+
 function loadDrafts(): Array<{ id: string; name: string; templateId: DocumentTemplateId; data: DocumentData; updatedAt: string }> {
   try {
     return JSON.parse(window.localStorage.getItem(draftKey) || "[]");
@@ -342,19 +376,15 @@ export function DocumentCenter() {
     setError("");
     setMessage("");
     try {
-      if (file.type === "application/pdf") {
-        throw new Error("อัปโหลด PDF ได้แล้ว แต่ OCR PDF ตรง ๆ ยังต้องเพิ่มตัวแปลง PDF เป็นภาพก่อน ตอนนี้ใช้รูปถ่าย/รูปสแกนเพื่อ OCR ได้จริง");
-      }
-      if (!file.type.startsWith("image/")) throw new Error("รองรับ OCR จากรูปภาพ หรือ PDF สำหรับเก็บไฟล์เท่านั้น");
-      const base64 = await fileToBase64(file);
+      const payload = await documentFileToOcrPayload(file);
       const res = await api<{ result: Record<string, unknown> }>("/api/ocr/document", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ base64, mimeType: file.type, buyerType: "individual" })
+        body: JSON.stringify({ ...payload, buyerType: "individual" })
       });
       setData((current) => ({ ...current, ...mapOcrResultToDocument(res.result) }));
       setTab("create");
-      setMessage("อ่าน OCR แล้ว กรุณาตรวจและแก้ไขก่อน Export");
+      setMessage(file.type === "application/pdf" ? "แปลง PDF หน้าแรกและอ่าน OCR แล้ว กรุณาตรวจข้อมูลก่อน Export" : "อ่าน OCR แล้ว กรุณาตรวจและแก้ไขก่อน Export");
     } catch (err) {
       setError(err instanceof Error ? err.message : "OCR ไม่สำเร็จ");
     } finally {
@@ -471,12 +501,12 @@ export function DocumentCenter() {
       {!loading && tab === "ocr" ? (
         <SectionCard title="OCR Scanner" icon={<Upload size={18} />}>
           <p className="rounded-lg border border-line bg-[#0b0d11] p-3 text-sm leading-6 text-soft">
-            OCR รูปภาพใช้งานได้จริงผ่านระบบเดิม ส่วน PDF OCR ตรง ๆ ยังต้องเพิ่มตัวแปลง PDF เป็นภาพก่อน ระบบจะแจ้ง error ชัดเจนและไม่ทำให้ข้อมูลเดิมเสีย
+            OCR รองรับรูปภาพและ PDF โดยระบบจะแปลง PDF หน้าแรกเป็นภาพก่อนอ่านข้อมูล กรุณาตรวจและแก้ไขข้อมูลก่อน Export ทุกครั้ง
           </p>
           <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-brand/50 bg-brand/10 p-4 text-center text-brand">
             <Upload size={26} />
             <span className="mt-2 font-black">อัปโหลด / ถ่ายรูปเอกสาร</span>
-            <span className="mt-1 text-xs text-soft">รองรับรูปภาพ, PDF จะรับไฟล์แต่ยังไม่ OCR ตรง</span>
+            <span className="mt-1 text-xs text-soft">รองรับรูปภาพและ PDF หน้าแรก</span>
             <input type="file" accept="image/*,application/pdf" capture="environment" onChange={handleOcrFile} className="hidden" />
           </label>
           {working ? <p className="text-sm text-soft"><Loader2 className="mr-2 inline animate-spin text-brand" />กำลัง OCR...</p> : null}
