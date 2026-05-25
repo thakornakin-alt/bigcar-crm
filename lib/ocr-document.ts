@@ -72,6 +72,7 @@ export async function readDocumentOcr(input: OcrDocumentInput) {
 
   if (!base64) throw new Error("ไม่พบรูปสำหรับ OCR");
   if (!mimeType.startsWith("image/")) throw new Error("OCR รองรับเฉพาะรูปภาพ");
+  if (base64.length > 12_000_000) throw new Error("รูปใหญ่เกินไป กรุณาถ่ายใหม่ให้ชัดและใกล้ขึ้น");
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",

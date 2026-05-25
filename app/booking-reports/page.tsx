@@ -343,7 +343,8 @@ export default function BookingReportsPage() {
   async function handleOcrImage(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    setOcrPreviewUrl(URL.createObjectURL(file));
+    const uploadFile = await compressBookingImage(file);
+    setOcrPreviewUrl(URL.createObjectURL(uploadFile));
     setOcrPreview(blankOcrPreview);
     setOcrReading(true);
     setOcrStatus("กำลังอ่านเอกสารจากรูป...");
@@ -352,12 +353,12 @@ export default function BookingReportsPage() {
     event.target.value = "";
 
     try {
-      const base64 = await fileToBase64(file);
+      const base64 = await fileToBase64(uploadFile);
       const data = await readJson<{ result: OcrPreviewFields }>("/api/ocr/document", {
         method: "POST",
         body: JSON.stringify({
           base64,
-          mimeType: file.type || "image/jpeg",
+          mimeType: uploadFile.type || "image/jpeg",
           buyerType: form.buyerType
         })
       });
@@ -389,6 +390,13 @@ export default function BookingReportsPage() {
     } finally {
       setOcrReading(false);
     }
+  }
+
+  function resetOcrPreview() {
+    setOcrPreviewUrl("");
+    setOcrPreview(blankOcrPreview);
+    setOcrStatus("");
+    setOcrReading(false);
   }
 
   function confirmOcrPreview() {
@@ -732,6 +740,13 @@ export default function BookingReportsPage() {
                 <div className="rounded-lg border border-line bg-[#0b0d11] p-2">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={ocrPreviewUrl} alt="OCR booking document preview" className="max-h-32 w-full rounded-md object-contain" />
+                  <button
+                    type="button"
+                    onClick={resetOcrPreview}
+                    className="mt-2 flex min-h-9 w-full items-center justify-center rounded-md border border-line bg-panel px-3 text-xs font-black text-white"
+                  >
+                    สแกนใหม่
+                  </button>
                 </div>
               )}
             </div>
