@@ -1,6 +1,5 @@
-import { mkdir, readFile, writeFile } from "fs/promises";
-import path from "path";
 import { createCalendarEvent, deleteCalendarEvent } from "@/lib/calendar-events";
+import { readJsonStore, writeJsonStore } from "@/lib/json-store";
 import type { DriveAttachment } from "@/lib/types";
 
 export type PrepChecklistKey = "decal" | "spa" | "oil" | "wash";
@@ -37,8 +36,7 @@ type VehiclePrepStore = {
   records: VehiclePrepRecord[];
 };
 
-const dataDir = path.join(process.cwd(), ".data");
-const dataFile = path.join(dataDir, "vehicle-prep.json");
+const storeFile = "vehicle-prep.json";
 const checklistKeys: PrepChecklistKey[] = ["decal", "spa", "oil", "wash"];
 
 function blankChecklist(): Record<PrepChecklistKey, boolean> {
@@ -46,18 +44,12 @@ function blankChecklist(): Record<PrepChecklistKey, boolean> {
 }
 
 async function readStore(): Promise<VehiclePrepStore> {
-  try {
-    const raw = await readFile(dataFile, "utf8");
-    const parsed = JSON.parse(raw) as Partial<VehiclePrepStore>;
-    return { records: Array.isArray(parsed.records) ? parsed.records : [] };
-  } catch {
-    return { records: [] };
-  }
+  const parsed = await readJsonStore<Partial<VehiclePrepStore>>(storeFile, { records: [] });
+  return { records: Array.isArray(parsed.records) ? parsed.records : [] };
 }
 
 async function writeStore(store: VehiclePrepStore) {
-  await mkdir(dataDir, { recursive: true });
-  await writeFile(dataFile, JSON.stringify(store, null, 2), "utf8");
+  await writeJsonStore(storeFile, store);
 }
 
 function cleanDate(value?: string) {

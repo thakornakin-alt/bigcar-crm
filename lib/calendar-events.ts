@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile } from "fs/promises";
-import path from "path";
+import { readJsonStore, writeJsonStore } from "@/lib/json-store";
 
 export type CalendarEventType = "delivery" | "garage_return" | "customer_appointment" | "other";
 
@@ -27,23 +26,16 @@ type CalendarStore = {
   events: CalendarEvent[];
 };
 
-const dataDir = path.join(process.cwd(), ".data");
-const dataFile = path.join(dataDir, "calendar-events.json");
 const eventTypes: CalendarEventType[] = ["delivery", "garage_return", "customer_appointment", "other"];
+const storeFile = "calendar-events.json";
 
 async function readStore(): Promise<CalendarStore> {
-  try {
-    const raw = await readFile(dataFile, "utf8");
-    const parsed = JSON.parse(raw) as Partial<CalendarStore>;
-    return { events: Array.isArray(parsed.events) ? parsed.events : [] };
-  } catch {
-    return { events: [] };
-  }
+  const parsed = await readJsonStore<Partial<CalendarStore>>(storeFile, { events: [] });
+  return { events: Array.isArray(parsed.events) ? parsed.events : [] };
 }
 
 async function writeStore(store: CalendarStore) {
-  await mkdir(dataDir, { recursive: true });
-  await writeFile(dataFile, JSON.stringify(store, null, 2), "utf8");
+  await writeJsonStore(storeFile, store);
 }
 
 export function isCalendarEventType(value: string): value is CalendarEventType {

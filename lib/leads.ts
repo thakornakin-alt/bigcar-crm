@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile } from "fs/promises";
-import path from "path";
+import { readJsonStore, writeJsonStore } from "@/lib/json-store";
 
 export type SalesLeadInput = {
   name: string;
@@ -22,22 +21,15 @@ type LeadStore = {
   leads: SalesLead[];
 };
 
-const dataDir = path.join(process.cwd(), ".data");
-const dataFile = path.join(dataDir, "sales-leads.json");
+const storeFile = "sales-leads.json";
 
 async function readStore(): Promise<LeadStore> {
-  try {
-    const raw = await readFile(dataFile, "utf8");
-    const parsed = JSON.parse(raw) as Partial<LeadStore>;
-    return { leads: Array.isArray(parsed.leads) ? parsed.leads : [] };
-  } catch {
-    return { leads: [] };
-  }
+  const parsed = await readJsonStore<Partial<LeadStore>>(storeFile, { leads: [] });
+  return { leads: Array.isArray(parsed.leads) ? parsed.leads : [] };
 }
 
 async function writeStore(store: LeadStore) {
-  await mkdir(dataDir, { recursive: true });
-  await writeFile(dataFile, JSON.stringify(store, null, 2), "utf8");
+  await writeJsonStore(storeFile, store);
 }
 
 export function normalizeLeadGroup(value: string, availableGroups: string[] = []) {
