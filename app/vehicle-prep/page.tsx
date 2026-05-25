@@ -366,6 +366,12 @@ function PrepCaseCard({
       </button>
       {expanded && (
         <>
+          <PrepTimeline
+            garageOutDate={garageOutDate}
+            garageReturnDate={garageReturnDate}
+            deliveryDate={deliveryDate}
+            checklist={checks}
+          />
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <InfoRow label="รุ่นรถ" value={item.model} />
             <InfoRow label="ประเภทการซื้อ" value={item.paymentLabel} />
@@ -406,6 +412,52 @@ function PrepCaseCard({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function PrepTimeline({
+  garageOutDate,
+  garageReturnDate,
+  deliveryDate,
+  checklist: checks
+}: {
+  garageOutDate: string;
+  garageReturnDate: string;
+  deliveryDate: string;
+  checklist: Record<PrepChecklistKey, boolean>;
+}) {
+  const checklistDone = checklist.every((item) => checks[item.key]);
+  const steps = [
+    { label: "ส่งอู่", value: garageOutDate, done: Boolean(garageOutDate) },
+    { label: "รถกลับ", value: garageReturnDate, done: Boolean(garageReturnDate) },
+    { label: "Checklist", value: checklistDone ? "ครบแล้ว" : "ยังไม่ครบ", done: checklistDone },
+    { label: "ส่งมอบ", value: deliveryDate, done: Boolean(deliveryDate) }
+  ];
+
+  return (
+    <div className="mt-3 rounded-xl border border-line bg-black/20 p-3">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="text-sm font-black text-white">ไทม์ไลน์งานรถ</p>
+        <span className="rounded-full border border-brand/30 bg-brand/10 px-2 py-1 text-[11px] font-black text-brand">
+          {steps.filter((step) => step.done).length}/{steps.length}
+        </span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-4">
+        {steps.map((step, index) => (
+          <div key={step.label} className="relative rounded-lg border border-line bg-[#0b0d11] p-3">
+            <div className="flex items-center gap-2">
+              <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-black ${step.done ? "bg-brand text-ink" : "bg-panel text-soft"}`}>
+                {index + 1}
+              </span>
+              <p className="text-sm font-black text-white">{step.label}</p>
+            </div>
+            <p className={`mt-2 text-xs font-bold ${step.done ? "text-brand" : "text-soft"}`}>
+              {formatTimelineValue(step.value)}
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -454,6 +506,12 @@ function InfoTile({ icon, label, value }: { icon: ReactNode; label: string; valu
 
 function isoDateOrEmpty(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) ? value : "";
+}
+
+function formatTimelineValue(value: string) {
+  if (!value) return "รอระบุ";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  return new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric" }).format(new Date(`${value}T00:00:00`));
 }
 
 function exportPrepPng(input: {
