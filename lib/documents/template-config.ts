@@ -1,4 +1,6 @@
 import { readJsonStore, writeJsonStore } from "@/lib/json-store";
+import { mkdir, writeFile } from "fs/promises";
+import path from "path";
 import type { DocumentFieldConfig, DocumentTemplateConfig, DocumentTemplateId } from "@/lib/documents/document-types";
 
 const STORE_FILE = "document-template-configs.json";
@@ -289,7 +291,30 @@ export const documentTemplates: DocumentTemplateConfig[] = [
   }
 ];
 
-type StoredTemplateConfigs = Partial<Record<DocumentTemplateId, Record<string, DocumentFieldConfig>>>;
+type StoredTemplateOverride = {
+  fields?: Record<string, DocumentFieldConfig>;
+  backgroundPath?: string;
+  fileName?: string;
+  uploadedAt?: string;
+};
+
+type StoredTemplateConfigs = Partial<Record<DocumentTemplateId, Record<string, DocumentFieldConfig> | StoredTemplateOverride>>;
+
+function dataDirectory() {
+  return process.env.BIG_CAR_DATA_DIR
+    ? path.resolve(process.env.BIG_CAR_DATA_DIR)
+    : path.join(process.cwd(), ".data");
+}
+
+function normalizeOverride(value: Record<string, DocumentFieldConfig> | StoredTemplateOverride | undefined): StoredTemplateOverride {
+  if (!value) return {};
+  if ("fields" in value || "backgroundPath" in value || "fileName" in value) return value as StoredTemplateOverride;
+  return { fields: value as Record<string, DocumentFieldConfig> };
+}
+
+function safeFileName(name: string) {
+  return name.replace(/[\\/:*?"<>|#%&{}$!'@+=`]/g, "-").replace(/\s+/g, "-").slice(0, 120) || "template.pdf";
+}
 
 export function listDocumentTemplates() {
   return documentTemplates;
@@ -299,9 +324,16 @@ export async function listDocumentTemplatesWithOverrides() {
   const stored = await readJsonStore<StoredTemplateConfigs>(STORE_FILE, {});
   return documentTemplates.map((template) => ({
     ...template,
+    ...(() => {
+      const override = normalizeOverride(stored[template.id]);
+      return {
+        backgroundPath: override.backgroundPath || template.backgroundPath,
+        fileName: override.fileName || template.fileName
+      };
+    })(),
     fields: {
       ...template.fields,
-      ...(stored[template.id] || {})
+      ...(normalizeOverride(stored[template.id]).fields || {})
     }
   }));
 }
@@ -313,9 +345,35 @@ export async function getDocumentTemplate(id: string) {
 
 export async function saveDocumentTemplateFields(templateId: DocumentTemplateId, fields: Record<string, DocumentFieldConfig>) {
   const stored = await readJsonStore<StoredTemplateConfigs>(STORE_FILE, {});
-  stored[templateId] = fields;
+  const current = normalizeOverride(stored[templateId]);
+  stored[templateId] = { ...current, fields };
   await writeJsonStore(STORE_FILE, stored);
   return getDocumentTemplate(templateId);
+}
+
+export async function saveDocumentTemplatePdf(input: {
+  templateId: DocumentTemplateId;
+  fileName: string;
+  base64: string;
+}) {
+  if (!input.templateId) throw new Error("กรุณาเลือก template");
+  if (!input.base64) throw new Error("ไม่พบไฟล์ PDF");
+  const targetDir = path.join(dataDirectory(), "document-template-uploads");
+  await mkdir(targetDir, { recursive: true });
+  const fileName = `${input.templateId}-${Date.now()}-${safeFileName(input.fileName || "template.pdf")}`;
+  const targetPath = path.join(targetDir, fileName);
+  await writeFile(targetPath, Buffer.from(input.base64, "base64"));
+
+  const stored = await readJsonStore<StoredTemplateConfigs>(STORE_FILE, {});
+  const current = normalizeOverride(stored[input.templateId]);
+  stored[input.templateId] = {
+    ...current,
+    backgroundPath: targetPath,
+    fileName: input.fileName || fileName,
+    uploadedAt: new Date().toISOString()
+  };
+  await writeJsonStore(STORE_FILE, stored);
+  return getDocumentTemplate(input.templateId);
 }
 
 export function formatThaiDate(value?: string | Date) {
