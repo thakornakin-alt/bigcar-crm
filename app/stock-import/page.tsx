@@ -163,42 +163,54 @@ function detectHiddenRows(sheet: XLSX.WorkSheet | undefined) {
   return (sheet?.["!rows"] || []).filter((row) => row?.hidden).length;
 }
 
-function mapRows(rows: RawRow[], mapping: Record<keyof StockVehicle, string>) {
+function mapRows(rows: RawRow[], mapping: Record<keyof StockVehicle, string>, importedHiddenHeaders: string[] = []) {
+  const mappedHeaders = new Set(Object.values(mapping).filter((value) => value && !String(value).startsWith("__BIGCAR_")));
+
   return rows
-    .map((row) => ({
-      plate: cell(row[mapping.plate]),
-      brand: cell(row[mapping.brand]),
-      model: cell(row[mapping.model]),
-      year: yearOnly(row[mapping.year]),
-      color: cell(row[mapping.color]),
-      salePrice: cell(row[mapping.salePrice]).replace(/[^\d.]/g, ""),
-      source: cell(row[mapping.source]),
-      ownership: cell(row[mapping.ownership]),
-      reportReturnDate: cell(row[mapping.reportReturnDate]),
-      agingGroup: cell(row[mapping.agingGroup]),
-      aging: cell(row[mapping.aging]),
-      customerName: cell(row[mapping.customerName]),
-      project: cell(row[mapping.project]),
-      campaign: cell(row[mapping.campaign]),
-      colorGroup: cell(row[mapping.colorGroup]),
-      closedSales: cell(row[mapping.closedSales]),
-      inspection: cell(row[mapping.inspection]),
-      extendedWarranty: cell(row[mapping.extendedWarranty]),
-      sellerName: cell(row[mapping.sellerName]),
-      bookingSaleDate: cell(row[mapping.bookingSaleDate]),
-      vin: cell(row[mapping.vin]) || cell(row[vinFallbackKey]),
-      engineNo: cell(row[mapping.engineNo]),
-      financeName: cell(row[mapping.financeName]),
-      finalGrade: cell(row[mapping.finalGrade]),
-      program: cell(row[mapping.program]),
-      parkingLocation: cell(row[mapping.parkingLocation]),
-      status: cell(row[mapping.status]),
-      gear: cell(row[mapping.gear]),
-      mileage: cell(row[mapping.mileage]).replace(/[^\d.]/g, ""),
-      pdiStatus: cell(row[mapping.pdiStatus]),
-      pdiNote: cell(row[mapping.pdiNote]),
-      vehicleGroup: cell(row[mapping.vehicleGroup]) || cell(row[vehicleGroupFallbackKey])
-    }))
+    .map((row) => {
+      const extraFields = importedHiddenHeaders.reduce<Record<string, string>>((fields, header) => {
+        if (!header || mappedHeaders.has(header)) return fields;
+        const value = cell(row[header]);
+        if (value) fields[header] = value;
+        return fields;
+      }, {});
+
+      return {
+        plate: cell(row[mapping.plate]),
+        brand: cell(row[mapping.brand]),
+        model: cell(row[mapping.model]),
+        year: yearOnly(row[mapping.year]),
+        color: cell(row[mapping.color]),
+        salePrice: cell(row[mapping.salePrice]).replace(/[^\d.]/g, ""),
+        source: cell(row[mapping.source]),
+        ownership: cell(row[mapping.ownership]),
+        reportReturnDate: cell(row[mapping.reportReturnDate]),
+        agingGroup: cell(row[mapping.agingGroup]),
+        aging: cell(row[mapping.aging]),
+        customerName: cell(row[mapping.customerName]),
+        project: cell(row[mapping.project]),
+        campaign: cell(row[mapping.campaign]),
+        colorGroup: cell(row[mapping.colorGroup]),
+        closedSales: cell(row[mapping.closedSales]),
+        inspection: cell(row[mapping.inspection]),
+        extendedWarranty: cell(row[mapping.extendedWarranty]),
+        sellerName: cell(row[mapping.sellerName]),
+        bookingSaleDate: cell(row[mapping.bookingSaleDate]),
+        vin: cell(row[mapping.vin]) || cell(row[vinFallbackKey]),
+        engineNo: cell(row[mapping.engineNo]),
+        financeName: cell(row[mapping.financeName]),
+        finalGrade: cell(row[mapping.finalGrade]),
+        program: cell(row[mapping.program]),
+        parkingLocation: cell(row[mapping.parkingLocation]),
+        status: cell(row[mapping.status]),
+        gear: cell(row[mapping.gear]),
+        mileage: cell(row[mapping.mileage]).replace(/[^\d.]/g, ""),
+        pdiStatus: cell(row[mapping.pdiStatus]),
+        pdiNote: cell(row[mapping.pdiNote]),
+        vehicleGroup: cell(row[mapping.vehicleGroup]) || cell(row[vehicleGroupFallbackKey]),
+        extraFields
+      };
+    })
     .filter((row) => row.plate);
 }
 
@@ -248,7 +260,11 @@ export default function StockImportPage() {
     () => activeHiddenColumns.filter((column) => hiddenColumnActions[headerPolicyKey(column.header)] === "import").length,
     [activeHiddenColumns, hiddenColumnActions]
   );
-  const parsedRows = useMemo(() => mapRows(workbookRows[activeSheet] || [], mapping), [activeSheet, mapping, workbookRows]);
+  const importedHiddenHeaders = useMemo(
+    () => activeHiddenColumns.filter((column) => hiddenColumnActions[headerPolicyKey(column.header)] === "import").map((column) => column.header),
+    [activeHiddenColumns, hiddenColumnActions]
+  );
+  const parsedRows = useMemo(() => mapRows(workbookRows[activeSheet] || [], mapping, importedHiddenHeaders), [activeSheet, importedHiddenHeaders, mapping, workbookRows]);
   const previewRows = parsedRows.slice(0, 8);
   const missingPlate = !mapping.plate;
   const parsedVinCount = useMemo(() => parsedRows.filter((row) => row.vin).length, [parsedRows]);

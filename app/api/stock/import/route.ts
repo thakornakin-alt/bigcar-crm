@@ -1,10 +1,18 @@
 import { NextResponse } from "next/server";
 import { importStock } from "@/lib/apps-script";
 import type { StockVehicle } from "@/lib/types";
+import { saveStockExtraFields } from "@/lib/stock-extra-fields";
 
 export const dynamic = "force-dynamic";
 
 function cleanRow(row: Partial<StockVehicle>): StockVehicle {
+  const rawExtraFields = row.extraFields && typeof row.extraFields === "object" ? row.extraFields : {};
+  const extraFields = Object.fromEntries(
+    Object.entries(rawExtraFields)
+      .map(([key, value]) => [String(key || "").trim(), String(value || "").trim()])
+      .filter(([key, value]) => key && value)
+  );
+
   return {
     plate: String(row.plate || "").trim(),
     brand: String(row.brand || "").trim(),
@@ -37,7 +45,8 @@ function cleanRow(row: Partial<StockVehicle>): StockVehicle {
     mileage: String(row.mileage || "").trim(),
     pdiStatus: String(row.pdiStatus || "").trim(),
     pdiNote: String(row.pdiNote || "").trim(),
-    vehicleGroup: String(row.vehicleGroup || "").trim()
+    vehicleGroup: String(row.vehicleGroup || "").trim(),
+    extraFields
   };
 }
 
@@ -55,6 +64,7 @@ export async function POST(request: Request) {
     }
 
     const result = await importStock({ rows, sourceName, clearExisting });
+    await saveStockExtraFields(rows, { clearExisting });
     return NextResponse.json({
       result: {
         ...result,

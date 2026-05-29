@@ -156,6 +156,7 @@ export type StockVehicle = {
   pdiStatus?: string;
   engineNo?: string;
   financeName?: string;
+  extraFields?: Record<string, string>;
   vin?: string;
   finalGrade?: string;
   program?: string;

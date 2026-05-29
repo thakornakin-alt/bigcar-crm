@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { listStockVehicles } from "@/lib/apps-script";
 import type { StockVehicle } from "@/lib/types";
+import { mergeStockExtraFields } from "@/lib/stock-extra-fields";
 
 export const dynamic = "force-dynamic";
 
@@ -35,9 +36,10 @@ export async function GET(request: Request) {
     const query = String(searchParams.get("query") || "").trim();
     const limit = Number(searchParams.get("limit") || 250);
     const data = await listStockVehicles({ query, limit });
+    const vehicles = await mergeStockExtraFields(data.vehicles || []);
     return NextResponse.json({
       ...data,
-      vehicles: (data.vehicles || []).map(normalizeStockVehicle)
+      vehicles: vehicles.map(normalizeStockVehicle)
     });
   } catch (error) {
     return NextResponse.json(

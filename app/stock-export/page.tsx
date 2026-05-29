@@ -128,7 +128,8 @@ const emptyAdvancedFilters: AdvancedStockFilters = {
 type SortField = "location" | "ownership" | "reportReturnDate" | "agingGroup" | "aging" | "customerName" | "vehicleGroup" | "plate" | "colorGroup" | "project" | "campaign" | "closedSales" | "inspection" | "extendedWarranty" | "status" | "sellerName" | "bookingSaleDate" | "year" | "model" | "gear" | "color" | "mileage" | "price" | "pdiStatus" | "pdiNote";
 type SortDirection = "asc" | "desc";
 type SortRule = { id: string; field: SortField; direction: SortDirection };
-type ExtraColumnKey = "ownership" | "reportReturnDate" | "agingGroup" | "aging" | "customerName" | "vehicleGroup" | "colorGroup" | "project" | "campaign" | "closedSales" | "inspection" | "extendedWarranty" | "status" | "sellerName" | "bookingSaleDate" | "pdiStatus" | "pdiNote" | "vin" | "engineNo" | "financeName";
+type BaseExtraColumnKey = "ownership" | "reportReturnDate" | "agingGroup" | "aging" | "customerName" | "vehicleGroup" | "colorGroup" | "project" | "campaign" | "closedSales" | "inspection" | "extendedWarranty" | "status" | "sellerName" | "bookingSaleDate" | "pdiStatus" | "pdiNote" | "vin" | "engineNo" | "financeName";
+type ExtraColumnKey = BaseExtraColumnKey | `custom:${string}`;
 type FilterPreset = { id: string; name: string; filters: AdvancedStockFilters; statuses: string[]; groups: string[]; pdi: PdiRemarkFilter; sorts: SortRule[]; columns: ExtraColumnKey[] };
 
 async function api<T>(url: string): Promise<T> {
@@ -373,12 +374,21 @@ function sortVehicles(vehicles: StockVehicle[], rules: SortRule[]) {
   });
 }
 
+function customExtraColumnName(key: ExtraColumnKey) {
+  return key.startsWith("custom:") ? key.slice("custom:".length) : "";
+}
+
 function defaultColumnValue(vehicle: StockVehicle, key: ExtraColumnKey) {
+  const customName = customExtraColumnName(key);
+  if (customName) {
+    const raw = vehicle as StockVehicle & Record<string, unknown>;
+    return String(vehicle.extraFields?.[customName] || raw[customName] || "-");
+  }
   if (key === "vin") return vehicle.vin || "-";
   if (key === "engineNo") return engineNo(vehicle) || "-";
   if (key === "financeName") return financeName(vehicle) || "-";
   if (key === "pdiNote") return pdiRemarkText(stockPdiRemark(vehicle));
-  return stockRawValue(vehicle, key) || "-";
+  return stockRawValue(vehicle, key as BaseExtraColumnKey) || "-";
 }
 
 function normalizeAdvancedFilters(value: Partial<AdvancedStockFilters> | null | undefined): AdvancedStockFilters {
@@ -437,7 +447,7 @@ const sortFieldLabels: Record<SortField, string> = {
   pdiNote: realStockFieldLabels.pdiNote
 };
 
-const extraColumnLabels: Record<ExtraColumnKey, string> = {
+const extraColumnLabels: Record<BaseExtraColumnKey, string> = {
   ownership: realStockFieldLabels.ownership,
   reportReturnDate: realStockFieldLabels.reportReturnDate,
   agingGroup: realStockFieldLabels.agingGroup,
@@ -460,6 +470,12 @@ const extraColumnLabels: Record<ExtraColumnKey, string> = {
   financeName: realStockFieldLabels.financeName
 };
 
+function extraColumnLabel(key: ExtraColumnKey) {
+  const customName = customExtraColumnName(key);
+  if (customName) return customName;
+  return extraColumnLabels[key as BaseExtraColumnKey];
+}
+
 type StockExportColumn = { key: string; label: string; width: number; extraKey?: ExtraColumnKey };
 
 function stockExportExtraColumns(mode: ExportMode, selectedColumns: ExtraColumnKey[]) {
@@ -473,6 +489,7 @@ function stockExportExtraColumns(mode: ExportMode, selectedColumns: ExtraColumnK
 }
 
 function extraColumnExportWidth(key: ExtraColumnKey) {
+  if (customExtraColumnName(key)) return 190;
   if (key === "vin") return 260;
   if (key === "engineNo") return 220;
   if (key === "customerName" || key === "sellerName") return 220;
@@ -507,7 +524,7 @@ function stockExportColumns(mode: ExportMode, selectedColumns: ExtraColumnKey[])
         ];
 
   stockExportExtraColumns(mode, selectedColumns).forEach((key) => {
-    columns.push({ key: `extra:${key}`, label: extraColumnLabels[key], width: extraColumnExportWidth(key), extraKey: key });
+    columns.push({ key: `extra:${key}`, label: extraColumnLabel(key), width: extraColumnExportWidth(key), extraKey: key });
   });
 
   return columns;
@@ -679,14 +696,25 @@ export default function StockExportPage() {
   }, [advancedFilters, groupMatchedVehicles]);
 
   const availableExtraColumns = useMemo(() => {
-    const keys = Object.keys(extraColumnLabels) as ExtraColumnKey[];
-    return keys.filter((key) => {
+    const keys = Object.keys(extraColumnLabels) as BaseExtraColumnKey[];
+    const fixedColumns = keys.filter((key) => {
       if (key === "pdiNote") return exportMode === "internal" && vehicles.some((vehicle) => hasPdiRemark(stockPdiRemark(vehicle)));
       if (key === "vin") return hasStockFieldData(vehicles, "vin");
       if (key === "engineNo") return hasStockFieldData(vehicles, "engineNo");
       if (key === "financeName") return hasStockFieldData(vehicles, "financeName");
       return hasStockFieldData(vehicles, key);
     });
+
+    const knownLabels = new Set(Object.values(extraColumnLabels).map((label) => normalizeText(label)));
+    const customColumns = uniqueSorted(
+      vehicles.flatMap((vehicle) =>
+        Object.entries(vehicle.extraFields || {})
+          .filter(([key, value]) => key && String(value || "").trim() && !knownLabels.has(normalizeText(key)))
+          .map(([key]) => key)
+      )
+    ).map((key) => `custom:${key}` as ExtraColumnKey);
+
+    return [...fixedColumns, ...customColumns];
   }, [exportMode, vehicles]);
 
   const advancedFilterCount = useMemo(() => countAdvancedFilters(advancedFilters), [advancedFilters]);
@@ -1442,7 +1470,7 @@ export default function StockExportPage() {
                           <span className="col-span-2">ราคาเสนอขายRT: <b className="text-brand">{formatPrice(vehicle.salePrice)}</b></span>
                           {extraColumns.map((column) => (
                             <span key={`${vehicle.plate}-${column}`} className={column === "pdiNote" || column === "vin" ? "col-span-2" : ""}>
-                              {extraColumnLabels[column]}: <b className="text-white">{defaultColumnValue(vehicle, column)}</b>
+                              {extraColumnLabel(column)}: <b className="text-white">{defaultColumnValue(vehicle, column)}</b>
                             </span>
                           ))}
                         </div>
@@ -1600,7 +1628,7 @@ export default function StockExportPage() {
                 onChange={(event) => setExtraColumns((current) => event.target.checked ? [...current, key] : current.filter((item) => item !== key))}
                 className="h-5 w-5 accent-brand"
               />
-              {extraColumnLabels[key]}
+              {extraColumnLabel(key)}
             </label>
           )) : (
             <p className="rounded-lg border border-dashed border-line bg-[#0b0d11] p-4 text-center text-sm text-soft sm:col-span-2">
