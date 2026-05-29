@@ -7,9 +7,17 @@ import { PageContainer, PageTitle, TopMenuButton } from "@/app/components/ui";
 import type { StockImportResult, StockImportStatus, StockVehicle } from "@/lib/types";
 
 type RawRow = Record<string, unknown>;
+type HiddenColumnAction = "import" | "ignore" | "never";
+type HiddenColumnInfo = {
+  header: string;
+  index: number;
+  letter: string;
+  hidden: boolean;
+};
 
 const chunkSize = 300;
 const defaultHeaderRow = 5;
+const hiddenColumnPolicyStorageKey = "bigcar-stock-hidden-column-policy-v1";
 const vinFallbackKey = "__BIGCAR_COL_U";
 const vinFallbackLabel = "คอลัมน์ U (ล็อกอัตโนมัติ)";
 const vehicleGroupFallbackKey = "__BIGCAR_COL_H";
@@ -57,6 +65,10 @@ function normalizeHeader(value: string) {
   return value.toLowerCase().replace(/\s+/g, "").replace(/[()/_-]/g, "");
 }
 
+function columnLetter(index: number) {
+  return XLSX.utils.encode_col(index);
+}
+
 function cell(value: unknown) {
   if (value === null || value === undefined) return "";
   return String(value).trim();
@@ -85,14 +97,57 @@ function yearOnly(value: unknown) {
   return text.replace(/[^\d]/g, "").slice(-4);
 }
 
-function detectMapping(headers: string[]) {
-  const normalized = headers.map((header) => ({ header, normalized: normalizeHeader(header) }));
+function readHiddenColumnPolicy() {
+  try {
+    const raw = window.localStorage.getItem(hiddenColumnPolicyStorageKey);
+    return raw ? JSON.parse(raw) as Record<string, HiddenColumnAction> : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeHiddenColumnPolicy(policy: Record<string, HiddenColumnAction>) {
+  window.localStorage.setItem(hiddenColumnPolicyStorageKey, JSON.stringify(policy));
+}
+
+function headerPolicyKey(header: string) {
+  return normalizeHeader(header);
+}
+
+function detectMapping(headers: string[], hiddenColumns: HiddenColumnInfo[] = [], hiddenActions: Record<string, HiddenColumnAction> = {}) {
+  const hiddenHeaderKeys = new Set(hiddenColumns.map((column) => headerPolicyKey(column.header)));
+  const selectableHeaders = headers.filter((header) => {
+    const key = headerPolicyKey(header);
+    if (!hiddenHeaderKeys.has(key)) return true;
+    return hiddenActions[key] === "import";
+  });
+  const normalized = selectableHeaders.map((header) => ({ header, normalized: normalizeHeader(header) }));
 
   return fieldLabels.reduce<Record<keyof StockVehicle, string>>((mapping, field) => {
     const found = normalized.find((item) => field.aliases.some((alias) => item.normalized === normalizeHeader(alias)));
     mapping[field.key] = found?.header || (field.key === "vin" ? vinFallbackKey : field.key === "vehicleGroup" ? vehicleGroupFallbackKey : "");
     return mapping;
   }, {} as Record<keyof StockVehicle, string>);
+}
+
+function detectHiddenColumns(sheet: XLSX.WorkSheet | undefined, headerRow: number): HiddenColumnInfo[] {
+  if (!sheet) return [];
+  const range = XLSX.utils.decode_range(String(sheet["!ref"] || "A1:A1"));
+  const cols = sheet["!cols"] || [];
+  const output: HiddenColumnInfo[] = [];
+
+  for (let c = range.s.c; c <= range.e.c; c += 1) {
+    const metadata = cols[c] as XLSX.ColInfo | undefined;
+    if (!metadata?.hidden) continue;
+    const header = cell(sheet[XLSX.utils.encode_cell({ c, r: Math.max(headerRow - 1, 0) })]?.v) || `คอลัมน์ ${columnLetter(c)}`;
+    output.push({ header, index: c, letter: columnLetter(c), hidden: true });
+  }
+
+  return output;
+}
+
+function detectHiddenRows(sheet: XLSX.WorkSheet | undefined) {
+  return (sheet?.["!rows"] || []).filter((row) => row?.hidden).length;
 }
 
 function mapRows(rows: RawRow[], mapping: Record<keyof StockVehicle, string>) {
@@ -144,6 +199,9 @@ export default function StockImportPage() {
   const [activeSheet, setActiveSheet] = useState("");
   const [workbookSheets, setWorkbookSheets] = useState<Record<string, XLSX.WorkSheet>>({});
   const [workbookRows, setWorkbookRows] = useState<Record<string, RawRow[]>>({});
+  const [hiddenColumnsBySheet, setHiddenColumnsBySheet] = useState<Record<string, HiddenColumnInfo[]>>({});
+  const [hiddenRowsBySheet, setHiddenRowsBySheet] = useState<Record<string, number>>({});
+  const [hiddenColumnActions, setHiddenColumnActions] = useState<Record<string, HiddenColumnAction>>({});
   const [headers, setHeaders] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Record<keyof StockVehicle, string>>(detectMapping([]));
   const [headerRow, setHeaderRow] = useState(defaultHeaderRow);
@@ -154,6 +212,16 @@ export default function StockImportPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  const activeHiddenColumns = useMemo(() => hiddenColumnsBySheet[activeSheet] || [], [activeSheet, hiddenColumnsBySheet]);
+  const activeHiddenRows = useMemo(() => hiddenRowsBySheet[activeSheet] || 0, [activeSheet, hiddenRowsBySheet]);
+  const visibleHeaders = useMemo(() => {
+    const hiddenHeaderKeys = new Set(activeHiddenColumns.map((column) => headerPolicyKey(column.header)));
+    return headers.filter((header) => !hiddenHeaderKeys.has(headerPolicyKey(header)) || hiddenColumnActions[headerPolicyKey(header)] === "import");
+  }, [activeHiddenColumns, headers, hiddenColumnActions]);
+  const importedHiddenCount = useMemo(
+    () => activeHiddenColumns.filter((column) => hiddenColumnActions[headerPolicyKey(column.header)] === "import").length,
+    [activeHiddenColumns, hiddenColumnActions]
+  );
   const parsedRows = useMemo(() => mapRows(workbookRows[activeSheet] || [], mapping), [activeSheet, mapping, workbookRows]);
   const previewRows = parsedRows.slice(0, 8);
   const missingPlate = !mapping.plate;
@@ -179,14 +247,19 @@ export default function StockImportPage() {
 
     try {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: "array", cellDates: false });
+      const workbook = XLSX.read(buffer, { type: "array", cellDates: false, cellStyles: true });
       const nextSheets: Record<string, XLSX.WorkSheet> = {};
       const nextRows: Record<string, RawRow[]> = {};
+      const nextHiddenColumns: Record<string, HiddenColumnInfo[]> = {};
+      const nextHiddenRows: Record<string, number> = {};
+      const savedPolicy = readHiddenColumnPolicy();
 
       workbook.SheetNames.forEach((name) => {
         const sheet = workbook.Sheets[name];
         nextSheets[name] = sheet;
         nextRows[name] = readSheetRows(sheet, headerRow);
+        nextHiddenColumns[name] = detectHiddenColumns(sheet, headerRow);
+        nextHiddenRows[name] = detectHiddenRows(sheet);
       });
 
       const firstSheet = workbook.SheetNames[0] || "";
@@ -197,9 +270,20 @@ export default function StockImportPage() {
       setActiveSheet(firstSheet);
       setWorkbookSheets(nextSheets);
       setWorkbookRows(nextRows);
+      setHiddenColumnsBySheet(nextHiddenColumns);
+      setHiddenRowsBySheet(nextHiddenRows);
+      setHiddenColumnActions((current) => {
+        const next = { ...savedPolicy, ...current };
+        Object.values(nextHiddenColumns).flat().forEach((column) => {
+          const key = headerPolicyKey(column.header);
+          if (!next[key]) next[key] = "ignore";
+        });
+        return next;
+      });
       setHeaders(nextHeaders);
-      setMapping(detectMapping(nextHeaders));
-      setMessage(`อ่านไฟล์แล้ว ${firstRows.length.toLocaleString("th-TH")} แถว`);
+      setMapping(detectMapping(nextHeaders, nextHiddenColumns[firstSheet] || [], savedPolicy));
+      const hiddenCount = Object.values(nextHiddenColumns).flat().length;
+      setMessage(`อ่านไฟล์แล้ว ${firstRows.length.toLocaleString("th-TH")} แถว${hiddenCount ? ` / พบ Hidden Column ${hiddenCount.toLocaleString("th-TH")} คอลัมน์` : ""}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "อ่านไฟล์ไม่สำเร็จ");
     } finally {
@@ -213,19 +297,21 @@ export default function StockImportPage() {
     const nextHeaders = Object.keys(rows[0] || {});
     setActiveSheet(name);
     setHeaders(nextHeaders);
-    setMapping(detectMapping(nextHeaders));
+    setMapping(detectMapping(nextHeaders, hiddenColumnsBySheet[name] || [], hiddenColumnActions));
     setMessage(`เลือกชีต ${name}: ${rows.length.toLocaleString("th-TH")} แถว`);
   }
 
   function changeHeaderRow(value: string) {
     const nextHeaderRow = Math.max(Number(value) || defaultHeaderRow, 1);
     const nextRows = readSheetRows(workbookSheets[activeSheet], nextHeaderRow);
+    const nextHiddenColumns = detectHiddenColumns(workbookSheets[activeSheet], nextHeaderRow);
     const nextHeaders = Object.keys(nextRows[0] || {});
 
     setHeaderRow(nextHeaderRow);
     setWorkbookRows((current) => ({ ...current, [activeSheet]: nextRows }));
+    setHiddenColumnsBySheet((current) => ({ ...current, [activeSheet]: nextHiddenColumns }));
     setHeaders(nextHeaders);
-    setMapping(detectMapping(nextHeaders));
+    setMapping(detectMapping(nextHeaders, nextHiddenColumns, hiddenColumnActions));
     if (activeSheet) {
       setMessage(`อ่านหัวตารางจากแถว ${nextHeaderRow}: ${nextRows.length.toLocaleString("th-TH")} แถว`);
     }
@@ -295,6 +381,35 @@ export default function StockImportPage() {
     } finally {
       setImporting(false);
     }
+  }
+
+  function setHiddenColumnAction(column: HiddenColumnInfo, action: HiddenColumnAction) {
+    const key = headerPolicyKey(column.header);
+    setHiddenColumnActions((current) => {
+      const next = { ...current, [key]: action };
+      if (action === "never") writeHiddenColumnPolicy(next);
+      return next;
+    });
+    setMapping((current) => {
+      if (action === "import") return current;
+      const next = { ...current };
+      (Object.keys(next) as Array<keyof StockVehicle>).forEach((field) => {
+        if (next[field] === column.header) next[field] = "";
+      });
+      return next;
+    });
+  }
+
+  function resetNeverImportPolicy() {
+    writeHiddenColumnPolicy({});
+    setHiddenColumnActions((current) => {
+      const next = { ...current };
+      activeHiddenColumns.forEach((column) => {
+        const key = headerPolicyKey(column.header);
+        if (next[key] === "never") next[key] = "ignore";
+      });
+      return next;
+    });
   }
 
   return (
@@ -394,6 +509,65 @@ export default function StockImportPage() {
               </label>
             </div>
           )}
+
+          {activeHiddenColumns.length > 0 && (
+            <div className="rounded-lg border border-brand/30 bg-green-950/10 p-4 shadow-glow">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="flex items-center gap-2 text-lg font-bold text-white">
+                    <FileSpreadsheet size={18} className="text-brand" />
+                    Hidden Columns
+                  </h2>
+                  <p className="mt-1 text-xs leading-5 text-soft">
+                    พบคอลัมน์ซ่อน {activeHiddenColumns.length.toLocaleString("th-TH")} คอลัมน์
+                    {activeHiddenRows ? ` / แถวซ่อน ${activeHiddenRows.toLocaleString("th-TH")} แถว` : ""} ค่าเริ่มต้นคือไม่ import และไม่แสดงใน Preview/Export
+                  </p>
+                </div>
+                <button type="button" onClick={resetNeverImportPolicy} className="shrink-0 rounded-lg border border-line px-3 py-2 text-xs font-bold text-white">
+                  Reset Never
+                </button>
+              </div>
+              <div className="space-y-2">
+                {activeHiddenColumns.map((column) => {
+                  const key = headerPolicyKey(column.header);
+                  const action = hiddenColumnActions[key] || "ignore";
+                  return (
+                    <div key={`${column.letter}-${column.header}`} className="rounded-lg border border-line bg-[#0b0d11] p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black text-white">{column.header}</p>
+                          <p className="mt-0.5 text-xs text-soft">Column {column.letter} · default hidden</p>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1">
+                          {[
+                            ["import", "Import"],
+                            ["ignore", "Ignore"],
+                            ["never", "Never"]
+                          ].map(([value, label]) => (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => setHiddenColumnAction(column, value as HiddenColumnAction)}
+                              className={`min-h-9 rounded-md border px-2 text-xs font-black ${
+                                action === value ? "border-brand bg-brand text-ink" : "border-line bg-panel text-white"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {importedHiddenCount > 0 && (
+                <p className="mt-3 rounded-lg border border-brand/30 bg-brand/10 px-3 py-2 text-xs font-bold text-brand">
+                  นำเข้า hidden column แล้ว {importedHiddenCount.toLocaleString("th-TH")} คอลัมน์ ตอนนี้เลือกใช้ใน mapping ได้ แต่จะไม่แสดง Preview/Export อัตโนมัติจนกว่าจะเลือกคอลัมน์เอง
+                </p>
+              )}
+            </div>
+          )}
         </section>
 
         <section className="space-y-4">
@@ -412,7 +586,7 @@ export default function StockImportPage() {
                       <option value="">ไม่ใช้</option>
                       {field.key === "vin" && <option value={vinFallbackKey}>{vinFallbackLabel}</option>}
                       {field.key === "vehicleGroup" && <option value={vehicleGroupFallbackKey}>{vehicleGroupFallbackLabel}</option>}
-                      {headers.map((header) => (
+                      {visibleHeaders.map((header) => (
                         <option key={header} value={header}>
                           {header}
                         </option>
