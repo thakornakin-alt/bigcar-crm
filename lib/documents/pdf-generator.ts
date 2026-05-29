@@ -18,8 +18,28 @@ function textValue(value: unknown) {
 }
 
 function fieldValue(fieldKey: string, field: DocumentFieldConfig, data: DocumentData) {
+  const aliases: Record<string, string[]> = {
+    customerAddress: ["address"],
+    address: ["customerAddress"],
+    plateNumber: ["plate"],
+    plate: ["plateNumber"],
+    vin: ["chassisNumber", "เลขตัวรถ", "เลขตัวถัง"],
+    engineNo: ["engineNumber", "เลขเครื่อง"],
+    salePrice: ["price", "finalPrice", "ราคาเสนอขายRT"],
+    price: ["salePrice", "finalPrice", "ราคาเสนอขายRT"],
+    sellerName: ["saleName", "ชื่อผู้ขาย"],
+    saleName: ["sellerName", "ชื่อผู้ขาย"],
+    signatureName: ["customerName"]
+  };
+
   if (field.type === "date") return textValue(data[fieldKey]) || formatThaiDate();
-  return textValue(data[fieldKey]);
+  const direct = textValue(data[fieldKey]);
+  if (direct) return direct;
+  for (const alias of aliases[fieldKey] || []) {
+    const value = textValue(data[alias]);
+    if (value) return value;
+  }
+  return "";
 }
 
 function wrapText(value: string, maxChars: number) {
@@ -53,18 +73,17 @@ export async function generateFilledDocumentPdf(input: {
 
   const backgroundBytes = await readFile(absoluteAssetPath(template.backgroundPath));
   const isPdfTemplate = template.backgroundPath.toLowerCase().endsWith(".pdf");
-  const page = pdf.addPage([A4_WIDTH, A4_HEIGHT]);
+  const pages = [];
 
   if (isPdfTemplate) {
     const sourcePdf = await PDFDocument.load(backgroundBytes, { ignoreEncryption: true });
-    const [embeddedPage] = await pdf.embedPdf(sourcePdf, [0]);
-    page.drawPage(embeddedPage, {
-      x: 0,
-      y: 0,
-      width: A4_WIDTH,
-      height: A4_HEIGHT
-    });
+    const copiedPages = await pdf.copyPages(sourcePdf, sourcePdf.getPageIndices());
+    for (const copiedPage of copiedPages) {
+      pages.push(pdf.addPage(copiedPage));
+    }
   } else {
+    const page = pdf.addPage([A4_WIDTH, A4_HEIGHT]);
+    pages.push(page);
     const backgroundImage = await pdf.embedJpg(backgroundBytes);
     page.drawImage(backgroundImage, {
       x: 0,
@@ -84,7 +103,8 @@ export async function generateFilledDocumentPdf(input: {
 
   const fields = input.fields || template.fields;
   for (const [key, field] of Object.entries(fields)) {
-    if (field.page !== 1) continue;
+    const page = pages[Math.max((field.page || 1) - 1, 0)];
+    if (!page) continue;
     const value = fieldValue(key, field, input.data);
     if (field.type === "checkbox") {
       const selectedValue = textValue(input.data.paymentType || input.data[key]).toLowerCase();

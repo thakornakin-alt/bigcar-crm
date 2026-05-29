@@ -275,6 +275,7 @@ export default function DocumentTemplatesPage() {
 
             {field && (
               <div className="grid grid-cols-2 gap-2">
+                <NumberInput label="page" value={field.page || 1} onChange={(value) => updateField({ page: Math.max(1, value || 1) })} />
                 <NumberInput label="x" value={field.x} onChange={(value) => updateField({ x: value })} />
                 <NumberInput label="y" value={field.y} onChange={(value) => updateField({ y: value })} />
                 <NumberInput label="font" value={field.fontSize} onChange={(value) => updateField({ fontSize: value })} />
