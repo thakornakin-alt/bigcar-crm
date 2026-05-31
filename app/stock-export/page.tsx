@@ -233,11 +233,6 @@ function isValidGregorianYearText(value?: string) {
   return year >= 1990 && year <= 2100;
 }
 
-function stockYear(vehicle: StockVehicle) {
-  const year = parseYearSafely(vehicle.year, false);
-  return isValidGregorianYearText(year) ? year : "";
-}
-
 function stockRegistrationYear(vehicle: StockVehicle) {
   const raw = rawVehicleValue(vehicle, ["registrationYear", "registeredYear", "ปีจด", "ปีจดทะเบียน", "ทะเบียนปี"]);
   const year = parseYearSafely(raw, false);
@@ -376,7 +371,6 @@ function matchesAdvancedFilters(vehicle: StockVehicle, filters: AdvancedStockFil
 function matchesAdvancedFiltersExcept(vehicle: StockVehicle, filters: AdvancedStockFilters, except: (keyof AdvancedStockFilters)[]) {
   const ignored = new Set<keyof AdvancedStockFilters>(except);
   if (!ignored.has("models") && filters.models.length && !filters.models.includes(vehicleTitle(vehicle))) return false;
-  if (!ignored.has("years") && filters.years.length && !filters.years.includes(stockYear(vehicle))) return false;
   if (!ignored.has("registrationYears") && filters.registrationYears.length && !filters.registrationYears.includes(stockRegistrationYear(vehicle))) return false;
   if (!ignored.has("colors") && filters.colors.length && !filters.colors.includes(vehicle.color || "")) return false;
   if (!ignored.has("colorGroups") && filters.colorGroups.length && !filters.colorGroups.includes(stockRawValue(vehicle, "colorGroup"))) return false;
@@ -459,7 +453,7 @@ function sortVehicleValue(vehicle: StockVehicle, field: SortField) {
   if (field === "sellerName") return stockRawValue(vehicle, "sellerName");
   if (field === "bookingSaleDate") return dateValue(stockRawValue(vehicle, "bookingSaleDate"));
   if (field === "model") return vehicleTitle(vehicle);
-  if (field === "year") return Number(stockYear(vehicle) || 0);
+  if (field === "year") return Number(stockRegistrationYear(vehicle) || 0);
   if (field === "price") return parseNumeric(vehicle.salePrice);
   if (field === "mileage") return parseNumeric(vehicle.mileage);
   if (field === "status") return stockStatus(vehicle);
@@ -634,7 +628,6 @@ function stockExportColumns(mode: ExportMode, selectedColumns: ExtraColumnKey[],
       ? [
           { key: "location", label: "Location", width: 120 },
           { key: "plate", label: "ทะเบียน", width: 130 },
-          { key: "year", label: "ปีรถ", width: 82 },
           ...(hasRegistrationYear ? [{ key: "registrationYear", label: "ปีจด", width: 82 }] : []),
           { key: "model", label: "รุ่นรถยนต์", width: 370 },
           { key: "gear", label: "เกียร์", width: 70 },
@@ -646,7 +639,6 @@ function stockExportColumns(mode: ExportMode, selectedColumns: ExtraColumnKey[],
       : [
           { key: "location", label: "Location", width: 165 },
           { key: "plate", label: "ทะเบียน", width: 150 },
-          { key: "year", label: "ปีรถ", width: 120 },
           ...(hasRegistrationYear ? [{ key: "registrationYear", label: "ปีจด", width: 120 }] : []),
           { key: "model", label: "รุ่นรถยนต์", width: 620 },
           { key: "gear", label: "เกียร์", width: 95 },
@@ -755,7 +747,7 @@ export default function StockExportPage() {
           vehicle.plate,
           vehicle.brand,
           vehicle.model,
-          stockYear(vehicle),
+          stockRegistrationYear(vehicle),
           vehicle.color,
           vehicle.status,
           vehicle.gear,
@@ -808,7 +800,7 @@ export default function StockExportPage() {
 
     return {
       models: uniqueSorted(optionValues(["models"]).map((vehicle) => vehicleTitle(vehicle))),
-      years: uniqueSorted(optionValues(["years"]).map((vehicle) => stockYear(vehicle)).filter((value) => isValidGregorianYearText(value))).sort((a, b) => Number(b) - Number(a)),
+      years: [],
       registrationYears: uniqueSorted(optionValues(["registrationYears"]).map((vehicle) => stockRegistrationYear(vehicle)).filter((value) => isValidGregorianYearText(value))).sort((a, b) => Number(b) - Number(a)),
       colors: uniqueSorted(optionValues(["colors"]).map((vehicle) => vehicle.color || "")),
       colorGroups: uniqueSorted(optionValues(["colorGroups"]).map((vehicle) => stockRawValue(vehicle, "colorGroup"))),
@@ -1293,7 +1285,6 @@ export default function StockExportPage() {
                   </ActiveFilterTag>
                 ))}
                 {advancedFilters.models.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("models")}>รุ่น: {advancedFilters.models.join(", ")}</ActiveFilterTag>}
-                {advancedFilters.years.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("years")}>ปีรถ: {advancedFilters.years.join(", ")}</ActiveFilterTag>}
                 {advancedFilters.registrationYears.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("registrationYears")}>ปีจด: {advancedFilters.registrationYears.join(", ")}</ActiveFilterTag>}
                 {advancedFilters.colors.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("colors")}>สี: {advancedFilters.colors.join(", ")}</ActiveFilterTag>}
                 {advancedFilters.colorGroups.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("colorGroups")}>กลุ่มสี: {advancedFilters.colorGroups.join(", ")}</ActiveFilterTag>}
@@ -1617,7 +1608,7 @@ export default function StockExportPage() {
                           <span>สถานะ: <b className="text-white">{vehicle.status || "-"}</b></span>
                           <span>กลุ่ม: <b className="text-white">{vehicle.vehicleGroup || "-"}</b></span>
                           <span>Location: <b className="text-white">{vehicle.parkingLocation || "-"}</b></span>
-                          <span>ปีรถ: <b className="text-white">{stockYear(vehicle) || "-"}</b></span>
+                          <span>ปีจด: <b className="text-white">{stockRegistrationYear(vehicle) || "-"}</b></span>
                           <span>เกียร์: <b className="text-white">{vehicle.gear || "-"}</b></span>
                           <span>สี: <b className="text-white">{vehicle.color || "-"}</b></span>
                           <span>เลขไมล์: <b className="text-white">{formatMileage(vehicle.mileage)}</b></span>
@@ -1701,9 +1692,6 @@ export default function StockExportPage() {
         <FilterAccordion title="ราคา / ไมล์ / ปี">
           <div className="grid gap-3 sm:grid-cols-2">
             <FieldFilterShell sort={<FieldSortButtons field="year" direction={fieldSortDirection("year")} onSort={setFieldSort} onClear={clearFieldSort} ascLabel="เก่า→ใหม่" descLabel="ใหม่→เก่า" />}>
-              <MultiFilter label="ปีรถ" values={advancedFilters.years} options={advancedOptions.years} onToggle={(value) => toggleAdvancedValue("years", value)} onClear={() => clearAdvancedFilter("years")} />
-            </FieldFilterShell>
-            <FieldFilterShell>
               <MultiFilter label="ปีจด" values={advancedFilters.registrationYears} options={advancedOptions.registrationYears} onToggle={(value) => toggleAdvancedValue("registrationYears", value)} onClear={() => clearAdvancedFilter("registrationYears")} />
             </FieldFilterShell>
             <FieldFilterShell sort={<FieldSortButtons field="color" direction={fieldSortDirection("color")} onSort={setFieldSort} onClear={clearFieldSort} />}>
@@ -2251,7 +2239,6 @@ function previewColumnValue(vehicle: StockVehicle, column: StockExportColumn, mo
   if (column.extraKey) return defaultColumnValue(vehicle, column.extraKey);
   if (column.key === "location") return shortLocation(vehicle.parkingLocation);
   if (column.key === "plate") return vehicle.plate || "-";
-  if (column.key === "year") return stockYear(vehicle) || "-";
   if (column.key === "registrationYear") return stockRegistrationYear(vehicle) || "-";
   if (column.key === "model") return vehicleTitle(vehicle);
   if (column.key === "gear") return vehicle.gear || "-";
@@ -2341,7 +2328,6 @@ function renderStockTableCanvas(
     const values: Record<string, string> = {
       location: shortLocation(vehicle.parkingLocation),
       plate: vehicle.plate || "-",
-      year: stockYear(vehicle) || "-",
       registrationYear: stockRegistrationYear(vehicle) || "-",
       model: vehicleTitle(vehicle),
       gear: vehicle.gear || "-",
