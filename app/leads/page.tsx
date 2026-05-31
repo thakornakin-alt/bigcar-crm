@@ -174,12 +174,12 @@ export default function LeadsPage() {
     <NativeAppShell className="max-w-5xl">
       <NativeAppHeader
         title="ลูกค้ามุ่งหวัง"
-        subtitle="รวมลูกค้าหารถไว้ในเมนูเดียว ใช้กลุ่มรถเดียวกับสต็อก"
+        subtitle="เก็บลูกค้าที่กำลังหารถ และติดตามต่อได้เร็ว"
         actions={<NativeBadge>{visibleLeads.length.toLocaleString("th-TH")} ราย</NativeBadge>}
       />
 
       {(message || error) && (
-        <div className={`mb-4 rounded-lg border px-4 py-3 text-sm font-semibold ${error ? "border-red-400/40 bg-red-950/30 text-red-100" : "border-brand/40 bg-green-950/30 text-green-100"}`}>
+        <div className={`mb-4 rounded-2xl border px-4 py-3 text-sm font-semibold ${error ? "border-red-400/40 bg-red-950/30 text-red-100" : "border-brand/40 bg-green-950/30 text-green-100"}`}>
           {error || message}
         </div>
       )}
@@ -197,7 +197,7 @@ export default function LeadsPage() {
               <Field label="เบอร์" value={form.phone} onChange={(value) => update("phone", value)} icon={<Phone size={16} />} inputMode="tel" required />
               <label className="block">
                 <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">กลุ่มรถยนต์</span>
-                <span className="flex min-h-12 items-center gap-3 rounded-lg border border-line bg-[#0b0d11] px-3 focus-within:border-brand">
+                <span className="flex min-h-12 items-center gap-3 rounded-2xl border border-white/10 bg-[#080c12] px-3 focus-within:border-brand/80">
                   <Car size={16} className="text-brand" />
                   <input
                     value={form.vehicleGroup}
@@ -220,7 +220,7 @@ export default function LeadsPage() {
                   <select
                     value={form.status}
                     onChange={(event) => update("status", event.target.value as LeadForm["status"])}
-                    className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none focus:border-brand"
+                    className="h-12 w-full rounded-2xl border border-white/10 bg-[#080c12] px-3 text-white outline-none focus:border-brand/80"
                   >
                     {leadStatusOptions.map((option) => (
                       <option key={option.value} value={option.value}>{option.label}</option>
@@ -233,7 +233,7 @@ export default function LeadsPage() {
                     type="date"
                     value={form.nextFollowUpDate}
                     onChange={(event) => update("nextFollowUpDate", event.target.value)}
-                    className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none focus:border-brand"
+                    className="h-12 w-full rounded-2xl border border-white/10 bg-[#080c12] px-3 text-white outline-none focus:border-brand/80"
                   />
                 </label>
               </div>
@@ -244,7 +244,7 @@ export default function LeadsPage() {
                   onChange={(event) => update("comment", event.target.value)}
                   rows={4}
                   placeholder="รายละเอียดที่ต้องติดตาม"
-                  className="min-h-28 w-full rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
+                  className="min-h-28 w-full rounded-2xl border border-white/10 bg-[#080c12] px-3 py-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand/80"
                 />
               </label>
               <NativeButton type="submit" disabled={saving} className="w-full">
@@ -266,9 +266,9 @@ export default function LeadsPage() {
               ))}
             </div>
             {loading ? (
-              <div className="flex min-h-32 items-center justify-center rounded-lg border border-line bg-[#0b0d11] text-soft">
+              <div className="flex min-h-32 items-center justify-center rounded-2xl border border-white/10 bg-[#080c12] text-soft">
                 <Loader2 size={22} className="mr-2 animate-spin text-brand" />
-                Loading
+                กำลังโหลด
               </div>
             ) : visibleLeads.length ? (
               <div className="space-y-2">
@@ -277,7 +277,7 @@ export default function LeadsPage() {
                 ))}
               </div>
             ) : (
-              <div className="rounded-lg border border-line bg-[#0b0d11] px-4 py-8 text-center text-soft">
+              <div className="rounded-2xl border border-white/10 bg-[#080c12] px-4 py-8 text-center text-soft">
                 ไม่พบลูกค้ามุ่งหวัง
               </div>
             )}
@@ -308,7 +308,7 @@ function Field({
   return (
     <label className="block">
       <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">{label}</span>
-      <span className="flex min-h-12 items-center gap-3 rounded-lg border border-line bg-[#0b0d11] px-3 focus-within:border-brand">
+      <span className="flex min-h-12 items-center gap-3 rounded-2xl border border-white/10 bg-[#080c12] px-3 focus-within:border-brand/80">
         <span className="text-brand">{icon}</span>
         <input
           value={value}
@@ -326,7 +326,7 @@ function Field({
 
 function LeadCard({ lead }: { lead: SalesLead }) {
   return (
-    <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
+    <div className="rounded-[22px] border border-white/10 bg-[#080c12] p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-lg font-black text-white">{lead.name}</p>
@@ -334,10 +334,10 @@ function LeadCard({ lead }: { lead: SalesLead }) {
           {lead.desiredModel && <p className="mt-1 text-xs font-bold text-brand">สนใจ: {lead.desiredModel}</p>}
           <p className="mt-1 text-xs text-soft">วันที่บันทึก: {lead.date || "-"}</p>
         </div>
-        <span className="rounded-full border border-brand/40 px-2.5 py-1 text-xs font-black text-brand">{statusLabel(lead.status)}</span>
+        <span className="rounded-full border border-brand/40 bg-brand/10 px-2.5 py-1 text-xs font-black text-brand">{statusLabel(lead.status)}</span>
       </div>
       {(lead.budget || lead.comment) && (
-        <p className="mt-3 whitespace-pre-line rounded-lg border border-line bg-black/20 px-3 py-2 text-sm leading-6 text-soft">
+        <p className="mt-3 whitespace-pre-line rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm leading-6 text-soft">
           {lead.budget ? `งบประมาณ: ${lead.budget}` : ""}
           {lead.budget && lead.comment ? "\n" : ""}
           {lead.comment}
@@ -359,7 +359,7 @@ function formatThaiDate(value: string) {
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-line bg-panel p-4 shadow-glow">
+    <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,#101720,#070b10)] p-4 shadow-[0_18px_46px_rgba(0,0,0,0.22)]">
       <p className="text-xs font-bold uppercase tracking-[0.12em] text-soft">{label}</p>
       <p className="mt-2 text-2xl font-black text-white">{value}</p>
     </div>

@@ -301,7 +301,7 @@ export default function RealtimeBookingPage() {
         body: JSON.stringify({ id: item.id })
       });
       await loadDashboard();
-      setMessage(`Lock จองทะเบียน ${item.plate} แล้ว`);
+      setMessage(`ยืนยันทะเบียน ${item.plate} แล้ว`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Lock จองไม่สำเร็จ");
     }
@@ -358,13 +358,13 @@ export default function RealtimeBookingPage() {
     <NativeAppShell className="max-w-5xl">
       <NativeAppHeader
         title="แย่งคิวรถ"
-        subtitle="คิวรถ realtime"
+        subtitle="กรอกคิวล่วงหน้า รอราคา RT แล้วสร้างข้อความส่งต่อทันที"
         actions={<NativeBadge>{filteredQueue.length.toLocaleString("th-TH")} คิว</NativeBadge>}
       />
 
       {(message || error) && (
         <div
-          className={`mb-4 rounded-lg border px-4 py-3 text-sm font-semibold ${
+          className={`mb-4 rounded-2xl border px-4 py-3 text-sm font-semibold ${
             error ? "border-red-400/40 bg-red-950/30 text-red-100" : "border-cyan-300/40 bg-cyan-950/25 text-cyan-100"
           }`}
         >
@@ -409,7 +409,7 @@ export default function RealtimeBookingPage() {
           </form>
         </SectionCard>
 
-        <SectionCard title="สถานะคิวแย่งรถ realtime" icon={<Activity size={18} />}>
+        <SectionCard title="คิวและการแจ้งผล" icon={<Activity size={18} />}>
           <div
             className={`rounded-lg border p-3 text-sm ${
               gmailStatus.state === "error"
@@ -422,7 +422,7 @@ export default function RealtimeBookingPage() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 font-bold">
                 {gmailStatus.state === "checking" ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
-                ตรวจ Gmail อัตโนมัติทุก 15 วิ
+              ตรวจเมลราคาอัตโนมัติ
               </div>
               <span className="text-xs text-soft">{gmailStatus.checkedAt ? time(gmailStatus.checkedAt) : "-"}</span>
             </div>
@@ -564,8 +564,8 @@ export default function RealtimeBookingPage() {
 
 function CompactMetric({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
   return (
-    <div className="rounded-md border border-line bg-panel/70 px-2 py-2 text-center">
-      <div className="mx-auto mb-1 flex h-6 w-6 items-center justify-center rounded-md border border-cyan-300/25 bg-cyan-300/10 text-cyan-200">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2 text-center">
+      <div className="mx-auto mb-1 flex h-6 w-6 items-center justify-center rounded-xl border border-cyan-300/25 bg-cyan-300/10 text-cyan-200">
         {icon}
       </div>
       <p className="text-lg font-black leading-none text-white">{value}</p>
@@ -598,7 +598,7 @@ function Field({
         placeholder={placeholder}
         inputMode={inputMode}
         autoFocus={autoFocus}
-        className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none placeholder:text-[#6f7785] focus:border-cyan-300"
+        className="h-12 w-full rounded-2xl border border-white/10 bg-[#080c12] px-3 text-white outline-none placeholder:text-[#6f7785] focus:border-cyan-300"
       />
     </label>
   );
@@ -631,7 +631,7 @@ function QueueCard({
           : "border-line bg-[#121720] text-soft";
 
   return (
-    <article className="rounded-lg border border-line bg-[#0b0d11] p-3">
+    <article className="rounded-[22px] border border-white/10 bg-[#080c12] p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
@@ -674,7 +674,7 @@ function QueueCard({
           className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3 font-bold text-white disabled:opacity-40"
         >
           <Copy size={18} />
-          Copy
+          คัดลอก
         </button>
         <button
           type="button"
@@ -683,7 +683,7 @@ function QueueCard({
           className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-cyan-300/40 bg-cyan-300/10 px-3 font-bold text-cyan-100 disabled:opacity-40"
         >
           {sendingLine ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-          LINE
+          ส่ง LINE
         </button>
         <button
           type="button"
@@ -692,7 +692,7 @@ function QueueCard({
           className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-cyan-300 px-3 font-black text-slate-950 disabled:opacity-40"
         >
           <CheckCircle2 size={18} />
-          Lock Booked
+          ยืนยัน
         </button>
         <button
           type="button"
@@ -701,7 +701,7 @@ function QueueCard({
           className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-red-300/35 bg-red-300/10 px-3 font-bold text-red-100 disabled:opacity-40"
         >
           <XCircle size={18} />
-          Cancel
+          ยกเลิก
         </button>
       </div>
     </article>

@@ -261,10 +261,10 @@ export function SectionCard({
   className?: string;
 }) {
   return (
-    <section className={`rounded-lg border border-line bg-panel p-4 shadow-glow ${className}`}>
+    <section className={`rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(17,24,32,0.92),rgba(7,10,15,0.94))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] ${className}`}>
       {title && (
-        <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-white">
-          {icon && <span className="flex h-[18px] w-[18px] items-center justify-center text-brand">{icon}</span>}
+        <h2 className="mb-3 flex items-center gap-2 text-lg font-black text-white">
+          {icon && <span className="flex h-9 w-9 items-center justify-center rounded-2xl border border-brand/25 bg-brand/10 text-brand">{icon}</span>}
           {title}
         </h2>
       )}
@@ -414,7 +414,7 @@ export function FloatingActionButton({ href, label = "เพิ่ม", icon = <
 
 export function StickyFilterBar({ children }: { children: ReactNode }) {
   return (
-    <div className="sticky top-2 z-20 -mx-1 rounded-lg border border-line/80 bg-[#11141a]/95 p-2 shadow-glow backdrop-blur sm:mx-0">
+    <div className="sticky top-2 z-20 -mx-1 rounded-[22px] border border-white/10 bg-[#080c12]/92 p-2 shadow-[0_16px_44px_rgba(0,0,0,0.26)] backdrop-blur-xl sm:mx-0">
       <div className="space-y-2">{children}</div>
     </div>
   );
@@ -428,7 +428,7 @@ export function SearchField({
   icon?: ReactNode;
 }) {
   return (
-    <label className={classNames("flex min-h-12 items-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-3 text-white transition focus-within:border-brand", className)}>
+    <label className={classNames("flex min-h-12 items-center gap-2 rounded-2xl border border-white/10 bg-[#080c12] px-3 text-white transition focus-within:border-brand/80", className)}>
       {icon && <span className="flex h-5 w-5 shrink-0 items-center justify-center text-brand">{icon}</span>}
       <input
         {...props}
@@ -451,8 +451,8 @@ export function FilterChip({
       type="button"
       {...props}
       className={classNames(
-        "min-h-10 rounded-lg border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-45",
-        active ? "border-brand bg-brand text-ink" : "border-line bg-[#0b0d11] text-soft hover:border-brand/60 hover:text-white",
+        "min-h-10 rounded-2xl border px-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-45",
+        active ? "border-white bg-white text-ink shadow-[0_10px_26px_rgba(255,255,255,0.12)]" : "border-white/10 bg-white/[0.04] text-soft hover:border-brand/60 hover:text-white",
         className
       )}
     >
