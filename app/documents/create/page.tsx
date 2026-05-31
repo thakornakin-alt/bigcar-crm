@@ -492,7 +492,7 @@ export default function DocumentCreatePage() {
     <PageContainer wide>
       <PageTitle
         title="สร้างเอกสาร PDF"
-        subtitle="เลือกข้อมูลลูกค้าและรถ แล้วเติมลงแบบฟอร์ม A4 อัตโนมัติ"
+        subtitle="เลือกข้อมูลลูกค้าและรถ แล้วเติมลงแบบฟอร์ม A4 อัตโนมัติ · build 2fe4b4f"
       />
 
       {(message || error) && (
