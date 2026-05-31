@@ -66,9 +66,23 @@ export const stockFieldAliases: Record<RealStockFieldKey, string[]> = {
 
 export function stockRawValue(vehicle: StockVehicle, key: RealStockFieldKey) {
   const raw = vehicle as StockVehicle & Record<string, unknown>;
+  const extra = (raw.extraFields && typeof raw.extraFields === "object" ? (raw.extraFields as Record<string, unknown>) : {}) as Record<string, unknown>;
+  const normalize = (value: string) => value.toLowerCase().replace(/\s+/g, "");
   for (const alias of stockFieldAliases[key]) {
     const value = raw[alias];
     if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+  }
+  for (const alias of stockFieldAliases[key]) {
+    const value = extra[alias];
+    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+  }
+  const extraEntries = Object.entries(extra);
+  for (const alias of stockFieldAliases[key]) {
+    const normalizedAlias = normalize(alias);
+    const matched = extraEntries.find(([extraKey]) => normalize(String(extraKey || "")) === normalizedAlias);
+    if (matched && matched[1] !== undefined && matched[1] !== null && String(matched[1]).trim()) {
+      return String(matched[1]).trim();
+    }
   }
   return "";
 }
