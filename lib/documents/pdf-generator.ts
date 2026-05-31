@@ -20,11 +20,23 @@ function publicAssetUrl(assetPath: string, baseUrl?: string) {
 }
 
 async function readAssetBytes(assetPath: string, baseUrl?: string) {
+  const maybePublic = String(assetPath || "").replace(/\\/g, "/").startsWith("public/");
+  // In serverless production, static files under /public are most reliable via HTTP URL.
+  if (maybePublic && baseUrl) {
+    const url = publicAssetUrl(assetPath, baseUrl);
+    if (url) {
+      const response = await fetch(url, { cache: "no-store" });
+      if (response.ok) {
+        const arr = await response.arrayBuffer();
+        return Buffer.from(arr);
+      }
+    }
+  }
+
   try {
     return await readFile(absoluteAssetPath(assetPath));
   } catch (error) {
     const code = (error as NodeJS.ErrnoException)?.code;
-    const maybePublic = String(assetPath || "").replace(/\\/g, "/").startsWith("public/");
     if (code !== "ENOENT" || !maybePublic) throw error;
     const url = publicAssetUrl(assetPath, baseUrl);
     if (!url) throw error;
