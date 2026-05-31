@@ -4,12 +4,35 @@ import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb } from "pdf-lib";
 import { formatThaiDate, getDocumentTemplate } from "@/lib/documents/template-config";
 import type { DocumentData, DocumentFieldConfig, DocumentTemplateId } from "@/lib/documents/document-types";
+import { replacePdfPlaceholders } from "@/lib/documents/pdf-placeholder-replacer";
 
 const A4_WIDTH = 595.28;
 const A4_HEIGHT = 841.89;
 
 function absoluteAssetPath(assetPath: string) {
   return path.isAbsolute(assetPath) ? assetPath : path.join(process.cwd(), assetPath);
+}
+
+function publicAssetUrl(assetPath: string, baseUrl?: string) {
+  const normalized = `/${String(assetPath || "").replace(/^public[\\/]/, "").replace(/\\/g, "/")}`;
+  if (!baseUrl) return "";
+  return `${baseUrl.replace(/\/+$/, "")}${normalized}`;
+}
+
+async function readAssetBytes(assetPath: string, baseUrl?: string) {
+  try {
+    return await readFile(absoluteAssetPath(assetPath));
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException)?.code;
+    const maybePublic = String(assetPath || "").replace(/\\/g, "/").startsWith("public/");
+    if (code !== "ENOENT" || !maybePublic) throw error;
+    const url = publicAssetUrl(assetPath, baseUrl);
+    if (!url) throw error;
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) throw error;
+    const arr = await response.arrayBuffer();
+    return Buffer.from(arr);
+  }
 }
 
 function normalizeFieldName(value: string) {
@@ -101,6 +124,7 @@ export async function generateFilledDocumentPdf(input: {
   templateId: DocumentTemplateId;
   data: DocumentData;
   fields?: Record<string, DocumentFieldConfig>;
+  baseUrl?: string;
 }) {
   const template = await getDocumentTemplate(input.templateId);
   if (!template) throw new Error("ไม่พบ PDF Template");
@@ -110,7 +134,7 @@ export async function generateFilledDocumentPdf(input: {
 
   let backgroundBytes: Buffer;
   try {
-    backgroundBytes = await readFile(absoluteAssetPath(template.backgroundPath));
+    backgroundBytes = await readAssetBytes(template.backgroundPath, input.baseUrl);
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
       throw new Error("ไม่พบไฟล์ PDF Template กรุณาอัปโหลด template ใหม่ที่หน้า /documents/templates");
@@ -140,7 +164,7 @@ export async function generateFilledDocumentPdf(input: {
 
   let font;
   try {
-    const fontBytes = await readFile(absoluteAssetPath("public/fonts/tahoma.ttf"));
+    const fontBytes = await readAssetBytes("public/fonts/tahoma.ttf", input.baseUrl);
     font = await pdf.embedFont(fontBytes, { subset: true });
   } catch {
     throw new Error("โหลดฟอนต์ภาษาไทยไม่สำเร็จ");
@@ -179,6 +203,20 @@ export async function generateFilledDocumentPdf(input: {
       }
     } catch {
       usedAcroForm = false;
+    }
+  }
+
+  if (isPdfTemplate) {
+    try {
+      await replacePdfPlaceholders({
+        sourcePdfBytes: new Uint8Array(backgroundBytes),
+        pdfDoc: pdf,
+        pages,
+        font,
+        data: input.data
+      });
+    } catch {
+      // Keep existing workflow: if placeholder replacement fails, continue with existing mapping layers.
     }
   }
 

@@ -17,7 +17,8 @@ export async function POST(request: Request) {
     const template = await getDocumentTemplate(templateId);
     if (!template) return NextResponse.json({ error: "ไม่พบ template" }, { status: 404 });
 
-    const pdfBytes = await generateFilledDocumentPdf({ templateId, data, fields });
+    const origin = new URL(request.url).origin;
+    const pdfBytes = await generateFilledDocumentPdf({ templateId, data, fields, baseUrl: origin });
     const fileName = `${template.fileName.replace(/\.pdf$/i, "")}-${Date.now()}.pdf`;
     return new NextResponse(Buffer.from(pdfBytes), {
       headers: {

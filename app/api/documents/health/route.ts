@@ -7,8 +7,9 @@ export const runtime = "nodejs";
 
 const requiredTemplates = ["contract", "temporary-receipt"] as const;
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const origin = new URL(request.url).origin;
     const checks: Array<{ templateId: string; ok: boolean; detail: string }> = [];
     for (const templateId of requiredTemplates) {
       try {
@@ -19,6 +20,7 @@ export async function GET() {
         }
         const bytes = await generateFilledDocumentPdf({
           templateId,
+          baseUrl: origin,
           data: {
             customerName: "ทดสอบระบบ",
             plate: "ทด1234",
@@ -62,4 +64,3 @@ export async function GET() {
     );
   }
 }
-
