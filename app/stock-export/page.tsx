@@ -6,10 +6,12 @@ import {
   ActiveFilterTag,
   BottomSheet,
   FilterChip,
-  PageContainer,
-  PageTitle,
+  NativeAppHeader,
+  NativeAppShell,
+  NativeBadge,
+  NativeButton,
+  NativeCard,
   SearchField,
-  SectionCard,
   StickyFilterBar,
 } from "@/app/components/ui";
 import type { StockVehicle } from "@/lib/types";
@@ -1127,8 +1129,12 @@ export default function StockExportPage() {
   }
 
   return (
-    <PageContainer wide>
-      <PageTitle title="สร้างรูปสต็อก" subtitle="ค้นหา กรอง และเซฟรูปสต็อก" />
+    <NativeAppShell className="max-w-5xl">
+      <NativeAppHeader
+        title="สต๊อก"
+        subtitle="ค้นหา กรอง Preview และ Export รูปสต็อก"
+        actions={<NativeBadge>{exportVehicles.length.toLocaleString("th-TH")} คัน</NativeBadge>}
+      />
 
       {(message || error) && (
         <div
@@ -1142,7 +1148,14 @@ export default function StockExportPage() {
       )}
 
       <div className="space-y-4">
-          <SectionCard title="ค้นหาและกรองสต็อก" icon={<Search size={18} />}>
+          <NativeCard>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="flex items-center gap-2 text-lg font-black text-white">
+                <Search size={18} className="text-brand" />
+                ค้นหาและกรอง
+              </h2>
+              <NativeBadge tone="muted">Export Ready</NativeBadge>
+            </div>
             {ENABLE_NEW_STOCK_UI ? (
               <StickyFilterBar>
                 <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -1153,25 +1166,27 @@ export default function StockExportPage() {
                     icon={<Search size={18} />}
                   />
                   <div className="grid grid-cols-2 gap-2 sm:flex">
-                    <button
+                    <NativeButton
                       type="button"
                       onClick={() => setAdvancedOpen(true)}
-                      className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-4 font-semibold text-white transition hover:border-brand/60"
+                      variant="secondary"
+                      className="px-3"
                     >
                       <Filter size={18} className="text-brand" />
                       ตัวกรองขั้นสูง{advancedFilterCount ? ` (${advancedFilterCount})` : ""}
-                    </button>
-                    <button
+                    </NativeButton>
+                    <NativeButton
                       type="button"
                       onClick={() => setColumnsOpen(true)}
-                      className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-4 font-semibold text-white transition hover:border-brand/60"
+                      variant="secondary"
+                      className="px-3"
                     >
                       <Columns3 size={18} className="text-brand" />
                       เลือกข้อมูลที่แสดง{extraColumns.length ? ` (${extraColumns.length})` : ""}
-                    </button>
-                    <button type="button" onClick={clearFilters} className="min-h-12 rounded-lg border border-line bg-[#0b0d11] px-4 font-semibold text-white transition hover:border-brand/60">
+                    </NativeButton>
+                    <NativeButton type="button" onClick={clearFilters} variant="ghost" className="px-3">
                       ล้างตัวกรอง
-                    </button>
+                    </NativeButton>
                   </div>
                 </div>
               </StickyFilterBar>
@@ -1425,9 +1440,16 @@ export default function StockExportPage() {
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft">
               Export เป็นตารางแยกตามกลุ่มรถยนต์ หน้า/รูปละ {maxTableItems} คัน ถ้ากลุ่มไหนเกินจะสร้างหลายหน้าพร้อมเลขหน้าอัตโนมัติ
             </p>
-          </SectionCard>
+          </NativeCard>
 
-        <SectionCard title="Preview รูป" icon={<FileImage size={18} />}>
+        <NativeCard>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-lg font-black text-white">
+              <FileImage size={18} className="text-brand" />
+              Preview รูป
+            </h2>
+            <NativeBadge>{exportPageCount.toLocaleString("th-TH")} หน้า</NativeBadge>
+          </div>
           <StockPreview vehicles={exportVehicles} mode={exportMode} pageCount={exportPageCount} groupCount={exportGroups.length} extraColumns={extraColumns} />
           <div className="grid gap-2 rounded-lg border border-line bg-[#0b0d11] p-3 sm:grid-cols-[1fr_auto]">
             <label>
@@ -1453,55 +1475,61 @@ export default function StockExportPage() {
                 </p>
               )}
             </label>
-            <button
+            <NativeButton
               type="button"
               onClick={sendLineStockImages}
               disabled={sendingLine || exporting || !selectedLineGroupId || !exportVehicles.length}
-              className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink disabled:opacity-60 sm:self-end"
+              className="sm:self-end"
             >
               {sendingLine ? <Loader2 size={20} className="animate-spin" /> : <MessageCircle size={20} />}
               ส่ง LINE
-            </button>
+            </NativeButton>
           </div>
           <div className="grid gap-2 sm:grid-cols-3">
-            <button
+            <NativeButton
               type="button"
               onClick={() => exportImage("png")}
               disabled={exporting || !exportVehicles.length}
-              className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink disabled:opacity-60"
             >
               {exporting ? <Loader2 size={20} className="animate-spin" /> : <Download size={20} />}
               เซฟ PNG {exportPageCount ? `(${exportPageCount.toLocaleString("th-TH")} รูป)` : ""}
-            </button>
-            <button
+            </NativeButton>
+            <NativeButton
               type="button"
               onClick={() => exportImage("jpeg")}
               disabled={exporting || !exportVehicles.length}
-              className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-brand/60 bg-brand/10 px-4 font-bold text-brand disabled:opacity-60"
+              variant="secondary"
             >
               JPG
-            </button>
-            <button
+            </NativeButton>
+            <NativeButton
               type="button"
               onClick={() => exportImage("pdf")}
               disabled={exporting || !exportVehicles.length}
-              className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-line px-4 font-bold text-white disabled:opacity-60"
+              variant="secondary"
             >
               PDF
-            </button>
+            </NativeButton>
           </div>
           <canvas ref={canvasRef} className="hidden" />
-        </SectionCard>
+        </NativeCard>
 
-        <SectionCard title="รายการรถ" icon={<Search size={18} />}>
+        <NativeCard>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-lg font-black text-white">
+              <Search size={18} className="text-brand" />
+              รายการรถ
+            </h2>
+            <NativeBadge tone="muted">{sortedVehicles.length.toLocaleString("th-TH")} คัน</NativeBadge>
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <button
+            <NativeButton
               type="button"
               onClick={() => setListOpen((current) => !current)}
-              className="min-h-10 rounded-lg border border-line bg-[#0b0d11] px-4 text-sm font-bold text-white transition hover:border-brand"
+              variant="secondary"
             >
               {listOpen ? "ซ่อนรายการรถ" : "ดูรายการรถทั้งหมด"}
-            </button>
+            </NativeButton>
           </div>
 
           {!listOpen ? (
@@ -1575,7 +1603,7 @@ export default function StockExportPage() {
               )}
             </div>
           )}
-        </SectionCard>
+        </NativeCard>
       </div>
 
       <BottomSheet
@@ -1783,7 +1811,7 @@ export default function StockExportPage() {
           </button>
         ) : null}
       </BottomSheet>
-    </PageContainer>
+    </NativeAppShell>
   );
 }
 
