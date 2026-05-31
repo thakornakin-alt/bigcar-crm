@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowLeft, CheckCircle2, Database, FileSpreadsheet, Loader2, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, Database, FileSpreadsheet, Loader2, RefreshCw, Upload } from "lucide-react";
 import * as XLSX from "xlsx";
 import { PageContainer, PageTitle, TopMenuButton } from "@/app/components/ui";
 import type { StockImportResult, StockImportStatus, StockVehicle } from "@/lib/types";
@@ -13,6 +13,26 @@ type HiddenColumnInfo = {
   index: number;
   letter: string;
   hidden: boolean;
+};
+type StockStagingStatus = "Pending" | "Confirmed" | "Rejected" | "Duplicate" | "Ignored" | "Excluded";
+type StockStagingItem = {
+  id: string;
+  status: StockStagingStatus;
+  source: "gmail" | "manual";
+  fileName: string;
+  subject: string;
+  sender: string;
+  emailTime: string;
+  fileDate: string;
+  totalCars: number;
+  columnCount: number;
+  hiddenColumnCount: number;
+  validation: { ok: boolean; warnings: string[]; errors: string[] };
+  diff?: { added: number; missing: number; priceChanged: number; suspicious: boolean; warnings: string[] };
+  excludedReason?: string;
+  confirmedAt?: string;
+  confirmedBy?: string;
+  previewRows: StockVehicle[];
 };
 
 const chunkSize = 300;
@@ -72,6 +92,16 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
   }
 
   return data;
+}
+
+async function fileToBase64(file: File) {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
+    reader.readAsDataURL(file);
+  });
+  return dataUrl.split(",")[1] || "";
 }
 
 function normalizeHeader(value: string) {
@@ -247,6 +277,10 @@ export default function StockImportPage() {
   const [clearExisting, setClearExisting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [importing, setImporting] = useState(false);
+  const [stagingItems, setStagingItems] = useState<StockStagingItem[]>([]);
+  const [latestConfirmed, setLatestConfirmed] = useState<StockStagingItem | null>(null);
+  const [stagingLoading, setStagingLoading] = useState(false);
+  const [selectedStagingId, setSelectedStagingId] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -276,7 +310,104 @@ export default function StockImportPage() {
     api<{ status: StockImportStatus }>("/api/stock/status")
       .then((data) => setStatus(data.status))
       .catch(() => undefined);
+    loadStaging();
   }, []);
+
+  async function loadStaging() {
+    setStagingLoading(true);
+    try {
+      const data = await api<{ items: StockStagingItem[]; latestConfirmed: StockStagingItem | null }>("/api/stock/staging");
+      setStagingItems(data.items || []);
+      setLatestConfirmed(data.latestConfirmed || null);
+      setSelectedStagingId((current) => current || (data.items || []).find((item) => item.status === "Pending")?.id || "");
+    } catch {
+      setStagingItems([]);
+    } finally {
+      setStagingLoading(false);
+    }
+  }
+
+  async function handleManualStagingFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setError("");
+    setMessage("กำลังสร้าง staging จากไฟล์ manual...");
+    setStagingLoading(true);
+    try {
+      await api<{ item: StockStagingItem }>("/api/stock/staging", {
+        method: "POST",
+        body: JSON.stringify({
+          fileName: file.name,
+          base64: await fileToBase64(file),
+          source: "manual",
+          subject: file.name,
+          sender: "Manual Upload"
+        })
+      });
+      setMessage("สร้าง staging แล้ว กรุณา Preview/Confirm ก่อนนำเข้า Stock จริง");
+      await loadStaging();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "สร้าง staging ไม่สำเร็จ");
+    } finally {
+      setStagingLoading(false);
+      event.target.value = "";
+    }
+  }
+
+  async function syncGmailStaging() {
+    setError("");
+    setMessage("กำลังดึงไฟล์สต็อกจาก Gmail เข้า Staging...");
+    setStagingLoading(true);
+    try {
+      const data = await api<{ created: Array<{ status: string }>; checked: number }>("/api/stock/staging/gmail-sync", {
+        method: "POST",
+        body: JSON.stringify({})
+      });
+      setMessage(`ตรวจ Gmail ${data.checked.toLocaleString("th-TH")} เมล / สร้าง staging ${data.created.length.toLocaleString("th-TH")} ไฟล์`);
+      await loadStaging();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ดึง Gmail ไม่สำเร็จ");
+    } finally {
+      setStagingLoading(false);
+    }
+  }
+
+  async function confirmStaging(id: string) {
+    const item = stagingItems.find((entry) => entry.id === id);
+    const duplicateWarning = item?.status === "Duplicate" ? "\nไฟล์นี้เป็น Duplicate ต้องการ Confirm จริงหรือไม่?" : "";
+    const diffWarning = item?.diff?.suspicious ? `\nคำเตือน Diff: ${item.diff.warnings.join(", ")}` : "";
+    if (!window.confirm(`Confirm Import ไฟล์นี้เข้า Main Stock?\n${item?.fileName || ""}${duplicateWarning}${diffWarning}`)) return;
+
+    setError("");
+    setMessage("กำลัง Confirm Import เข้า Main Stock...");
+    setStagingLoading(true);
+    try {
+      await api(`/api/stock/staging/${encodeURIComponent(id)}/confirm`, {
+        method: "POST",
+        body: JSON.stringify({ confirmedBy: "CRM User" })
+      });
+      setMessage("Confirm Import สำเร็จแล้ว");
+      await loadStaging();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Confirm Import ไม่สำเร็จ");
+    } finally {
+      setStagingLoading(false);
+    }
+  }
+
+  async function rejectStaging(id: string) {
+    setError("");
+    setStagingLoading(true);
+    try {
+      await api(`/api/stock/staging/${encodeURIComponent(id)}/reject`, { method: "POST" });
+      setMessage("Reject staging แล้ว");
+      await loadStaging();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Reject ไม่สำเร็จ");
+    } finally {
+      setStagingLoading(false);
+    }
+  }
 
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -465,6 +596,124 @@ export default function StockImportPage() {
           </TopMenuButton>
         }
       />
+
+      <section className="mb-6 rounded-xl border border-brand/25 bg-[#10151f] p-4 shadow-glow">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="flex items-center gap-2 text-lg font-black text-white">
+              <FileSpreadsheet size={19} className="text-brand" />
+              Gmail Auto Import Staging
+            </h2>
+            <p className="mt-1 text-sm text-soft">ไฟล์จาก Gmail/Manual Upload ต้องเข้า Staging ก่อน แล้วค่อย Confirm เข้า Main Stock</p>
+            {latestConfirmed ? (
+              <p className="mt-2 rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs text-soft">
+                Latest Stock Source: <b className="text-white">{latestConfirmed.fileName}</b> · From: {latestConfirmed.sender} · Confirmed: {latestConfirmed.confirmedAt ? new Date(latestConfirmed.confirmedAt).toLocaleString("th-TH") : "-"}
+              </p>
+            ) : null}
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[520px]">
+            <button type="button" onClick={syncGmailStaging} disabled={stagingLoading} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-4 font-black text-ink disabled:opacity-60">
+              {stagingLoading ? <Loader2 size={17} className="animate-spin" /> : <RefreshCw size={17} />}
+              Sync Gmail
+            </button>
+            <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-4 font-black text-white">
+              <Upload size={17} className="text-brand" />
+              Upload Manual File
+              <input type="file" accept=".xlsx,.xls,.csv" onChange={handleManualStagingFile} className="hidden" />
+            </label>
+            <button type="button" onClick={loadStaging} disabled={stagingLoading} className="min-h-11 rounded-lg border border-line px-4 font-black text-white disabled:opacity-60">
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3">
+          {stagingItems.length ? stagingItems.map((item) => {
+            const active = selectedStagingId === item.id;
+            const blocked = item.status === "Excluded" || item.status === "Ignored" || item.status === "Confirmed" || item.status === "Rejected";
+            return (
+              <div key={item.id} className={`rounded-xl border p-3 ${active ? "border-brand bg-brand/10" : "border-line bg-[#0b0d11]"}`}>
+                <button type="button" onClick={() => setSelectedStagingId(active ? "" : item.id)} className="w-full text-left">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-black text-white">{item.fileName}</p>
+                      <p className="mt-1 text-xs text-soft">{item.subject}</p>
+                      <p className="mt-1 text-xs text-soft">From: {item.sender} · Email: {new Date(item.emailTime).toLocaleString("th-TH")} · File date: {item.fileDate || "-"}</p>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-xs font-black ${
+                      item.status === "Pending" ? "bg-brand text-ink" :
+                      item.status === "Confirmed" ? "bg-blue-400 text-ink" :
+                      item.status === "Duplicate" ? "bg-amber-300 text-ink" :
+                      item.status === "Excluded" || item.status === "Ignored" ? "bg-red-300 text-ink" :
+                      "bg-[#1f2530] text-white"
+                    }`}>
+                      {item.status}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-soft sm:grid-cols-5">
+                    <span>รถ {item.totalCars.toLocaleString("th-TH")} คัน</span>
+                    <span>คอลัมน์ {item.columnCount.toLocaleString("th-TH")}</span>
+                    <span>Hidden {item.hiddenColumnCount.toLocaleString("th-TH")}</span>
+                    <span>เพิ่ม {item.diff?.added?.toLocaleString("th-TH") || "0"}</span>
+                    <span>ราคาเปลี่ยน {item.diff?.priceChanged?.toLocaleString("th-TH") || "0"}</span>
+                  </div>
+                </button>
+                {active ? (
+                  <div className="mt-3 space-y-3">
+                    {item.excludedReason ? <p className="rounded-lg border border-red-300/30 bg-red-950/20 px-3 py-2 text-xs text-red-100">{item.excludedReason}</p> : null}
+                    {[...(item.validation.errors || []), ...(item.validation.warnings || []), ...(item.diff?.warnings || [])].length ? (
+                      <div className="rounded-lg border border-amber-300/30 bg-amber-950/20 px-3 py-2 text-xs text-amber-100">
+                        {[...(item.validation.errors || []), ...(item.validation.warnings || []), ...(item.diff?.warnings || [])].map((warning) => <p key={warning}>{warning}</p>)}
+                      </div>
+                    ) : null}
+                    <div className="overflow-x-auto rounded-lg border border-line">
+                      <table className="min-w-[760px] w-full text-left text-xs text-soft">
+                        <thead className="bg-[#121923] text-white">
+                          <tr>
+                            <th className="px-3 py-2">ทะเบียน</th>
+                            <th className="px-3 py-2">รุ่น</th>
+                            <th className="px-3 py-2">ปี</th>
+                            <th className="px-3 py-2">สี</th>
+                            <th className="px-3 py-2">ราคา</th>
+                            <th className="px-3 py-2">สถานะ</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(item.previewRows || []).map((row) => (
+                            <tr key={`${item.id}-${row.plate}`} className="border-t border-line">
+                              <td className="px-3 py-2 font-bold text-white">{row.plate}</td>
+                              <td className="px-3 py-2">{[row.brand, row.model].filter(Boolean).join(" ") || "-"}</td>
+                              <td className="px-3 py-2">{row.year || "-"}</td>
+                              <td className="px-3 py-2">{row.color || "-"}</td>
+                              <td className="px-3 py-2">{row.salePrice || "-"}</td>
+                              <td className="px-3 py-2">{row.status || "-"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <button type="button" disabled={blocked} onClick={() => confirmStaging(item.id)} className="min-h-11 rounded-lg bg-brand px-4 font-black text-ink disabled:cursor-not-allowed disabled:opacity-40">
+                        Confirm Import
+                      </button>
+                      <button type="button" disabled={item.status === "Confirmed" || item.status === "Rejected"} onClick={() => rejectStaging(item.id)} className="min-h-11 rounded-lg border border-red-300/40 px-4 font-black text-red-100 disabled:opacity-40">
+                        Reject
+                      </button>
+                      <button type="button" onClick={() => setSelectedStagingId("")} className="min-h-11 rounded-lg border border-line px-4 font-black text-white">
+                        ปิด Preview
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            );
+          }) : (
+            <div className="rounded-lg border border-dashed border-line bg-[#0b0d11] p-5 text-center text-sm text-soft">
+              ยังไม่มีไฟล์ใน Staging
+            </div>
+          )}
+        </div>
+      </section>
 
       {(message || error) && (
         <div
