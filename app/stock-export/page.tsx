@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Columns3, Download, FileImage, Filter, Loader2, MessageCircle, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import { CheckCircle2, Columns3, Download, FileImage, Filter, Loader2, MessageCircle, Search } from "lucide-react";
 import {
   ActiveFilterTag,
   BottomSheet,
@@ -79,6 +79,8 @@ type AdvancedStockFilters = {
   inspections: string[];
   extendedWarranties: string[];
   pdiStatuses: string[];
+  pdiNotes: string[];
+  financeNames: string[];
   locations: string[];
   vehicleGroups: string[];
   customerName: string;
@@ -86,10 +88,14 @@ type AdvancedStockFilters = {
   plate: string;
   vin: string;
   engineNo: string;
+  mileageBands: string[];
   mileageMin: string;
   mileageMax: string;
   priceMin: string;
   priceMax: string;
+  agingMin: string;
+  agingMax: string;
+  customValues: Record<string, string[]>;
 };
 
 const emptyAdvancedFilters: AdvancedStockFilters = {
@@ -112,6 +118,8 @@ const emptyAdvancedFilters: AdvancedStockFilters = {
   inspections: [],
   extendedWarranties: [],
   pdiStatuses: [],
+  pdiNotes: [],
+  financeNames: [],
   locations: [],
   vehicleGroups: [],
   customerName: "",
@@ -119,13 +127,17 @@ const emptyAdvancedFilters: AdvancedStockFilters = {
   plate: "",
   vin: "",
   engineNo: "",
+  mileageBands: [],
   mileageMin: "",
   mileageMax: "",
   priceMin: "",
-  priceMax: ""
+  priceMax: "",
+  agingMin: "",
+  agingMax: "",
+  customValues: {}
 };
 
-type SortField = "location" | "ownership" | "reportReturnDate" | "agingGroup" | "aging" | "customerName" | "vehicleGroup" | "plate" | "colorGroup" | "project" | "campaign" | "closedSales" | "inspection" | "extendedWarranty" | "status" | "sellerName" | "bookingSaleDate" | "year" | "model" | "gear" | "color" | "mileage" | "price" | "pdiStatus" | "pdiNote";
+type SortField = "location" | "ownership" | "reportReturnDate" | "agingGroup" | "aging" | "customerName" | "vehicleGroup" | "plate" | "colorGroup" | "project" | "campaign" | "closedSales" | "inspection" | "extendedWarranty" | "status" | "sellerName" | "bookingSaleDate" | "year" | "model" | "gear" | "color" | "mileage" | "price" | "pdiStatus" | "pdiNote" | "vin" | "engineNo" | "financeName" | `custom:${string}`;
 type SortDirection = "asc" | "desc";
 type SortRule = { id: string; field: SortField; direction: SortDirection };
 type BaseExtraColumnKey = "ownership" | "reportReturnDate" | "agingGroup" | "aging" | "customerName" | "vehicleGroup" | "colorGroup" | "project" | "campaign" | "closedSales" | "inspection" | "extendedWarranty" | "status" | "sellerName" | "bookingSaleDate" | "pdiStatus" | "pdiNote" | "vin" | "engineNo" | "financeName";
@@ -266,9 +278,24 @@ function uniqueSorted(values: string[]) {
   return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, "th"));
 }
 
+const mileageBandOptions = [
+  { label: "0-30,000", min: 0, max: 30000 },
+  { label: "30,000-60,000", min: 30000, max: 60000 },
+  { label: "60,000-100,000", min: 60000, max: 100000 },
+  { label: "100,000+", min: 100000, max: Number.POSITIVE_INFINITY }
+];
+
+function matchesMileageBand(mileage: number, bandLabel: string) {
+  const band = mileageBandOptions.find((item) => item.label === bandLabel);
+  if (!band) return true;
+  if (band.max === Number.POSITIVE_INFINITY) return mileage >= band.min;
+  return mileage >= band.min && mileage <= band.max;
+}
+
 function countAdvancedFilters(filters: AdvancedStockFilters) {
   return Object.values(filters).reduce((count, value) => {
     if (Array.isArray(value)) return count + value.length;
+    if (value && typeof value === "object") return count + Object.values(value).reduce((sum, item) => sum + (Array.isArray(item) ? item.length : 0), 0);
     return count + (String(value || "").trim() ? 1 : 0);
   }, 0);
 }
@@ -294,6 +321,8 @@ function matchesAdvancedFiltersExcept(vehicle: StockVehicle, filters: AdvancedSt
   if (!ignored.has("inspections") && filters.inspections.length && !filters.inspections.includes(stockRawValue(vehicle, "inspection"))) return false;
   if (!ignored.has("extendedWarranties") && filters.extendedWarranties.length && !filters.extendedWarranties.includes(stockRawValue(vehicle, "extendedWarranty"))) return false;
   if (!ignored.has("pdiStatuses") && filters.pdiStatuses.length && !filters.pdiStatuses.includes(stockRawValue(vehicle, "pdiStatus"))) return false;
+  if (!ignored.has("pdiNotes") && filters.pdiNotes.length && !filters.pdiNotes.includes(pdiRemarkText(stockPdiRemark(vehicle)))) return false;
+  if (!ignored.has("financeNames") && filters.financeNames.length && !filters.financeNames.includes(financeName(vehicle))) return false;
   if (!ignored.has("locations") && filters.locations.length && !filters.locations.includes(vehicle.parkingLocation || "")) return false;
   if (!ignored.has("vehicleGroups") && filters.vehicleGroups.length && !filters.vehicleGroups.includes(stockVehicleGroup(vehicle) || "")) return false;
   if (!ignored.has("customerName") && filters.customerName && !normalizeText(stockRawValue(vehicle, "customerName")).includes(normalizeText(filters.customerName))) return false;
@@ -303,6 +332,7 @@ function matchesAdvancedFiltersExcept(vehicle: StockVehicle, filters: AdvancedSt
   if (!ignored.has("engineNo") && filters.engineNo && !normalizeText(engineNo(vehicle)).includes(normalizeText(filters.engineNo))) return false;
 
   const mileage = parseNumeric(vehicle.mileage);
+  if (!ignored.has("mileageBands") && filters.mileageBands.length && !filters.mileageBands.some((band) => matchesMileageBand(mileage, band))) return false;
   const mileageMin = parseNumeric(filters.mileageMin);
   const mileageMax = parseNumeric(filters.mileageMax);
   if (!ignored.has("mileageMin") && mileageMin && mileage < mileageMin) return false;
@@ -313,6 +343,12 @@ function matchesAdvancedFiltersExcept(vehicle: StockVehicle, filters: AdvancedSt
   const priceMax = parseNumeric(filters.priceMax);
   if (!ignored.has("priceMin") && priceMin && price < priceMin) return false;
   if (!ignored.has("priceMax") && priceMax && price > priceMax) return false;
+
+  const aging = parseNumeric(stockRawValue(vehicle, "aging"));
+  const agingMin = parseNumeric(filters.agingMin);
+  const agingMax = parseNumeric(filters.agingMax);
+  if (!ignored.has("agingMin") && agingMin && aging < agingMin) return false;
+  if (!ignored.has("agingMax") && agingMax && aging > agingMax) return false;
 
   const reportReturn = dateValue(stockRawValue(vehicle, "reportReturnDate"));
   const reportReturnFrom = dateValue(filters.reportReturnFrom);
@@ -325,6 +361,12 @@ function matchesAdvancedFiltersExcept(vehicle: StockVehicle, filters: AdvancedSt
   const bookingSaleTo = dateValue(filters.bookingSaleTo);
   if (!ignored.has("bookingSaleFrom") && bookingSaleFrom && bookingSale && bookingSale < bookingSaleFrom) return false;
   if (!ignored.has("bookingSaleTo") && bookingSaleTo && bookingSale && bookingSale > bookingSaleTo + 86400000 - 1) return false;
+
+  if (!ignored.has("customValues")) {
+    for (const [field, values] of Object.entries(filters.customValues || {})) {
+      if (values.length && !values.includes(defaultColumnValue(vehicle, `custom:${field}`))) return false;
+    }
+  }
 
   return true;
 }
@@ -355,6 +397,10 @@ function sortVehicleValue(vehicle: StockVehicle, field: SortField) {
   if (field === "color") return stockRawValue(vehicle, "color");
   if (field === "pdiStatus") return stockRawValue(vehicle, "pdiStatus");
   if (field === "pdiNote") return stockRawValue(vehicle, "pdiNote");
+  if (field === "vin") return vehicle.vin || "";
+  if (field === "engineNo") return engineNo(vehicle);
+  if (field === "financeName") return financeName(vehicle);
+  if (field.startsWith("custom:")) return defaultColumnValue(vehicle, field);
   return "";
 }
 
@@ -408,18 +454,25 @@ function normalizeAdvancedFilters(value: Partial<AdvancedStockFilters> | null | 
     "inspections",
     "extendedWarranties",
     "pdiStatuses",
+    "pdiNotes",
+    "financeNames",
     "locations",
-    "vehicleGroups"
+    "vehicleGroups",
+    "mileageBands"
   ];
   const next = { ...emptyAdvancedFilters, ...(value || {}) };
   arrayKeys.forEach((key) => {
     const current = next[key];
     (next as Record<string, unknown>)[key] = Array.isArray(current) ? current.filter(Boolean) : current ? [String(current)] : [];
   });
+  next.customValues = Object.entries(next.customValues || {}).reduce<Record<string, string[]>>((mapped, [key, values]) => {
+    mapped[key] = Array.isArray(values) ? values.filter(Boolean) : [];
+    return mapped;
+  }, {});
   return next;
 }
 
-const sortFieldLabels: Record<SortField, string> = {
+const sortFieldLabels: Record<string, string> = {
   location: realStockFieldLabels.location,
   ownership: realStockFieldLabels.ownership,
   reportReturnDate: realStockFieldLabels.reportReturnDate,
@@ -444,8 +497,15 @@ const sortFieldLabels: Record<SortField, string> = {
   mileage: realStockFieldLabels.mileage,
   price: realStockFieldLabels.salePrice,
   pdiStatus: realStockFieldLabels.pdiStatus,
-  pdiNote: realStockFieldLabels.pdiNote
+  pdiNote: realStockFieldLabels.pdiNote,
+  vin: realStockFieldLabels.vin,
+  engineNo: realStockFieldLabels.engineNo,
+  financeName: realStockFieldLabels.financeName
 };
+
+function sortFieldLabel(field: SortField) {
+  return sortFieldLabels[field] || extraColumnLabel(field as ExtraColumnKey) || String(field);
+}
 
 const extraColumnLabels: Record<BaseExtraColumnKey, string> = {
   ownership: realStockFieldLabels.ownership,
@@ -690,10 +750,21 @@ export default function StockExportPage() {
       inspections: uniqueSorted(optionValues(["inspections"]).map((vehicle) => stockRawValue(vehicle, "inspection"))),
       extendedWarranties: uniqueSorted(optionValues(["extendedWarranties"]).map((vehicle) => stockRawValue(vehicle, "extendedWarranty"))),
       pdiStatuses: uniqueSorted(optionValues(["pdiStatuses"]).map((vehicle) => stockRawValue(vehicle, "pdiStatus"))),
+      pdiNotes: uniqueSorted(optionValues(["pdiNotes"]).map((vehicle) => pdiRemarkText(stockPdiRemark(vehicle))).filter((value) => value !== "-")),
+      financeNames: uniqueSorted(optionValues(["financeNames"]).map((vehicle) => financeName(vehicle))),
       locations: uniqueSorted(optionValues(["locations"]).map((vehicle) => vehicle.parkingLocation || "")),
       vehicleGroups: uniqueSorted(optionValues(["vehicleGroups"]).map((vehicle) => stockVehicleGroup(vehicle) || ""))
     };
   }, [advancedFilters, groupMatchedVehicles]);
+
+  const customFieldOptions = useMemo(() => {
+    return extraColumns.reduce<Record<string, string[]>>((options, key) => {
+      const customName = customExtraColumnName(key);
+      if (!customName) return options;
+      options[customName] = uniqueSorted(groupMatchedVehicles.map((vehicle) => defaultColumnValue(vehicle, key)).filter((value) => value !== "-"));
+      return options;
+    }, {});
+  }, [extraColumns, groupMatchedVehicles]);
 
   const availableExtraColumns = useMemo(() => {
     const keys = Object.keys(extraColumnLabels) as BaseExtraColumnKey[];
@@ -860,55 +931,32 @@ export default function StockExportPage() {
     });
   }
 
-  function addSortRule() {
-    setSortRules((current) => [...current, { id: `sort-${Date.now()}`, field: "location", direction: "asc" }]);
+  function toggleCustomFilterValue(field: string, value: string) {
+    setAdvancedFilters((current) => {
+      const values = current.customValues[field] || [];
+      const nextValues = values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
+      return { ...current, customValues: { ...current.customValues, [field]: nextValues } };
+    });
   }
 
-  function updateSortRule(id: string, patch: Partial<SortRule>) {
-    setSortRules((current) => current.map((rule) => (rule.id === id ? { ...rule, ...patch } : rule)));
+  function clearCustomFilter(field: string) {
+    setAdvancedFilters((current) => {
+      const next = { ...current.customValues };
+      delete next[field];
+      return { ...current, customValues: next };
+    });
   }
 
-  function removeSortRule(id: string) {
-    setSortRules((current) => current.filter((rule) => rule.id !== id));
+  function setFieldSort(field: SortField, direction: SortDirection) {
+    setSortRules([{ id: `sort-${field}`, field, direction }]);
   }
 
-  function saveFilterPreset() {
-    const name = presetName.trim();
-    if (!name) {
-      setError("กรุณาตั้งชื่อชุดตัวกรองก่อนบันทึก");
-      return;
-    }
-    const nextPreset: FilterPreset = {
-      id: `preset-${Date.now()}`,
-      name,
-      filters: advancedFilters,
-      statuses: selectedStatuses,
-      groups: selectedVehicleGroups,
-      pdi: pdiRemarkFilter,
-      sorts: sortRules,
-      columns: extraColumns
-    };
-    const next = [nextPreset, ...filterPresets].slice(0, 12);
-    setFilterPresets(next);
-    window.localStorage.setItem("bigcar-stock-filter-presets", JSON.stringify(next));
-    setPresetName("");
-    setMessage(`บันทึกชุดตัวกรอง "${name}" แล้ว`);
+  function clearFieldSort(field: SortField) {
+    setSortRules((current) => current.filter((rule) => rule.field !== field));
   }
 
-  function applyFilterPreset(preset: FilterPreset) {
-    setAdvancedFilters(normalizeAdvancedFilters(preset.filters));
-    setSelectedStatuses(preset.statuses || []);
-    setSelectedVehicleGroups(preset.groups || []);
-    setPdiRemarkFilter(preset.pdi || "all");
-    setSortRules(preset.sorts || []);
-    setExtraColumns(preset.columns || []);
-    setAdvancedOpen(false);
-  }
-
-  function deleteFilterPreset(id: string) {
-    const next = filterPresets.filter((preset) => preset.id !== id);
-    setFilterPresets(next);
-    window.localStorage.setItem("bigcar-stock-filter-presets", JSON.stringify(next));
+  function fieldSortDirection(field: SortField) {
+    return sortRules.find((rule) => rule.field === field)?.direction || "";
   }
 
   async function exportImage(format: ExportFormat) {
@@ -1152,6 +1200,8 @@ export default function StockExportPage() {
                 {advancedFilters.ownerships.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("ownerships")}>กรรมสิทธิ์: {advancedFilters.ownerships.join(", ")}</ActiveFilterTag>}
                 {advancedFilters.projects.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("projects")}>PROJECT: {advancedFilters.projects.join(", ")}</ActiveFilterTag>}
                 {advancedFilters.campaigns.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("campaigns")}>CAMPAIGN: {advancedFilters.campaigns.join(", ")}</ActiveFilterTag>}
+                {advancedFilters.financeNames.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("financeNames")}>ไฟแนนซ์: {advancedFilters.financeNames.join(", ")}</ActiveFilterTag>}
+                {advancedFilters.pdiNotes.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("pdiNotes")}>หมายเหตุ PDI: {advancedFilters.pdiNotes.join(", ")}</ActiveFilterTag>}
                 {advancedFilters.locations.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("locations")}>Location: {advancedFilters.locations.join(", ")}</ActiveFilterTag>}
                 {advancedFilters.vehicleGroups.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("vehicleGroups")}>กลุ่มรถยนต์: {advancedFilters.vehicleGroups.join(", ")}</ActiveFilterTag>}
                 {advancedFilters.customerName && <ActiveFilterTag onRemove={() => clearAdvancedFilter("customerName")}>ชื่อลูกค้า: {advancedFilters.customerName}</ActiveFilterTag>}
@@ -1169,12 +1219,13 @@ export default function StockExportPage() {
                     วันที่จอง/ขาย: {advancedFilters.bookingSaleFrom || "เริ่มต้น"}-{advancedFilters.bookingSaleTo || "ล่าสุด"}
                   </ActiveFilterTag>
                 ) : null}
-                {sortRules.length > 0 && <ActiveFilterTag onRemove={() => setSortRules([])}>Sort: {sortRules.map((rule) => `${sortFieldLabels[rule.field]} ${rule.direction === "asc" ? "น้อย→มาก" : "มาก→น้อย"}`).join(" / ")}</ActiveFilterTag>}
+                {sortRules.length > 0 && <ActiveFilterTag onRemove={() => setSortRules([])}>Sort: {sortRules.map((rule) => `${sortFieldLabel(rule.field)} ${rule.direction === "asc" ? "น้อย→มาก" : "มาก→น้อย"}`).join(" / ")}</ActiveFilterTag>}
                 {pdiRemarkFilter !== "all" && (
                   <ActiveFilterTag onRemove={() => setPdiRemarkFilter("all")}>
                     หมายเหตุ PDI: {pdiRemarkFilter === "has" ? "มีหมายเหตุ" : "ไม่มีหมายเหตุ"}
                   </ActiveFilterTag>
                 )}
+                {advancedFilters.mileageBands.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("mileageBands")}>ช่วงไมล์: {advancedFilters.mileageBands.join(", ")}</ActiveFilterTag>}
                 {(advancedFilters.mileageMin || advancedFilters.mileageMax) && (
                   <ActiveFilterTag
                     onRemove={() => setAdvancedFilters((current) => ({ ...current, mileageMin: "", mileageMax: "" }))}
@@ -1189,6 +1240,18 @@ export default function StockExportPage() {
                     ราคา: {advancedFilters.priceMin || "0"}-{advancedFilters.priceMax || "∞"}
                   </ActiveFilterTag>
                 )}
+                {(advancedFilters.agingMin || advancedFilters.agingMax) && (
+                  <ActiveFilterTag
+                    onRemove={() => setAdvancedFilters((current) => ({ ...current, agingMin: "", agingMax: "" }))}
+                  >
+                    Aging: {advancedFilters.agingMin || "0"}-{advancedFilters.agingMax || "∞"}
+                  </ActiveFilterTag>
+                )}
+                {Object.entries(advancedFilters.customValues).map(([field, values]) => values.length ? (
+                  <ActiveFilterTag key={`custom-${field}`} onRemove={() => clearCustomFilter(field)}>
+                    {field}: {values.join(", ")}
+                  </ActiveFilterTag>
+                ) : null)}
                 <button type="button" onClick={clearFilters} className="min-h-8 rounded-full border border-line px-3 text-xs font-bold text-soft transition hover:border-brand hover:text-white">
                   ล้างทั้งหมด
                 </button>
@@ -1519,95 +1582,161 @@ export default function StockExportPage() {
         }
       >
         <FilterAccordion title="ข้อมูลรถ" defaultOpen>
-          <MultiFilter label="Location" values={advancedFilters.locations} options={advancedOptions.locations} onToggle={(value) => toggleAdvancedValue("locations", value)} onClear={() => clearAdvancedFilter("locations")} />
-          <MultiFilter label="กลุ่มรถยนต์" values={advancedFilters.vehicleGroups} options={advancedOptions.vehicleGroups} onToggle={(value) => toggleAdvancedValue("vehicleGroups", value)} onClear={() => clearAdvancedFilter("vehicleGroups")} />
-          <MultiFilter label="รุ่นรถยนต์" values={advancedFilters.models} options={advancedOptions.models} onToggle={(value) => toggleAdvancedValue("models", value)} onClear={() => clearAdvancedFilter("models")} />
+          <FieldFilterShell sort={<FieldSortButtons field="location" direction={fieldSortDirection("location")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+            <MultiFilter label="Location" values={advancedFilters.locations} options={advancedOptions.locations} onToggle={(value) => toggleAdvancedValue("locations", value)} onClear={() => clearAdvancedFilter("locations")} />
+          </FieldFilterShell>
+          <FieldFilterShell sort={<FieldSortButtons field="vehicleGroup" direction={fieldSortDirection("vehicleGroup")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+            <MultiFilter label="กลุ่มรถยนต์" values={advancedFilters.vehicleGroups} options={advancedOptions.vehicleGroups} onToggle={(value) => toggleAdvancedValue("vehicleGroups", value)} onClear={() => clearAdvancedFilter("vehicleGroups")} />
+          </FieldFilterShell>
+          <FieldFilterShell sort={<FieldSortButtons field="model" direction={fieldSortDirection("model")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+            <MultiFilter label="รุ่นรถยนต์" values={advancedFilters.models} options={advancedOptions.models} onToggle={(value) => toggleAdvancedValue("models", value)} onClear={() => clearAdvancedFilter("models")} />
+          </FieldFilterShell>
           <div className="grid gap-3 sm:grid-cols-2">
-            <AdvancedTextField label="ทะเบียน" value={advancedFilters.plate} onChange={(value) => setAdvancedFilter("plate", value)} placeholder="contains" />
-            {hasStockFieldData(vehicles, "vin") ? <AdvancedTextField label="เลขตัวถัง (optional)" value={advancedFilters.vin} onChange={(value) => setAdvancedFilter("vin", value)} placeholder="contains" /> : null}
-            {hasStockFieldData(vehicles, "engineNo") ? <AdvancedTextField label="เลขเครื่อง (optional)" value={advancedFilters.engineNo} onChange={(value) => setAdvancedFilter("engineNo", value)} placeholder="contains" /> : null}
+            <FieldFilterShell sort={<FieldSortButtons field="plate" direction={fieldSortDirection("plate")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+              <AdvancedTextField label="ทะเบียน" value={advancedFilters.plate} onChange={(value) => setAdvancedFilter("plate", value)} placeholder="contains" />
+            </FieldFilterShell>
+            {hasStockFieldData(vehicles, "vin") ? (
+              <FieldFilterShell sort={<FieldSortButtons field="vin" direction={fieldSortDirection("vin")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+                <AdvancedTextField label="เลขตัวถัง (optional)" value={advancedFilters.vin} onChange={(value) => setAdvancedFilter("vin", value)} placeholder="contains" />
+              </FieldFilterShell>
+            ) : null}
+            {hasStockFieldData(vehicles, "engineNo") ? (
+              <FieldFilterShell sort={<FieldSortButtons field="engineNo" direction={fieldSortDirection("engineNo")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+                <AdvancedTextField label="เลขเครื่อง (optional)" value={advancedFilters.engineNo} onChange={(value) => setAdvancedFilter("engineNo", value)} placeholder="contains" />
+              </FieldFilterShell>
+            ) : null}
           </div>
         </FilterAccordion>
         <FilterAccordion title="ราคา / ไมล์ / ปี">
           <div className="grid gap-3 sm:grid-cols-2">
-            <MultiFilter label="ปีจด" values={advancedFilters.years} options={advancedOptions.years} onToggle={(value) => toggleAdvancedValue("years", value)} onClear={() => clearAdvancedFilter("years")} />
-            <MultiFilter label="สี" values={advancedFilters.colors} options={advancedOptions.colors} onToggle={(value) => toggleAdvancedValue("colors", value)} onClear={() => clearAdvancedFilter("colors")} />
+            <FieldFilterShell sort={<FieldSortButtons field="year" direction={fieldSortDirection("year")} onSort={setFieldSort} onClear={clearFieldSort} ascLabel="เก่า→ใหม่" descLabel="ใหม่→เก่า" />}>
+              <MultiFilter label="ปีจด" values={advancedFilters.years} options={advancedOptions.years} onToggle={(value) => toggleAdvancedValue("years", value)} onClear={() => clearAdvancedFilter("years")} />
+            </FieldFilterShell>
+            <FieldFilterShell sort={<FieldSortButtons field="color" direction={fieldSortDirection("color")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+              <MultiFilter label="สี" values={advancedFilters.colors} options={advancedOptions.colors} onToggle={(value) => toggleAdvancedValue("colors", value)} onClear={() => clearAdvancedFilter("colors")} />
+            </FieldFilterShell>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <MultiFilter label="กลุ่มสี" values={advancedFilters.colorGroups} options={advancedOptions.colorGroups} onToggle={(value) => toggleAdvancedValue("colorGroups", value)} onClear={() => clearAdvancedFilter("colorGroups")} />
-            <MultiFilter label="เกียร์" values={advancedFilters.gears} options={advancedOptions.gears} onToggle={(value) => toggleAdvancedValue("gears", value)} onClear={() => clearAdvancedFilter("gears")} />
+            <FieldFilterShell sort={<FieldSortButtons field="colorGroup" direction={fieldSortDirection("colorGroup")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+              <MultiFilter label="กลุ่มสี" values={advancedFilters.colorGroups} options={advancedOptions.colorGroups} onToggle={(value) => toggleAdvancedValue("colorGroups", value)} onClear={() => clearAdvancedFilter("colorGroups")} />
+            </FieldFilterShell>
+            <FieldFilterShell sort={<FieldSortButtons field="gear" direction={fieldSortDirection("gear")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+              <MultiFilter label="เกียร์" values={advancedFilters.gears} options={advancedOptions.gears} onToggle={(value) => toggleAdvancedValue("gears", value)} onClear={() => clearAdvancedFilter("gears")} />
+            </FieldFilterShell>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <AdvancedTextField label="เลขไมล์ต่ำสุด" value={advancedFilters.mileageMin} onChange={(value) => setAdvancedFilter("mileageMin", value)} placeholder="เช่น 50000" inputMode="numeric" />
-            <AdvancedTextField label="เลขไมล์สูงสุด" value={advancedFilters.mileageMax} onChange={(value) => setAdvancedFilter("mileageMax", value)} placeholder="เช่น 150000" inputMode="numeric" />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <AdvancedTextField label="ราคาเสนอขายRT ต่ำสุด" value={advancedFilters.priceMin} onChange={(value) => setAdvancedFilter("priceMin", value)} placeholder="เช่น 300000" inputMode="numeric" />
-            <AdvancedTextField label="ราคาเสนอขายRT สูงสุด" value={advancedFilters.priceMax} onChange={(value) => setAdvancedFilter("priceMax", value)} placeholder="เช่น 800000" inputMode="numeric" />
-          </div>
+          <FieldFilterShell sort={<FieldSortButtons field="mileage" direction={fieldSortDirection("mileage")} onSort={setFieldSort} onClear={clearFieldSort} ascLabel="น้อย→มาก" descLabel="มาก→น้อย" />}>
+            <MultiFilter label="เลขไมล์แบบช่วง" values={advancedFilters.mileageBands} options={mileageBandOptions.map((option) => option.label)} onToggle={(value) => toggleAdvancedValue("mileageBands", value)} onClear={() => clearAdvancedFilter("mileageBands")} />
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <AdvancedTextField label="เลขไมล์ต่ำสุด" value={advancedFilters.mileageMin} onChange={(value) => setAdvancedFilter("mileageMin", value)} placeholder="เช่น 50000" inputMode="numeric" />
+              <AdvancedTextField label="เลขไมล์สูงสุด" value={advancedFilters.mileageMax} onChange={(value) => setAdvancedFilter("mileageMax", value)} placeholder="เช่น 150000" inputMode="numeric" />
+            </div>
+          </FieldFilterShell>
+          <FieldFilterShell sort={<FieldSortButtons field="price" direction={fieldSortDirection("price")} onSort={setFieldSort} onClear={clearFieldSort} ascLabel="ต่ำ→สูง" descLabel="สูง→ต่ำ" />}>
+            <div className="grid grid-cols-2 gap-2">
+              <AdvancedTextField label="ราคาเสนอขายRT ต่ำสุด" value={advancedFilters.priceMin} onChange={(value) => setAdvancedFilter("priceMin", value)} placeholder="เช่น 300000" inputMode="numeric" />
+              <AdvancedTextField label="ราคาเสนอขายRT สูงสุด" value={advancedFilters.priceMax} onChange={(value) => setAdvancedFilter("priceMax", value)} placeholder="เช่น 800000" inputMode="numeric" />
+            </div>
+          </FieldFilterShell>
         </FilterAccordion>
         <FilterAccordion title="สถานะ">
-          <MultiFilter label="สถานะ" values={advancedFilters.statuses} options={advancedOptions.statuses} onToggle={(value) => toggleAdvancedValue("statuses", value)} onClear={() => clearAdvancedFilter("statuses")} />
-          <MultiFilter label="กรรมสิทธิ์" values={advancedFilters.ownerships} options={advancedOptions.ownerships} onToggle={(value) => toggleAdvancedValue("ownerships", value)} onClear={() => clearAdvancedFilter("ownerships")} />
+          <FieldFilterShell sort={<FieldSortButtons field="status" direction={fieldSortDirection("status")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+            <MultiFilter label="สถานะ" values={advancedFilters.statuses} options={advancedOptions.statuses} onToggle={(value) => toggleAdvancedValue("statuses", value)} onClear={() => clearAdvancedFilter("statuses")} />
+          </FieldFilterShell>
+          <FieldFilterShell sort={<FieldSortButtons field="ownership" direction={fieldSortDirection("ownership")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+            <MultiFilter label="กรรมสิทธิ์" values={advancedFilters.ownerships} options={advancedOptions.ownerships} onToggle={(value) => toggleAdvancedValue("ownerships", value)} onClear={() => clearAdvancedFilter("ownerships")} />
+          </FieldFilterShell>
           <div className="grid gap-3 sm:grid-cols-2">
-            <MultiFilter label="PROJECT" values={advancedFilters.projects} options={advancedOptions.projects} onToggle={(value) => toggleAdvancedValue("projects", value)} onClear={() => clearAdvancedFilter("projects")} />
-            <MultiFilter label="CAMPAIGN" values={advancedFilters.campaigns} options={advancedOptions.campaigns} onToggle={(value) => toggleAdvancedValue("campaigns", value)} onClear={() => clearAdvancedFilter("campaigns")} />
+            <FieldFilterShell sort={<FieldSortButtons field="project" direction={fieldSortDirection("project")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+              <MultiFilter label="PROJECT" values={advancedFilters.projects} options={advancedOptions.projects} onToggle={(value) => toggleAdvancedValue("projects", value)} onClear={() => clearAdvancedFilter("projects")} />
+            </FieldFilterShell>
+            <FieldFilterShell sort={<FieldSortButtons field="campaign" direction={fieldSortDirection("campaign")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+              <MultiFilter label="CAMPAIGN" values={advancedFilters.campaigns} options={advancedOptions.campaigns} onToggle={(value) => toggleAdvancedValue("campaigns", value)} onClear={() => clearAdvancedFilter("campaigns")} />
+            </FieldFilterShell>
           </div>
         </FilterAccordion>
         <FilterAccordion title="ลูกค้า / ผู้ขาย">
           <div className="grid gap-3 sm:grid-cols-2">
-            <AdvancedTextField label="ชื่อลูกค้า" value={advancedFilters.customerName} onChange={(value) => setAdvancedFilter("customerName", value)} placeholder="contains" />
-            <AdvancedTextField label="ชื่อผู้ขาย" value={advancedFilters.sellerName} onChange={(value) => setAdvancedFilter("sellerName", value)} placeholder="contains" />
+            <FieldFilterShell sort={<FieldSortButtons field="customerName" direction={fieldSortDirection("customerName")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+              <AdvancedTextField label="ชื่อลูกค้า" value={advancedFilters.customerName} onChange={(value) => setAdvancedFilter("customerName", value)} placeholder="contains" />
+            </FieldFilterShell>
+            <FieldFilterShell sort={<FieldSortButtons field="sellerName" direction={fieldSortDirection("sellerName")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+              <AdvancedTextField label="ชื่อผู้ขาย" value={advancedFilters.sellerName} onChange={(value) => setAdvancedFilter("sellerName", value)} placeholder="contains" />
+            </FieldFilterShell>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <MultiFilter label="Closed Sales" values={advancedFilters.closedSales} options={advancedOptions.closedSales} onToggle={(value) => toggleAdvancedValue("closedSales", value)} onClear={() => clearAdvancedFilter("closedSales")} />
-            <MultiFilter label="กลุ่มAging" values={advancedFilters.agingGroups} options={advancedOptions.agingGroups} onToggle={(value) => toggleAdvancedValue("agingGroups", value)} onClear={() => clearAdvancedFilter("agingGroups")} />
+            <FieldFilterShell sort={<FieldSortButtons field="closedSales" direction={fieldSortDirection("closedSales")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+              <MultiFilter label="Closed Sales" values={advancedFilters.closedSales} options={advancedOptions.closedSales} onToggle={(value) => toggleAdvancedValue("closedSales", value)} onClear={() => clearAdvancedFilter("closedSales")} />
+            </FieldFilterShell>
+            <FieldFilterShell sort={<FieldSortButtons field="agingGroup" direction={fieldSortDirection("agingGroup")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+              <MultiFilter label="กลุ่มAging" values={advancedFilters.agingGroups} options={advancedOptions.agingGroups} onToggle={(value) => toggleAdvancedValue("agingGroups", value)} onClear={() => clearAdvancedFilter("agingGroups")} />
+            </FieldFilterShell>
           </div>
-          <MultiFilter label="Aging" values={advancedFilters.agings} options={advancedOptions.agings} onToggle={(value) => toggleAdvancedValue("agings", value)} onClear={() => clearAdvancedFilter("agings")} />
+          <FieldFilterShell sort={<FieldSortButtons field="aging" direction={fieldSortDirection("aging")} onSort={setFieldSort} onClear={clearFieldSort} ascLabel="น้อย→มาก" descLabel="มาก→น้อย" />}>
+            <MultiFilter label="Aging" values={advancedFilters.agings} options={advancedOptions.agings} onToggle={(value) => toggleAdvancedValue("agings", value)} onClear={() => clearAdvancedFilter("agings")} />
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <AdvancedTextField label="Aging ต่ำสุด" value={advancedFilters.agingMin} onChange={(value) => setAdvancedFilter("agingMin", value)} placeholder="เช่น 30" inputMode="numeric" />
+              <AdvancedTextField label="Aging สูงสุด" value={advancedFilters.agingMax} onChange={(value) => setAdvancedFilter("agingMax", value)} placeholder="เช่น 90" inputMode="numeric" />
+            </div>
+          </FieldFilterShell>
         </FilterAccordion>
         <FilterAccordion title="วันที่">
-          <div className="grid grid-cols-2 gap-2">
-            <AdvancedTextField label="วันที่รับรายงานคืน จาก" value={advancedFilters.reportReturnFrom} onChange={(value) => setAdvancedFilter("reportReturnFrom", value)} inputType="date" />
-            <AdvancedTextField label="วันที่รับรายงานคืน ถึง" value={advancedFilters.reportReturnTo} onChange={(value) => setAdvancedFilter("reportReturnTo", value)} inputType="date" />
-            <AdvancedTextField label="วันที่จอง/ขาย จาก" value={advancedFilters.bookingSaleFrom} onChange={(value) => setAdvancedFilter("bookingSaleFrom", value)} inputType="date" />
-            <AdvancedTextField label="วันที่จอง/ขาย ถึง" value={advancedFilters.bookingSaleTo} onChange={(value) => setAdvancedFilter("bookingSaleTo", value)} inputType="date" />
-          </div>
+          <FieldFilterShell sort={<FieldSortButtons field="reportReturnDate" direction={fieldSortDirection("reportReturnDate")} onSort={setFieldSort} onClear={clearFieldSort} ascLabel="เก่าสุด" descLabel="ใหม่สุด" />}>
+            <div className="grid grid-cols-2 gap-2">
+              <AdvancedTextField label="วันที่รับรายงานคืน จาก" value={advancedFilters.reportReturnFrom} onChange={(value) => setAdvancedFilter("reportReturnFrom", value)} inputType="date" />
+              <AdvancedTextField label="วันที่รับรายงานคืน ถึง" value={advancedFilters.reportReturnTo} onChange={(value) => setAdvancedFilter("reportReturnTo", value)} inputType="date" />
+            </div>
+          </FieldFilterShell>
+          <FieldFilterShell sort={<FieldSortButtons field="bookingSaleDate" direction={fieldSortDirection("bookingSaleDate")} onSort={setFieldSort} onClear={clearFieldSort} ascLabel="เก่าสุด" descLabel="ใหม่สุด" />}>
+            <div className="grid grid-cols-2 gap-2">
+              <AdvancedTextField label="วันที่จอง/ขาย จาก" value={advancedFilters.bookingSaleFrom} onChange={(value) => setAdvancedFilter("bookingSaleFrom", value)} inputType="date" />
+              <AdvancedTextField label="วันที่จอง/ขาย ถึง" value={advancedFilters.bookingSaleTo} onChange={(value) => setAdvancedFilter("bookingSaleTo", value)} inputType="date" />
+            </div>
+          </FieldFilterShell>
         </FilterAccordion>
         <FilterAccordion title="PDI / Inspection / Warranty">
           <div className="grid gap-3 sm:grid-cols-2">
-            <MultiFilter label="Inspection" values={advancedFilters.inspections} options={advancedOptions.inspections} onToggle={(value) => toggleAdvancedValue("inspections", value)} onClear={() => clearAdvancedFilter("inspections")} />
-            <MultiFilter label="Extended Warranty" values={advancedFilters.extendedWarranties} options={advancedOptions.extendedWarranties} onToggle={(value) => toggleAdvancedValue("extendedWarranties", value)} onClear={() => clearAdvancedFilter("extendedWarranties")} />
+            <FieldFilterShell sort={<FieldSortButtons field="inspection" direction={fieldSortDirection("inspection")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+              <MultiFilter label="Inspection" values={advancedFilters.inspections} options={advancedOptions.inspections} onToggle={(value) => toggleAdvancedValue("inspections", value)} onClear={() => clearAdvancedFilter("inspections")} />
+            </FieldFilterShell>
+            <FieldFilterShell sort={<FieldSortButtons field="extendedWarranty" direction={fieldSortDirection("extendedWarranty")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+              <MultiFilter label="Extended Warranty" values={advancedFilters.extendedWarranties} options={advancedOptions.extendedWarranties} onToggle={(value) => toggleAdvancedValue("extendedWarranties", value)} onClear={() => clearAdvancedFilter("extendedWarranties")} />
+            </FieldFilterShell>
           </div>
-          <MultiFilter label="สถานะปรับสภาพ PDI" values={advancedFilters.pdiStatuses} options={advancedOptions.pdiStatuses} onToggle={(value) => toggleAdvancedValue("pdiStatuses", value)} onClear={() => clearAdvancedFilter("pdiStatuses")} />
-        </FilterAccordion>
-        <SortPanel rules={sortRules} onAdd={addSortRule} onUpdate={updateSortRule} onRemove={removeSortRule} onClear={() => setSortRules([])} />
-        <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
-          <p className="mb-2 text-sm font-bold text-white">Save Filter Preset</p>
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-            <input value={presetName} onChange={(event) => setPresetName(event.target.value)} placeholder="เช่น รถไมล์น้อย / Revo ปี 2020" className="h-11 rounded-lg border border-line bg-black/30 px-3 text-white outline-none focus:border-brand" />
-            <button type="button" onClick={saveFilterPreset} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-4 font-black text-ink">
-              <Save size={17} />
-              บันทึก
-            </button>
-          </div>
-          {filterPresets.length ? (
-            <div className="mt-3 grid gap-2">
-              {filterPresets.map((preset) => (
-                <div key={preset.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-2 rounded-lg border border-line bg-black/20 p-2">
-                  <button type="button" onClick={() => applyFilterPreset(preset)} className="min-h-9 text-left text-sm font-bold text-white">
-                    {preset.name}
-                  </button>
-                  <button type="button" onClick={() => applyFilterPreset(preset)} className="min-h-9 rounded-lg border border-brand/40 px-3 text-xs font-bold text-brand">
-                    ใช้
-                  </button>
-                  <button type="button" onClick={() => deleteFilterPreset(preset.id)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-red-300/30 text-red-100">
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              ))}
-            </div>
+          <FieldFilterShell sort={<FieldSortButtons field="pdiStatus" direction={fieldSortDirection("pdiStatus")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+            <MultiFilter label="สถานะปรับสภาพ PDI" values={advancedFilters.pdiStatuses} options={advancedOptions.pdiStatuses} onToggle={(value) => toggleAdvancedValue("pdiStatuses", value)} onClear={() => clearAdvancedFilter("pdiStatuses")} />
+          </FieldFilterShell>
+          {extraColumns.includes("pdiNote") ? (
+            <FieldFilterShell sort={<FieldSortButtons field="pdiNote" direction={fieldSortDirection("pdiNote")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+              <MultiFilter label="หมายเหตุ PDI" values={advancedFilters.pdiNotes} options={advancedOptions.pdiNotes} onToggle={(value) => toggleAdvancedValue("pdiNotes", value)} onClear={() => clearAdvancedFilter("pdiNotes")} />
+            </FieldFilterShell>
           ) : null}
-        </div>
+          {extraColumns.includes("financeName") ? (
+            <FieldFilterShell sort={<FieldSortButtons field="financeName" direction={fieldSortDirection("financeName")} onSort={setFieldSort} onClear={clearFieldSort} />}>
+              <MultiFilter label="ไฟแนนซ์" values={advancedFilters.financeNames} options={advancedOptions.financeNames} onToggle={(value) => toggleAdvancedValue("financeNames", value)} onClear={() => clearAdvancedFilter("financeNames")} />
+            </FieldFilterShell>
+          ) : null}
+        </FilterAccordion>
+        {extraColumns.some((key) => customExtraColumnName(key)) ? (
+          <FilterAccordion title="ข้อมูลที่เลือกแสดงเพิ่ม">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {extraColumns.map((key) => {
+                const customName = customExtraColumnName(key);
+                if (!customName) return null;
+                return (
+                  <FieldFilterShell key={key} sort={<FieldSortButtons field={key as SortField} direction={fieldSortDirection(key as SortField)} onSort={setFieldSort} onClear={clearFieldSort} />}>
+                    <MultiFilter
+                      label={customName}
+                      values={advancedFilters.customValues[customName] || []}
+                      options={customFieldOptions[customName] || []}
+                      onToggle={(value) => toggleCustomFilterValue(customName, value)}
+                      onClear={() => clearCustomFilter(customName)}
+                    />
+                  </FieldFilterShell>
+                );
+              })}
+            </div>
+          </FilterAccordion>
+        ) : null}
       </BottomSheet>
 
       <BottomSheet
@@ -1798,115 +1927,53 @@ function MultiFilter({
   );
 }
 
-function SortPanel({
-  rules,
-  onAdd,
-  onUpdate,
-  onRemove,
-  onClear
-}: {
-  rules: SortRule[];
-  onAdd: () => void;
-  onUpdate: (id: string, patch: Partial<SortRule>) => void;
-  onRemove: (id: string) => void;
-  onClear: () => void;
-}) {
+function FieldFilterShell({ children, sort }: { children: ReactNode; sort?: ReactNode }) {
   return (
-    <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-sm font-bold text-white">
-          <SlidersHorizontal size={16} className="text-brand" />
-          Sort แบบ Excel / Multi Sort
-        </p>
-        {rules.length ? <button type="button" onClick={onClear} className="text-xs font-bold text-brand">ล้าง Sort</button> : null}
-      </div>
-      <div className="space-y-2">
-        {rules.map((rule, index) => (
-          <div key={rule.id} className="grid grid-cols-[auto_1fr_1fr_auto] items-center gap-2">
-            <span className="text-xs font-black text-soft">#{index + 1}</span>
-            <select value={rule.field} onChange={(event) => onUpdate(rule.id, { field: event.target.value as SortField })} className="h-10 rounded-lg border border-line bg-black/30 px-2 text-sm text-white">
-              {(Object.keys(sortFieldLabels) as SortField[]).map((field) => (
-                <option key={field} value={field}>{sortFieldLabels[field]}</option>
-              ))}
-            </select>
-            <select value={rule.direction} onChange={(event) => onUpdate(rule.id, { direction: event.target.value as SortDirection })} className="h-10 rounded-lg border border-line bg-black/30 px-2 text-sm text-white">
-              <option value="asc">น้อยไปมาก / A-Z</option>
-              <option value="desc">มากไปน้อย / Z-A</option>
-            </select>
-            <button type="button" onClick={() => onRemove(rule.id)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-red-300/30 text-red-100">
-              <Trash2 size={15} />
-            </button>
-          </div>
-        ))}
-      </div>
-      <button type="button" onClick={onAdd} className="mt-2 min-h-10 w-full rounded-lg border border-brand/40 bg-brand/10 px-3 text-sm font-bold text-brand">
-        เพิ่มชั้น Sort
-      </button>
+    <div className="rounded-xl border border-line bg-black/15 p-2">
+      {children}
+      {sort ? <div className="mt-2">{sort}</div> : null}
     </div>
   );
 }
 
-function AdvancedSelect({
-  label,
-  value,
-  options,
-  onChange
+function FieldSortButtons({
+  field,
+  direction,
+  ascLabel = "ก-ฮ / น้อย→มาก",
+  descLabel = "ฮ-ก / มาก→น้อย",
+  onSort,
+  onClear
 }: {
-  label: string;
-  value: string;
-  options: string[];
-  onChange: (value: string) => void;
+  field: SortField;
+  direction: SortDirection | "";
+  ascLabel?: string;
+  descLabel?: string;
+  onSort: (field: SortField, direction: SortDirection) => void;
+  onClear: (field: SortField) => void;
 }) {
   return (
-    <label className="block space-y-1">
-      <span className="text-sm font-bold text-white">{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-semibold text-white outline-none focus:border-brand"
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-[#0b0d11] p-2">
+      <span className="text-xs font-bold text-soft">เรียง {sortFieldLabel(field)}</span>
+      <button
+        type="button"
+        onClick={() => onSort(field, "asc")}
+        className={`min-h-8 rounded-lg border px-2 text-xs font-bold transition ${direction === "asc" ? "border-brand bg-brand text-ink" : "border-line text-soft hover:border-brand hover:text-white"}`}
       >
-        <option value="">ทั้งหมด</option>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function AdvancedSearchable({
-  label,
-  value,
-  options,
-  placeholder,
-  listId,
-  onChange
-}: {
-  label: string;
-  value: string;
-  options: string[];
-  placeholder: string;
-  listId: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="block space-y-1">
-      <span className="text-sm font-bold text-white">{label}</span>
-      <input
-        value={value}
-        list={listId}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-semibold text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
-      />
-      <datalist id={listId}>
-        {options.map((option) => (
-          <option key={option} value={option} />
-        ))}
-      </datalist>
-    </label>
+        {ascLabel}
+      </button>
+      <button
+        type="button"
+        onClick={() => onSort(field, "desc")}
+        className={`min-h-8 rounded-lg border px-2 text-xs font-bold transition ${direction === "desc" ? "border-brand bg-brand text-ink" : "border-line text-soft hover:border-brand hover:text-white"}`}
+      >
+        {descLabel}
+      </button>
+      {direction ? (
+        <button type="button" onClick={() => onClear(field)} className="min-h-8 rounded-lg border border-line px-2 text-xs font-bold text-soft transition hover:border-brand hover:text-white">
+          ล้าง
+        </button>
+      ) : null}
+    </div>
   );
 }
 
