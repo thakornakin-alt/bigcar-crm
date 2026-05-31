@@ -2,7 +2,7 @@
 
 import { Calculator, Car, ImageDown, Loader2, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { AppHeader } from "@/app/components/ui";
+import { NativeAppHeader, NativeAppShell, NativeButton, NativeCard } from "@/app/components/ui";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import type { InstallmentRow, InterestRate } from "@/lib/types";
 
@@ -174,13 +174,13 @@ export default function CalculatorPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-5xl px-4 pb-24 pt-5 sm:px-6">
-      <AppHeader
+    <NativeAppShell className="max-w-5xl">
+      <NativeAppHeader
         title="คำนวณค่างวด"
         subtitle={salesProfile ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname}` : "ยังไม่ได้ Login จะใช้ข้อมูลบิ๊กเป็นค่าเริ่มต้น"}
       />
 
-      <section className="mb-4 rounded-lg border border-line bg-panel p-4 shadow-glow">
+      <NativeCard className="mb-4">
         <div className="grid gap-3 md:grid-cols-2">
           <TextField label="รุ่นรถ" value={carModel} onChange={setCarModel} placeholder="Toyota Revo 2020" />
           <TextField label="ปีรถ" value={actualYear} onChange={setActualYear} placeholder="2020" inputMode="numeric" />
@@ -226,7 +226,7 @@ export default function CalculatorPage() {
             Refresh
           </button>
         </div>
-      </section>
+      </NativeCard>
 
       {error && (
         <div className="mb-4 rounded-lg border border-red-400/40 bg-red-950/30 px-4 py-3 text-sm text-red-100">
@@ -234,7 +234,7 @@ export default function CalculatorPage() {
         </div>
       )}
 
-      <section className="rounded-lg border border-line bg-panel shadow-glow">
+      <NativeCard className="p-0">
         <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
           <div>
             <h2 className="text-lg font-bold text-white">ตารางผ่อน</h2>
@@ -244,15 +244,14 @@ export default function CalculatorPage() {
             </div>
           </div>
           {rows.length ? (
-            <button
-              type="button"
+            <NativeButton
               disabled={exporting}
               onClick={handleSaveImage}
-              className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand px-3 text-sm font-bold text-ink"
+              className="shrink-0 px-3"
             >
               {exporting ? <Loader2 size={18} className="animate-spin" /> : <ImageDown size={18} />}
               บันทึกรูป
-            </button>
+            </NativeButton>
           ) : (
             <Calculator size={24} className="shrink-0 text-brand" aria-hidden="true" />
           )}
@@ -295,8 +294,8 @@ export default function CalculatorPage() {
         ) : (
           <div className="px-4 py-8 text-center text-soft">กรอกราคารถและเลือกตารางดอกเบี้ย</div>
         )}
-      </section>
-    </main>
+      </NativeCard>
+    </NativeAppShell>
   );
 }
 
@@ -448,11 +447,11 @@ async function exportInstallmentImage({
   const lineQrImage = contactLineQrUrl ? await loadCanvasImage(contactLineQrUrl).catch(() => null) : null;
   const canvas = document.createElement("canvas");
   const scale = Math.max(window.devicePixelRatio || 1, 2);
-  const width = 1100;
-  const rowHeight = 60;
-  const tableHeaderHeight = 74;
-  const headerHeight = 300;
-  const footerHeight = 42;
+  const width = 1200;
+  const rowHeight = 64;
+  const tableHeaderHeight = 82;
+  const headerHeight = 360;
+  const footerHeight = 86;
   const height = headerHeight + tableHeaderHeight + rowHeight * rows.length + footerHeight;
   canvas.width = width * scale;
   canvas.height = height * scale;
@@ -463,74 +462,75 @@ async function exportInstallmentImage({
   if (!ctx) throw new Error("ไม่สามารถสร้างรูปได้บนอุปกรณ์นี้");
 
   ctx.scale(scale, scale);
-  ctx.fillStyle = "#08090b";
+  ctx.fillStyle = "#07090d";
   ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = "#111318";
+  ctx.fillStyle = "#111821";
   roundRect(ctx, 28, 28, width - 56, height - 56, 18);
   ctx.fill();
 
-  if (profileImage) {
-    const sourceHeight = profileImage.height * 0.72;
-    const imageHeight = 258;
-    const imageWidth = Math.round((profileImage.width / sourceHeight) * imageHeight);
-    ctx.drawImage(
-      profileImage,
-      0,
-      0,
-      profileImage.width,
-      sourceHeight,
-      width - imageWidth - 52,
-      28,
-      imageWidth,
-      imageHeight
-    );
-  }
+  ctx.fillStyle = "#0b1118";
+  roundRect(ctx, width - 356, 56, 300, 252, 22);
+  ctx.fill();
+  ctx.strokeStyle = "#263241";
+  ctx.lineWidth = 2;
+  roundRect(ctx, width - 356, 56, 300, 252, 22);
+  ctx.stroke();
 
-  if (lineQrImage) {
-    const qrSize = 112;
-    ctx.fillStyle = "#ffffff";
-    roundRect(ctx, width - qrSize - 70, 162, qrSize + 20, qrSize + 20, 16);
-    ctx.fill();
-    ctx.drawImage(lineQrImage, width - qrSize - 60, 172, qrSize, qrSize);
-    ctx.fillStyle = "#dce2eb";
-    ctx.font = "700 16px Arial, sans-serif";
+  const avatarSize = 92;
+  ctx.fillStyle = "#ffffff";
+  roundRect(ctx, width - 330, 84, avatarSize, avatarSize, 18);
+  ctx.fill();
+  if (profileImage) drawImageContain(ctx, profileImage, width - 322, 92, avatarSize - 16, avatarSize - 16);
+
+  const qrSize = 128;
+  ctx.fillStyle = "#ffffff";
+  roundRect(ctx, width - 202, 84, qrSize + 18, qrSize + 18, 18);
+  ctx.fill();
+  if (lineQrImage) drawImageContain(ctx, lineQrImage, width - 193, 93, qrSize, qrSize);
+  else {
+    ctx.fillStyle = "#111821";
+    ctx.font = "700 18px Arial, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("สแกน LINE", width - qrSize / 2 - 60, 306);
+    ctx.fillText("LINE QR", width - 128, 160);
     ctx.textAlign = "left";
   }
 
+  ctx.fillStyle = "#dce2eb";
+  ctx.font = "700 18px Arial, sans-serif";
+  ctx.fillText(contactName || "บิ๊ก", width - 330, 205);
+  ctx.fillStyle = "#22c55e";
+  ctx.font = "700 18px Arial, sans-serif";
+  ctx.fillText(contactPhone || "091-778-5117", width - 330, 234);
+  ctx.fillText(`Line: ${contactLineId || "@bigcars"}`, width - 330, 263);
+
   ctx.fillStyle = "#ffffff";
-  ctx.font = "700 46px Arial, sans-serif";
-  ctx.fillText("Big Car RDD", 56, 82);
+  ctx.font = "700 52px Arial, sans-serif";
+  ctx.fillText("Big Car RDD", 64, 92);
 
   ctx.fillStyle = "#22c55e";
-  ctx.font = "700 28px Arial, sans-serif";
-  ctx.fillText(`${contactName || "บิ๊ก"} ${contactPhone || "091-778-5117"}`, 56, 124);
-  ctx.fillText(`Line: ${contactLineId || "@bigcars"}`, 56, 162);
+  ctx.font = "700 26px Arial, sans-serif";
+  ctx.fillText("ตารางค่างวดรถมือสอง", 64, 138);
 
   ctx.fillStyle = "#ffffff";
-  ctx.font = "700 34px Arial, sans-serif";
-  ctx.fillText("ตารางค่างวดรถมือสอง", 56, 214);
-
-  ctx.fillStyle = "#aeb5c2";
-  ctx.font = "24px Arial, sans-serif";
-  ctx.fillText(`รุ่นรถ: ${carModel.trim() || "-"}`, 56, 254);
-  ctx.fillText(`ปีรถ: ${actualYear.trim() || "-"}`, 360, 254);
-  ctx.fillText(`ราคารถ ${formatWholeMoney(carPrice)} บาท`, 560, 254);
+  ctx.font = "700 30px Arial, sans-serif";
+  drawCanvasPill(ctx, "รุ่นรถ", carModel.trim() || "-", 64, 182, 500);
+  drawCanvasPill(ctx, "ปีรถ", actualYear.trim() || "-", 64, 240, 210);
+  drawCanvasPill(ctx, "ราคารถ", `${formatWholeMoney(carPrice)} บาท`, 300, 240, 300);
+  drawCanvasPill(ctx, "ประเภท", rate.vehicleType, 626, 240, 210);
 
   const columns = [
-    { label: "เรทดาวน์", rate: "", x: 56, width: 128, align: "left" },
-    { label: "เงินดาวน์", rate: "", x: 190, width: 142, align: "right" },
-    { label: "ยอดจัด", rate: "", x: 346, width: 142, align: "right" },
-    { label: "48 งวด", rate: formatPercent(rate.months48), x: 518, width: 118, align: "right" },
-    { label: "60 งวด", rate: formatPercent(rate.months60), x: 650, width: 118, align: "right" },
-    { label: "72 งวด", rate: formatPercent(rate.months72), x: 782, width: 118, align: "right" },
-    { label: "84 งวด", rate: formatPercent(rate.months84), x: 914, width: 118, align: "right" }
+    { label: "เรทดาวน์", rate: "", x: 64, width: 128, align: "left" },
+    { label: "เงินดาวน์", rate: "", x: 210, width: 146, align: "right" },
+    { label: "ยอดจัด", rate: "", x: 382, width: 146, align: "right" },
+    { label: "48 งวด", rate: formatPercent(rate.months48), x: 560, width: 132, align: "right" },
+    { label: "60 งวด", rate: formatPercent(rate.months60), x: 712, width: 132, align: "right" },
+    { label: "72 งวด", rate: formatPercent(rate.months72), x: 864, width: 132, align: "right" },
+    { label: "84 งวด", rate: formatPercent(rate.months84), x: 1016, width: 120, align: "right" }
   ] as const;
 
-  const tableTop = 300;
-  ctx.fillStyle = "#1b2028";
-  roundRect(ctx, 44, tableTop - 10, width - 88, tableHeaderHeight, 10);
+  const tableTop = headerHeight;
+  ctx.fillStyle = "#17202b";
+  roundRect(ctx, 48, tableTop - 12, width - 96, tableHeaderHeight, 14);
   ctx.fill();
 
   ctx.font = "700 22px Arial, sans-serif";
@@ -549,9 +549,9 @@ async function exportInstallmentImage({
   rows.forEach((row, index) => {
     const y = tableTop + tableHeaderHeight + rowHeight * index;
     ctx.fillStyle = index % 2 === 0 ? "#111318" : "#0d0f13";
-    ctx.fillRect(44, y - 10, width - 88, rowHeight);
+    ctx.fillRect(48, y - 10, width - 96, rowHeight);
     ctx.fillStyle = "#252932";
-    ctx.fillRect(44, y + rowHeight - 11, width - 88, 1);
+    ctx.fillRect(48, y + rowHeight - 11, width - 96, 1);
 
     ctx.font = "700 22px Arial, sans-serif";
     ctx.fillStyle = "#ffffff";
@@ -572,7 +572,12 @@ async function exportInstallmentImage({
 
   ctx.fillStyle = "#6f7785";
   ctx.font = "18px Arial, sans-serif";
-  ctx.fillText("คำนวณด้วยสูตร Flat Rate รวม VAT 7%", 56, height - 56);
+  ctx.fillText("คำนวณด้วยสูตร Flat Rate รวม VAT 7%", 64, height - 64);
+  ctx.fillStyle = "#22c55e";
+  ctx.font = "700 18px Arial, sans-serif";
+  ctx.textAlign = "right";
+  ctx.fillText("BIG CAR RDD CRM", width - 64, height - 64);
+  ctx.textAlign = "left";
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
   if (!blob) throw new Error("ไม่สามารถสร้างไฟล์รูปได้");
@@ -611,6 +616,29 @@ function drawCellText(
   ctx.textAlign = align;
   ctx.fillText(text, align === "right" ? x + width : x, y);
   ctx.textAlign = "left";
+}
+
+function drawCanvasPill(ctx: CanvasRenderingContext2D, label: string, value: string, x: number, y: number, width: number) {
+  ctx.fillStyle = "#0b1118";
+  roundRect(ctx, x, y, width, 44, 12);
+  ctx.fill();
+  ctx.strokeStyle = "#263241";
+  ctx.lineWidth = 1;
+  roundRect(ctx, x, y, width, 44, 12);
+  ctx.stroke();
+  ctx.fillStyle = "#7d8796";
+  ctx.font = "700 13px Arial, sans-serif";
+  ctx.fillText(label, x + 14, y + 17);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "700 18px Arial, sans-serif";
+  ctx.fillText(value, x + 14, y + 34);
+}
+
+function drawImageContain(ctx: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number) {
+  const ratio = Math.min(width / image.width, height / image.height);
+  const drawWidth = image.width * ratio;
+  const drawHeight = image.height * ratio;
+  ctx.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
