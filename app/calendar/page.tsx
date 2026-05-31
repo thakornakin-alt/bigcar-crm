@@ -2,7 +2,7 @@
 
 import { forwardRef, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, Car, ChevronLeft, ChevronRight, Clock3, Plus, Trash2, UserRound, Wrench } from "lucide-react";
-import { FilterChip, PageContainer, PageTitle, SectionCard } from "@/app/components/ui";
+import { FilterChip, NativeAppHeader, NativeAppShell, NativeBadge, SectionCard } from "@/app/components/ui";
 import type { CalendarEvent, CalendarEventType } from "@/lib/calendar-events";
 import type { CalendarVehicleOption } from "@/lib/vehicle-prep-cases";
 
@@ -241,8 +241,12 @@ export default function CalendarPage() {
   }
 
   return (
-    <PageContainer wide>
-      <PageTitle title="ปฏิทิน" subtitle="ปฏิทินจริงสำหรับงานลูกค้า งานรถ และงานเซลล์" />
+    <NativeAppShell className="max-w-5xl">
+      <NativeAppHeader
+        title="ปฏิทิน"
+        subtitle="รวมงานลูกค้า งานรถ และงานเซลล์ไว้ในปฏิทินเดียว"
+        actions={<NativeBadge>{events.length.toLocaleString("th-TH")} งาน</NativeBadge>}
+      />
 
       <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
         <SectionCard className="overflow-hidden">
@@ -252,13 +256,13 @@ export default function CalendarPage() {
               <p className="text-sm text-soft">{loading ? "กำลังโหลดงาน..." : `มีงานในเดือนนี้ ${events.length} รายการ`}</p>
             </div>
             <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setMonth((current) => addMonths(current, -1))} className="flex h-11 w-11 items-center justify-center rounded-lg border border-line bg-[#0b0d11] text-brand">
+              <button type="button" onClick={() => setMonth((current) => addMonths(current, -1))} className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-[#080c12] text-brand">
                 <ChevronLeft size={19} />
               </button>
-              <button type="button" onClick={goToday} className="min-h-11 rounded-lg border border-line bg-panel px-3 text-sm font-black text-white">
+              <button type="button" onClick={goToday} className="min-h-11 rounded-2xl border border-white/10 bg-white/[0.04] px-3 text-sm font-black text-white">
                 วันนี้
               </button>
-              <button type="button" onClick={() => setMonth((current) => addMonths(current, 1))} className="flex h-11 w-11 items-center justify-center rounded-lg border border-line bg-[#0b0d11] text-brand">
+              <button type="button" onClick={() => setMonth((current) => addMonths(current, 1))} className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-[#080c12] text-brand">
                 <ChevronRight size={19} />
               </button>
             </div>
@@ -272,7 +276,7 @@ export default function CalendarPage() {
 
           <div className="mt-1 grid grid-cols-7 gap-1">
             {days.map((day, index) => {
-              if (!day) return <div key={`blank-${index}`} className="min-h-[92px] rounded-lg border border-transparent sm:min-h-[112px]" />;
+              if (!day) return <div key={`blank-${index}`} className="min-h-[92px] rounded-2xl border border-transparent sm:min-h-[112px]" />;
 
               const dayEvents = eventsByDate[day] || [];
               const active = day === selectedDate;
@@ -283,7 +287,7 @@ export default function CalendarPage() {
                   key={day}
                   type="button"
                   onClick={() => selectDate(day)}
-                  className={`min-h-[92px] rounded-lg border p-1.5 text-left transition sm:min-h-[112px] sm:p-2 ${
+                  className={`min-h-[92px] rounded-2xl border p-1.5 text-left transition sm:min-h-[112px] sm:p-2 ${
                     active
                       ? "border-brand bg-brand/12 shadow-glow"
                       : isToday
@@ -352,11 +356,11 @@ export default function CalendarPage() {
                   value={form.detail}
                   onChange={(event) => setForm((current) => ({ ...current, detail: event.target.value }))}
                   placeholder="สาขา หมายเหตุ หรือสิ่งที่ต้องทำ"
-                  className="mt-1 min-h-[92px] w-full rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm font-semibold text-white outline-none transition placeholder:text-[#6f7785] focus:border-brand"
+                  className="mt-1 min-h-[92px] w-full rounded-2xl border border-white/10 bg-[#080c12] px-3 py-3 text-sm font-semibold text-white outline-none transition placeholder:text-[#6f7785] focus:border-brand"
                 />
               </label>
 
-              <button disabled={saving} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 font-black text-ink disabled:opacity-60">
+              <button disabled={saving} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand px-4 font-black text-ink disabled:opacity-60">
                 <Plus size={18} />
                 {saving ? "กำลังเพิ่มงาน..." : "เพิ่มงานลงปฏิทิน"}
               </button>
@@ -364,11 +368,11 @@ export default function CalendarPage() {
           </SectionCard>
 
           <SectionCard title={thaiLongDate(selectedDate)} icon={<CalendarDays size={18} />}>
-            {message && <p className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm font-bold text-emerald-100">{message}</p>}
-            {error && <p className="rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm font-bold text-red-100">{error}</p>}
+            {message && <p className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm font-bold text-emerald-100">{message}</p>}
+            {error && <p className="rounded-2xl border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm font-bold text-red-100">{error}</p>}
 
             {selectedEvents.length === 0 ? (
-              <div className="rounded-lg border border-line bg-[#0b0d11] px-3 py-6 text-center text-sm font-bold text-soft">
+              <div className="rounded-2xl border border-white/10 bg-[#080c12] px-3 py-6 text-center text-sm font-bold text-soft">
                 วันนี้ยังไม่มีงาน
               </div>
             ) : (
@@ -420,7 +424,7 @@ export default function CalendarPage() {
           </SectionCard>
         </div>
       </div>
-    </PageContainer>
+    </NativeAppShell>
   );
 }
 

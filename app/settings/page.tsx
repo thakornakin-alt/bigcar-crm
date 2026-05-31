@@ -1,8 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { ArrowLeft, CheckCircle2, Database, Download, FlaskConical, History, Loader2, MessageCircle, Save, Settings, Shield, Upload, UserRound } from "lucide-react";
-import { PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
+import { CheckCircle2, Database, Download, FlaskConical, History, Loader2, MessageCircle, Save, Settings, Shield, Upload, UserRound } from "lucide-react";
+import { NativeAppHeader, NativeAppShell, NativeBadge, NativeButton, SectionCard, TopMenuButton } from "@/app/components/ui";
 import {
   BigCarSystemSettings,
   defaultSystemSettings,
@@ -162,20 +162,16 @@ export default function SettingsPage() {
   }
 
   return (
-    <PageContainer>
-      <PageTitle
+    <NativeAppShell>
+      <NativeAppHeader
         title="ตั้งค่าระบบ"
-        subtitle="กำหนดค่าเริ่มต้นสำหรับรายงานจอง รายงานขาย และ LINE"
-        actions={
-          <TopMenuButton href="/" icon={<ArrowLeft size={18} />}>
-            หน้าแรก
-          </TopMenuButton>
-        }
+        subtitle="จัดการโปรไฟล์ ระบบ LINE และเครื่องมือสำหรับแอดมิน"
+        actions={<NativeBadge tone={isAdmin ? "brand" : "muted"}>{isAdmin ? "Admin" : "Profile"}</NativeBadge>}
       />
 
       {(message || error) && (
         <div
-          className={`mb-4 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${
+          className={`mb-4 flex items-start gap-2 rounded-2xl border px-4 py-3 text-sm ${
             error ? "border-red-400/40 bg-red-950/30 text-red-100" : "border-brand/40 bg-green-950/30 text-green-100"
           }`}
         >
@@ -188,7 +184,7 @@ export default function SettingsPage() {
         <div className="mb-4">
           <SectionCard title="สถานะฐานข้อมูล" icon={<Database size={18} />}>
             <div
-              className={`rounded-lg border px-4 py-3 ${
+              className={`rounded-2xl border px-4 py-3 ${
                 storageStatus?.ok
                   ? "border-brand/40 bg-brand/10"
                   : "border-amber-300/40 bg-amber-950/20"
@@ -215,20 +211,20 @@ export default function SettingsPage() {
                   type="button"
                   onClick={() => checkStorage().catch((err) => setError(err.message))}
                   disabled={checkingStorage}
-                  className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line px-3 text-sm font-bold text-white disabled:opacity-60"
+                  className="flex min-h-10 items-center justify-center gap-2 rounded-2xl border border-white/10 px-3 text-sm font-bold text-white disabled:opacity-60"
                 >
                   {checkingStorage ? <Loader2 size={16} className="animate-spin text-brand" /> : <Database size={16} className="text-brand" />}
                   ตรวจอีกครั้ง
                 </button>
                 <a
                   href="/api/system/export"
-                  className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-3 text-sm font-black text-ink"
+                  className="flex min-h-10 items-center justify-center gap-2 rounded-2xl bg-brand px-3 text-sm font-black text-ink"
                 >
                   <Download size={16} />
                   Backup JSON
                 </a>
               </div>
-              <form onSubmit={restoreBackup} className="mt-4 rounded-lg border border-line bg-[#0b0d11] p-3">
+              <form onSubmit={restoreBackup} className="mt-4 rounded-2xl border border-white/10 bg-[#080c12] p-3">
                 <p className="text-sm font-black text-white">Restore Backup JSON</p>
                 <p className="mt-1 text-xs leading-5 text-soft">
                   ใช้เฉพาะกรณีย้ายเครื่องหรือกู้ข้อมูล ระบบจะรับเฉพาะไฟล์ Backup ของ BIG CAR RDD CRM
@@ -238,12 +234,12 @@ export default function SettingsPage() {
                     type="file"
                     accept="application/json,.json"
                     onChange={(event) => setRestoreFile(event.target.files?.[0] || null)}
-                    className="min-h-11 rounded-lg border border-line bg-panel px-3 py-2 text-sm font-bold text-white file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-sm file:font-black file:text-ink"
+                    className="min-h-11 rounded-2xl border border-white/10 bg-[#0b0d11] px-3 py-2 text-sm font-bold text-white file:mr-3 file:rounded-xl file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-sm file:font-black file:text-ink"
                   />
                   <button
                     type="submit"
                     disabled={restoring || !restoreFile}
-                    className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-amber-300/40 px-3 text-sm font-black text-amber-100 disabled:opacity-50"
+                    className="flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-amber-300/40 px-3 text-sm font-black text-amber-100 disabled:opacity-50"
                   >
                     {restoring ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
                     Restore
@@ -322,16 +318,16 @@ export default function SettingsPage() {
           <button
             type="button"
             onClick={() => loadGroups().catch((err) => setError(err.message))}
-            className="min-h-11 rounded-lg border border-brand/50 px-3 text-sm font-semibold text-brand"
+            className="min-h-11 rounded-2xl border border-brand/50 px-3 text-sm font-semibold text-brand"
           >
             Refresh กลุ่ม LINE
           </button>
         </SectionCard>
 
-        <button type="submit" disabled={saving} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink disabled:opacity-60">
+        <NativeButton type="submit" disabled={saving} className="w-full">
           {saving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
           บันทึกตั้งค่าระบบ
-        </button>
+        </NativeButton>
       </form>
 
       <form onSubmit={addLineGroup} className="mt-4">
@@ -341,13 +337,13 @@ export default function SettingsPage() {
           </p>
           <Field label="ชื่อกลุ่ม" value={newGroupName} onChange={setNewGroupName} placeholder="เช่น กลุ่มขออนุมัติ" />
           <Field label="Group ID" value={newGroupId} onChange={setNewGroupId} placeholder="เช่น Cxxxxxxxx..." />
-          <button type="submit" disabled={addingGroup} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-brand/50 px-4 font-bold text-brand disabled:opacity-60">
+          <NativeButton type="submit" variant="secondary" disabled={addingGroup} className="w-full">
             {addingGroup ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
             เพิ่มกลุ่ม LINE
-          </button>
+          </NativeButton>
         </SectionCard>
       </form>
-    </PageContainer>
+    </NativeAppShell>
   );
 }
 
@@ -359,7 +355,7 @@ function Field({ label, value, onChange, placeholder }: { label: string; value: 
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
+        className="h-12 w-full rounded-2xl border border-white/10 bg-[#080c12] px-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
       />
     </label>
   );
@@ -384,7 +380,7 @@ function LineGroupSelect({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none focus:border-brand"
+        className="h-12 w-full rounded-2xl border border-white/10 bg-[#080c12] px-3 text-white outline-none focus:border-brand"
       >
         <option value="">{loading ? "กำลังโหลด..." : "ใช้กลุ่มล่าสุด/ยังไม่กำหนด"}</option>
         {groups.map((group) => (
