@@ -117,9 +117,44 @@ function money(value: unknown) {
 }
 
 function yearOnly(value: unknown) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return String(value.getFullYear());
+  }
+
+  if (typeof value === "number" && value > 25000 && value < 60000) {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (parsed?.y) return String(parsed.y);
+  }
+
   const raw = text(value);
-  const match = raw.match(/\b(19|20)\d{2}\b/);
-  return match ? match[0] : raw.replace(/[^\d]/g, "").slice(-4);
+  if (!raw) return "";
+
+  const match = raw.match(/\b(19|20|25)\d{2}\b/);
+  if (match) {
+    const y = Number(match[0]);
+    if (y >= 2400) return String(y - 543);
+    return String(y);
+  }
+
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric) && numeric > 25000 && numeric < 60000) {
+    const parsed = XLSX.SSF.parse_date_code(numeric);
+    if (parsed?.y) return String(parsed.y);
+  }
+
+  const shortDateMatch = raw.match(/\b\d{1,2}[\/\-]\d{1,2}[\/\-](\d{2})\b/);
+  if (shortDateMatch) {
+    const yy = Number(shortDateMatch[1]);
+    return String(yy >= 40 ? 2500 + yy - 543 : 2000 + yy);
+  }
+
+  const digits = raw.replace(/[^\d]/g, "");
+  if (/^\d{2}$/.test(digits)) {
+    const yy = Number(digits);
+    return String(yy >= 40 ? 2500 + yy - 543 : 2000 + yy);
+  }
+
+  return "";
 }
 
 function normalizePlate(value: string) {
