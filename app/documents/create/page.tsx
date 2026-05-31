@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Download, Eye, FileImage, FileText, Loader2, Printer, Save, Search } from "lucide-react";
-import { FilterChip, PageContainer, PageTitle, SearchField, SectionCard, TopMenuButton } from "@/app/components/ui";
+import { FilterChip, PageContainer, PageTitle, SearchField, SectionCard } from "@/app/components/ui";
 import type { DocumentTemplateConfig, DocumentTemplateId } from "@/lib/documents/document-types";
 import type { ReportHistoryItem } from "@/lib/types";
 
@@ -28,6 +28,9 @@ type Vehicle = {
 
 type DocumentFormData = Record<string, string>;
 const autoTemplateIds: DocumentTemplateId[] = ["contract", "temporary-receipt"];
+const tuningStorageKey = "bigcar-document-image-tuning-v1";
+type ImageTuning = { offsetX: number; offsetY: number; textOffsetX: number; textOffsetY: number; scale: number };
+const defaultTuning: ImageTuning = { offsetX: 0, offsetY: 0, textOffsetX: 0, textOffsetY: 0, scale: 1 };
 
 const initialData: DocumentFormData = {
   customerName: "",
@@ -160,6 +163,27 @@ function formatDateForDoc(value: string) {
   return value;
 }
 
+function readTuning(templateId: DocumentTemplateId): ImageTuning {
+  try {
+    const raw = window.localStorage.getItem(tuningStorageKey);
+    const parsed = raw ? (JSON.parse(raw) as Record<string, ImageTuning>) : {};
+    return { ...defaultTuning, ...(parsed[templateId] || {}) };
+  } catch {
+    return { ...defaultTuning };
+  }
+}
+
+function writeTuning(templateId: DocumentTemplateId, tuning: ImageTuning) {
+  try {
+    const raw = window.localStorage.getItem(tuningStorageKey);
+    const parsed = raw ? (JSON.parse(raw) as Record<string, ImageTuning>) : {};
+    parsed[templateId] = tuning;
+    window.localStorage.setItem(tuningStorageKey, JSON.stringify(parsed));
+  } catch {
+    // ignore
+  }
+}
+
 async function loadImage(src: string) {
   return await new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
@@ -182,6 +206,7 @@ export default function DocumentCreatePage() {
   const [data, setData] = useState<DocumentFormData>({ ...initialData, transactionDate: todayInput(), bookingDate: todayInput() });
   const [previewUrl, setPreviewUrl] = useState("");
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
+  const [imageTuning, setImageTuning] = useState<ImageTuning>(defaultTuning);
   const [loading, setLoading] = useState(false);
   const [savingHistory, setSavingHistory] = useState(false);
   const [message, setMessage] = useState("");
@@ -208,6 +233,11 @@ export default function DocumentCreatePage() {
       if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
     };
   }, [previewUrl, imagePreviewUrl]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setImageTuning(readTuning(templateId));
+  }, [templateId]);
 
   const selectedTemplate = templates.find((template) => template.id === templateId);
   const autoTemplates = useMemo(
@@ -413,7 +443,11 @@ export default function DocumentCreatePage() {
       const scaleX = canvas.width / basePdfWidth;
       const scaleY = canvas.height / basePdfHeight;
 
-      ctx.drawImage(bg, 0, 0, canvas.width, canvas.height);
+      const drawWidth = canvas.width * imageTuning.scale;
+      const drawHeight = canvas.height * imageTuning.scale;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(bg, imageTuning.offsetX, imageTuning.offsetY, drawWidth, drawHeight);
       ctx.fillStyle = "#111827";
 
       Object.entries(selectedTemplate.fields || {}).forEach(([fieldKey, config]) => {
@@ -422,7 +456,7 @@ export default function DocumentCreatePage() {
           const checked = rawValue.toLowerCase() === String(config.value || "").toLowerCase();
           if (checked) {
             ctx.font = `${Math.max(12, (config.fontSize || 10) * ((scaleX + scaleY) / 2))}px Arial, Tahoma, sans-serif`;
-            ctx.fillText("✓", config.x * scaleX, config.y * scaleY);
+            ctx.fillText("✓", config.x * scaleX + imageTuning.textOffsetX, config.y * scaleY + imageTuning.textOffsetY);
           }
           return;
         }
@@ -430,7 +464,7 @@ export default function DocumentCreatePage() {
         const textValue = config.type === "date" ? formatDateForDoc(rawValue) : rawValue;
         const fontSize = Math.max(10, (config.fontSize || 10) * ((scaleX + scaleY) / 2));
         ctx.font = `${fontSize}px Arial, Tahoma, sans-serif`;
-        ctx.fillText(textValue, config.x * scaleX, config.y * scaleY);
+        ctx.fillText(textValue, config.x * scaleX + imageTuning.textOffsetX, config.y * scaleY + imageTuning.textOffsetY);
       });
 
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 0.95));
@@ -490,7 +524,6 @@ export default function DocumentCreatePage() {
       <PageTitle
         title="สร้างเอกสาร PDF"
         subtitle="เลือกข้อมูลลูกค้าและรถ แล้วเติมลงแบบฟอร์ม A4 อัตโนมัติ"
-        actions={<TopMenuButton href="/documents/templates" icon={<FileText size={18} />}>ตั้งค่า Template</TopMenuButton>}
       />
 
       {(message || error) && (
@@ -508,6 +541,24 @@ export default function DocumentCreatePage() {
                   {template.title}
                 </FilterChip>
               ))}
+            </div>
+          </SectionCard>
+          <SectionCard title="ปรับตำแหน่งฟอร์ม (Pixel Tuning)" icon={<FileImage size={18} />}>
+            <p className="mb-3 text-sm text-soft">จูนเฉพาะหน้านี้สำหรับ 2 ฟอร์มหลัก ค่าจะจำตาม template อัตโนมัติ</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button type="button" onClick={() => { const next = { ...imageTuning, offsetX: imageTuning.offsetX - 2 }; setImageTuning(next); writeTuning(templateId, next); }} className="min-h-10 rounded-lg border border-line px-3 font-bold text-white">ฟอร์มซ้าย 2px</button>
+              <button type="button" onClick={() => { const next = { ...imageTuning, offsetX: imageTuning.offsetX + 2 }; setImageTuning(next); writeTuning(templateId, next); }} className="min-h-10 rounded-lg border border-line px-3 font-bold text-white">ฟอร์มขวา 2px</button>
+              <button type="button" onClick={() => { const next = { ...imageTuning, offsetY: imageTuning.offsetY - 2 }; setImageTuning(next); writeTuning(templateId, next); }} className="min-h-10 rounded-lg border border-line px-3 font-bold text-white">ฟอร์มขึ้น 2px</button>
+              <button type="button" onClick={() => { const next = { ...imageTuning, offsetY: imageTuning.offsetY + 2 }; setImageTuning(next); writeTuning(templateId, next); }} className="min-h-10 rounded-lg border border-line px-3 font-bold text-white">ฟอร์มลง 2px</button>
+              <button type="button" onClick={() => { const next = { ...imageTuning, textOffsetX: imageTuning.textOffsetX - 2 }; setImageTuning(next); writeTuning(templateId, next); }} className="min-h-10 rounded-lg border border-line px-3 font-bold text-white">ตัวอักษรซ้าย 2px</button>
+              <button type="button" onClick={() => { const next = { ...imageTuning, textOffsetX: imageTuning.textOffsetX + 2 }; setImageTuning(next); writeTuning(templateId, next); }} className="min-h-10 rounded-lg border border-line px-3 font-bold text-white">ตัวอักษรขวา 2px</button>
+              <button type="button" onClick={() => { const next = { ...imageTuning, textOffsetY: imageTuning.textOffsetY - 2 }; setImageTuning(next); writeTuning(templateId, next); }} className="min-h-10 rounded-lg border border-line px-3 font-bold text-white">ตัวอักษรขึ้น 2px</button>
+              <button type="button" onClick={() => { const next = { ...imageTuning, textOffsetY: imageTuning.textOffsetY + 2 }; setImageTuning(next); writeTuning(templateId, next); }} className="min-h-10 rounded-lg border border-line px-3 font-bold text-white">ตัวอักษรลง 2px</button>
+            </div>
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              <button type="button" onClick={() => { const next = { ...imageTuning, scale: Math.max(0.96, imageTuning.scale - 0.002) }; setImageTuning(next); writeTuning(templateId, next); }} className="min-h-10 rounded-lg border border-line px-3 font-bold text-white">ย่อฟอร์ม</button>
+              <button type="button" onClick={() => { const next = { ...imageTuning, scale: Math.min(1.04, imageTuning.scale + 0.002) }; setImageTuning(next); writeTuning(templateId, next); }} className="min-h-10 rounded-lg border border-line px-3 font-bold text-white">ขยายฟอร์ม</button>
+              <button type="button" onClick={() => { setImageTuning(defaultTuning); writeTuning(templateId, defaultTuning); }} className="min-h-10 rounded-lg bg-brand px-3 font-black text-ink">รีเซ็ต</button>
             </div>
           </SectionCard>
 
