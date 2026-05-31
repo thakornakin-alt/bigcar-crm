@@ -375,6 +375,29 @@ function uniqueSorted(values: string[]) {
   return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, "th"));
 }
 
+function yearDebugInfo(vehicle: StockVehicle) {
+  const raw = vehicle as StockVehicle & Record<string, unknown>;
+  const extra = (raw.extraFields && typeof raw.extraFields === "object" ? (raw.extraFields as Record<string, unknown>) : {}) as Record<string, unknown>;
+  const yearLikeKeys = [
+    "year",
+    "Year",
+    "registrationYear",
+    "registeredYear",
+    "ปีจด",
+    "ปีจดทะเบียน",
+    "ปี",
+    "ทะเบียนปี"
+  ];
+  const coreValues = yearLikeKeys.map((key) => ({ key, value: raw[key] }));
+  const extraValues = Object.entries(extra).filter(([key]) => /ปี|year|regis|ทะเบียน/i.test(String(key || "")));
+  return {
+    plate: vehicle.plate || "-",
+    resolved: stockRegistrationYear(vehicle) || "(empty)",
+    coreValues,
+    extraValues
+  };
+}
+
 const mileageBandOptions = [
   { label: "0-30,000", min: 0, max: 30000 },
   { label: "30,000-60,000", min: 30000, max: 60000 },
@@ -765,7 +788,14 @@ export default function StockExportPage() {
   const [sendingLine, setSendingLine] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [showYearDebug, setShowYearDebug] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("debugYear") === "1") setShowYearDebug(true);
+  }, []);
 
   const importedStatusCount = useMemo(() => vehicles.filter((vehicle) => stockStatus(vehicle)).length, [vehicles]);
   const importedVehicleGroupCount = useMemo(() => vehicles.filter((vehicle) => stockVehicleGroup(vehicle)).length, [vehicles]);
@@ -1858,6 +1888,37 @@ export default function StockExportPage() {
           </FilterAccordion>
         ) : null}
       </BottomSheet>
+
+      <div className="mb-4 mt-2 flex items-center justify-end">
+        <button
+          type="button"
+          onClick={() => setShowYearDebug((current) => !current)}
+          className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs font-bold text-soft"
+        >
+          {showYearDebug ? "ซ่อน Debug ปีจด" : "แสดง Debug ปีจด"}
+        </button>
+      </div>
+
+      {showYearDebug ? (
+        <NativeCard className="mb-20 rounded-2xl border border-amber-300/30 bg-amber-950/10 p-4">
+          <p className="text-sm font-black text-amber-200">Year Debug (สำหรับแก้ mapping ปีจดชั่วคราว)</p>
+          <p className="mt-1 text-xs text-amber-100/90">ตรวจค่า raw จากรถ 5 คันแรกเพื่อจับชื่อคอลัมน์จริงในไฟล์สต็อก</p>
+          <div className="mt-3 space-y-3">
+            {vehicles.slice(0, 5).map((vehicle, index) => {
+              const info = yearDebugInfo(vehicle);
+              return (
+                <div key={`${vehicle.plate || "no-plate"}-${index}`} className="rounded-lg border border-amber-200/20 bg-black/20 p-3 text-xs text-amber-50">
+                  <p className="font-bold">ทะเบียน: {info.plate} | ปีจดที่ระบบอ่านได้: {info.resolved}</p>
+                  <p className="mt-1 font-semibold text-amber-200">Core Keys:</p>
+                  <pre className="mt-1 overflow-x-auto whitespace-pre-wrap text-[11px] leading-5">{JSON.stringify(info.coreValues, null, 2)}</pre>
+                  <p className="mt-1 font-semibold text-amber-200">extraFields ที่เกี่ยวกับปี:</p>
+                  <pre className="mt-1 overflow-x-auto whitespace-pre-wrap text-[11px] leading-5">{JSON.stringify(info.extraValues, null, 2)}</pre>
+                </div>
+              );
+            })}
+          </div>
+        </NativeCard>
+      ) : null}
 
       <div className="fixed inset-x-0 bottom-4 z-40 px-4 sm:px-6">
         <div className="mx-auto flex w-full max-w-5xl items-center gap-2 rounded-[24px] border border-white/10 bg-[#0b1220]/90 p-2 shadow-[0_0_40px_rgba(34,197,94,0.10)] backdrop-blur-xl">
