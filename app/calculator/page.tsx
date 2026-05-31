@@ -220,7 +220,7 @@ export default function CalculatorPage() {
                 })
                 .finally(() => setLoading(false));
             }}
-            className="flex min-h-10 items-center gap-2 rounded-lg border border-line px-3 font-semibold text-white"
+            className="flex min-h-10 items-center gap-2 rounded-2xl border border-white/10 px-3 font-semibold text-white"
           >
             <RefreshCw size={16} />
             Refresh
@@ -229,15 +229,15 @@ export default function CalculatorPage() {
       </NativeCard>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-red-400/40 bg-red-950/30 px-4 py-3 text-sm text-red-100">
+        <div className="mb-4 rounded-2xl border border-red-400/40 bg-red-950/30 px-4 py-3 text-sm text-red-100">
           {error}
         </div>
       )}
 
       <NativeCard className="p-0">
-        <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+        <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
           <div>
-            <h2 className="text-lg font-bold text-white">ตารางผ่อน</h2>
+            <h2 className="text-lg font-black text-white">ตารางผ่อน</h2>
             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-soft">
               <span>รุ่นรถ: {carModel.trim()}</span>
               <span>ปีรถ: {actualYear.trim()}</span>
@@ -261,7 +261,7 @@ export default function CalculatorPage() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] border-collapse text-sm">
               <thead>
-                <tr className="border-b border-line text-left text-soft">
+                <tr className="border-b border-white/10 text-left text-soft">
                   <th className="px-4 py-3 font-semibold">เรทดาวน์</th>
                   <th className="px-4 py-3 text-right font-semibold">เงินดาวน์</th>
                   <th className="px-4 py-3 text-right font-semibold">ยอดจัด</th>
@@ -273,7 +273,7 @@ export default function CalculatorPage() {
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr key={`${row.label}-${row.downPayment}`} className="border-b border-line/70 last:border-0">
+                  <tr key={`${row.label}-${row.downPayment}`} className="border-b border-white/10 last:border-0">
                     <td className="px-4 py-3 font-bold text-white">{row.label}</td>
                     <td className="px-4 py-3 text-right text-[#dce2eb]">{formatMoney(row.downPayment)}</td>
                     <td className="px-4 py-3 text-right text-[#dce2eb]">{formatMoney(row.financeAmount)}</td>
@@ -289,7 +289,7 @@ export default function CalculatorPage() {
         ) : loading ? (
           <div className="flex min-h-36 items-center justify-center text-soft">
             <Loader2 size={22} className="mr-2 animate-spin" />
-            Loading
+            กำลังโหลด
           </div>
         ) : (
           <div className="px-4 py-8 text-center text-soft">กรอกราคารถและเลือกตารางดอกเบี้ย</div>
@@ -339,7 +339,7 @@ function SelectField({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none focus:border-brand"
+        className="h-12 w-full rounded-2xl border border-white/10 bg-[#080c12] px-3 text-white outline-none focus:border-brand"
       >
         {options.map((option) => (
           <option key={option} value={option}>
@@ -370,7 +370,7 @@ function NumberField({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         inputMode="decimal"
-        className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
+        className="h-12 w-full rounded-2xl border border-white/10 bg-[#080c12] px-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
       />
     </label>
   );
@@ -397,7 +397,7 @@ function TextField({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         inputMode={inputMode}
-        className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
+        className="h-12 w-full rounded-2xl border border-white/10 bg-[#080c12] px-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
       />
     </label>
   );
@@ -465,47 +465,47 @@ async function exportInstallmentImage({
   ctx.fillStyle = "#07090d";
   ctx.fillRect(0, 0, width, height);
   ctx.fillStyle = "#111821";
-  roundRect(ctx, 28, 28, width - 56, height - 56, 18);
+  roundRect(ctx, 28, 28, width - 56, height - 56, 26);
   ctx.fill();
 
   ctx.fillStyle = "#0b1118";
-  roundRect(ctx, width - 356, 56, 300, 252, 22);
+  roundRect(ctx, width - 382, 56, 326, 252, 24);
   ctx.fill();
   ctx.strokeStyle = "#263241";
   ctx.lineWidth = 2;
-  roundRect(ctx, width - 356, 56, 300, 252, 22);
+  roundRect(ctx, width - 382, 56, 326, 252, 24);
   ctx.stroke();
 
   const avatarSize = 92;
   ctx.fillStyle = "#ffffff";
-  roundRect(ctx, width - 330, 84, avatarSize, avatarSize, 18);
+  roundRect(ctx, width - 356, 84, avatarSize, avatarSize, 20);
   ctx.fill();
-  if (profileImage) drawImageContain(ctx, profileImage, width - 322, 92, avatarSize - 16, avatarSize - 16);
+  if (profileImage) drawImageContain(ctx, profileImage, width - 348, 92, avatarSize - 16, avatarSize - 16);
 
   const qrSize = 128;
   ctx.fillStyle = "#ffffff";
-  roundRect(ctx, width - 202, 84, qrSize + 18, qrSize + 18, 18);
+  roundRect(ctx, width - 218, 84, qrSize + 18, qrSize + 18, 20);
   ctx.fill();
-  if (lineQrImage) drawImageContain(ctx, lineQrImage, width - 193, 93, qrSize, qrSize);
+  if (lineQrImage) drawImageContain(ctx, lineQrImage, width - 209, 93, qrSize, qrSize);
   else {
     ctx.fillStyle = "#111821";
     ctx.font = "700 18px Arial, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("LINE QR", width - 128, 160);
+    ctx.fillText("LINE QR", width - 144, 160);
     ctx.textAlign = "left";
   }
 
   ctx.fillStyle = "#dce2eb";
   ctx.font = "700 18px Arial, sans-serif";
-  ctx.fillText(contactName || "บิ๊ก", width - 330, 205);
+  drawFitText(ctx, contactName || "บิ๊ก", width - 356, 205, 292);
   ctx.fillStyle = "#22c55e";
   ctx.font = "700 18px Arial, sans-serif";
-  ctx.fillText(contactPhone || "091-778-5117", width - 330, 234);
-  ctx.fillText(`Line: ${contactLineId || "@bigcars"}`, width - 330, 263);
+  drawFitText(ctx, contactPhone || "091-778-5117", width - 356, 234, 292);
+  drawFitText(ctx, `Line: ${contactLineId || "@bigcars"}`, width - 356, 263, 292);
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "700 52px Arial, sans-serif";
-  ctx.fillText("Big Car RDD", 64, 92);
+  ctx.fillText("BIG CAR RDD", 64, 92);
 
   ctx.fillStyle = "#22c55e";
   ctx.font = "700 26px Arial, sans-serif";
@@ -513,7 +513,7 @@ async function exportInstallmentImage({
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "700 30px Arial, sans-serif";
-  drawCanvasPill(ctx, "รุ่นรถ", carModel.trim() || "-", 64, 182, 500);
+  drawCanvasPill(ctx, "รุ่นรถ", carModel.trim() || "-", 64, 182, 560);
   drawCanvasPill(ctx, "ปีรถ", actualYear.trim() || "-", 64, 240, 210);
   drawCanvasPill(ctx, "ราคารถ", `${formatWholeMoney(carPrice)} บาท`, 300, 240, 300);
   drawCanvasPill(ctx, "ประเภท", rate.vehicleType, 626, 240, 210);
@@ -631,7 +631,21 @@ function drawCanvasPill(ctx: CanvasRenderingContext2D, label: string, value: str
   ctx.fillText(label, x + 14, y + 17);
   ctx.fillStyle = "#ffffff";
   ctx.font = "700 18px Arial, sans-serif";
-  ctx.fillText(value, x + 14, y + 34);
+  drawFitText(ctx, value, x + 14, y + 34, width - 28);
+}
+
+function drawFitText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number) {
+  const value = String(text || "-");
+  if (ctx.measureText(value).width <= maxWidth) {
+    ctx.fillText(value, x, y);
+    return;
+  }
+
+  let clipped = value;
+  while (clipped.length > 1 && ctx.measureText(`${clipped}...`).width > maxWidth) {
+    clipped = clipped.slice(0, -1);
+  }
+  ctx.fillText(`${clipped}...`, x, y);
 }
 
 function drawImageContain(ctx: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number) {
