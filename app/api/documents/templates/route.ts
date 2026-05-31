@@ -3,11 +3,12 @@ import { listDocumentTemplatesWithOverrides, saveDocumentTemplateFields, saveDoc
 import type { DocumentFieldConfig, DocumentTemplateId } from "@/lib/documents/document-types";
 
 export const dynamic = "force-dynamic";
+const primaryTemplateIds = new Set(["contract", "temporary-receipt"]);
 
 export async function GET() {
   try {
     const templates = await listDocumentTemplatesWithOverrides();
-    return NextResponse.json({ templates });
+    return NextResponse.json({ templates: templates.filter((template) => primaryTemplateIds.has(template.id)) });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "โหลด template ไม่สำเร็จ" },
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
     const mimeType = String(body.mimeType || "");
     const base64 = String(body.base64 || "");
     if (!templateId) return NextResponse.json({ error: "กรุณาเลือก template" }, { status: 400 });
+    if (!primaryTemplateIds.has(templateId)) return NextResponse.json({ error: "รองรับเฉพาะ Template หลักเท่านั้น" }, { status: 400 });
     if (mimeType && mimeType !== "application/pdf") return NextResponse.json({ error: "รองรับเฉพาะไฟล์ PDF" }, { status: 400 });
     const template = await saveDocumentTemplatePdf({ templateId, fileName, mimeType, base64 });
     return NextResponse.json({ template });
