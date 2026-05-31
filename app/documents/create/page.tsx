@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Eye, FileImage, FileText, Loader2, Printer, Save, Search } from "lucide-react";
 import { FilterChip, PageContainer, PageTitle, SearchField, SectionCard } from "@/app/components/ui";
 import type { DocumentTemplateConfig, DocumentTemplateId } from "@/lib/documents/document-types";
@@ -173,6 +173,7 @@ function writeTuning(templateId: DocumentTemplateId, tuning: ImageTuning) {
 }
 
 export default function DocumentCreatePage() {
+  const previewSectionRef = useRef<HTMLDivElement | null>(null);
   const [templates, setTemplates] = useState<DocumentTemplateConfig[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -389,9 +390,11 @@ export default function DocumentCreatePage() {
         link.click();
       }
       setMessage("สร้าง PDF สำเร็จ");
+      setTimeout(() => previewSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
       return url;
     } catch (err) {
       setError(err instanceof Error ? err.message : "สร้างเอกสารไม่สำเร็จ กรุณาตรวจข้อมูลและลองใหม่อีกครั้ง");
+      setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
       return "";
     } finally {
       setLoading(false);
@@ -453,9 +456,11 @@ export default function DocumentCreatePage() {
         link.click();
       }
       setMessage("สร้างรูปเอกสารจาก PDF สำเร็จ");
+      setTimeout(() => previewSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
       return url;
     } catch (err) {
       setError(err instanceof Error ? err.message : "สร้างรูปเอกสารไม่สำเร็จ");
+      setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
       return "";
     } finally {
       setLoading(false);
@@ -618,6 +623,7 @@ export default function DocumentCreatePage() {
             </div>
           </SectionCard>
 
+          <div ref={previewSectionRef}>
           <SectionCard title="Preview เอกสาร" icon={<Eye size={18} />}>
             {imagePreviewUrl ? (
               <div className="mb-4 overflow-hidden rounded-lg border border-line bg-white">
@@ -632,6 +638,7 @@ export default function DocumentCreatePage() {
               </div>
             )}
           </SectionCard>
+          </div>
         </section>
       </div>
     </PageContainer>
