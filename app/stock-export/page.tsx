@@ -234,7 +234,18 @@ function isValidGregorianYearText(value?: string) {
 }
 
 function stockRegistrationYear(vehicle: StockVehicle) {
-  const raw = rawVehicleValue(vehicle, ["registrationYear", "registeredYear", "ปีจด", "ปีจดทะเบียน", "ทะเบียนปี"]);
+  const raw =
+    stockRawValue(vehicle, "year") ||
+    rawVehicleValue(vehicle, [
+      "registrationYear",
+      "registeredYear",
+      "year",
+      "Year",
+      "ปีจด",
+      "ปีจดทะเบียน",
+      "ปี",
+      "ทะเบียนปี"
+    ]);
   const year = parseYearSafely(raw, false);
   return isValidGregorianYearText(year) ? year : "";
 }
@@ -628,7 +639,7 @@ function stockExportColumns(mode: ExportMode, selectedColumns: ExtraColumnKey[],
       ? [
           { key: "location", label: "Location", width: 120 },
           { key: "plate", label: "ทะเบียน", width: 130 },
-          ...(hasRegistrationYear ? [{ key: "registrationYear", label: "ปีจด", width: 82 }] : []),
+          { key: "registrationYear", label: "ปีจด", width: 82 },
           { key: "model", label: "รุ่นรถยนต์", width: 370 },
           { key: "gear", label: "เกียร์", width: 70 },
           { key: "color", label: "สี", width: 110 },
@@ -639,7 +650,7 @@ function stockExportColumns(mode: ExportMode, selectedColumns: ExtraColumnKey[],
       : [
           { key: "location", label: "Location", width: 165 },
           { key: "plate", label: "ทะเบียน", width: 150 },
-          ...(hasRegistrationYear ? [{ key: "registrationYear", label: "ปีจด", width: 120 }] : []),
+          { key: "registrationYear", label: "ปีจด", width: 120 },
           { key: "model", label: "รุ่นรถยนต์", width: 620 },
           { key: "gear", label: "เกียร์", width: 95 },
           { key: "color", label: "สี", width: 190 },
