@@ -3,7 +3,7 @@
 import { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Calculator, CalendarDays, Car, CheckSquare, FileText, Home, Menu, Radio, Settings, UploadCloud, Users, Wrench, X } from "lucide-react";
+import { Bell, Calculator, CalendarDays, Car, CheckSquare, FileText, Home, Menu, Plus, Radio, Settings, UploadCloud, Users, Wrench, X } from "lucide-react";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 
 function classNames(...values: Array<string | false | null | undefined>) {
@@ -269,6 +269,145 @@ export function SectionCard({
       )}
       <div className="space-y-3">{children}</div>
     </section>
+  );
+}
+
+export function NativeAppShell({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return (
+    <main className={classNames("mx-auto min-h-screen w-full max-w-3xl px-4 pb-28 pt-4 sm:px-6", className)}>
+      {children}
+    </main>
+  );
+}
+
+export function NativeAppHeader({
+  title,
+  subtitle,
+  eyebrow = "BIG CAR CRM",
+  actions
+}: {
+  title: string;
+  subtitle?: ReactNode;
+  eyebrow?: string;
+  actions?: ReactNode;
+}) {
+  return (
+    <>
+      <GlobalNav />
+      <header className="mb-5 overflow-hidden rounded-2xl border border-line bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,0.18),transparent_32%),linear-gradient(135deg,#111820,#070a0f)] p-4 shadow-glow">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-brand">{eyebrow}</p>
+            <h1 className="mt-2 text-2xl font-black tracking-normal text-white sm:text-3xl">{title}</h1>
+            {subtitle ? <div className="mt-2 text-sm font-medium text-soft">{subtitle}</div> : null}
+          </div>
+          {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+        </div>
+      </header>
+    </>
+  );
+}
+
+export function NativeCard({
+  children,
+  className = "",
+  interactive = false
+}: {
+  children: ReactNode;
+  className?: string;
+  interactive?: boolean;
+}) {
+  return (
+    <section
+      className={classNames(
+        "rounded-2xl border border-line bg-panel/90 p-4 shadow-glow",
+        interactive && "transition hover:border-brand/60 hover:bg-[#111820] active:scale-[0.99]",
+        className
+      )}
+    >
+      {children}
+    </section>
+  );
+}
+
+export function NativeButton({
+  children,
+  variant = "primary",
+  className = "",
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: "primary" | "secondary" | "ghost" | "danger";
+}) {
+  const variantClass =
+    variant === "primary"
+      ? "border-brand bg-brand text-ink"
+      : variant === "danger"
+        ? "border-red-400/45 bg-red-950/30 text-red-100"
+        : variant === "ghost"
+          ? "border-line/70 bg-black/20 text-soft"
+          : "border-line bg-[#0b0d11] text-white";
+
+  return (
+    <button
+      type="button"
+      {...props}
+      className={classNames(
+        "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-black transition hover:border-brand/70 disabled:cursor-not-allowed disabled:opacity-50",
+        variantClass,
+        className
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function NativeBadge({ children, tone = "brand" }: { children: ReactNode; tone?: "brand" | "muted" | "warning" }) {
+  const toneClass =
+    tone === "warning"
+      ? "border-amber-300/35 bg-amber-300/10 text-amber-100"
+      : tone === "muted"
+        ? "border-line bg-[#0b0d11] text-soft"
+        : "border-brand/40 bg-brand/10 text-brand";
+  return <span className={classNames("inline-flex min-h-7 items-center rounded-full border px-3 text-xs font-black", toneClass)}>{children}</span>;
+}
+
+export function NativeBottomNav() {
+  const pathname = usePathname();
+  const items = globalNavItems.slice(0, 5);
+  return (
+    <nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 gap-1 rounded-2xl border border-line bg-[#11141a]/95 p-2 shadow-glow backdrop-blur lg:hidden">
+      {items.map((item) => {
+        const Icon = item.icon;
+        const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={classNames(
+              "flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-black",
+              active ? "bg-brand text-ink" : "text-soft"
+            )}
+          >
+            <Icon size={17} className={active ? "text-ink" : "text-brand"} />
+            <span className="max-w-full truncate">{item.label}</span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+export function FloatingActionButton({ href, label = "เพิ่ม", icon = <Plus size={22} /> }: { href: string; label?: string; icon?: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      aria-label={label}
+      title={label}
+      className="fixed bottom-20 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-2xl border border-brand/50 bg-brand text-ink shadow-glow transition active:scale-95 lg:hidden"
+    >
+      {icon}
+    </Link>
   );
 }
 
