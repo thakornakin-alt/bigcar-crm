@@ -178,6 +178,18 @@ function parseNumeric(value?: string) {
   return Number(String(value || "").replace(/[^\d.]/g, "")) || 0;
 }
 
+function normalizeStockYear(value?: string) {
+  const raw = String(value || "").trim();
+  const direct = raw.match(/\b(19|20|25)\d{2}\b/);
+  if (direct) return direct[0];
+  const digits = raw.replace(/[^\d]/g, "");
+  return digits.length >= 4 ? digits.slice(-4) : raw;
+}
+
+function stockYear(vehicle: StockVehicle) {
+  return normalizeStockYear(vehicle.year);
+}
+
 function rawVehicleValue(vehicle: StockVehicle, keys: string[]) {
   const raw = vehicle as StockVehicle & Record<string, unknown>;
   for (const key of keys) {
@@ -307,7 +319,7 @@ function matchesAdvancedFilters(vehicle: StockVehicle, filters: AdvancedStockFil
 function matchesAdvancedFiltersExcept(vehicle: StockVehicle, filters: AdvancedStockFilters, except: (keyof AdvancedStockFilters)[]) {
   const ignored = new Set<keyof AdvancedStockFilters>(except);
   if (!ignored.has("models") && filters.models.length && !filters.models.includes(vehicleTitle(vehicle))) return false;
-  if (!ignored.has("years") && filters.years.length && !filters.years.includes(vehicle.year || "")) return false;
+  if (!ignored.has("years") && filters.years.length && !filters.years.includes(stockYear(vehicle))) return false;
   if (!ignored.has("colors") && filters.colors.length && !filters.colors.includes(vehicle.color || "")) return false;
   if (!ignored.has("colorGroups") && filters.colorGroups.length && !filters.colorGroups.includes(stockRawValue(vehicle, "colorGroup"))) return false;
   if (!ignored.has("gears") && filters.gears.length && !filters.gears.includes(vehicle.gear || "")) return false;
@@ -389,7 +401,7 @@ function sortVehicleValue(vehicle: StockVehicle, field: SortField) {
   if (field === "sellerName") return stockRawValue(vehicle, "sellerName");
   if (field === "bookingSaleDate") return dateValue(stockRawValue(vehicle, "bookingSaleDate"));
   if (field === "model") return vehicleTitle(vehicle);
-  if (field === "year") return Number(vehicle.year || 0);
+  if (field === "year") return Number(stockYear(vehicle) || 0);
   if (field === "price") return parseNumeric(vehicle.salePrice);
   if (field === "mileage") return parseNumeric(vehicle.mileage);
   if (field === "status") return stockStatus(vehicle);
@@ -683,7 +695,7 @@ export default function StockExportPage() {
           vehicle.plate,
           vehicle.brand,
           vehicle.model,
-          vehicle.year,
+          stockYear(vehicle),
           vehicle.color,
           vehicle.status,
           vehicle.gear,
@@ -736,7 +748,7 @@ export default function StockExportPage() {
 
     return {
       models: uniqueSorted(optionValues(["models"]).map((vehicle) => vehicleTitle(vehicle))),
-      years: uniqueSorted(optionValues(["years"]).map((vehicle) => vehicle.year || "")),
+      years: uniqueSorted(optionValues(["years"]).map((vehicle) => stockYear(vehicle))).sort((a, b) => Number(b) - Number(a)),
       colors: uniqueSorted(optionValues(["colors"]).map((vehicle) => vehicle.color || "")),
       colorGroups: uniqueSorted(optionValues(["colorGroups"]).map((vehicle) => stockRawValue(vehicle, "colorGroup"))),
       gears: uniqueSorted(optionValues(["gears"]).map((vehicle) => vehicle.gear || "")),
@@ -1526,7 +1538,7 @@ export default function StockExportPage() {
                           <span>สถานะ: <b className="text-white">{vehicle.status || "-"}</b></span>
                           <span>กลุ่ม: <b className="text-white">{vehicle.vehicleGroup || "-"}</b></span>
                           <span>Location: <b className="text-white">{vehicle.parkingLocation || "-"}</b></span>
-                          <span>ปีจด: <b className="text-white">{vehicle.year || "-"}</b></span>
+                          <span>ปีจด: <b className="text-white">{stockYear(vehicle) || "-"}</b></span>
                           <span>เกียร์: <b className="text-white">{vehicle.gear || "-"}</b></span>
                           <span>สี: <b className="text-white">{vehicle.color || "-"}</b></span>
                           <span>เลขไมล์: <b className="text-white">{formatMileage(vehicle.mileage)}</b></span>
@@ -1885,44 +1897,59 @@ function MultiFilter({
   onClear: () => void;
 }) {
   const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
   const visibleOptions = useMemo(() => {
     const term = normalizeText(search);
     return options.filter((option) => !term || normalizeText(option).includes(term)).slice(0, 60);
   }, [options, search]);
+  const summary = values.length ? values.slice(0, 2).join(", ") + (values.length > 2 ? ` +${values.length - 2}` : "") : "ทั้งหมด";
 
   return (
-    <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-sm font-bold text-white">{label}</p>
-        {values.length ? (
-          <button type="button" onClick={onClear} className="text-xs font-bold text-brand">
-            ล้าง
-          </button>
-        ) : null}
-      </div>
-      <input
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        placeholder={`ค้นหา${label}`}
-        className="mb-2 h-10 w-full rounded-lg border border-line bg-black/30 px-3 text-sm text-white outline-none focus:border-brand"
-      />
-      <div className="flex max-h-44 flex-wrap gap-2 overflow-y-auto pr-1">
-        {visibleOptions.length ? visibleOptions.map((option) => {
-          const active = values.includes(option);
-          return (
-            <button
-              key={option}
-              type="button"
-              onClick={() => onToggle(option)}
-              className={`min-h-9 rounded-lg border px-3 text-xs font-bold transition ${active ? "border-brand bg-brand text-ink" : "border-line bg-panel text-soft hover:border-brand hover:text-white"}`}
-            >
-              {option}
-            </button>
-          );
-        }) : (
-          <p className="w-full rounded-lg border border-line bg-black/20 p-3 text-center text-xs text-soft">ไม่มีตัวเลือกจากข้อมูลสต็อก</p>
-        )}
-      </div>
+    <div className="rounded-lg border border-line bg-[#0b0d11] p-2">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="grid min-h-11 w-full grid-cols-[1fr_auto] items-center gap-3 rounded-lg bg-black/20 px-3 text-left"
+      >
+        <span>
+          <span className="block text-sm font-bold text-white">{label}</span>
+          <span className={`mt-0.5 block truncate text-xs ${values.length ? "text-brand" : "text-soft"}`}>{summary}</span>
+        </span>
+        <span className="text-sm font-black text-brand">{open ? "▲" : "▼"}</span>
+      </button>
+      {open ? (
+        <div className="mt-2 rounded-lg border border-line bg-black/20 p-2">
+          <div className="mb-2 grid grid-cols-[1fr_auto] gap-2">
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={`ค้นหา${label}`}
+              className="h-10 min-w-0 rounded-lg border border-line bg-black/30 px-3 text-sm text-white outline-none focus:border-brand"
+            />
+            {values.length ? (
+              <button type="button" onClick={onClear} className="h-10 rounded-lg border border-line px-3 text-xs font-bold text-brand">
+                ล้าง
+              </button>
+            ) : null}
+          </div>
+          <div className="grid max-h-56 gap-1 overflow-y-auto pr-1">
+            {visibleOptions.length ? visibleOptions.map((option) => {
+              const active = values.includes(option);
+              return (
+                <label
+                  key={option}
+                  className={`flex min-h-10 items-center gap-3 rounded-lg border px-3 text-sm font-bold transition ${active ? "border-brand bg-brand/10 text-brand" : "border-line bg-panel text-soft"}`}
+                >
+                  <input type="checkbox" checked={active} onChange={() => onToggle(option)} className="h-4 w-4 accent-brand" />
+                  <span className="min-w-0 flex-1 truncate">{option}</span>
+                </label>
+              );
+            }) : (
+              <p className="w-full rounded-lg border border-line bg-black/20 p-3 text-center text-xs text-soft">ไม่มีตัวเลือกจากข้อมูลสต็อก</p>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -2121,7 +2148,7 @@ function previewColumnValue(vehicle: StockVehicle, column: StockExportColumn, mo
   if (column.extraKey) return defaultColumnValue(vehicle, column.extraKey);
   if (column.key === "location") return shortLocation(vehicle.parkingLocation);
   if (column.key === "plate") return vehicle.plate || "-";
-  if (column.key === "year") return vehicle.year || "-";
+  if (column.key === "year") return stockYear(vehicle) || "-";
   if (column.key === "model") return vehicleTitle(vehicle);
   if (column.key === "gear") return vehicle.gear || "-";
   if (column.key === "color") return vehicle.color || "-";
@@ -2209,7 +2236,7 @@ function renderStockTableCanvas(
     const values: Record<string, string> = {
       location: shortLocation(vehicle.parkingLocation),
       plate: vehicle.plate || "-",
-      year: vehicle.year || "-",
+      year: stockYear(vehicle) || "-",
       model: vehicleTitle(vehicle),
       gear: vehicle.gear || "-",
       color: vehicle.color || "-",
