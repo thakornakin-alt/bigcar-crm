@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { registerSalesUser } from "@/lib/apps-script";
 import { recordActivity } from "@/lib/activity-log";
 import { setSalesProfileCookie } from "@/lib/auth-session";
+import { preservePhoneInput } from "@/lib/phone";
 import { saveSalesProfile } from "@/lib/sales-profile-store";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
       firstName: String(body.firstName || "").trim(),
       lastName: String(body.lastName || "").trim(),
       nickname: String(body.nickname || "").trim(),
-      phone: String(body.phone || "").trim(),
+      phone: preservePhoneInput(body.phone),
       lineId: String(body.lineId || "").trim(),
       lineQrUrl: String(body.lineQrUrl || "").trim(),
       avatarUrl: String(body.avatarUrl || "").trim(),

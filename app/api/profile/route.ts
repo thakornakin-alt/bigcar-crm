@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { updateSalesUser } from "@/lib/apps-script";
 import { recordActivity } from "@/lib/activity-log";
 import { salesProfileCookieName, setSalesProfileCookie, verifySalesProfileToken } from "@/lib/auth-session";
+import { preservePhoneInput } from "@/lib/phone";
 import { saveSalesProfile } from "@/lib/sales-profile-store";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export async function PATCH(request: Request) {
     const body = await request.json();
     const nextUser = await updateSalesUser({
       id: currentUser.id,
-      phone: String(body.phone ?? currentUser.phone ?? "").trim(),
+      phone: body.phone === undefined ? preservePhoneInput(currentUser.phone) : preservePhoneInput(body.phone),
       lineId: String(body.lineId ?? currentUser.lineId ?? "").trim(),
       lineQrUrl: String(body.lineQrUrl ?? currentUser.lineQrUrl ?? "").trim(),
       avatarUrl: String(body.avatarUrl ?? currentUser.avatarUrl ?? "").trim(),

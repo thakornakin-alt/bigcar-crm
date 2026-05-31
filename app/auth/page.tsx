@@ -116,7 +116,7 @@ export default function AuthPage() {
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <TextInput name="nickname" label="ชื่อเล่น" required />
-                <TextInput name="phone" label="เบอร์โทร" required />
+                <TextInput name="phone" label="เบอร์โทร" type="tel" inputMode="tel" autoComplete="tel" required />
               </div>
               <TextInput name="lineId" label="LINE ID" placeholder="@bigcars" />
               <div className="grid gap-3 sm:grid-cols-2">
@@ -156,7 +156,9 @@ function TextInput({
   type = "text",
   placeholder,
   icon,
-  required
+  required,
+  inputMode,
+  autoComplete
 }: {
   name: string;
   label: string;
@@ -164,13 +166,15 @@ function TextInput({
   placeholder?: string;
   icon?: ReactNode;
   required?: boolean;
+  inputMode?: "text" | "tel" | "email" | "numeric";
+  autoComplete?: string;
 }) {
   return (
     <label className="block">
       <span className="text-sm font-bold text-white">{label}</span>
       <div className="mt-2 flex min-h-12 items-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-3 text-white">
         {icon}
-        <input name={name} type={type} required={required} className={inputClass} placeholder={placeholder || label} />
+        <input name={name} type={type} inputMode={inputMode} autoComplete={autoComplete} required={required} className={inputClass} placeholder={placeholder || label} />
       </div>
     </label>
   );

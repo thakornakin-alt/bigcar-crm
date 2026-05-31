@@ -148,7 +148,7 @@ export default function ProfilePage() {
           <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
             <p className="mb-3 text-sm font-black text-white">แก้ไขข้อมูลได้ทันที</p>
           <form onSubmit={saveProfile} className="grid gap-3 sm:grid-cols-2">
-            <ProfileField label="เบอร์โทร" value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value }))} />
+            <ProfileField label="เบอร์โทร" value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value }))} inputMode="tel" autoComplete="tel" />
             <ProfileField label="LINE ID" value={form.lineId} onChange={(value) => setForm((current) => ({ ...current, lineId: value }))} />
             <ProfileField label="ตำแหน่ง / ทีม" value={form.position} onChange={(value) => setForm((current) => ({ ...current, position: value }))} placeholder="Sales / ทีมพี่ลีฟ" />
             <ProfileField label="สาขา" value={form.branch} onChange={(value) => setForm((current) => ({ ...current, branch: value }))} placeholder="สาขาบางนา" />
@@ -257,18 +257,25 @@ function ProfileField({
   label,
   value,
   onChange,
-  placeholder
+  placeholder,
+  inputMode,
+  autoComplete
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  inputMode?: "text" | "tel" | "numeric";
+  autoComplete?: string;
 }) {
   return (
     <label className="block">
       <span className="text-sm font-bold text-white">{label}</span>
       <input
         value={value}
+        type={inputMode === "tel" ? "tel" : "text"}
+        inputMode={inputMode}
+        autoComplete={autoComplete}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder || label}
         className="mt-2 h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none placeholder:text-soft/60 focus:border-brand"
