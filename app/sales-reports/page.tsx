@@ -2,7 +2,7 @@
 
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Camera, CheckCircle2, Clipboard, Cloud, Eye, FileText, ImagePlus, Loader2, Mail, Save, Search, Send, X } from "lucide-react";
-import { AppHeader, TopMenuButton } from "@/app/components/ui";
+import { NativeAppHeader, NativeAppShell, NativeBadge, TopMenuButton } from "@/app/components/ui";
 import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
 import { defaultSystemSettings, readSystemSettings, salesLineGroupStorageKey } from "@/lib/client-settings";
 import { normalizeCarYear } from "@/lib/format";
@@ -624,12 +624,13 @@ export default function SalesReportsPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-5xl px-4 pb-24 pt-5 sm:px-6">
-      <AppHeader
+    <NativeAppShell className="max-w-5xl">
+      <NativeAppHeader
         title="รายงานขาย"
         subtitle={salesProfile ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname}` : "ค้นรายงานจองเดิม แล้วสร้างรายงานขายแบบ Draft / Preview"}
         actions={
           <>
+            <NativeBadge>Sales</NativeBadge>
             <TopMenuButton href="/booking-reports" icon={<ArrowLeft size={18} />}>
               รายงานจอง
             </TopMenuButton>
@@ -908,7 +909,7 @@ export default function SalesReportsPage() {
           </section>
         </aside>
       </div>
-    </main>
+    </NativeAppShell>
   );
 }
 

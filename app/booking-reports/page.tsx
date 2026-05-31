@@ -17,7 +17,7 @@ import {
   Search
 } from "lucide-react";
 import { buildDefaultBookingSubject, renderBookingReport } from "@/lib/booking-report";
-import { PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
+import { NativeAppHeader, NativeAppShell, NativeBadge, NativeButton, SectionCard, TopMenuButton } from "@/app/components/ui";
 import { bookingLineGroupStorageKey, defaultSystemSettings, readSystemSettings } from "@/lib/client-settings";
 import { normalizeCarYear } from "@/lib/format";
 import { documentFileToOcrPayloads, imagePayloadToDataUrl, isPdfFile, mergeOcrRecords } from "@/lib/ocr/client-document-ocr";
@@ -691,12 +691,13 @@ export default function BookingReportsPage() {
   }
 
   return (
-    <PageContainer wide>
-      <PageTitle
+    <NativeAppShell className="max-w-5xl">
+      <NativeAppHeader
         title="รายงานจอง"
         subtitle={salesProfile ? `ใช้โปรไฟล์เซลล์: ${salesProfile.nickname}` : "บันทึก Draft, สร้าง Gmail Draft และส่งข้อความเข้า LINE"}
         actions={
           <>
+            <NativeBadge>Booking</NativeBadge>
             <TopMenuButton href="/sales-reports" icon={<FileText size={18} />} variant="primary">
               ขาย
             </TopMenuButton>
@@ -778,15 +779,15 @@ export default function BookingReportsPage() {
                   <p className="max-h-24 overflow-y-auto whitespace-pre-wrap">{ocrPreview.rawText}</p>
                 </div>
               )}
-              <button
+              <NativeButton
                 type="button"
                 onClick={confirmOcrPreview}
                 disabled={!ocrPreviewUrl || ocrReading}
-                className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-3 font-black text-ink disabled:opacity-50 sm:col-span-2"
+                className="sm:col-span-2"
               >
                 {ocrReading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
                 {ocrReading ? "กำลังอ่าน OCR..." : "ยืนยันและเติมเข้ารายงานจอง"}
-              </button>
+              </NativeButton>
             </div>
           </div>
         </SectionCard>
@@ -973,24 +974,24 @@ export default function BookingReportsPage() {
                   )}
                 </select>
               </label>
-              <button
+              <NativeButton
                 type="button"
                 onClick={sendLineReport}
                 disabled={sendingLine || !selectedLineGroupId || !reportText.trim()}
-                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-3 text-base font-bold text-ink disabled:opacity-70"
+                className="w-full"
               >
                 {sendingLine ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
                 {sendingLine ? "กำลังส่ง LINE..." : "ส่ง LINE"}
-              </button>
+              </NativeButton>
             </div>
-            <button
+            <NativeButton
               type="submit"
               disabled={saving || uploading}
-              className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-3 text-base font-bold text-ink"
+              className="mt-3 w-full"
             >
               {saving || uploading ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
               {uploading ? "กำลังอัปโหลดรูป..." : "บันทึก Draft"}
-            </button>
+            </NativeButton>
             {driveFolderUrl && (
               <a
                 href={driveFolderUrl}
@@ -1008,7 +1009,7 @@ export default function BookingReportsPage() {
           </SectionCard>
         </aside>
       </form>
-    </PageContainer>
+    </NativeAppShell>
   );
 }
 

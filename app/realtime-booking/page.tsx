@@ -14,7 +14,7 @@ import {
   XCircle,
   Zap
 } from "lucide-react";
-import { PageContainer, PageTitle, SectionCard } from "@/app/components/ui";
+import { NativeAppHeader, NativeAppShell, NativeBadge, NativeButton, SectionCard } from "@/app/components/ui";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import type { RealtimePaymentType, RealtimeQueueStatus } from "@/lib/realtime-booking";
 
@@ -355,10 +355,11 @@ export default function RealtimeBookingPage() {
   }
 
   return (
-    <PageContainer wide>
-      <PageTitle
+    <NativeAppShell className="max-w-5xl">
+      <NativeAppHeader
         title="แย่งคิวรถ"
         subtitle="คิวรถ realtime"
+        actions={<NativeBadge>{filteredQueue.length.toLocaleString("th-TH")} คิว</NativeBadge>}
       />
 
       {(message || error) && (
@@ -397,14 +398,14 @@ export default function RealtimeBookingPage() {
               </div>
             </label>
             <Field label="เซลส์เจ้าของเคส" value={form.saleName} onChange={(value) => setForm((cur) => ({ ...cur, saleName: value }))} />
-            <button
+            <NativeButton
               type="submit"
               disabled={saving}
-              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 py-3 text-base font-black text-slate-950 transition hover:bg-cyan-200 disabled:opacity-60"
+              className="w-full"
             >
               {saving ? <Loader2 size={20} className="animate-spin" /> : <Clock3 size={20} />}
               แย่งคิวรถ
-            </button>
+            </NativeButton>
           </form>
         </SectionCard>
 
@@ -557,7 +558,7 @@ export default function RealtimeBookingPage() {
           </div>
         </SectionCard>
       </div>
-    </PageContainer>
+    </NativeAppShell>
   );
 }
 

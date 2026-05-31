@@ -2,8 +2,8 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { CalendarDays, Car, Loader2, Phone, Save, Search, Sparkles, UserRound } from "lucide-react";
-import { FilterChip, PageContainer, PageTitle, SearchField, SectionCard, TopMenuButton } from "@/app/components/ui";
+import { Car, Loader2, Phone, Save, Search, Sparkles, UserRound } from "lucide-react";
+import { FilterChip, NativeAppHeader, NativeAppShell, NativeBadge, NativeButton, SearchField, SectionCard } from "@/app/components/ui";
 import type { StockVehicle } from "@/lib/types";
 import type { SalesLead } from "@/lib/leads";
 
@@ -171,15 +171,11 @@ export default function LeadsPage() {
   }
 
   return (
-    <PageContainer wide>
-      <PageTitle
+    <NativeAppShell className="max-w-5xl">
+      <NativeAppHeader
         title="ลูกค้ามุ่งหวัง"
         subtitle="รวมลูกค้าหารถไว้ในเมนูเดียว ใช้กลุ่มรถเดียวกับสต็อก"
-        actions={
-          <TopMenuButton href="/calendar" icon={<CalendarDays size={18} />} variant="primary">
-            ปฏิทิน
-          </TopMenuButton>
-        }
+        actions={<NativeBadge>{visibleLeads.length.toLocaleString("th-TH")} ราย</NativeBadge>}
       />
 
       {(message || error) && (
@@ -251,10 +247,10 @@ export default function LeadsPage() {
                   className="min-h-28 w-full rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
                 />
               </label>
-              <button type="submit" disabled={saving} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 font-black text-ink disabled:opacity-60">
+              <NativeButton type="submit" disabled={saving} className="w-full">
                 {saving ? <Loader2 size={19} className="animate-spin" /> : <Save size={19} />}
                 บันทึกลูกค้ามุ่งหวัง
-              </button>
+              </NativeButton>
             </form>
           </SectionCard>
         </section>
@@ -288,7 +284,7 @@ export default function LeadsPage() {
           </SectionCard>
         </section>
       </div>
-    </PageContainer>
+    </NativeAppShell>
   );
 }
 
