@@ -21,6 +21,10 @@ const fieldOptions = [
   ["engineNo", "เลขเครื่อง"],
   ["salePrice", "ราคารถ / ราคาขาย"],
   ["bookingPrice", "เงินจอง"],
+  ["bookingNo", "เลขที่ใบจอง"],
+  ["discountPrice", "ส่วนลด"],
+  ["netCarPrice", "ราคาสุทธิ"],
+  ["financeCompany", "ไฟแนนซ์"],
   ["financeAmount", "ยอดจัด"],
   ["deliveryDate", "วันส่งมอบ"],
   ["deliveryLocation", "สถานที่ส่งมอบ"],
@@ -79,7 +83,7 @@ function sampleData(): PreviewData {
 
 export default function DocumentTemplatesPage() {
   const [templates, setTemplates] = useState<DocumentTemplateConfig[]>([]);
-  const [templateId, setTemplateId] = useState<DocumentTemplateId>("sale-summary");
+  const [templateId, setTemplateId] = useState<DocumentTemplateId>("temporary-receipt");
   const [fieldKey, setFieldKey] = useState("customerName");
   const [previewUrl, setPreviewUrl] = useState("");
   const [saving, setSaving] = useState(false);

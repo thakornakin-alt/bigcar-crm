@@ -12,6 +12,10 @@ function absoluteAssetPath(assetPath: string) {
   return path.isAbsolute(assetPath) ? assetPath : path.join(process.cwd(), assetPath);
 }
 
+function normalizeFieldName(value: string) {
+  return String(value || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
 function textValue(value: unknown) {
   if (value === null || value === undefined) return "";
   return String(value).trim();
@@ -36,6 +40,39 @@ function fieldValue(fieldKey: string, field: DocumentFieldConfig, data: Document
   const direct = textValue(data[fieldKey]);
   if (direct) return direct;
   for (const alias of aliases[fieldKey] || []) {
+    const value = textValue(data[alias]);
+    if (value) return value;
+  }
+  return "";
+}
+
+const pdfFieldAliases: Record<string, string[]> = {
+  CUSTOMERNAME: ["customerName"],
+  CUSTOMERPHONE: ["phone", "customerPhone"],
+  CUSTOMERIDCARD: ["idCard", "customerIdCard"],
+  CUSTOMERADDRESS: ["address", "customerAddress"],
+  BOOKINGNO: ["bookingNo", "bookingNumber", "id"],
+  BOOKINGDATE: ["bookingDate", "transactionDate", "createdAt"],
+  LICENSEPLATE: ["plate", "plateNumber"],
+  CARBRAND: ["carBrand", "brand"],
+  CARMODEL: ["carModel", "model"],
+  CARYEAR: ["year", "registeredYear"],
+  CARCOLOR: ["color"],
+  CHASSISNO: ["vin", "chassisNo", "chassisNumber"],
+  ENGINENO: ["engineNo", "engineNumber"],
+  FINANCECOMPANY: ["financeCompany", "financeName"],
+  SELLPRICE: ["salePrice", "finalPrice", "price"],
+  DISCOUNTPRICE: ["discountPrice", "discount"],
+  NETCARPRICE: ["netCarPrice", "finalPrice", "salePrice"],
+  DOWNPAYMENT: ["bookingPrice", "downPayment"],
+  FINANCEAMOUNT: ["financeAmount"],
+  SALESNAME: ["sellerName", "saleName"]
+};
+
+function findMappedValueByPdfFieldName(fieldName: string, data: DocumentData) {
+  const key = normalizeFieldName(fieldName);
+  const aliases = pdfFieldAliases[key] || [];
+  for (const alias of aliases) {
     const value = textValue(data[alias]);
     if (value) return value;
   }
@@ -71,7 +108,15 @@ export async function generateFilledDocumentPdf(input: {
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
 
-  const backgroundBytes = await readFile(absoluteAssetPath(template.backgroundPath));
+  let backgroundBytes: Buffer;
+  try {
+    backgroundBytes = await readFile(absoluteAssetPath(template.backgroundPath));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+      throw new Error("ไม่พบไฟล์ PDF Template กรุณาอัปโหลด template ใหม่ที่หน้า /documents/templates");
+    }
+    throw error;
+  }
   const isPdfTemplate = template.backgroundPath.toLowerCase().endsWith(".pdf");
   const pages = [];
 
@@ -102,6 +147,42 @@ export async function generateFilledDocumentPdf(input: {
   }
 
   const fields = input.fields || template.fields;
+  let usedAcroForm = false;
+  if (isPdfTemplate) {
+    try {
+      const form = pdf.getForm();
+      const formFields = form.getFields();
+      if (formFields.length) {
+        usedAcroForm = true;
+        for (const formField of formFields) {
+          const rawName = formField.getName();
+          const normalized = normalizeFieldName(rawName);
+          const configured = Object.entries(fields).find(([, config]) => normalizeFieldName(config.pdfFieldName || "") === normalized);
+          const fromConfigured = configured ? fieldValue(configured[0], configured[1], input.data) : "";
+          const fromAlias = fromConfigured || findMappedValueByPdfFieldName(rawName, input.data);
+          const value = fromAlias || textValue(input.data[rawName]);
+          if (!value) continue;
+
+          const maybeText = formField as unknown as { setText?: (value: string) => void; check?: () => void };
+          if (typeof maybeText.setText === "function") {
+            maybeText.setText(value);
+            continue;
+          }
+          if (typeof maybeText.check === "function") {
+            const flag = value.toLowerCase();
+            if (flag === "1" || flag === "true" || flag === "yes" || flag === "checked" || flag === "x") {
+              maybeText.check();
+            }
+          }
+        }
+        form.flatten();
+      }
+    } catch {
+      usedAcroForm = false;
+    }
+  }
+
+  if (!usedAcroForm) {
   for (const [key, field] of Object.entries(fields)) {
     const page = pages[Math.max((field.page || 1) - 1, 0)];
     if (!page) continue;
@@ -132,6 +213,7 @@ export async function generateFilledDocumentPdf(input: {
         color: rgb(0.02, 0.04, 0.07)
       });
     });
+  }
   }
 
   return pdf.save();

@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Download, Eye, FileText, Loader2, Printer, Save, Search } from "lucide-react";
 import { FilterChip, PageContainer, PageTitle, SearchField, SectionCard, TopMenuButton } from "@/app/components/ui";
 import type { DocumentTemplateConfig, DocumentTemplateId } from "@/lib/documents/document-types";
+import type { ReportHistoryItem } from "@/lib/types";
 
 type Customer = {
   no?: string;
@@ -58,6 +59,10 @@ const initialData: DocumentFormData = {
   deliveryLocation: "",
   deliveryDate: "",
   bookingDate: "",
+  bookingNo: "",
+  discountPrice: "",
+  netCarPrice: "",
+  financeCompany: "",
   paymentType: "finance",
   sellerName: "",
   sellerPhone: "",
@@ -97,6 +102,10 @@ const fieldLabels: Record<string, string> = {
   deliveryLocation: "สถานที่ส่งมอบ",
   deliveryDate: "วันที่ส่งมอบ",
   bookingDate: "วันที่ใบจอง",
+  bookingNo: "เลขที่ใบจอง",
+  discountPrice: "ส่วนลด",
+  netCarPrice: "ราคาสุทธิ",
+  financeCompany: "ไฟแนนซ์",
   paymentType: "ช่องทางชำระ",
   sellerName: "ชื่อเซลล์",
   sellerPhone: "เบอร์เซลล์",
@@ -135,9 +144,11 @@ export default function DocumentCreatePage() {
   const [templates, setTemplates] = useState<DocumentTemplateConfig[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [templateId, setTemplateId] = useState<DocumentTemplateId>("sale-summary");
+  const [templateId, setTemplateId] = useState<DocumentTemplateId>("temporary-receipt");
   const [customerQuery, setCustomerQuery] = useState("");
   const [vehicleQuery, setVehicleQuery] = useState("");
+  const [bookingQuery, setBookingQuery] = useState("");
+  const [bookingReports, setBookingReports] = useState<ReportHistoryItem[]>([]);
   const [data, setData] = useState<DocumentFormData>({ ...initialData, transactionDate: todayInput(), bookingDate: todayInput() });
   const [previewUrl, setPreviewUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -154,6 +165,9 @@ export default function DocumentCreatePage() {
       .catch(() => undefined);
     api<{ vehicles: Vehicle[] }>("/api/stock/list?limit=1000")
       .then((res) => setVehicles(res.vehicles || []))
+      .catch(() => undefined);
+    api<{ reports: ReportHistoryItem[] }>("/api/reports/history?type=booking")
+      .then((res) => setBookingReports((res.reports || []).filter((report) => report.type === "booking" && report.status !== "deleted")))
       .catch(() => undefined);
   }, []);
 
@@ -204,6 +218,16 @@ export default function DocumentCreatePage() {
       .slice(0, 8);
   }, [vehicles, vehicleQuery]);
 
+  const filteredBookingReports = useMemo(() => {
+    const term = bookingQuery.trim().toLowerCase().replace(/\s+/g, "");
+    return bookingReports
+      .filter((report) => {
+        const hay = [report.customerName, report.phone, report.plate, report.model, report.id].join("").toLowerCase().replace(/\s+/g, "");
+        return !term || hay.includes(term);
+      })
+      .slice(0, 8);
+  }, [bookingReports, bookingQuery]);
+
   function update(key: string, value: string) {
     setData((current) => ({ ...current, [key]: value }));
   }
@@ -234,12 +258,35 @@ export default function DocumentCreatePage() {
     setVehicleQuery(vehicleLabel(vehicle));
   }
 
+  function selectBookingReport(report: ReportHistoryItem) {
+    const salePrice = money(report.reportText.match(/ราคาขาย[:：]\s*([\d,]+)/)?.[1] || "");
+    const discount = money(report.reportText.match(/ส่วนลด[:：]\s*([\d,]+)/)?.[1] || "");
+    setData((current) => ({
+      ...current,
+      bookingNo: report.id || current.bookingNo,
+      bookingDate: current.bookingDate || todayInput(),
+      customerName: report.customerName || current.customerName,
+      phone: report.phone || current.phone,
+      idCard: report.idCard || current.idCard,
+      plate: report.plate || current.plate,
+      carBrand: report.brand || current.carBrand,
+      carModel: report.model || current.carModel,
+      year: report.year || current.year,
+      color: report.color || current.color,
+      sellerName: report.saleName || current.sellerName,
+      salePrice: salePrice || current.salePrice,
+      discountPrice: discount || current.discountPrice
+    }));
+    setBookingQuery(`${report.id} / ${report.customerName}`);
+  }
+
   async function generatePdf(download = false) {
     setLoading(true);
     setError("");
     setMessage("");
     try {
       if (!selectedTemplate) throw new Error("กรุณาเลือกประเภทเอกสาร");
+      if (!data.customerName || !data.plate) throw new Error("กรุณากรอก ชื่อลูกค้า และ ทะเบียน ก่อนสร้างเอกสาร");
       const blob = await api<Blob>("/api/documents/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -249,15 +296,20 @@ export default function DocumentCreatePage() {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(url);
       if (download) {
+        const safeName = [selectedTemplate.fileName.replace(/\.pdf$/i, ""), data.customerName || "customer", data.plate || "no-plate"]
+          .join("-")
+          .replace(/[\\/:*?"<>|#%&{}$!'@+=`]/g, "-")
+          .replace(/\s+/g, "-")
+          .slice(0, 120);
         const link = document.createElement("a");
         link.href = url;
-        link.download = `${selectedTemplate.fileName.replace(/\.pdf$/i, "")}-${data.plate || Date.now()}.pdf`;
+        link.download = `${safeName}.pdf`;
         link.click();
       }
       setMessage("สร้าง PDF สำเร็จ");
       return url;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "สร้าง PDF ไม่สำเร็จ");
+      setError(err instanceof Error ? err.message : "สร้างเอกสารไม่สำเร็จ กรุณาตรวจข้อมูลและลองใหม่อีกครั้ง");
       return "";
     } finally {
       setLoading(false);
@@ -267,19 +319,28 @@ export default function DocumentCreatePage() {
   async function printPdf() {
     const url = previewUrl || await generatePdf(false);
     if (!url) return;
-    const frame = document.createElement("iframe");
-    frame.style.position = "fixed";
-    frame.style.right = "0";
-    frame.style.bottom = "0";
-    frame.style.width = "0";
-    frame.style.height = "0";
-    frame.src = url;
-    document.body.appendChild(frame);
-    frame.onload = () => {
-      frame.contentWindow?.focus();
-      frame.contentWindow?.print();
-      setTimeout(() => frame.remove(), 1000);
-    };
+    try {
+      const frame = document.createElement("iframe");
+      frame.style.position = "fixed";
+      frame.style.right = "0";
+      frame.style.bottom = "0";
+      frame.style.width = "0";
+      frame.style.height = "0";
+      frame.src = url;
+      document.body.appendChild(frame);
+      frame.onload = () => {
+        try {
+          frame.contentWindow?.focus();
+          frame.contentWindow?.print();
+        } catch {
+          generatePdf(true).catch(() => undefined);
+        } finally {
+          setTimeout(() => frame.remove(), 1000);
+        }
+      };
+    } catch {
+      await generatePdf(true);
+    }
   }
 
   async function saveHistory() {
@@ -353,6 +414,18 @@ export default function DocumentCreatePage() {
                 <button key={`${vehicle.plate}-${vehicle.vin}`} type="button" onClick={() => selectVehicle(vehicle)} className="rounded-lg border border-line bg-[#0b0d11] p-3 text-left transition hover:border-brand">
                   <p className="font-black text-white">{vehicle.plate || "ไม่ระบุทะเบียน"}</p>
                   <p className="mt-1 text-sm text-soft">{[vehicle.brand, vehicle.model, vehicle.year].filter(Boolean).join(" ")} · {vehicle.salePrice ? `${money(vehicle.salePrice)} บาท` : "-"}</p>
+                </button>
+              ))}
+            </div>
+          </SectionCard>
+
+          <SectionCard title="เลือกรายงานจอง" icon={<Search size={18} />}>
+            <SearchField value={bookingQuery} onChange={(event) => setBookingQuery(event.target.value)} placeholder="ค้นเลขที่ใบจอง / ทะเบียน / ชื่อลูกค้า" />
+            <div className="grid gap-2">
+              {filteredBookingReports.map((report) => (
+                <button key={report.id} type="button" onClick={() => selectBookingReport(report)} className="rounded-lg border border-line bg-[#0b0d11] p-3 text-left transition hover:border-brand">
+                  <p className="font-black text-white">{report.id} · {report.customerName}</p>
+                  <p className="mt-1 text-sm text-soft">{report.plate || "-"} · {[report.brand, report.model, report.year].filter(Boolean).join(" ") || "-"}</p>
                 </button>
               ))}
             </div>

@@ -27,8 +27,13 @@ export async function POST(request: Request) {
       }
     });
   } catch (error) {
+    const message = error instanceof Error ? error.message : "สร้าง PDF ไม่สำเร็จ";
+    const safeMessage =
+      /ENOENT|\/var\/task|public\/document-templates/i.test(message)
+        ? "ไม่พบไฟล์ PDF Template กรุณาอัปโหลด template ที่หน้า /documents/templates"
+        : message;
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "สร้าง PDF ไม่สำเร็จ" },
+      { error: safeMessage },
       { status: 500 }
     );
   }

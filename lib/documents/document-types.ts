@@ -1,4 +1,5 @@
 export type DocumentTemplateId =
+  | "temporary-receipt"
   | "vehicle-private-use"
   | "sale-summary"
   | "contract"
@@ -26,6 +27,7 @@ export type DocumentFieldConfig = {
   type?: DocumentFieldType;
   width?: number;
   value?: string;
+  pdfFieldName?: string;
 };
 
 export type DocumentTemplateConfig = {
