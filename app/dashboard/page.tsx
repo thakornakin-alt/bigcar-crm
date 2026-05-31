@@ -2,7 +2,7 @@
 
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { Bell, CalendarDays, Check, ClipboardCheck, FileText, Plus, User } from "lucide-react";
-import { FloatingActionButton, NativeAppHeader, NativeAppShell, NativeBadge, NativeBottomNav, NativeCard } from "@/app/components/ui";
+import { FloatingActionButton, NativeAppHeader, NativeAppShell, NativeBottomNav } from "@/app/components/ui";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 
 async function api<T>(url: string): Promise<T> {
@@ -57,7 +57,6 @@ export default function DashboardPage() {
               : "BIG CAR RDD CRM"}
           </span>
         }
-        actions={<NativeBadge>Phase 1</NativeBadge>}
       />
 
       <section className="mb-4 grid auto-rows-[124px] grid-cols-2 gap-3">
@@ -68,16 +67,6 @@ export default function DashboardPage() {
         <BentoCard href="/case-closure" label="ส่งมอบแล้ว" value={dashboard.delivered} icon={<Check size={18} />} />
         <BentoCard href="/calendar" label="งานวันนี้" value={dashboard.todayEvents} icon={<Bell size={18} />} wide />
       </section>
-
-      <NativeCard>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-black text-white">Workspace</p>
-            <p className="mt-1 text-xs text-soft">แตะการ์ดเพื่อเข้าโมดูลหลักได้ทันที</p>
-          </div>
-          <NativeBadge>CRM V3</NativeBadge>
-        </div>
-      </NativeCard>
 
       <FloatingActionButton href="/booking-reports" label="เพิ่มรายงานจอง" icon={<Plus size={22} />} />
       <NativeBottomNav />

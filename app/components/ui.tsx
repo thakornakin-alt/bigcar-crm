@@ -87,13 +87,13 @@ export function TopMenuButton({
 
 export function ProfileIndicator() {
   const { user, loading } = useSalesProfile();
-  const name = loading ? "Loading" : user?.nickname || user?.firstName || "RDD";
+  const name = loading ? "..." : user?.nickname || user?.firstName || "RDD";
   const avatarStyle = { backgroundImage: `url(${user?.avatarUrl || "/logo-rdd.png"})` };
 
   return (
     <Link
       href="/profile"
-      className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-panel px-2.5 text-sm font-black text-white transition hover:border-brand/60"
+      className="flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-2.5 text-sm font-black text-white transition hover:border-brand/50 hover:bg-white/[0.07]"
       aria-label="โปรไฟล์"
       title="โปรไฟล์"
     >
@@ -150,14 +150,14 @@ export function GlobalNav() {
   }
 
   return (
-    <nav className="sticky top-0 z-50 mb-5 rounded-lg border border-line bg-[#0b0d11]/95 shadow-glow backdrop-blur">
-      <div className="flex min-h-[64px] items-center justify-between gap-3 px-3 sm:px-4">
+    <nav className="sticky top-0 z-50 mb-5 rounded-[24px] border border-white/10 bg-[#070b10]/88 shadow-[0_18px_48px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+      <div className="flex min-h-[66px] items-center justify-between gap-3 px-3 sm:px-4">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <Link href="/dashboard" className="flex shrink-0 items-center gap-2" aria-label="BIG CAR RDD CRM หน้าแรก">
-            <span className="h-10 w-14 shrink-0 rounded-md bg-white bg-contain bg-center bg-no-repeat ring-1 ring-brand/30" style={{ backgroundImage: "url('/logo-rdd.png')" }} />
+            <span className="h-10 w-14 shrink-0 rounded-xl bg-white bg-contain bg-center bg-no-repeat ring-1 ring-brand/25" style={{ backgroundImage: "url('/logo-rdd.png')" }} />
             <span className="hidden leading-tight xl:block">
               <span className="block text-sm font-black tracking-[0.16em] text-white">BIG CAR RDD</span>
-              <span className="block text-[11px] font-bold uppercase tracking-[0.22em] text-brand">CRM V3</span>
+              <span className="block text-[11px] font-bold uppercase tracking-[0.22em] text-brand">Workspace</span>
             </span>
           </Link>
           <ProfileIndicator />
@@ -172,9 +172,10 @@ export function GlobalNav() {
                 key={item.href}
                 href={item.href}
                 className={classNames(
-                  "flex min-h-10 items-center gap-2 rounded-lg px-2.5 text-xs font-bold transition xl:px-3 xl:text-sm",
-                  active ? "bg-brand text-ink" : "text-soft hover:bg-panel hover:text-white"
+                  "flex min-h-10 items-center gap-2 rounded-xl px-2.5 text-xs font-bold transition xl:px-3 xl:text-sm",
+                  active ? "bg-white text-ink shadow-[0_10px_30px_rgba(255,255,255,0.12)]" : "text-soft hover:bg-white/7 hover:text-white"
                 )}
+                aria-current={active ? "page" : undefined}
               >
                 <Icon size={17} className={active ? "text-ink" : "text-brand"} />
                 {item.label}
@@ -189,7 +190,7 @@ export function GlobalNav() {
           <button
             type="button"
             onClick={() => setOpen((current) => !current)}
-            className="flex h-11 w-11 items-center justify-center rounded-lg border border-line bg-panel text-brand lg:hidden"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-brand lg:hidden"
             aria-label={open ? "ปิดเมนู" : "เปิดเมนู"}
           >
             {open ? <X size={19} /> : <Menu size={19} />}
@@ -198,7 +199,7 @@ export function GlobalNav() {
       </div>
 
       {open && (
-        <div className="grid grid-cols-2 gap-2 border-t border-line p-3 lg:hidden">
+        <div className="grid grid-cols-2 gap-2 border-t border-white/10 p-3 lg:hidden">
           {globalNavItems.map((item, index) => {
             const Icon = item.icon;
             const active = isActive(item.href);
@@ -208,9 +209,9 @@ export function GlobalNav() {
                 href={item.href}
                 onClick={() => setOpen(false)}
                 className={classNames(
-                  "flex min-h-12 items-center gap-3 rounded-lg border px-3 text-sm font-bold",
+                  "flex min-h-12 items-center gap-3 rounded-xl border px-3 text-sm font-bold",
                   hasOddMenuCount && index === 0 ? "col-span-2" : "",
-                  active ? "border-brand bg-brand text-ink" : "border-line bg-panel text-white"
+                  active ? "border-white bg-white text-ink" : "border-white/10 bg-white/5 text-white"
                 )}
               >
                 <Icon size={18} className={active ? "text-ink" : "text-brand"} />
@@ -283,7 +284,7 @@ export function NativeAppShell({ children, className = "" }: { children: ReactNo
 export function NativeAppHeader({
   title,
   subtitle,
-  eyebrow = "BIG CAR CRM",
+  eyebrow = "",
   actions
 }: {
   title: string;
@@ -294,11 +295,11 @@ export function NativeAppHeader({
   return (
     <>
       <GlobalNav />
-      <header className="mb-5 overflow-hidden rounded-2xl border border-line bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,0.18),transparent_32%),linear-gradient(135deg,#111820,#070a0f)] p-4 shadow-glow">
+      <header className="mb-5 overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,0.16),transparent_34%),linear-gradient(135deg,#101720,#06090e)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-brand">{eyebrow}</p>
-            <h1 className="mt-2 text-2xl font-black tracking-normal text-white sm:text-3xl">{title}</h1>
+            {eyebrow ? <p className="text-[11px] font-black uppercase tracking-[0.22em] text-brand">{eyebrow}</p> : null}
+            <h1 className={classNames("text-2xl font-black tracking-normal text-white sm:text-3xl", eyebrow ? "mt-2" : "")}>{title}</h1>
             {subtitle ? <div className="mt-2 text-sm font-medium text-soft">{subtitle}</div> : null}
           </div>
           {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
@@ -320,8 +321,8 @@ export function NativeCard({
   return (
     <section
       className={classNames(
-        "rounded-2xl border border-line bg-panel/90 p-4 shadow-glow",
-        interactive && "transition hover:border-brand/60 hover:bg-[#111820] active:scale-[0.99]",
+        "rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(17,24,32,0.92),rgba(7,10,15,0.94))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.24)]",
+        interactive && "transition hover:border-brand/50 hover:bg-[#111820] active:scale-[0.99]",
         className
       )}
     >
@@ -344,15 +345,15 @@ export function NativeButton({
       : variant === "danger"
         ? "border-red-400/45 bg-red-950/30 text-red-100"
         : variant === "ghost"
-          ? "border-line/70 bg-black/20 text-soft"
-          : "border-line bg-[#0b0d11] text-white";
+          ? "border-white/10 bg-white/[0.04] text-soft"
+          : "border-white/10 bg-[#0b0d11] text-white";
 
   return (
     <button
       type="button"
       {...props}
       className={classNames(
-        "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-black transition hover:border-brand/70 disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-black transition hover:border-brand/70 disabled:cursor-not-allowed disabled:opacity-50",
         variantClass,
         className
       )}
@@ -376,7 +377,7 @@ export function NativeBottomNav() {
   const pathname = usePathname();
   const items = globalNavItems.slice(0, 5);
   return (
-    <nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 gap-1 rounded-2xl border border-line bg-[#11141a]/95 p-2 shadow-glow backdrop-blur lg:hidden">
+    <nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 gap-1 rounded-[24px] border border-white/10 bg-[#070b10]/92 p-2 shadow-[0_18px_52px_rgba(0,0,0,0.34)] backdrop-blur-xl lg:hidden">
       {items.map((item) => {
         const Icon = item.icon;
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -386,7 +387,7 @@ export function NativeBottomNav() {
             href={item.href}
             className={classNames(
               "flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-black",
-              active ? "bg-brand text-ink" : "text-soft"
+              active ? "bg-white text-ink shadow-[0_10px_26px_rgba(255,255,255,0.12)]" : "text-soft"
             )}
           >
             <Icon size={17} className={active ? "text-ink" : "text-brand"} />
