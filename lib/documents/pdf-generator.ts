@@ -140,16 +140,24 @@ export async function generateFilledDocumentPdf(input: {
 }) {
   const template = await getDocumentTemplate(input.templateId);
   if (!template) throw new Error("ไม่พบ PDF Template");
+  const requiresUploadedPrimary = input.templateId === "contract" || input.templateId === "temporary-receipt";
+  if (requiresUploadedPrimary && !template.backgroundBase64) {
+    throw new Error("ยังไม่ได้อัปโหลด Template");
+  }
 
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
 
   let backgroundBytes: Buffer;
   try {
-    backgroundBytes = await readAssetBytes(template.backgroundPath, input.baseUrl);
+    if (template.backgroundBase64) {
+      backgroundBytes = Buffer.from(template.backgroundBase64, "base64");
+    } else {
+      backgroundBytes = await readAssetBytes(template.backgroundPath, input.baseUrl);
+    }
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
-      throw new Error("ไม่พบไฟล์ PDF Template กรุณาอัปโหลด template ใหม่ที่หน้า /documents/templates");
+      throw new Error("ยังไม่ได้อัปโหลด Template");
     }
     throw error;
   }

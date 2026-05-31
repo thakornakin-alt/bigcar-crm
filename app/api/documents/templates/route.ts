@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     const base64 = String(body.base64 || "");
     if (!templateId) return NextResponse.json({ error: "กรุณาเลือก template" }, { status: 400 });
     if (mimeType && mimeType !== "application/pdf") return NextResponse.json({ error: "รองรับเฉพาะไฟล์ PDF" }, { status: 400 });
-    const template = await saveDocumentTemplatePdf({ templateId, fileName, base64 });
+    const template = await saveDocumentTemplatePdf({ templateId, fileName, mimeType, base64 });
     return NextResponse.json({ template });
   } catch (error) {
     return NextResponse.json(

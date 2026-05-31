@@ -36,6 +36,9 @@ export type DocumentTemplateConfig = {
   description: string;
   fileName: string;
   backgroundPath: string;
+  backgroundBase64?: string;
+  backgroundMimeType?: string;
+  uploadedAt?: string;
   fields: Record<string, DocumentFieldConfig>;
 };
 
