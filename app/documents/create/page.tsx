@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Download, Eye, FileText, Loader2, Printer, Save, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Download, Eye, FileImage, FileText, Loader2, Printer, Save, Search } from "lucide-react";
 import { FilterChip, PageContainer, PageTitle, SearchField, SectionCard, TopMenuButton } from "@/app/components/ui";
 import type { DocumentTemplateConfig, DocumentTemplateId } from "@/lib/documents/document-types";
 import type { ReportHistoryItem } from "@/lib/types";
@@ -141,6 +141,35 @@ function vehicleLabel(vehicle: Vehicle) {
   return [vehicle.plate, vehicle.brand, vehicle.model, vehicle.year].filter(Boolean).join(" / ");
 }
 
+function publicFilePath(path: string) {
+  return `/${String(path || "").replace(/^public[\\/]/, "").replace(/\\/g, "/")}`;
+}
+
+function templateImagePath(template: DocumentTemplateConfig) {
+  const direct = publicFilePath(template.backgroundPath || "");
+  if (direct.toLowerCase().endsWith(".jpg") || direct.toLowerCase().endsWith(".jpeg") || direct.toLowerCase().endsWith(".png")) return direct;
+  if (template.id === "contract") return "/document-templates/contract.jpg";
+  if (template.id === "temporary-receipt") return "/document-templates/payment-receipt.jpg";
+  return "";
+}
+
+function formatDateForDoc(value: string) {
+  if (!value) return "";
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  return value;
+}
+
+async function loadImage(src: string) {
+  return await new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("โหลดภาพเอกสารไม่สำเร็จ"));
+    image.src = src;
+  });
+}
+
 export default function DocumentCreatePage() {
   const [templates, setTemplates] = useState<DocumentTemplateConfig[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -152,6 +181,7 @@ export default function DocumentCreatePage() {
   const [bookingReports, setBookingReports] = useState<ReportHistoryItem[]>([]);
   const [data, setData] = useState<DocumentFormData>({ ...initialData, transactionDate: todayInput(), bookingDate: todayInput() });
   const [previewUrl, setPreviewUrl] = useState("");
+  const [imagePreviewUrl, setImagePreviewUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [savingHistory, setSavingHistory] = useState(false);
   const [message, setMessage] = useState("");
@@ -175,8 +205,9 @@ export default function DocumentCreatePage() {
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
     };
-  }, [previewUrl]);
+  }, [previewUrl, imagePreviewUrl]);
 
   const selectedTemplate = templates.find((template) => template.id === templateId);
   const autoTemplates = useMemo(
@@ -273,21 +304,25 @@ export default function DocumentCreatePage() {
   function selectBookingReport(report: ReportHistoryItem) {
     const salePrice = money(report.reportText.match(/ราคาขาย[:：]\s*([\d,]+)/)?.[1] || "");
     const discount = money(report.reportText.match(/ส่วนลด[:：]\s*([\d,]+)/)?.[1] || "");
+    const matchedVehicle = vehicles.find((vehicle) => String(vehicle.plate || "").replace(/\s+/g, "") === String(report.plate || "").replace(/\s+/g, ""));
     setData((current) => ({
       ...current,
       bookingNo: report.id || current.bookingNo,
-      bookingDate: current.bookingDate || todayInput(),
+      bookingDate: report.createdAt ? String(report.createdAt).slice(0, 10) : current.bookingDate || todayInput(),
+      transactionDate: report.createdAt ? String(report.createdAt).slice(0, 10) : current.transactionDate || todayInput(),
       customerName: report.customerName || current.customerName,
       phone: report.phone || current.phone,
       idCard: report.idCard || current.idCard,
       plate: report.plate || current.plate,
-      carBrand: report.brand || current.carBrand,
-      carModel: report.model || current.carModel,
-      year: report.year || current.year,
-      color: report.color || current.color,
+      carBrand: report.brand || matchedVehicle?.brand || current.carBrand,
+      carModel: report.model || matchedVehicle?.model || current.carModel,
+      year: report.year || matchedVehicle?.year || current.year,
+      color: report.color || matchedVehicle?.color || current.color,
       sellerName: report.saleName || current.sellerName,
       salePrice: salePrice || current.salePrice,
-      discountPrice: discount || current.discountPrice
+      discountPrice: discount || current.discountPrice,
+      vin: matchedVehicle?.vin || current.vin,
+      deliveryLocation: matchedVehicle?.parkingLocation || current.deliveryLocation
     }));
     setBookingQuery(`${report.id} / ${report.customerName}`);
   }
@@ -352,6 +387,75 @@ export default function DocumentCreatePage() {
       };
     } catch {
       await generatePdf(true);
+    }
+  }
+
+  async function generateDocumentImage(download = false) {
+    setLoading(true);
+    setError("");
+    setMessage("");
+    try {
+      if (!selectedTemplate) throw new Error("กรุณาเลือกประเภทเอกสาร");
+      if (!data.customerName || !data.plate) throw new Error("กรุณาเลือกข้อมูลรายงานจองอย่างน้อย ชื่อลูกค้า + ทะเบียน");
+
+      const imagePath = templateImagePath(selectedTemplate);
+      if (!imagePath) throw new Error("Template นี้ยังไม่มีไฟล์ภาพพื้นหลังสำหรับสร้างรูป");
+
+      const bg = await loadImage(imagePath);
+      const canvas = document.createElement("canvas");
+      canvas.width = bg.naturalWidth || bg.width;
+      canvas.height = bg.naturalHeight || bg.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas ไม่พร้อมใช้งาน");
+
+      const basePdfWidth = 595;
+      const basePdfHeight = 842;
+      const scaleX = canvas.width / basePdfWidth;
+      const scaleY = canvas.height / basePdfHeight;
+
+      ctx.drawImage(bg, 0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#111827";
+
+      Object.entries(selectedTemplate.fields || {}).forEach(([fieldKey, config]) => {
+        const rawValue = String(data[fieldKey] || "").trim();
+        if (config.type === "checkbox") {
+          const checked = rawValue.toLowerCase() === String(config.value || "").toLowerCase();
+          if (checked) {
+            ctx.font = `${Math.max(12, (config.fontSize || 10) * ((scaleX + scaleY) / 2))}px Arial, Tahoma, sans-serif`;
+            ctx.fillText("✓", config.x * scaleX, config.y * scaleY);
+          }
+          return;
+        }
+        if (!rawValue) return;
+        const textValue = config.type === "date" ? formatDateForDoc(rawValue) : rawValue;
+        const fontSize = Math.max(10, (config.fontSize || 10) * ((scaleX + scaleY) / 2));
+        ctx.font = `${fontSize}px Arial, Tahoma, sans-serif`;
+        ctx.fillText(textValue, config.x * scaleX, config.y * scaleY);
+      });
+
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 0.95));
+      if (!blob) throw new Error("สร้างรูปเอกสารไม่สำเร็จ");
+      const url = URL.createObjectURL(blob);
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+      setImagePreviewUrl(url);
+      if (download) {
+        const safeName = [selectedTemplate.fileName.replace(/\.pdf$/i, ""), data.customerName || "customer", data.plate || "no-plate"]
+          .join("-")
+          .replace(/[\\/:*?"<>|#%&{}$!'@+=`]/g, "-")
+          .replace(/\s+/g, "-")
+          .slice(0, 120);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${safeName}.png`;
+        link.click();
+      }
+      setMessage("สร้างรูปเอกสารสำเร็จ");
+      return url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "สร้างรูปเอกสารไม่สำเร็จ");
+      return "";
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -466,14 +570,22 @@ export default function DocumentCreatePage() {
                 </label>
               ))}
             </div>
-            <div className="grid gap-2 sm:grid-cols-4">
+            <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
               <button type="button" onClick={() => generatePdf(false)} disabled={loading} className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-brand/40 bg-brand/10 px-3 font-black text-brand disabled:opacity-60">
                 {loading ? <Loader2 size={18} className="animate-spin" /> : <Eye size={18} />}
                 Preview PDF
               </button>
               <button type="button" onClick={() => generatePdf(true)} disabled={loading} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-3 font-black text-ink disabled:opacity-60">
                 <Download size={18} />
-                Download
+                เซฟ PDF
+              </button>
+              <button type="button" onClick={() => generateDocumentImage(false)} disabled={loading} className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-brand/40 bg-brand/10 px-3 font-black text-brand disabled:opacity-60">
+                <FileImage size={18} />
+                Preview รูป
+              </button>
+              <button type="button" onClick={() => generateDocumentImage(true)} disabled={loading} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-3 font-black text-ink disabled:opacity-60">
+                <Download size={18} />
+                เซฟ PNG
               </button>
               <button type="button" onClick={printPdf} className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-3 font-bold text-white">
                 <Printer size={18} />
@@ -486,12 +598,17 @@ export default function DocumentCreatePage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Preview PDF" icon={<Eye size={18} />}>
+          <SectionCard title="Preview เอกสาร" icon={<Eye size={18} />}>
+            {imagePreviewUrl ? (
+              <div className="mb-4 overflow-hidden rounded-lg border border-line bg-white">
+                <img src={imagePreviewUrl} alt="Document image preview" className="h-auto w-full" />
+              </div>
+            ) : null}
             {previewUrl ? (
               <iframe title="PDF Preview" src={previewUrl} className="h-[72vh] w-full rounded-lg border border-line bg-white" />
             ) : (
               <div className="rounded-lg border border-dashed border-line bg-[#0b0d11] px-4 py-10 text-center text-soft">
-                กด Preview PDF เพื่อดูเอกสารก่อนพิมพ์หรือดาวน์โหลด
+                กด Preview PDF หรือ Preview รูป เพื่อดูเอกสารก่อนเซฟ
               </div>
             )}
           </SectionCard>
