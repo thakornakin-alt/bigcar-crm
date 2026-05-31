@@ -144,18 +144,6 @@ function vehicleLabel(vehicle: Vehicle) {
   return [vehicle.plate, vehicle.brand, vehicle.model, vehicle.year].filter(Boolean).join(" / ");
 }
 
-function publicFilePath(path: string) {
-  return `/${String(path || "").replace(/^public[\\/]/, "").replace(/\\/g, "/")}`;
-}
-
-function templateImagePath(template: DocumentTemplateConfig) {
-  const direct = publicFilePath(template.backgroundPath || "");
-  if (direct.toLowerCase().endsWith(".jpg") || direct.toLowerCase().endsWith(".jpeg") || direct.toLowerCase().endsWith(".png")) return direct;
-  if (template.id === "contract") return "/document-templates/contract.jpg";
-  if (template.id === "temporary-receipt") return "/document-templates/payment-receipt.jpg";
-  return "";
-}
-
 function formatDateForDoc(value: string) {
   if (!value) return "";
   const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -182,16 +170,6 @@ function writeTuning(templateId: DocumentTemplateId, tuning: ImageTuning) {
   } catch {
     // ignore
   }
-}
-
-async function loadImage(src: string) {
-  return await new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.crossOrigin = "anonymous";
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("โหลดภาพเอกสารไม่สำเร็จ"));
-    image.src = src;
-  });
 }
 
 export default function DocumentCreatePage() {
@@ -357,23 +335,50 @@ export default function DocumentCreatePage() {
     setBookingQuery(`${report.id} / ${report.customerName}`);
   }
 
+  async function generatePdfBlob() {
+    if (!selectedTemplate) throw new Error("กรุณาเลือกประเภทเอกสาร");
+    if (!data.customerName || !data.plate) throw new Error("กรุณาเลือกข้อมูลรายงานจองอย่างน้อย ชื่อลูกค้า + ทะเบียน");
+    return await api<Blob>("/api/documents/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ templateId, data })
+      });
+  }
+
+  async function renderPdfPageToPng(pdfBlob: Blob) {
+    const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as any;
+    if (pdfjs?.GlobalWorkerOptions) {
+      pdfjs.GlobalWorkerOptions.workerSrc = "";
+    }
+    const bytes = new Uint8Array(await pdfBlob.arrayBuffer());
+    const loadingTask = pdfjs.getDocument({ data: bytes, isEvalSupported: false });
+    const pdf = await loadingTask.promise;
+    const firstPage = await pdf.getPage(1);
+    const viewport = firstPage.getViewport({ scale: 2 });
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas ไม่พร้อมใช้งาน");
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    await firstPage.render({ canvasContext: ctx, viewport }).promise;
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 0.95));
+    if (!blob) throw new Error("แปลง PDF เป็นรูปไม่สำเร็จ");
+    return blob;
+  }
+
   async function generatePdf(download = false) {
     setLoading(true);
     setError("");
     setMessage("");
     try {
-      if (!selectedTemplate) throw new Error("กรุณาเลือกประเภทเอกสาร");
-      if (!data.customerName || !data.plate) throw new Error("กรุณากรอก ชื่อลูกค้า และ ทะเบียน ก่อนสร้างเอกสาร");
-      const blob = await api<Blob>("/api/documents/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ templateId, data })
-      });
+      const template = selectedTemplate;
+      if (!template) throw new Error("กรุณาเลือกประเภทเอกสาร");
+      const blob = await generatePdfBlob();
       const url = URL.createObjectURL(blob);
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(url);
       if (download) {
-        const safeName = [selectedTemplate.fileName.replace(/\.pdf$/i, ""), data.customerName || "customer", data.plate || "no-plate"]
+        const safeName = [template.fileName.replace(/\.pdf$/i, ""), data.customerName || "customer", data.plate || "no-plate"]
           .join("-")
           .replace(/[\\/:*?"<>|#%&{}$!'@+=`]/g, "-")
           .replace(/\s+/g, "-")
@@ -425,55 +430,19 @@ export default function DocumentCreatePage() {
     setError("");
     setMessage("");
     try {
-      if (!selectedTemplate) throw new Error("กรุณาเลือกประเภทเอกสาร");
-      if (!data.customerName || !data.plate) throw new Error("กรุณาเลือกข้อมูลรายงานจองอย่างน้อย ชื่อลูกค้า + ทะเบียน");
+      const template = selectedTemplate;
+      if (!template) throw new Error("กรุณาเลือกประเภทเอกสาร");
+      const pdfBlob = await generatePdfBlob();
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(pdfUrl);
 
-      const imagePath = templateImagePath(selectedTemplate);
-      if (!imagePath) throw new Error("Template นี้ยังไม่มีไฟล์ภาพพื้นหลังสำหรับสร้างรูป");
-
-      const bg = await loadImage(imagePath);
-      const canvas = document.createElement("canvas");
-      canvas.width = bg.naturalWidth || bg.width;
-      canvas.height = bg.naturalHeight || bg.height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas ไม่พร้อมใช้งาน");
-
-      const basePdfWidth = 595;
-      const basePdfHeight = 842;
-      const scaleX = canvas.width / basePdfWidth;
-      const scaleY = canvas.height / basePdfHeight;
-
-      const drawWidth = canvas.width * imageTuning.scale;
-      const drawHeight = canvas.height * imageTuning.scale;
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(bg, imageTuning.offsetX, imageTuning.offsetY, drawWidth, drawHeight);
-      ctx.fillStyle = "#111827";
-
-      Object.entries(selectedTemplate.fields || {}).forEach(([fieldKey, config]) => {
-        const rawValue = String(data[fieldKey] || "").trim();
-        if (config.type === "checkbox") {
-          const checked = rawValue.toLowerCase() === String(config.value || "").toLowerCase();
-          if (checked) {
-            ctx.font = `${Math.max(12, (config.fontSize || 10) * ((scaleX + scaleY) / 2))}px Arial, Tahoma, sans-serif`;
-            ctx.fillText("✓", config.x * scaleX + imageTuning.textOffsetX, config.y * scaleY + imageTuning.textOffsetY);
-          }
-          return;
-        }
-        if (!rawValue) return;
-        const textValue = config.type === "date" ? formatDateForDoc(rawValue) : rawValue;
-        const fontSize = Math.max(10, (config.fontSize || 10) * ((scaleX + scaleY) / 2));
-        ctx.font = `${fontSize}px Arial, Tahoma, sans-serif`;
-        ctx.fillText(textValue, config.x * scaleX + imageTuning.textOffsetX, config.y * scaleY + imageTuning.textOffsetY);
-      });
-
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 0.95));
-      if (!blob) throw new Error("สร้างรูปเอกสารไม่สำเร็จ");
-      const url = URL.createObjectURL(blob);
+      const imageBlob = await renderPdfPageToPng(pdfBlob);
+      const url = URL.createObjectURL(imageBlob);
       if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
       setImagePreviewUrl(url);
       if (download) {
-        const safeName = [selectedTemplate.fileName.replace(/\.pdf$/i, ""), data.customerName || "customer", data.plate || "no-plate"]
+        const safeName = [template.fileName.replace(/\.pdf$/i, ""), data.customerName || "customer", data.plate || "no-plate"]
           .join("-")
           .replace(/[\\/:*?"<>|#%&{}$!'@+=`]/g, "-")
           .replace(/\s+/g, "-")
@@ -483,7 +452,7 @@ export default function DocumentCreatePage() {
         link.download = `${safeName}.png`;
         link.click();
       }
-      setMessage("สร้างรูปเอกสารสำเร็จ");
+      setMessage("สร้างรูปเอกสารจาก PDF สำเร็จ");
       return url;
     } catch (err) {
       setError(err instanceof Error ? err.message : "สร้างรูปเอกสารไม่สำเร็จ");
