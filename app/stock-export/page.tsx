@@ -64,6 +64,7 @@ type StockExportContact = {
 type AdvancedStockFilters = {
   models: string[];
   years: string[];
+  registrationYears: string[];
   reportReturnFrom: string;
   reportReturnTo: string;
   bookingSaleFrom: string;
@@ -103,6 +104,7 @@ type AdvancedStockFilters = {
 const emptyAdvancedFilters: AdvancedStockFilters = {
   models: [],
   years: [],
+  registrationYears: [],
   reportReturnFrom: "",
   reportReturnTo: "",
   bookingSaleFrom: "",
@@ -180,16 +182,66 @@ function parseNumeric(value?: string) {
   return Number(String(value || "").replace(/[^\d.]/g, "")) || 0;
 }
 
-function normalizeStockYear(value?: string) {
-  const raw = String(value || "").trim();
+function parseYearSafely(value?: unknown, preferBuddhist = false) {
+  if (value === null || value === undefined) return "";
+  const toDisplay = (year: number) => {
+    const adYear = year >= 2400 ? year - 543 : year;
+    if (adYear < 1990 || adYear > 2100) return "";
+    return String(preferBuddhist ? adYear + 543 : adYear);
+  };
+
+  if (Object.prototype.toString.call(value) === "[object Date]") {
+    const year = (value as Date).getFullYear();
+    return toDisplay(year);
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return "";
+
   const direct = raw.match(/\b(19|20|25)\d{2}\b/);
-  if (direct) return direct[0];
+  if (direct) return toDisplay(Number(direct[0]));
+
+  const asNumber = Number(raw);
+  if (Number.isFinite(asNumber)) {
+    if (asNumber > 30000 && asNumber < 100000) {
+      const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+      const asDate = new Date(excelEpoch.getTime() + asNumber * 86400000);
+      return toDisplay(asDate.getUTCFullYear());
+    }
+    if (asNumber > 1000000 && asNumber < 9999999999) {
+      const ms = asNumber < 10000000000 ? asNumber * 1000 : asNumber;
+      const dt = new Date(ms);
+      if (!Number.isNaN(dt.getTime())) return toDisplay(dt.getUTCFullYear());
+    }
+  }
+
+  const dateLikeMatch = raw.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-]((19|20|25)\d{2})\b/);
+  if (dateLikeMatch) return toDisplay(Number(dateLikeMatch[3]));
+
   const digits = raw.replace(/[^\d]/g, "");
-  return digits.length >= 4 ? digits.slice(-4) : raw;
+  if (digits.length >= 4) {
+    const yearMatch = digits.match(/(19|20|25)\d{2}/);
+    if (yearMatch) return toDisplay(Number(yearMatch[0]));
+  }
+  return "";
+}
+
+function isValidGregorianYearText(value?: string) {
+  const text = String(value || "").trim();
+  if (!/^\d{4}$/.test(text)) return false;
+  const year = Number(text);
+  return year >= 1990 && year <= 2100;
 }
 
 function stockYear(vehicle: StockVehicle) {
-  return normalizeStockYear(vehicle.year);
+  const year = parseYearSafely(vehicle.year, false);
+  return isValidGregorianYearText(year) ? year : "";
+}
+
+function stockRegistrationYear(vehicle: StockVehicle) {
+  const raw = rawVehicleValue(vehicle, ["registrationYear", "registeredYear", "ปีจด", "ปีจดทะเบียน", "ทะเบียนปี"]);
+  const year = parseYearSafely(raw, false);
+  return isValidGregorianYearText(year) ? year : "";
 }
 
 function rawVehicleValue(vehicle: StockVehicle, keys: string[]) {
@@ -301,7 +353,10 @@ const mileageBandOptions = [
 
 function matchesMileageBand(mileage: number, bandLabel: string) {
   const band = mileageBandOptions.find((item) => item.label === bandLabel);
-  if (!band) return true;
+  if (!band) {
+    const exact = parseNumeric(bandLabel);
+    return exact ? mileage === exact : true;
+  }
   if (band.max === Number.POSITIVE_INFINITY) return mileage >= band.min;
   return mileage >= band.min && mileage <= band.max;
 }
@@ -322,6 +377,7 @@ function matchesAdvancedFiltersExcept(vehicle: StockVehicle, filters: AdvancedSt
   const ignored = new Set<keyof AdvancedStockFilters>(except);
   if (!ignored.has("models") && filters.models.length && !filters.models.includes(vehicleTitle(vehicle))) return false;
   if (!ignored.has("years") && filters.years.length && !filters.years.includes(stockYear(vehicle))) return false;
+  if (!ignored.has("registrationYears") && filters.registrationYears.length && !filters.registrationYears.includes(stockRegistrationYear(vehicle))) return false;
   if (!ignored.has("colors") && filters.colors.length && !filters.colors.includes(vehicle.color || "")) return false;
   if (!ignored.has("colorGroups") && filters.colorGroups.length && !filters.colorGroups.includes(stockRawValue(vehicle, "colorGroup"))) return false;
   if (!ignored.has("gears") && filters.gears.length && !filters.gears.includes(vehicle.gear || "")) return false;
@@ -572,13 +628,14 @@ function extraColumnExportWidth(key: ExtraColumnKey) {
   return 160;
 }
 
-function stockExportColumns(mode: ExportMode, selectedColumns: ExtraColumnKey[]): StockExportColumn[] {
+function stockExportColumns(mode: ExportMode, selectedColumns: ExtraColumnKey[], hasRegistrationYear: boolean): StockExportColumn[] {
   const columns: StockExportColumn[] =
     mode === "internal"
       ? [
           { key: "location", label: "Location", width: 120 },
           { key: "plate", label: "ทะเบียน", width: 130 },
-          { key: "year", label: "ปีจด", width: 82 },
+          { key: "year", label: "ปีรถ", width: 82 },
+          ...(hasRegistrationYear ? [{ key: "registrationYear", label: "ปีจด", width: 82 }] : []),
           { key: "model", label: "รุ่นรถยนต์", width: 370 },
           { key: "gear", label: "เกียร์", width: 70 },
           { key: "color", label: "สี", width: 110 },
@@ -589,7 +646,8 @@ function stockExportColumns(mode: ExportMode, selectedColumns: ExtraColumnKey[])
       : [
           { key: "location", label: "Location", width: 165 },
           { key: "plate", label: "ทะเบียน", width: 150 },
-          { key: "year", label: "ปีจด", width: 120 },
+          { key: "year", label: "ปีรถ", width: 120 },
+          ...(hasRegistrationYear ? [{ key: "registrationYear", label: "ปีจด", width: 120 }] : []),
           { key: "model", label: "รุ่นรถยนต์", width: 620 },
           { key: "gear", label: "เกียร์", width: 95 },
           { key: "color", label: "สี", width: 190 },
@@ -750,7 +808,8 @@ export default function StockExportPage() {
 
     return {
       models: uniqueSorted(optionValues(["models"]).map((vehicle) => vehicleTitle(vehicle))),
-      years: uniqueSorted(optionValues(["years"]).map((vehicle) => stockYear(vehicle))).sort((a, b) => Number(b) - Number(a)),
+      years: uniqueSorted(optionValues(["years"]).map((vehicle) => stockYear(vehicle)).filter((value) => isValidGregorianYearText(value))).sort((a, b) => Number(b) - Number(a)),
+      registrationYears: uniqueSorted(optionValues(["registrationYears"]).map((vehicle) => stockRegistrationYear(vehicle)).filter((value) => isValidGregorianYearText(value))).sort((a, b) => Number(b) - Number(a)),
       colors: uniqueSorted(optionValues(["colors"]).map((vehicle) => vehicle.color || "")),
       colorGroups: uniqueSorted(optionValues(["colorGroups"]).map((vehicle) => stockRawValue(vehicle, "colorGroup"))),
       gears: uniqueSorted(optionValues(["gears"]).map((vehicle) => vehicle.gear || "")),
@@ -849,6 +908,10 @@ export default function StockExportPage() {
     [sortedVehicles]
   );
   const hasMoreVehicles = sortedVehicles.length > visibleCount;
+  const hasRegistrationYear = useMemo(
+    () => vehicles.some((vehicle) => Boolean(stockRegistrationYear(vehicle))),
+    [vehicles]
+  );
 
   useEffect(() => {
     loadStock();
@@ -1081,7 +1144,7 @@ export default function StockExportPage() {
 
     for (const group of exportGroups) {
       for (let index = 0; index < group.pages.length; index += 1) {
-        renderStockTableCanvas(canvas, group.pages[index], exportMode, index + 1, group.pages.length, group.name, group.vehicles.length, exportVehicles.length, contact, extraColumns);
+        renderStockTableCanvas(canvas, group.pages[index], exportMode, index + 1, group.pages.length, group.name, group.vehicles.length, exportVehicles.length, contact, extraColumns, hasRegistrationYear);
         if (format === "pdf") {
           const jpegBlob = await canvasToBlob(canvas, "image/jpeg", 0.92);
           pdfImages.push({ bytes: new Uint8Array(await jpegBlob.arrayBuffer()), width: canvas.width, height: canvas.height });
@@ -1116,7 +1179,7 @@ export default function StockExportPage() {
       if (!canvas) throw new Error("Canvas is not ready");
       const firstGroup = exportGroups[0];
       const contact = await stockExportContactProfile(salesProfile);
-      renderStockTableCanvas(canvas, firstGroup.pages[0] || firstGroup.vehicles, exportMode, 1, Math.max(firstGroup.pages.length, 1), firstGroup.name, firstGroup.vehicles.length, exportVehicles.length, contact, extraColumns);
+      renderStockTableCanvas(canvas, firstGroup.pages[0] || firstGroup.vehicles, exportMode, 1, Math.max(firstGroup.pages.length, 1), firstGroup.name, firstGroup.vehicles.length, exportVehicles.length, contact, extraColumns, hasRegistrationYear);
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
       if (!blob || !navigator.clipboard || typeof ClipboardItem === "undefined") throw new Error("เครื่องนี้ยังไม่รองรับ Copy Image");
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
@@ -1129,11 +1192,11 @@ export default function StockExportPage() {
   }
 
   return (
-    <NativeAppShell className="max-w-5xl">
+    <NativeAppShell className="max-w-5xl pb-28">
       <NativeAppHeader
-        title="สต๊อก"
-        subtitle="ค้นหา กรอง Preview และ Export รูปสต็อก"
-        actions={<NativeBadge>{exportVehicles.length.toLocaleString("th-TH")} คัน</NativeBadge>}
+        title="Stock Studio"
+        subtitle="Live Board Creator"
+        actions={<NativeBadge>{exportVehicles.length.toLocaleString("th-TH")} คันที่เลือก</NativeBadge>}
       />
 
       {(message || error) && (
@@ -1148,6 +1211,17 @@ export default function StockExportPage() {
       )}
 
       <div className="space-y-4">
+          <NativeCard className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[#0B1220]/90 p-5 shadow-[0_0_60px_rgba(34,197,94,0.10)]">
+            <div className="pointer-events-none absolute -top-14 right-[-8%] h-36 w-36 rounded-full bg-brand/15 blur-[60px]" />
+            <p className="text-[13px] font-bold uppercase tracking-[0.14em] text-brand/90">สร้างรูปสต็อก</p>
+            <h2 className="mt-1 text-[34px] font-black leading-tight text-white">พร้อมส่งลูกค้า</h2>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-2xl border border-white/10 bg-[#050816]/70 px-3 py-3"><p className="text-[13px] font-semibold text-soft">ทั้งหมด</p><p className="mt-1 text-base font-black text-white">{sortedVehicles.length.toLocaleString("th-TH")} คัน</p></div>
+              <div className="rounded-2xl border border-white/10 bg-[#050816]/70 px-3 py-3"><p className="text-[13px] font-semibold text-soft">ที่เลือก</p><p className="mt-1 text-base font-black text-white">{exportVehicles.length.toLocaleString("th-TH")} คัน</p></div>
+              <div className="rounded-2xl border border-white/10 bg-[#050816]/70 px-3 py-3"><p className="text-[13px] font-semibold text-soft">กลุ่ม</p><p className="mt-1 text-base font-black text-white">{exportGroups.length.toLocaleString("th-TH")} กลุ่ม</p></div>
+              <div className="rounded-2xl border border-white/10 bg-[#050816]/70 px-3 py-3"><p className="text-[13px] font-semibold text-soft">หน้า</p><p className="mt-1 text-base font-black text-white">{exportPageCount.toLocaleString("th-TH")} หน้า</p></div>
+            </div>
+          </NativeCard>
           <NativeCard>
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="flex items-center gap-2 text-lg font-black text-white">
@@ -1184,11 +1258,11 @@ export default function StockExportPage() {
                       <Columns3 size={18} className="text-brand" />
                       เลือกข้อมูลที่แสดง{extraColumns.length ? ` (${extraColumns.length})` : ""}
                     </NativeButton>
-                    <NativeButton type="button" onClick={clearFilters} variant="ghost" className="px-3">
-                      ล้างตัวกรอง
-                    </NativeButton>
                   </div>
                 </div>
+                <NativeButton type="button" onClick={clearFilters} variant="ghost" className="w-full">
+                  ล้างตัวกรอง
+                </NativeButton>
               </StickyFilterBar>
             ) : (
               <>
@@ -1219,7 +1293,8 @@ export default function StockExportPage() {
                   </ActiveFilterTag>
                 ))}
                 {advancedFilters.models.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("models")}>รุ่น: {advancedFilters.models.join(", ")}</ActiveFilterTag>}
-                {advancedFilters.years.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("years")}>ปีจด: {advancedFilters.years.join(", ")}</ActiveFilterTag>}
+                {advancedFilters.years.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("years")}>ปีรถ: {advancedFilters.years.join(", ")}</ActiveFilterTag>}
+                {advancedFilters.registrationYears.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("registrationYears")}>ปีจด: {advancedFilters.registrationYears.join(", ")}</ActiveFilterTag>}
                 {advancedFilters.colors.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("colors")}>สี: {advancedFilters.colors.join(", ")}</ActiveFilterTag>}
                 {advancedFilters.colorGroups.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("colorGroups")}>กลุ่มสี: {advancedFilters.colorGroups.join(", ")}</ActiveFilterTag>}
                 {advancedFilters.gears.length > 0 && <ActiveFilterTag onRemove={() => clearAdvancedFilter("gears")}>เกียร์: {advancedFilters.gears.join(", ")}</ActiveFilterTag>}
@@ -1296,59 +1371,35 @@ export default function StockExportPage() {
               </p>
             )}
             <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-white">สถานะ</p>
-                <button type="button" onClick={() => setSelectedStatuses([])} className="text-xs font-semibold text-brand">
-                  ทั้งหมด
-                </button>
-              </div>
-              <p className="text-xs text-soft">ไม่เลือกสถานะ = แสดงทั้งหมด</p>
-              <div className="flex flex-wrap gap-2">
-                {statusOptions.map((status) => {
-                  const checked = selectedStatuses.includes(status);
-                  return (
-                    <FilterChip
-                      key={status}
-                      active={checked}
-                      onClick={() =>
-                        setSelectedStatuses((current) =>
-                          current.includes(status) ? current.filter((item) => item !== status) : [...current, status]
-                        )
-                      }
-                    >
-                      {status} ({statusCounts[status] || 0})
-                    </FilterChip>
-                  );
-                })}
-              </div>
+              <p className="text-sm font-semibold text-white">สถานะ</p>
+              <select
+                value={selectedStatuses[0] || "__all__"}
+                onChange={(event) => setSelectedStatuses(event.target.value === "__all__" ? [] : [event.target.value])}
+                className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-semibold text-white outline-none focus:border-brand"
+              >
+                <option value="__all__">ทั้งหมด</option>
+                {statusOptions.map((status) => (
+                  <option key={status} value={status}>
+                    {status} ({statusCounts[status] || 0})
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-white">กลุ่มรถยนต์</p>
-                <button type="button" onClick={() => setSelectedVehicleGroups([])} className="text-xs font-semibold text-brand">
-                  ทั้งหมด
-                </button>
-              </div>
-              <p className="text-xs text-soft">รายการนี้เปลี่ยนตามสถานะที่เลือกด้านบน</p>
+              <p className="text-sm font-semibold text-white">กลุ่มรถยนต์</p>
               {vehicleGroupOptions.length ? (
-                <div className="flex flex-wrap gap-2">
-                  {vehicleGroupOptions.map((group) => {
-                    const checked = selectedVehicleGroups.includes(group.name);
-                    return (
-                      <FilterChip
-                        key={group.name}
-                        active={checked}
-                        onClick={() =>
-                          setSelectedVehicleGroups((current) =>
-                            current.includes(group.name) ? current.filter((item) => item !== group.name) : [...current, group.name]
-                          )
-                        }
-                      >
-                        {group.name} ({group.count})
-                      </FilterChip>
-                    );
-                  })}
-                </div>
+                <select
+                  value={selectedVehicleGroups[0] || "__all__"}
+                  onChange={(event) => setSelectedVehicleGroups(event.target.value === "__all__" ? [] : [event.target.value])}
+                  className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-semibold text-white outline-none focus:border-brand"
+                >
+                  <option value="__all__">ทั้งหมด</option>
+                  {vehicleGroupOptions.map((group) => (
+                    <option key={group.name} value={group.name}>
+                      {group.name} ({group.count})
+                    </option>
+                  ))}
+                </select>
               ) : (
                 <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft">
                   ยังไม่พบกลุ่มรถยนต์ในสต็อก
@@ -1450,7 +1501,7 @@ export default function StockExportPage() {
             </h2>
             <NativeBadge>{exportPageCount.toLocaleString("th-TH")} หน้า</NativeBadge>
           </div>
-          <StockPreview vehicles={exportVehicles} mode={exportMode} pageCount={exportPageCount} groupCount={exportGroups.length} extraColumns={extraColumns} />
+          <StockPreview vehicles={exportVehicles} mode={exportMode} pageCount={exportPageCount} groupCount={exportGroups.length} extraColumns={extraColumns} hasRegistrationYear={hasRegistrationYear} />
           <div className="grid gap-2 rounded-lg border border-line bg-[#0b0d11] p-3 sm:grid-cols-[1fr_auto]">
             <label>
               <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">ส่งรูปสต็อกเข้า LINE กลุ่ม</span>
@@ -1566,7 +1617,7 @@ export default function StockExportPage() {
                           <span>สถานะ: <b className="text-white">{vehicle.status || "-"}</b></span>
                           <span>กลุ่ม: <b className="text-white">{vehicle.vehicleGroup || "-"}</b></span>
                           <span>Location: <b className="text-white">{vehicle.parkingLocation || "-"}</b></span>
-                          <span>ปีจด: <b className="text-white">{stockYear(vehicle) || "-"}</b></span>
+                          <span>ปีรถ: <b className="text-white">{stockYear(vehicle) || "-"}</b></span>
                           <span>เกียร์: <b className="text-white">{vehicle.gear || "-"}</b></span>
                           <span>สี: <b className="text-white">{vehicle.color || "-"}</b></span>
                           <span>เลขไมล์: <b className="text-white">{formatMileage(vehicle.mileage)}</b></span>
@@ -1650,7 +1701,10 @@ export default function StockExportPage() {
         <FilterAccordion title="ราคา / ไมล์ / ปี">
           <div className="grid gap-3 sm:grid-cols-2">
             <FieldFilterShell sort={<FieldSortButtons field="year" direction={fieldSortDirection("year")} onSort={setFieldSort} onClear={clearFieldSort} ascLabel="เก่า→ใหม่" descLabel="ใหม่→เก่า" />}>
-              <MultiFilter label="ปีจด" values={advancedFilters.years} options={advancedOptions.years} onToggle={(value) => toggleAdvancedValue("years", value)} onClear={() => clearAdvancedFilter("years")} />
+              <MultiFilter label="ปีรถ" values={advancedFilters.years} options={advancedOptions.years} onToggle={(value) => toggleAdvancedValue("years", value)} onClear={() => clearAdvancedFilter("years")} />
+            </FieldFilterShell>
+            <FieldFilterShell>
+              <MultiFilter label="ปีจด" values={advancedFilters.registrationYears} options={advancedOptions.registrationYears} onToggle={(value) => toggleAdvancedValue("registrationYears", value)} onClear={() => clearAdvancedFilter("registrationYears")} />
             </FieldFilterShell>
             <FieldFilterShell sort={<FieldSortButtons field="color" direction={fieldSortDirection("color")} onSort={setFieldSort} onClear={clearFieldSort} />}>
               <MultiFilter label="สี" values={advancedFilters.colors} options={advancedOptions.colors} onToggle={(value) => toggleAdvancedValue("colors", value)} onClear={() => clearAdvancedFilter("colors")} />
@@ -1665,11 +1719,13 @@ export default function StockExportPage() {
             </FieldFilterShell>
           </div>
           <FieldFilterShell sort={<FieldSortButtons field="mileage" direction={fieldSortDirection("mileage")} onSort={setFieldSort} onClear={clearFieldSort} ascLabel="น้อย→มาก" descLabel="มาก→น้อย" />}>
-            <MultiFilter label="เลขไมล์แบบช่วง" values={advancedFilters.mileageBands} options={mileageBandOptions.map((option) => option.label)} onToggle={(value) => toggleAdvancedValue("mileageBands", value)} onClear={() => clearAdvancedFilter("mileageBands")} />
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <AdvancedTextField label="เลขไมล์ต่ำสุด" value={advancedFilters.mileageMin} onChange={(value) => setAdvancedFilter("mileageMin", value)} placeholder="เช่น 50000" inputMode="numeric" />
-              <AdvancedTextField label="เลขไมล์สูงสุด" value={advancedFilters.mileageMax} onChange={(value) => setAdvancedFilter("mileageMax", value)} placeholder="เช่น 150000" inputMode="numeric" />
-            </div>
+            <MultiFilter
+              label="เลขไมล์"
+              values={advancedFilters.mileageBands}
+              options={uniqueSorted(groupMatchedVehicles.map((vehicle) => parseNumeric(vehicle.mileage)).filter((value) => value > 0).sort((a, b) => a - b).map((value) => value.toLocaleString("th-TH")))}
+              onToggle={(value) => toggleAdvancedValue("mileageBands", value)}
+              onClear={() => clearAdvancedFilter("mileageBands")}
+            />
           </FieldFilterShell>
           <FieldFilterShell sort={<FieldSortButtons field="price" direction={fieldSortDirection("price")} onSort={setFieldSort} onClear={clearFieldSort} ascLabel="ต่ำ→สูง" descLabel="สูง→ต่ำ" />}>
             <div className="grid grid-cols-2 gap-2">
@@ -1778,6 +1834,23 @@ export default function StockExportPage() {
           </FilterAccordion>
         ) : null}
       </BottomSheet>
+
+      <div className="fixed inset-x-0 bottom-4 z-40 px-4 sm:px-6">
+        <div className="mx-auto flex w-full max-w-5xl items-center gap-2 rounded-[24px] border border-white/10 bg-[#0b1220]/90 p-2 shadow-[0_0_40px_rgba(34,197,94,0.10)] backdrop-blur-xl">
+          <NativeButton type="button" onClick={() => setListOpen(true)} variant="secondary" className="flex-1">
+            <FileImage size={18} />
+            Preview
+          </NativeButton>
+          <NativeButton type="button" onClick={sendLineStockImages} disabled={sendingLine || exporting || !selectedLineGroupId || !exportVehicles.length} className="flex-1">
+            <MessageCircle size={18} />
+            ส่ง LINE
+          </NativeButton>
+          <NativeButton type="button" onClick={() => exportImage("png")} disabled={exporting || !exportVehicles.length} className="flex-1">
+            <Download size={18} />
+            Export PNG
+          </NativeButton>
+        </div>
+      </div>
 
       <BottomSheet
         open={columnsOpen}
@@ -2111,15 +2184,17 @@ function StockPreview({
   mode,
   pageCount,
   groupCount,
-  extraColumns
+  extraColumns,
+  hasRegistrationYear
 }: {
   vehicles: StockVehicle[];
   mode: ExportMode;
   pageCount: number;
   groupCount: number;
   extraColumns: ExtraColumnKey[];
+  hasRegistrationYear: boolean;
 }) {
-  const columns = stockExportColumns(mode, extraColumns);
+  const columns = stockExportColumns(mode, extraColumns, hasRegistrationYear);
 
   return (
     <div className="overflow-hidden rounded-lg border border-line bg-[#f6f8f7] text-[#111827] shadow-glow">
@@ -2177,6 +2252,7 @@ function previewColumnValue(vehicle: StockVehicle, column: StockExportColumn, mo
   if (column.key === "location") return shortLocation(vehicle.parkingLocation);
   if (column.key === "plate") return vehicle.plate || "-";
   if (column.key === "year") return stockYear(vehicle) || "-";
+  if (column.key === "registrationYear") return stockRegistrationYear(vehicle) || "-";
   if (column.key === "model") return vehicleTitle(vehicle);
   if (column.key === "gear") return vehicle.gear || "-";
   if (column.key === "color") return vehicle.color || "-";
@@ -2196,7 +2272,8 @@ function renderStockTableCanvas(
   groupTotal: number,
   exportTotal: number,
   contact: StockExportContact | null = null,
-  extraColumns: ExtraColumnKey[] = []
+  extraColumns: ExtraColumnKey[] = [],
+  hasRegistrationYear = false
 ) {
   const margin = 44;
   const headerHeight = 126;
@@ -2205,7 +2282,7 @@ function renderStockTableCanvas(
   const footerHeight = 60;
   const rows = vehicles.slice(0, maxTableItems);
   const headerRowHeight = 56;
-  const columns = stockExportColumns(mode, extraColumns);
+  const columns = stockExportColumns(mode, extraColumns, hasRegistrationYear);
   const tableWidth = columns.reduce((total, column) => total + column.width, 0);
   const width = Math.max(1800, tableWidth + margin * 2);
   const height = tableTop + headerRowHeight + rows.length * rowHeight + footerHeight;
@@ -2265,6 +2342,7 @@ function renderStockTableCanvas(
       location: shortLocation(vehicle.parkingLocation),
       plate: vehicle.plate || "-",
       year: stockYear(vehicle) || "-",
+      registrationYear: stockRegistrationYear(vehicle) || "-",
       model: vehicleTitle(vehicle),
       gear: vehicle.gear || "-",
       color: vehicle.color || "-",
