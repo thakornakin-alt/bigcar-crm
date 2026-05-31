@@ -1,5 +1,5 @@
 import { readJsonStore, writeJsonStore } from "@/lib/json-store";
-import { mkdir, writeFile } from "fs/promises";
+import { access, mkdir, writeFile } from "fs/promises";
 import path from "path";
 import type { DocumentFieldConfig, DocumentTemplateConfig, DocumentTemplateId } from "@/lib/documents/document-types";
 
@@ -357,20 +357,31 @@ export function listDocumentTemplates() {
 
 export async function listDocumentTemplatesWithOverrides() {
   const stored = await readJsonStore<StoredTemplateConfigs>(STORE_FILE, {});
-  return documentTemplates.map((template) => ({
-    ...template,
-    ...(() => {
-      const override = normalizeOverride(stored[template.id]);
-      return {
-        backgroundPath: override.backgroundPath || template.backgroundPath,
-        fileName: override.fileName || template.fileName
-      };
-    })(),
-    fields: {
-      ...template.fields,
-      ...(normalizeOverride(stored[template.id]).fields || {})
+  const out: DocumentTemplateConfig[] = [];
+  for (const template of documentTemplates) {
+    const override = normalizeOverride(stored[template.id]);
+    let resolvedBackgroundPath = override.backgroundPath || template.backgroundPath;
+
+    // Production-safe fallback: if stored override path/file no longer exists, use default template path.
+    if (override.backgroundPath) {
+      try {
+        await access(path.isAbsolute(override.backgroundPath) ? override.backgroundPath : path.join(process.cwd(), override.backgroundPath));
+      } catch {
+        resolvedBackgroundPath = template.backgroundPath;
+      }
     }
-  }));
+
+    out.push({
+      ...template,
+      backgroundPath: resolvedBackgroundPath,
+      fileName: override.fileName || template.fileName,
+      fields: {
+        ...template.fields,
+        ...(override.fields || {})
+      }
+    });
+  }
+  return out;
 }
 
 export async function getDocumentTemplate(id: string) {
