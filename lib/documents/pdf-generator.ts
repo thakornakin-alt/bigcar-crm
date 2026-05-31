@@ -4,7 +4,6 @@ import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb } from "pdf-lib";
 import { formatThaiDate, getDocumentTemplate } from "@/lib/documents/template-config";
 import type { DocumentData, DocumentFieldConfig, DocumentTemplateId } from "@/lib/documents/document-types";
-import { replacePdfPlaceholders } from "@/lib/documents/pdf-placeholder-replacer";
 
 const A4_WIDTH = 595.28;
 const A4_HEIGHT = 841.89;
@@ -220,6 +219,7 @@ export async function generateFilledDocumentPdf(input: {
 
   if (isPdfTemplate) {
     try {
+      const { replacePdfPlaceholders } = await import("@/lib/documents/pdf-placeholder-replacer");
       await replacePdfPlaceholders({
         sourcePdfBytes: new Uint8Array(backgroundBytes),
         pdfDoc: pdf,
