@@ -1,12 +1,8 @@
 import { readFile } from "fs/promises";
 import path from "path";
-import fontkit from "@pdf-lib/fontkit";
-import { PDFDocument, rgb } from "pdf-lib";
+import { PDFDocument } from "pdf-lib";
 import { formatThaiDate, getDocumentTemplate } from "@/lib/documents/template-config";
 import type { DocumentData, DocumentFieldConfig, DocumentTemplateId } from "@/lib/documents/document-types";
-
-const A4_WIDTH = 595.28;
-const A4_HEIGHT = 841.89;
 
 function absoluteAssetPath(assetPath: string) {
   return path.isAbsolute(assetPath) ? assetPath : path.join(process.cwd(), assetPath);
@@ -113,24 +109,6 @@ function findMappedValueByPdfFieldName(fieldName: string, data: DocumentData) {
   return "";
 }
 
-function wrapText(value: string, maxChars: number) {
-  if (!maxChars || value.length <= maxChars) return [value];
-
-  const lines: string[] = [];
-  let current = "";
-  for (const part of value.split(/\s+/)) {
-    const next = current ? `${current} ${part}` : part;
-    if (next.length > maxChars && current) {
-      lines.push(current);
-      current = part;
-    } else {
-      current = next;
-    }
-  }
-  if (current) lines.push(current);
-  return lines.slice(0, 3);
-}
-
 export async function generateFilledDocumentPdf(input: {
   templateId: DocumentTemplateId;
   data: DocumentData;
@@ -139,8 +117,6 @@ export async function generateFilledDocumentPdf(input: {
 }) {
   const template = await getDocumentTemplate(input.templateId);
   if (!template) throw new Error("ไม่พบ PDF Template");
-  const pdf = await PDFDocument.create();
-  pdf.registerFontkit(fontkit);
 
   let backgroundBytes: Buffer;
   try {
@@ -153,118 +129,42 @@ export async function generateFilledDocumentPdf(input: {
     throw error;
   }
   const isPdfTemplate = template.backgroundPath.toLowerCase().endsWith(".pdf");
-  const pages = [];
-
-  if (isPdfTemplate) {
-    const sourcePdf = await PDFDocument.load(backgroundBytes, { ignoreEncryption: true });
-    const copiedPages = await pdf.copyPages(sourcePdf, sourcePdf.getPageIndices());
-    for (const copiedPage of copiedPages) {
-      pages.push(pdf.addPage(copiedPage));
-    }
-  } else {
-    const page = pdf.addPage([A4_WIDTH, A4_HEIGHT]);
-    pages.push(page);
-    const backgroundImage = await pdf.embedJpg(backgroundBytes);
-    page.drawImage(backgroundImage, {
-      x: 0,
-      y: 0,
-      width: A4_WIDTH,
-      height: A4_HEIGHT
-    });
+  if (!isPdfTemplate) {
+    throw new Error("Template นี้ไม่ใช่ PDF แบบมีฟิลด์กรอก (AcroForm)");
   }
 
-  let font;
-  try {
-    const fontBytes = await readAssetBytes("public/fonts/tahoma.ttf", input.baseUrl);
-    font = await pdf.embedFont(fontBytes, { subset: true });
-  } catch {
-    throw new Error("โหลดฟอนต์ภาษาไทยไม่สำเร็จ");
-  }
+  const pdf = await PDFDocument.load(backgroundBytes, { ignoreEncryption: true });
 
   const fields = input.fields || template.fields;
-  let usedAcroForm = false;
-  if (isPdfTemplate) {
-    try {
-      const form = pdf.getForm();
-      const formFields = form.getFields();
-      if (formFields.length) {
-        usedAcroForm = true;
-        for (const formField of formFields) {
-          const rawName = formField.getName();
-          const normalized = normalizeFieldName(rawName);
-          const configured = Object.entries(fields).find(([, config]) => normalizeFieldName(config.pdfFieldName || "") === normalized);
-          const fromConfigured = configured ? fieldValue(configured[0], configured[1], input.data) : "";
-          const fromAlias = fromConfigured || findMappedValueByPdfFieldName(rawName, input.data);
-          const value = fromAlias || textValue(input.data[rawName]);
-          if (!value) continue;
-
-          const maybeText = formField as unknown as { setText?: (value: string) => void; check?: () => void };
-          if (typeof maybeText.setText === "function") {
-            maybeText.setText(value);
-            continue;
-          }
-          if (typeof maybeText.check === "function") {
-            const flag = value.toLowerCase();
-            if (flag === "1" || flag === "true" || flag === "yes" || flag === "checked" || flag === "x") {
-              maybeText.check();
-            }
-          }
-        }
-        form.flatten();
-      }
-    } catch {
-      usedAcroForm = false;
-    }
+  const form = pdf.getForm();
+  const formFields = form.getFields();
+  if (!formFields.length) {
+    throw new Error("ไม่พบช่องกรอกใน PDF Template (AcroForm)");
   }
 
-  if (isPdfTemplate) {
-    try {
-      const { replacePdfPlaceholders } = await import("@/lib/documents/pdf-placeholder-replacer");
-      await replacePdfPlaceholders({
-        sourcePdfBytes: new Uint8Array(backgroundBytes),
-        pdfDoc: pdf,
-        pages,
-        font,
-        data: input.data
-      });
-    } catch {
-      // Keep existing workflow: if placeholder replacement fails, continue with existing mapping layers.
-    }
-  }
+  for (const formField of formFields) {
+    const rawName = formField.getName();
+    const normalized = normalizeFieldName(rawName);
+    const configured = Object.entries(fields).find(([, config]) => normalizeFieldName(config.pdfFieldName || "") === normalized);
+    const fromConfigured = configured ? fieldValue(configured[0], configured[1], input.data) : "";
+    const fromAlias = fromConfigured || findMappedValueByPdfFieldName(rawName, input.data);
+    const value = fromAlias || textValue(input.data[rawName]);
+    if (!value) continue;
 
-  if (!usedAcroForm) {
-  for (const [key, field] of Object.entries(fields)) {
-    const page = pages[Math.max((field.page || 1) - 1, 0)];
-    if (!page) continue;
-    const value = fieldValue(key, field, input.data);
-    if (field.type === "checkbox") {
-      const selectedValue = textValue(input.data.paymentType || input.data[key]).toLowerCase();
-      if (selectedValue && selectedValue === textValue(field.value).toLowerCase()) {
-        page.drawText("X", {
-          x: field.x,
-          y: field.y,
-          size: field.fontSize || 12,
-          font,
-          color: rgb(0.02, 0.04, 0.07)
-        });
-      }
+    const maybeText = formField as unknown as { setText?: (value: string) => void; check?: () => void };
+    if (typeof maybeText.setText === "function") {
+      maybeText.setText(value);
       continue;
     }
+    if (typeof maybeText.check === "function") {
+      const flag = value.toLowerCase();
+      if (flag === "1" || flag === "true" || flag === "yes" || flag === "checked" || flag === "x") {
+        maybeText.check();
+      }
+    }
+  }
 
-    if (!value) continue;
-    const maxChars = field.width ? Math.max(Math.floor(field.width / Math.max((field.fontSize || 10) * 0.45, 1)), 10) : 0;
-    const lines = wrapText(value, maxChars);
-    lines.forEach((line, index) => {
-      page.drawText(line, {
-        x: field.x,
-        y: field.y - index * ((field.fontSize || 10) + 3),
-        size: field.fontSize || 10,
-        font,
-        color: rgb(0.02, 0.04, 0.07)
-      });
-    });
-  }
-  }
+  form.flatten();
 
   return pdf.save();
 }
