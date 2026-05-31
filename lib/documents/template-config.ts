@@ -11,7 +11,7 @@ export const documentTemplates: DocumentTemplateConfig[] = [
     title: "รายละเอียดการชำระเงิน / ใบรับเงินชั่วคราว",
     description: "กรอกข้อมูลลงฟอร์ม PDF ใบรับเงินชั่วคราว",
     fileName: "temporary-receipt.pdf",
-    backgroundPath: "public/document-templates/payment-receipt.pdf",
+    backgroundPath: "public/document-templates/temporary-receipt.pdf",
     fields: {
       customerName: { page: 1, x: 84, y: 692, fontSize: 10, pdfFieldName: "CUSTOMER_NAME" },
       idCard: { page: 1, x: 132, y: 672, fontSize: 10, pdfFieldName: "CUSTOMER_ID_CARD" },
@@ -26,8 +26,12 @@ export const documentTemplates: DocumentTemplateConfig[] = [
       vin: { page: 1, x: 121, y: 518, fontSize: 9, pdfFieldName: "CHASSIS_NO" },
       engineNo: { page: 1, x: 135, y: 496, fontSize: 9, pdfFieldName: "ENGINE_NO" },
       salePrice: { page: 1, x: 332, y: 408, fontSize: 10, pdfFieldName: "SELL_PRICE" },
+      discountPrice: { page: 1, x: 332, y: 397, fontSize: 10, pdfFieldName: "DISCOUNT_PRICE" },
+      netCarPrice: { page: 1, x: 332, y: 387, fontSize: 10, pdfFieldName: "NET_CAR_PRICE" },
       bookingPrice: { page: 1, x: 332, y: 387, fontSize: 10, pdfFieldName: "DOWN_PAYMENT" },
       financeAmount: { page: 1, x: 332, y: 366, fontSize: 10, pdfFieldName: "FINANCE_AMOUNT" },
+      bookingNo: { page: 1, x: 430, y: 731, fontSize: 10, pdfFieldName: "BOOKING_NO" },
+      financeCompany: { page: 1, x: 422, y: 451, fontSize: 10, pdfFieldName: "FINANCE_COMPANY" },
       sellerName: { page: 1, x: 425, y: 650, fontSize: 10, pdfFieldName: "SALES_NAME" }
     }
   },
@@ -58,7 +62,7 @@ export const documentTemplates: DocumentTemplateConfig[] = [
     title: "ใบสรุปการขาย",
     description: "สรุปรายละเอียดลูกค้า รถ เงื่อนไขขาย และงานส่งมอบ",
     fileName: "sale-summary.pdf",
-    backgroundPath: "public/document-templates/sale-summary.pdf",
+    backgroundPath: "public/document-templates/sale-summary.jpg",
     fields: {
       customerName: { page: 1, x: 118, y: 723, fontSize: 11, pdfFieldName: "CUSTOMER_NAME" },
       phone: { page: 1, x: 452, y: 723, fontSize: 11, pdfFieldName: "CUSTOMER_PHONE" },
@@ -94,20 +98,20 @@ export const documentTemplates: DocumentTemplateConfig[] = [
     fileName: "contract.pdf",
     backgroundPath: "public/document-templates/contract.pdf",
     fields: {
-      transactionDate: { page: 1, x: 466, y: 727, fontSize: 10, type: "date" },
-      customerName: { page: 1, x: 377, y: 679, fontSize: 10 },
-      idCard: { page: 1, x: 445, y: 650, fontSize: 10 },
-      customerAddress: { page: 1, x: 95, y: 627, fontSize: 9, width: 425 },
-      carBrand: { page: 1, x: 236, y: 559, fontSize: 10 },
-      carModel: { page: 1, x: 306, y: 559, fontSize: 10, width: 210 },
-      plate: { page: 1, x: 198, y: 535, fontSize: 10 },
-      engineNo: { page: 1, x: 375, y: 535, fontSize: 10 },
-      vin: { page: 1, x: 356, y: 513, fontSize: 9, width: 165 },
-      salePrice: { page: 1, x: 385, y: 488, fontSize: 10 },
-      bookingPrice: { page: 1, x: 382, y: 462, fontSize: 10 },
-      financeAmount: { page: 1, x: 276, y: 436, fontSize: 10 },
-      signatureName: { page: 1, x: 125, y: 154, fontSize: 10 },
-      sellerName: { page: 1, x: 420, y: 154, fontSize: 10 }
+      transactionDate: { page: 1, x: 466, y: 727, fontSize: 10, type: "date", pdfFieldName: "BOOKING_DATE" },
+      customerName: { page: 1, x: 377, y: 679, fontSize: 10, pdfFieldName: "CUSTOMER_NAME" },
+      idCard: { page: 1, x: 445, y: 650, fontSize: 10, pdfFieldName: "CUSTOMER_ID_CARD" },
+      customerAddress: { page: 1, x: 95, y: 627, fontSize: 9, width: 425, pdfFieldName: "CUSTOMER_ADDRESS" },
+      carBrand: { page: 1, x: 236, y: 559, fontSize: 10, pdfFieldName: "CAR_BRAND" },
+      carModel: { page: 1, x: 306, y: 559, fontSize: 10, width: 210, pdfFieldName: "CAR_MODEL" },
+      plate: { page: 1, x: 198, y: 535, fontSize: 10, pdfFieldName: "LICENSE_PLATE" },
+      engineNo: { page: 1, x: 375, y: 535, fontSize: 10, pdfFieldName: "ENGINE_NO" },
+      vin: { page: 1, x: 356, y: 513, fontSize: 9, width: 165, pdfFieldName: "CHASSIS_NO" },
+      salePrice: { page: 1, x: 385, y: 488, fontSize: 10, pdfFieldName: "SELL_PRICE" },
+      bookingPrice: { page: 1, x: 382, y: 462, fontSize: 10, pdfFieldName: "DOWN_PAYMENT" },
+      financeAmount: { page: 1, x: 276, y: 436, fontSize: 10, pdfFieldName: "FINANCE_AMOUNT" },
+      signatureName: { page: 1, x: 125, y: 154, fontSize: 10, pdfFieldName: "CUSTOMER_NAME" },
+      sellerName: { page: 1, x: 420, y: 154, fontSize: 10, pdfFieldName: "SALES_NAME" }
     }
   },
   {

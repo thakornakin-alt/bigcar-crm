@@ -47,6 +47,7 @@ type DocumentData = Record<string, string>;
 type ActiveTab = "download" | "create" | "ocr" | "drafts";
 
 const draftKey = "bigcar-document-drafts-v1";
+const autoTemplateIds: DocumentTemplateId[] = ["contract", "temporary-receipt"];
 
 const emptyDocumentData: DocumentData = {
   customerName: "",
@@ -64,6 +65,9 @@ const emptyDocumentData: DocumentData = {
   price: "",
   salePrice: "",
   bookingPrice: "",
+  bookingNo: "",
+  discountPrice: "",
+  netCarPrice: "",
   paymentType: "",
   deliveryDate: "",
   deliveryLocation: "",
@@ -93,6 +97,9 @@ const editableFields: Array<{ key: string; label: string; optional?: boolean }> 
   { key: "mileage", label: "เลขไมล์" },
   { key: "salePrice", label: "ราคาเสนอขายRT" },
   { key: "bookingPrice", label: "เงินจอง", optional: true },
+  { key: "bookingNo", label: "เลขที่ใบจอง", optional: true },
+  { key: "discountPrice", label: "ส่วนลด", optional: true },
+  { key: "netCarPrice", label: "ราคาสุทธิ", optional: true },
   { key: "paymentType", label: "ประเภทการชำระ", optional: true },
   { key: "deliveryDate", label: "วันที่ส่งมอบ", optional: true },
   { key: "deliveryLocation", label: "สถานที่ส่งมอบ", optional: true },
@@ -157,6 +164,12 @@ function mapReportToDocument(report: ReportRecord): DocumentData {
   const brand = firstText(report, ["brand", "ยี่ห้อรถ", "ยี่ห้อ"]);
   const model = [brand, firstText(report, ["model"])].filter(Boolean).join(" ");
   const paymentType = normalizePaymentType(firstText(report, ["paymentType", "ประเภทการซื้อ", "การชำระเงิน"]));
+  const salePriceRaw = firstText(report, ["salePrice", "ราคาเสนอขายRT", "finalPrice"]);
+  const bookingPriceRaw = firstText(report, ["bookingPrice", "เงินจอง"]);
+  const financeAmountRaw = firstText(report, ["financeAmount", "ยอดจัด"]);
+  const discountRaw = firstText(report, ["discount", "discountPrice", "ส่วนลด"]);
+  const netRaw = firstText(report, ["netCarPrice", "ราคาสุทธิ", "finalPrice"]);
+  const reportText = firstText(report, ["reportText"]);
   return {
     ...emptyDocumentData,
     customerName: firstText(report, ["customerName", "ชื่อลูกค้า"]),
@@ -170,15 +183,24 @@ function mapReportToDocument(report: ReportRecord): DocumentData {
     carModel: model || firstText(report, ["carModel", "รุ่นรถยนต์", "model"]),
     year: firstText(report, ["year", "ปีจด"]),
     color: firstText(report, ["color", "สี"]),
-    salePrice: money(firstText(report, ["salePrice", "ราคาเสนอขายRT", "finalPrice"])),
-    price: money(firstText(report, ["salePrice", "ราคาเสนอขายRT", "finalPrice"])),
-    bookingPrice: money(firstText(report, ["bookingPrice", "เงินจอง"])),
+    salePrice: money(salePriceRaw),
+    price: money(salePriceRaw),
+    bookingPrice: money(bookingPriceRaw),
+    bookingNo: firstText(report, ["id", "bookingNo", "เลขที่ใบจอง"]),
+    financeAmount: money(financeAmountRaw),
+    deliveryDate: firstText(report, ["deliveryDate", "วันที่ส่งมอบ"]),
+    deliveryLocation: firstText(report, ["deliveryLocation", "สถานที่ส่งมอบ"]),
     paymentType,
     sellerName: firstText(report, ["saleName", "ชื่อผู้ขาย"]),
     saleName: firstText(report, ["saleName", "ชื่อผู้ขาย"]),
     signatureName: firstText(report, ["customerName", "ชื่อลูกค้า"]),
     bookingDate: firstText(report, ["createdAt", "วันที่จอง/ขาย"]),
-    status: firstText(report, ["status", "สถานะ"])
+    status: firstText(report, ["status", "สถานะ"]),
+    vin: firstText(report, ["vin", "เลขตัวถัง", "เลขตัวรถ"]),
+    engineNo: firstText(report, ["engineNo", "เลขเครื่อง"]),
+    financeName: firstText(report, ["financeCompany", "financeName", "ไฟแนนซ์"]),
+    discountPrice: money(discountRaw || (reportText.match(/ส่วนลด[:：]\s*([\d,]+)/)?.[1] || "")),
+    netCarPrice: money(netRaw)
   };
 }
 
@@ -237,12 +259,12 @@ function loadDrafts(): Array<{ id: string; name: string; templateId: DocumentTem
 }
 
 export function DocumentCenter() {
-  const [tab, setTab] = useState<ActiveTab>("download");
+  const [tab, setTab] = useState<ActiveTab>("create");
   const [templates, setTemplates] = useState<DocumentTemplateConfig[]>([]);
   const [history, setHistory] = useState<DocumentHistoryItem[]>([]);
   const [reports, setReports] = useState<ReportRecord[]>([]);
   const [vehicles, setVehicles] = useState<VehicleRecord[]>([]);
-  const [templateId, setTemplateId] = useState<DocumentTemplateId>("sale-summary");
+  const [templateId, setTemplateId] = useState<DocumentTemplateId>("temporary-receipt");
   const [query, setQuery] = useState("");
   const [reportQuery, setReportQuery] = useState("");
   const [data, setData] = useState<DocumentData>({ ...emptyDocumentData });
@@ -268,6 +290,17 @@ export function DocumentCenter() {
   }, []);
 
   const selectedTemplate = templates.find((template) => template.id === templateId);
+  const autoTemplates = useMemo(
+    () => templates.filter((template) => autoTemplateIds.includes(template.id)),
+    [templates]
+  );
+
+  useEffect(() => {
+    if (!autoTemplates.length) return;
+    if (!autoTemplateIds.includes(templateId)) {
+      setTemplateId(autoTemplates[0].id);
+    }
+  }, [autoTemplates, templateId]);
   const filteredTemplates = useMemo(() => {
     const term = query.trim().toLowerCase();
     return templates.filter((template) => !term || [template.title, template.description, template.fileName].join(" ").toLowerCase().includes(term));
@@ -479,7 +512,7 @@ export function DocumentCenter() {
           <section className="space-y-4">
             <SectionCard title="เลือกเอกสาร / รายงานจอง" icon={<FileText size={18} />}>
               <select value={templateId} onChange={(event) => setTemplateId(event.target.value as DocumentTemplateId)} className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none focus:border-brand">
-                {templates.map((template) => <option key={template.id} value={template.id}>{template.title}</option>)}
+                {autoTemplates.map((template) => <option key={template.id} value={template.id}>{template.title}</option>)}
               </select>
               <SearchField value={reportQuery} onChange={(event) => setReportQuery(event.target.value)} placeholder="ค้นรายงานจอง / ทะเบียน / ลูกค้า" />
               <div className="grid gap-2">

@@ -27,6 +27,7 @@ type Vehicle = {
 };
 
 type DocumentFormData = Record<string, string>;
+const autoTemplateIds: DocumentTemplateId[] = ["contract", "temporary-receipt"];
 
 const initialData: DocumentFormData = {
   customerName: "",
@@ -178,6 +179,10 @@ export default function DocumentCreatePage() {
   }, [previewUrl]);
 
   const selectedTemplate = templates.find((template) => template.id === templateId);
+  const autoTemplates = useMemo(
+    () => templates.filter((template) => autoTemplateIds.includes(template.id)),
+    [templates]
+  );
   const visibleFields = useMemo(() => {
     const fields = selectedTemplate ? Object.keys(selectedTemplate.fields) : [];
     const core = [
@@ -200,6 +205,13 @@ export default function DocumentCreatePage() {
     ];
     return Array.from(new Set([...fields, ...core])).filter((key) => key in fieldLabels);
   }, [selectedTemplate]);
+
+  useEffect(() => {
+    if (!autoTemplates.length) return;
+    if (!autoTemplateIds.includes(templateId)) {
+      setTemplateId(autoTemplates[0].id);
+    }
+  }, [autoTemplates, templateId]);
 
   const filteredCustomers = useMemo(() => {
     const term = customerQuery.trim().toLowerCase();
@@ -387,7 +399,7 @@ export default function DocumentCreatePage() {
         <section className="space-y-4">
           <SectionCard title="ประเภทเอกสาร" icon={<FileText size={18} />}>
             <div className="grid gap-2 sm:grid-cols-2">
-              {templates.map((template) => (
+              {autoTemplates.map((template) => (
                 <FilterChip key={template.id} active={template.id === templateId} onClick={() => setTemplateId(template.id)}>
                   {template.title}
                 </FilterChip>
