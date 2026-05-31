@@ -218,10 +218,26 @@ function parseYearSafely(value?: unknown, preferBuddhist = false) {
   const dateLikeMatch = raw.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-]((19|20|25)\d{2})\b/);
   if (dateLikeMatch) return toDisplay(Number(dateLikeMatch[3]));
 
+  // รองรับวันที่ที่ลงปีแบบ 2 หลัก เช่น 16/06/22 หรือ 16-06-66
+  const shortDateYearMatch = raw.match(/\b\d{1,2}[\/\-]\d{1,2}[\/\-](\d{2})\b/);
+  if (shortDateYearMatch) {
+    const yy = Number(shortDateYearMatch[1]);
+    if (yy >= 0 && yy <= 99) {
+      // ปีรถในงานนี้เป็นรถยุคใหม่ จึงตีความเป็น ค.ศ. 20xx
+      return toDisplay(2000 + yy);
+    }
+  }
+
   const digits = raw.replace(/[^\d]/g, "");
   if (digits.length >= 4) {
     const yearMatch = digits.match(/(19|20|25)\d{2}/);
     if (yearMatch) return toDisplay(Number(yearMatch[0]));
+  }
+  // รองรับค่าปี 2 หลักจากไฟล์สต็อก เช่น 63 -> 2020, 66 -> 2023
+  if (/^\d{2}$/.test(digits)) {
+    const yy = Number(digits);
+    if (yy >= 40 && yy <= 99) return toDisplay(2500 + yy); // พ.ศ. สองหลัก
+    return toDisplay(2000 + yy); // ค.ศ. สองหลัก
   }
   return "";
 }
@@ -247,7 +263,16 @@ function stockRegistrationYear(vehicle: StockVehicle) {
       "ทะเบียนปี"
     ]);
   const year = parseYearSafely(raw, false);
-  return isValidGregorianYearText(year) ? year : "";
+  if (isValidGregorianYearText(year)) return year;
+
+  // fallback เพิ่มเติม: ถ้า parse ไม่ได้ ให้พยายามดึง 4 หลักจากข้อความตรงๆ
+  const rawText = String(raw || "").trim();
+  const m = rawText.match(/(19|20|25)\d{2}/);
+  if (m) {
+    const normalized = parseYearSafely(m[0], false);
+    if (isValidGregorianYearText(normalized)) return normalized;
+  }
+  return "";
 }
 
 function rawVehicleValue(vehicle: StockVehicle, keys: string[]) {
