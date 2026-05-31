@@ -188,6 +188,7 @@ export default function DocumentCreatePage() {
   const [imageTuning, setImageTuning] = useState<ImageTuning>(defaultTuning);
   const [loading, setLoading] = useState(false);
   const [savingHistory, setSavingHistory] = useState(false);
+  const [checkingSystem, setCheckingSystem] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -493,6 +494,27 @@ export default function DocumentCreatePage() {
     }
   }
 
+  async function checkDocumentSystem() {
+    setCheckingSystem(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await api<{ ok: boolean; checks?: Array<{ templateId: string; ok: boolean; detail: string }> }>("/api/documents/health");
+      const lines = (result.checks || []).map((check) => `${check.templateId}: ${check.ok ? "ผ่าน" : "ไม่ผ่าน"} (${check.detail})`);
+      if (result.ok) {
+        setMessage(`ระบบเอกสารพร้อมใช้งาน: ${lines.join(" | ")}`);
+      } else {
+        setError(`ระบบเอกสารยังไม่พร้อม: ${lines.join(" | ")}`);
+      }
+      setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ทดสอบระบบเอกสารไม่สำเร็จ");
+      setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
+    } finally {
+      setCheckingSystem(false);
+    }
+  }
+
   return (
     <PageContainer wide>
       <PageTitle
@@ -596,6 +618,10 @@ export default function DocumentCreatePage() {
               ))}
             </div>
             <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+              <button type="button" onClick={checkDocumentSystem} disabled={checkingSystem || loading} className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-3 font-bold text-white disabled:opacity-60">
+                {checkingSystem ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
+                ทดสอบระบบ
+              </button>
               <button type="button" onClick={() => generatePdf(false)} disabled={loading} className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-brand/40 bg-brand/10 px-3 font-black text-brand disabled:opacity-60">
                 {loading ? <Loader2 size={18} className="animate-spin" /> : <Eye size={18} />}
                 Preview PDF
