@@ -66,6 +66,8 @@ const blankForm: SalesReportInput = {
   model: "",
   year: "",
   color: "",
+  engineNo: "",
+  chassisNo: "",
   salePrice: "",
   centralDiscount: "",
   finalPrice: "",
@@ -175,6 +177,8 @@ function fromBooking(report: BookingReport): SalesReportInput {
     model: report.model,
     year: normalizeCarYear(report.year),
     color: report.color,
+    engineNo: "",
+    chassisNo: "",
     salePrice: report.salePrice,
     finalPrice: report.finalPrice,
     carPrice: report.finalPrice,
@@ -686,6 +690,8 @@ export default function SalesReportsPage() {
                 <Field label="รุ่น" value={form.model} onChange={(value) => update("model", value)} />
                 <Field label="ปีรถ" value={form.year} onChange={(value) => update("year", value)} />
                 <Field label="สี" value={form.color} onChange={(value) => update("color", value)} />
+                <Field label="เลขเครื่อง" value={form.engineNo} onChange={(value) => update("engineNo", value)} />
+                <Field label="เลขตัวถัง" value={form.chassisNo} onChange={(value) => update("chassisNo", value)} />
               </div>
               <TextArea label="ที่อยู่จัดส่งเอกสาร" value={form.address} onChange={(value) => update("address", value)} rows={3} />
             </Panel>

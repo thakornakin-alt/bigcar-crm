@@ -95,6 +95,8 @@ export type SalesReportInput = {
   model: string;
   year: string;
   color: string;
+  engineNo: string;
+  chassisNo: string;
   salePrice: string;
   centralDiscount: string;
   finalPrice: string;

@@ -18,6 +18,8 @@ function clean(body: Partial<SalesReportInput>): SalesReportInput {
     model: String(body.model || "").trim(),
     year: String(body.year || "").trim(),
     color: String(body.color || "").trim(),
+    engineNo: String(body.engineNo || "").trim(),
+    chassisNo: String(body.chassisNo || "").trim(),
     salePrice: String(body.salePrice || "").trim(),
     centralDiscount: String(body.centralDiscount || "").trim(),
     finalPrice: String(body.finalPrice || "").trim(),

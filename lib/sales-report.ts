@@ -51,6 +51,8 @@ export function renderSalesReport(input: SalesReportInput) {
     `รุ่น : ${input.model}`,
     `ปีรถ : ${normalizeCarYear(input.year)}`,
     `สี : ${input.color}`,
+    `เลขเครื่อง : ${input.engineNo}`,
+    `เลขตัวถัง : ${input.chassisNo}`,
     "",
     `ราคาที่ตั้งขาย : ${money(input.salePrice)}`,
     `ส่วนลดส่วนกลาง : ${money(input.centralDiscount)}`,
