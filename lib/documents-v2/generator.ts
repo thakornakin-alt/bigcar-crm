@@ -90,7 +90,10 @@ export async function generateDocumentV2WithBytes(
     Text16: "remainingAmount",
     Text17: "saleName"
   };
-  const active = { ...fallback, ...(mapping || {}) };
+  const active: DocumentV2FieldMapping = { ...fallback };
+  for (const [pdfField, mappedKey] of Object.entries(mapping || {})) {
+    active[pdfField] = (mappedKey || fallback[pdfField] || "") as DocumentV2FieldKey | "";
+  }
   for (const [pdfField, dataKey] of Object.entries(active)) {
     if (!dataKey) continue;
     const value = String((data as Record<string, string>)[dataKey as DocumentV2FieldKey] || "");
