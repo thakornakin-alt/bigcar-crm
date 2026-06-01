@@ -5,17 +5,19 @@ import { generateFilledDocumentPdf } from "@/lib/documents/pdf-generator";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const requiredTemplates = ["contract", "temporary-receipt"] as const;
+const primaryTemplate = "contract" as const;
+const optionalTemplates = ["temporary-receipt"] as const;
 
 export async function GET(request: Request) {
   try {
     const origin = new URL(request.url).origin;
-    const checks: Array<{ templateId: string; ok: boolean; detail: string }> = [];
-    for (const templateId of requiredTemplates) {
+    const checks: Array<{ templateId: string; ok: boolean; detail: string; required: boolean }> = [];
+    const allTemplates = [primaryTemplate, ...optionalTemplates] as const;
+    for (const templateId of allTemplates) {
       try {
         const template = await getDocumentTemplate(templateId);
         if (!template) {
-          checks.push({ templateId, ok: false, detail: "ไม่พบ template config" });
+          checks.push({ templateId, ok: false, detail: "ไม่พบ template config", required: templateId === primaryTemplate });
           continue;
         }
         const bytes = await generateFilledDocumentPdf({
@@ -40,18 +42,22 @@ export async function GET(request: Request) {
         checks.push({
           templateId,
           ok: true,
-          detail: `สร้าง PDF สำเร็จ (${bytes.length} bytes)`
+          detail: `สร้าง PDF สำเร็จ (${bytes.length} bytes)`,
+          required: templateId === primaryTemplate
         });
       } catch (error) {
         checks.push({
           templateId,
           ok: false,
-          detail: error instanceof Error ? error.message : "สร้าง PDF ไม่สำเร็จ"
+          detail: error instanceof Error ? error.message : "สร้าง PDF ไม่สำเร็จ",
+          required: templateId === primaryTemplate
         });
       }
     }
 
-    const ok = checks.every((check) => check.ok);
+    const ok = checks
+      .filter((check) => check.required)
+      .every((check) => check.ok);
     return NextResponse.json({
       ok,
       checkedAt: new Date().toISOString(),
