@@ -37,7 +37,7 @@ const terms = [
   { key: "months84", months: 84, years: 7, label: "84" }
 ] as const;
 
-type QuoteMode = "customer" | "internal" | "quotation";
+type QuoteMode = "customer" | "internal" | "installment";
 
 async function api<T>(url: string): Promise<T> {
   const response = await fetch(url, { cache: "no-store" });
@@ -91,7 +91,7 @@ export default function CalculatorPage() {
   const [importantNote, setImportantNote] = useState("");
   const [selectedDownLabel, setSelectedDownLabel] = useState("20%");
   const [selectedTermKey, setSelectedTermKey] = useState<(typeof terms)[number]["key"]>("months72");
-  const [quoteMode, setQuoteMode] = useState<QuoteMode>("quotation");
+  const [quoteMode, setQuoteMode] = useState<QuoteMode>("installment");
   const [carPrice, setCarPrice] = useState("684000");
   const [specialDownPayment, setSpecialDownPayment] = useState("");
   const [loading, setLoading] = useState(true);
@@ -227,7 +227,7 @@ export default function CalculatorPage() {
           <TextField label="สถานะรถ" value={vehicleStatus} onChange={setVehicleStatus} placeholder="พร้อมขาย / ติดจองรอคอนเฟิร์ม" />
           <TextField label="รูปภาพรถ (URL)" value={carImageUrl} onChange={setCarImageUrl} placeholder="https://..." />
           <SelectField
-            label="ดาวน์ที่ใช้สรุปใบเสนอราคา"
+            label="ดาวน์ที่ใช้สรุปคำนวนค่างวด"
             value={selectedDownLabel}
             onChange={setSelectedDownLabel}
             options={rows.map((row) => row.label)}
@@ -253,7 +253,7 @@ export default function CalculatorPage() {
         <div className="mt-3 grid gap-2 sm:grid-cols-3">
           <ModeButton active={quoteMode === "customer"} onClick={() => setQuoteMode("customer")} label="Customer Mode" />
           <ModeButton active={quoteMode === "internal"} onClick={() => setQuoteMode("internal")} label="Internal Mode" />
-          <ModeButton active={quoteMode === "quotation"} onClick={() => setQuoteMode("quotation")} label="Quotation Mode" />
+          <ModeButton active={quoteMode === "installment"} onClick={() => setQuoteMode("installment")} label="Installment Mode" />
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-soft">
           <span className="flex items-center gap-2">
@@ -600,15 +600,15 @@ async function exportInstallmentImage({
   drawFitText(ctx, `Line: ${contactLineId || "-"}`, width - 356, 263, 292);
   ctx.fillStyle = "#9ca3af";
   ctx.font = "600 16px Arial, sans-serif";
-  drawFitText(ctx, quoteMode === "internal" ? "Internal Mode" : quoteMode === "customer" ? "Customer Mode" : "Quotation Mode", width - 356, 291, 292);
+  drawFitText(ctx, quoteMode === "internal" ? "Internal Mode" : quoteMode === "customer" ? "Customer Mode" : "Installment Mode", width - 356, 291, 292);
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "700 52px Arial, sans-serif";
-  ctx.fillText("ใบเสนอราคา", 64, 92);
+  ctx.fillText("คำนวนค่างวด", 64, 92);
 
   ctx.fillStyle = "#22c55e";
   ctx.font = "700 26px Arial, sans-serif";
-  ctx.fillText("Modern Automotive Sales Proposal", 64, 138);
+  ctx.fillText("ตารางค่างวดรถมือสอง", 64, 138);
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "700 30px Arial, sans-serif";
@@ -706,17 +706,17 @@ async function exportInstallmentImage({
   ctx.fillStyle = "#22c55e";
   ctx.font = "700 18px Arial, sans-serif";
   ctx.textAlign = "right";
-  ctx.fillText("ใบเสนอราคาสำหรับลูกค้า", width - 64, height - 64);
+  ctx.fillText("คำนวนค่างวดสำหรับลูกค้า", width - 64, height - 64);
   ctx.textAlign = "left";
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
   if (!blob) throw new Error("ไม่สามารถสร้างไฟล์รูปได้");
 
-  const fileName = `quotation-${Date.now()}.png`;
+  const fileName = `installment-${Date.now()}.png`;
   const file = new File([blob], fileName, { type: "image/png" });
   const shareData = {
-    title: "ใบเสนอราคา",
-    text: "ใบเสนอราคาและตารางค่างวด",
+    title: "คำนวนค่างวด",
+    text: "ตารางค่างวดรถมือสอง",
     files: [file]
   };
 
