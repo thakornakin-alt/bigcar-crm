@@ -90,8 +90,17 @@ export default function DocumentsV2Page() {
 
   async function loadReports() {
     setError("");
-    const res = await api<{ reports: ReportHistoryItem[] }>("/api/reports/history?type=booking");
-    setReports((res.reports || []).filter((r) => r.type === "booking"));
+    const res = await api<{ reports: ReportHistoryItem[] }>("/api/reports/history?type=all");
+    const all = res.reports || [];
+    const bookingLike = all.filter((r) => {
+      const typeOk = String(r.type || "").toLowerCase() === "booking";
+      const hasCore = Boolean(String(r.customerName || "").trim() || String(r.plate || "").trim());
+      return typeOk || hasCore;
+    });
+    setReports(bookingLike);
+    if (!bookingLike.length) {
+      setError("ไม่พบรายงานจองในระบบ");
+    }
   }
 
   async function preview() {
