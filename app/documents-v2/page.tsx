@@ -125,9 +125,11 @@ export default function DocumentsV2Page() {
 
   async function loadMapping() {
     try {
-      const res = await api<{ ok: boolean; mapping: DocumentV2FieldMapping }>("/api/documents-v2/mapping");
+      const res = await api<{ ok: boolean; mapping: DocumentV2FieldMapping }>(`/api/documents-v2/mapping?templateId=${encodeURIComponent(templateId)}`);
       setMapping(res.mapping || {});
-    } catch {}
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "โหลด mapping ไม่สำเร็จ");
+    }
   }
 
   async function saveMapping() {
@@ -136,7 +138,7 @@ export default function DocumentsV2Page() {
       await api<{ ok: boolean; mapping: DocumentV2FieldMapping }>("/api/documents-v2/mapping", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mapping })
+        body: JSON.stringify({ templateId, mapping })
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "บันทึก mapping ไม่สำเร็จ");

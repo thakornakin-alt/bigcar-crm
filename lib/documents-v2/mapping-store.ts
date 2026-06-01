@@ -20,6 +20,7 @@ export type DocumentV2FieldKey =
   | "saleName";
 
 export type DocumentV2FieldMapping = Record<string, DocumentV2FieldKey | "">;
+type MappingByTemplate = Record<string, DocumentV2FieldMapping>;
 
 const DEFAULT_MAPPING: DocumentV2FieldMapping = {
   Text1: "customerName",
@@ -43,18 +44,19 @@ export function getDefaultDocumentV2Mapping(): DocumentV2FieldMapping {
   return { ...DEFAULT_MAPPING };
 }
 
-export async function readDocumentV2Mapping(): Promise<DocumentV2FieldMapping> {
-  const stored = await readJsonStore<DocumentV2FieldMapping>(DOCUMENT_V2_MAPPING_STORE, getDefaultDocumentV2Mapping());
-  return { ...getDefaultDocumentV2Mapping(), ...(stored || {}) };
+export async function readDocumentV2Mapping(templateId: string): Promise<DocumentV2FieldMapping> {
+  const stored = await readJsonStore<MappingByTemplate>(DOCUMENT_V2_MAPPING_STORE, {});
+  return { ...getDefaultDocumentV2Mapping(), ...((stored || {})[templateId] || {}) };
 }
 
-export async function writeDocumentV2Mapping(mapping: DocumentV2FieldMapping): Promise<DocumentV2FieldMapping> {
+export async function writeDocumentV2Mapping(templateId: string, mapping: DocumentV2FieldMapping): Promise<DocumentV2FieldMapping> {
+  const stored = await readJsonStore<MappingByTemplate>(DOCUMENT_V2_MAPPING_STORE, {});
   const normalized: DocumentV2FieldMapping = {};
   for (const [key, value] of Object.entries(mapping || {})) {
     normalized[String(key)] = (value || "") as DocumentV2FieldKey | "";
   }
   const merged = { ...getDefaultDocumentV2Mapping(), ...normalized };
-  await writeJsonStore(DOCUMENT_V2_MAPPING_STORE, merged);
+  const next: MappingByTemplate = { ...(stored || {}), [templateId]: merged };
+  await writeJsonStore(DOCUMENT_V2_MAPPING_STORE, next);
   return merged;
 }
-

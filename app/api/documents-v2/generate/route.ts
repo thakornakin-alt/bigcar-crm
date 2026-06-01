@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     if (!fileRes.ok) throw new Error("ไม่พบไฟล์ template");
     const templateBytes = new Uint8Array(await fileRes.arrayBuffer());
     const data = { ...mapBookingToDocumentV2(report), ...override };
-    const mapping = await readDocumentV2Mapping();
+    const mapping = await readDocumentV2Mapping(template.id);
     const pdfBytes = await generateDocumentV2WithBytes(data, templateBytes, mapping);
     const outputName = template.fileName;
     return new NextResponse(Buffer.from(pdfBytes), {
