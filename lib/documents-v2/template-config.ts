@@ -1,4 +1,4 @@
-export type DocumentV2TemplateId = "sale-contract" | "temporary-receipt";
+export type DocumentV2TemplateId = "contract-field";
 
 export type DocumentV2Template = {
   id: DocumentV2TemplateId;
@@ -8,17 +8,11 @@ export type DocumentV2Template = {
 };
 
 export const documentTemplatesV2: Record<DocumentV2TemplateId, DocumentV2Template> = {
-  "sale-contract": {
-    id: "sale-contract",
+  "contract-field": {
+    id: "contract-field",
     title: "สัญญาซื้อขายรถยนต์",
-    fileName: "sale-contract.pdf",
-    path: "/document-templates/sale-contract.pdf"
-  },
-  "temporary-receipt": {
-    id: "temporary-receipt",
-    title: "รายละเอียดการชำระเงิน / ใบเสร็จชั่วคราว",
-    fileName: "temporary-receipt.pdf",
-    path: "/document-templates/temporary-receipt.pdf"
+    fileName: "contract-field.pdf",
+    path: "/document-templates/contract-field.pdf"
   }
 };
 
@@ -33,4 +27,3 @@ export function getTemplateById(templateId?: string): DocumentV2Template {
 export function getDocumentV2Templates(): DocumentV2Template[] {
   return Object.values(documentTemplatesV2);
 }
-

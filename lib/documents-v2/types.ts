@@ -1,6 +1,6 @@
 import type { ReportHistoryItem } from "@/lib/types";
 
-export const DOC_V2_TEMPLATE_ID = "sale-contract" as const;
+export const DOC_V2_TEMPLATE_ID = "contract-field" as const;
 
 export type DocumentV2FieldDebug = {
   name: string;
