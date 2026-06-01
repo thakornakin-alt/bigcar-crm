@@ -4,7 +4,7 @@ import { mapBookingToDocumentV2 } from "@/lib/documents-v2/types";
 import type { ReportHistoryItem } from "@/lib/types";
 import { getTemplateById } from "@/lib/documents-v2/template-config";
 import { readDocumentV2Mapping } from "@/lib/documents-v2/mapping-store";
-import { lookupStockByPlate } from "@/lib/apps-script";
+import { listStockVehicles, lookupStockByPlate } from "@/lib/apps-script";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,7 +27,15 @@ export async function POST(request: Request) {
     const rawReport = ((report || {}) as Record<string, unknown>);
     const plateFromReport = String(rawReport.plate || rawReport.licensePlate || "").trim();
     const normalizedReportPlate = normalizePlate(plateFromReport);
-    const stock = plateFromReport ? await lookupStockByPlate(plateFromReport) : null;
+    let stock = plateFromReport ? await lookupStockByPlate(plateFromReport) : null;
+    if (!stock && plateFromReport) {
+      const shortQuery = plateFromReport.replace(/\s+/g, "").slice(0, 4);
+      if (shortQuery) {
+        const listed = await listStockVehicles({ query: shortQuery, limit: 50 });
+        const match = (listed.vehicles || []).find((v) => normalizePlate(v.plate) === normalizePlate(plateFromReport));
+        stock = match || null;
+      }
+    }
     const stockRaw = (stock || {}) as Record<string, unknown>;
     const stockPlateRaw = String(stockRaw.plate || "");
     const isSamePlate = normalizedReportPlate && normalizePlate(stockPlateRaw) === normalizedReportPlate;
