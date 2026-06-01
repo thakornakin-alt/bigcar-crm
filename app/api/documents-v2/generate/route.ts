@@ -21,6 +21,15 @@ export async function POST(request: Request) {
     const templateBytes = new Uint8Array(await fileRes.arrayBuffer());
     const data = { ...mapBookingToDocumentV2(report), ...override };
     const mapping = await readDocumentV2Mapping(template.id);
+    const fieldProbeName = String(body.fieldProbeName || "").trim();
+    const fieldProbeValue = String(body.fieldProbeValue || "").trim();
+    if (fieldProbeName && fieldProbeValue) {
+      Object.keys(mapping).forEach((key) => {
+        mapping[key] = "";
+      });
+      mapping[fieldProbeName] = "customerName";
+      data.customerName = fieldProbeValue;
+    }
     const pdfBytes = await generateDocumentV2WithBytes(data, templateBytes, mapping);
     const outputName = template.fileName;
     return new NextResponse(Buffer.from(pdfBytes), {

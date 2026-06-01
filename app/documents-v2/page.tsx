@@ -61,6 +61,8 @@ export default function DocumentsV2Page() {
   const [debug, setDebug] = useState<FieldsDebug | null>(null);
   const [isTemplateReady, setIsTemplateReady] = useState(false);
   const [mapping, setMapping] = useState<DocumentV2FieldMapping>({});
+  const [probeField, setProbeField] = useState("");
+  const [probeValue, setProbeValue] = useState("TEST-123");
 
   const selectedTemplate = documentTemplatesV2[templateId];
   const isDev = process.env.NODE_ENV === "development";
@@ -167,6 +169,28 @@ export default function DocumentsV2Page() {
     }
   }
 
+  async function previewProbe() {
+    if (!isTemplateReady || !probeField || !probeValue) {
+      setError("กรอก Field และค่า TEST ก่อน");
+      return;
+    }
+    try {
+      setLoading(true);
+      setError("");
+      const blob = await api<Blob>("/api/documents-v2/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ report: selectedReport, templateId, fieldProbeName: probeField, fieldProbeValue: probeValue })
+      });
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(URL.createObjectURL(blob));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Preview Probe ไม่สำเร็จ");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function exportPng() {
     if (!isTemplateReady) {
       setError("ไม่พบ AcroForm fields ในไฟล์นี้");
@@ -236,7 +260,26 @@ export default function DocumentsV2Page() {
         <button onClick={loadMapping} className="rounded border border-white/20 px-4 py-2">โหลด Mapping</button>
         <button onClick={saveMapping} className="rounded border border-white/20 px-4 py-2">บันทึก Mapping</button>
         <button onClick={preview} disabled={loading} className="rounded border border-white/20 px-4 py-2">{loading ? <Loader2 className="inline animate-spin" size={16} /> : <Eye className="inline" size={16} />} Preview PDF</button>
+        <button onClick={previewProbe} disabled={loading} className="rounded border border-yellow-300/40 px-4 py-2 text-yellow-200">ทดสอบ Field</button>
         <button onClick={exportPng} disabled={loading} className="rounded border border-white/20 px-4 py-2"><ImageIcon className="inline" size={16} /> Export PNG</button>
+      </div>
+
+      <div className="rounded border border-white/10 p-3">
+        <h2 className="mb-2 font-semibold">Field Probe</h2>
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          <input
+            value={probeField}
+            onChange={(e) => setProbeField(e.target.value)}
+            placeholder="เช่น Text1"
+            className="rounded bg-black/40 p-2 text-sm"
+          />
+          <input
+            value={probeValue}
+            onChange={(e) => setProbeValue(e.target.value)}
+            placeholder="ค่าทดสอบ"
+            className="rounded bg-black/40 p-2 text-sm"
+          />
+        </div>
       </div>
 
       <div className="rounded border border-white/10 p-3">
