@@ -9,6 +9,10 @@ import { lookupStockByPlate } from "@/lib/apps-script";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+function normalizePlate(value: unknown) {
+  return String(value || "").replace(/[\s\-_.]/g, "").trim();
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -22,16 +26,20 @@ export async function POST(request: Request) {
     const templateBytes = new Uint8Array(await fileRes.arrayBuffer());
     const rawReport = ((report || {}) as Record<string, unknown>);
     const plateFromReport = String(rawReport.plate || rawReport.licensePlate || "").trim();
+    const normalizedReportPlate = normalizePlate(plateFromReport);
     const stock = plateFromReport ? await lookupStockByPlate(plateFromReport) : null;
     const stockRaw = (stock || {}) as Record<string, unknown>;
+    const stockPlateRaw = String(stockRaw.plate || "");
+    const isSamePlate = normalizedReportPlate && normalizePlate(stockPlateRaw) === normalizedReportPlate;
 
     const data = {
       ...Object.fromEntries(Object.entries(rawReport).map(([k, v]) => [k, v == null ? "" : String(v)])),
       ...Object.fromEntries(Object.entries(stockRaw).map(([k, v]) => [k, v == null ? "" : String(v)])),
       ...mapBookingToDocumentV2(report),
       plateNo: String(rawReport.plate || rawReport.licensePlate || stockRaw.plate || "").trim(),
-      engineNo: String(rawReport.engineNo || rawReport.engineNumber || stockRaw.engineNo || stockRaw.engineNumber || "").trim(),
-      chassisNo: String(rawReport.chassisNo || rawReport.chassisNumber || rawReport.vin || stockRaw.vin || stockRaw.chassisNo || "").trim(),
+      customerAddress: String(rawReport.address || rawReport.customerAddress || (isSamePlate ? (stockRaw.customerAddress || stockRaw.address) : "") || "").trim(),
+      engineNo: String(rawReport.engineNo || rawReport.engineNumber || (isSamePlate ? (stockRaw.engineNo || stockRaw.engineNumber) : "") || "").trim(),
+      chassisNo: String(rawReport.chassisNo || rawReport.chassisNumber || rawReport.vin || (isSamePlate ? (stockRaw.vin || stockRaw.chassisNo || stockRaw.chassisNumber) : "") || "").trim(),
       ...override
     };
     const mapping = await readDocumentV2Mapping(template.id);
