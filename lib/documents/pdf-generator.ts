@@ -1,7 +1,7 @@
 import { readFile } from "fs/promises";
 import path from "path";
 import fontkit from "@pdf-lib/fontkit";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, rgb } from "pdf-lib";
 import { formatThaiDate, getDocumentTemplate } from "@/lib/documents/template-config";
 import type { DocumentData, DocumentFieldConfig, DocumentTemplateId } from "@/lib/documents/document-types";
 
@@ -145,6 +145,27 @@ export async function generateFilledDocumentPdf(input: {
   }
 
   const fields = input.fields || template.fields;
+
+  // Manual Mapping mode for contract: do not require AcroForm.
+  if (input.templateId === "contract") {
+    const pages = pdf.getPages();
+    const firstPage = pages[0];
+    if (!firstPage) throw new Error("ไม่พบหน้าของ PDF");
+    for (const [key, field] of Object.entries(fields)) {
+      const page = pages[Math.max((field.page || 1) - 1, 0)] || firstPage;
+      const value = fieldValue(key, field, input.data);
+      if (!value) continue;
+      page.drawText(value, {
+        x: field.x,
+        y: field.y,
+        size: field.fontSize || 10,
+        font: thaiFont,
+        color: rgb(0.02, 0.04, 0.07)
+      });
+    }
+    return pdf.save();
+  }
+
   const form = pdf.getForm();
   const formFields = form.getFields();
   if (!formFields.length) {
