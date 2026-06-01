@@ -37,6 +37,8 @@ const terms = [
   { key: "months84", months: 84, years: 7, label: "84" }
 ] as const;
 
+type QuoteMode = "customer" | "internal" | "quotation";
+
 async function api<T>(url: string): Promise<T> {
   const response = await fetch(url, { cache: "no-store" });
   const data = await response.json();
@@ -82,6 +84,14 @@ export default function CalculatorPage() {
   const [yearRange, setYearRange] = useState("2022-2026");
   const [carModel, setCarModel] = useState("");
   const [actualYear, setActualYear] = useState("");
+  const [carColor, setCarColor] = useState("");
+  const [mileage, setMileage] = useState("");
+  const [vehicleStatus, setVehicleStatus] = useState("พร้อมขาย");
+  const [carImageUrl, setCarImageUrl] = useState("");
+  const [importantNote, setImportantNote] = useState("");
+  const [selectedDownLabel, setSelectedDownLabel] = useState("20%");
+  const [selectedTermKey, setSelectedTermKey] = useState<(typeof terms)[number]["key"]>("months72");
+  const [quoteMode, setQuoteMode] = useState<QuoteMode>("quotation");
   const [carPrice, setCarPrice] = useState("684000");
   const [specialDownPayment, setSpecialDownPayment] = useState("");
   const [loading, setLoading] = useState(true);
@@ -147,6 +157,17 @@ export default function CalculatorPage() {
     return baseRows;
   }, [customDown, price, selectedRate]);
 
+  const selectedQuoteRow = useMemo(() => {
+    return rows.find((row) => row.label === selectedDownLabel) || rows[0] || null;
+  }, [rows, selectedDownLabel]);
+
+  useEffect(() => {
+    if (!rows.length) return;
+    if (!rows.some((row) => row.label === selectedDownLabel)) {
+      setSelectedDownLabel(rows[0].label);
+    }
+  }, [rows, selectedDownLabel]);
+
   async function handleSaveImage() {
     if (!rows.length || !selectedRate) return;
 
@@ -157,9 +178,17 @@ export default function CalculatorPage() {
       await exportInstallmentImage({
         carModel,
         actualYear,
+        carColor,
+        mileage,
+        vehicleStatus,
+        carImageUrl,
+        importantNote,
         carPrice: price,
         rate: selectedRate,
         rows,
+        selectedQuoteRow,
+        selectedTermKey,
+        quoteMode,
         contactName: salesProfile?.nickname || salesProfile?.firstName || "บิ๊ก",
         contactPhone: salesProfile?.phone || "091-778-5117",
         contactLineId: salesProfile?.lineId || "@bigcars",
@@ -184,6 +213,8 @@ export default function CalculatorPage() {
         <div className="grid gap-3 md:grid-cols-2">
           <TextField label="รุ่นรถ" value={carModel} onChange={setCarModel} placeholder="Toyota Revo 2020" />
           <TextField label="ปีรถ" value={actualYear} onChange={setActualYear} placeholder="2020" inputMode="numeric" />
+          <TextField label="สีรถ" value={carColor} onChange={setCarColor} placeholder="ขาว / เทา / ดำ" />
+          <TextField label="เลขไมล์" value={mileage} onChange={setMileage} placeholder="เช่น 68,000 กม." />
           <SelectField label="ประเภทรถ" value={vehicleType} onChange={setVehicleType} options={vehicleTypes} />
           <SelectField label="ช่วงปีรถ" value={yearRange} onChange={setYearRange} options={yearOptions} />
           <NumberField label="ราคารถ" value={carPrice} onChange={setCarPrice} placeholder="684000" />
@@ -193,6 +224,36 @@ export default function CalculatorPage() {
             onChange={setSpecialDownPayment}
             placeholder="เช่น 50000"
           />
+          <TextField label="สถานะรถ" value={vehicleStatus} onChange={setVehicleStatus} placeholder="พร้อมขาย / ติดจองรอคอนเฟิร์ม" />
+          <TextField label="รูปภาพรถ (URL)" value={carImageUrl} onChange={setCarImageUrl} placeholder="https://..." />
+          <SelectField
+            label="ดาวน์ที่ใช้สรุปใบเสนอราคา"
+            value={selectedDownLabel}
+            onChange={setSelectedDownLabel}
+            options={rows.map((row) => row.label)}
+          />
+          <SelectField
+            label="ระยะผ่อนที่ใช้สรุป"
+            value={selectedTermKey}
+            onChange={(value) => setSelectedTermKey(value as (typeof terms)[number]["key"])}
+            options={terms.map((term) => term.key)}
+            optionLabels={{ months48: "48 งวด", months60: "60 งวด", months72: "72 งวด", months84: "84 งวด" }}
+          />
+        </div>
+        <label className="mt-3 block">
+          <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">หมายเหตุสำคัญ</span>
+          <textarea
+            value={importantNote}
+            onChange={(event) => setImportantNote(event.target.value)}
+            rows={2}
+            placeholder="เช่น ราคาและค่างวดขึ้นอยู่กับไฟแนนซ์และเงื่อนไขวันอนุมัติ"
+            className="w-full rounded-2xl border border-white/10 bg-[#080c12] px-3 py-2 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
+          />
+        </label>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <ModeButton active={quoteMode === "customer"} onClick={() => setQuoteMode("customer")} label="Customer Mode" />
+          <ModeButton active={quoteMode === "internal"} onClick={() => setQuoteMode("internal")} label="Internal Mode" />
+          <ModeButton active={quoteMode === "quotation"} onClick={() => setQuoteMode("quotation")} label="Quotation Mode" />
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-soft">
           <span className="flex items-center gap-2">
@@ -326,12 +387,14 @@ function SelectField({
   label,
   value,
   onChange,
-  options
+  options,
+  optionLabels
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: string[];
+  optionLabels?: Record<string, string>;
 }) {
   return (
     <label className="block">
@@ -343,7 +406,7 @@ function SelectField({
       >
         {options.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {optionLabels?.[option] || option}
           </option>
         ))}
       </select>
@@ -403,6 +466,20 @@ function TextField({
   );
 }
 
+function ModeButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`min-h-11 rounded-2xl border px-3 text-sm font-bold transition ${
+        active ? "border-brand bg-brand text-ink" : "border-white/10 bg-[#0b0f16] text-white"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
 function PaymentHeader({ label, rate }: { label: string; rate: number | null }) {
   return (
     <th className="px-4 py-3 text-right font-semibold">
@@ -423,9 +500,17 @@ function PaymentCell({ value }: { value: number }) {
 async function exportInstallmentImage({
   carModel,
   actualYear,
+  carColor,
+  mileage,
+  vehicleStatus,
+  carImageUrl,
+  importantNote,
   carPrice,
   rate,
   rows,
+  selectedQuoteRow,
+  selectedTermKey,
+  quoteMode,
   contactName,
   contactPhone,
   contactLineId,
@@ -434,23 +519,34 @@ async function exportInstallmentImage({
 }: {
   carModel: string;
   actualYear: string;
+  carColor: string;
+  mileage: string;
+  vehicleStatus: string;
+  carImageUrl: string;
+  importantNote: string;
   carPrice: number;
   rate: InterestRate;
   rows: InstallmentRow[];
+  selectedQuoteRow: InstallmentRow | null;
+  selectedTermKey: (typeof terms)[number]["key"];
+  quoteMode: QuoteMode;
   contactName: string;
   contactPhone: string;
   contactLineId: string;
   contactAvatarUrl: string;
   contactLineQrUrl: string;
 }) {
+  const selectedTerm = terms.find((term) => term.key === selectedTermKey) || terms[2];
+  const selectedPayment = selectedQuoteRow ? selectedQuoteRow.payments[selectedTermKey] : 0;
   const profileImage = await loadCanvasImage(contactAvatarUrl || "/logo-rdd.png").catch(() => null);
   const lineQrImage = contactLineQrUrl ? await loadCanvasImage(contactLineQrUrl).catch(() => null) : null;
+  const carImage = carImageUrl ? await loadCanvasImage(carImageUrl).catch(() => null) : null;
   const canvas = document.createElement("canvas");
   const scale = Math.max(window.devicePixelRatio || 1, 2);
-  const width = 1200;
+  const width = 1280;
   const rowHeight = 64;
   const tableHeaderHeight = 82;
-  const headerHeight = 360;
+  const headerHeight = 470;
   const footerHeight = 86;
   const height = headerHeight + tableHeaderHeight + rowHeight * rows.length + footerHeight;
   canvas.width = width * scale;
@@ -469,11 +565,11 @@ async function exportInstallmentImage({
   ctx.fill();
 
   ctx.fillStyle = "#0b1118";
-  roundRect(ctx, width - 382, 56, 326, 252, 24);
+  roundRect(ctx, width - 382, 56, 326, 312, 24);
   ctx.fill();
   ctx.strokeStyle = "#263241";
   ctx.lineWidth = 2;
-  roundRect(ctx, width - 382, 56, 326, 252, 24);
+  roundRect(ctx, width - 382, 56, 326, 312, 24);
   ctx.stroke();
 
   const avatarSize = 92;
@@ -497,26 +593,60 @@ async function exportInstallmentImage({
 
   ctx.fillStyle = "#dce2eb";
   ctx.font = "700 18px Arial, sans-serif";
-  drawFitText(ctx, contactName || "บิ๊ก", width - 356, 205, 292);
+  drawFitText(ctx, contactName || "เซลล์", width - 356, 205, 292);
   ctx.fillStyle = "#22c55e";
   ctx.font = "700 18px Arial, sans-serif";
-  drawFitText(ctx, contactPhone || "091-778-5117", width - 356, 234, 292);
-  drawFitText(ctx, `Line: ${contactLineId || "@bigcars"}`, width - 356, 263, 292);
+  drawFitText(ctx, contactPhone || "-", width - 356, 234, 292);
+  drawFitText(ctx, `Line: ${contactLineId || "-"}`, width - 356, 263, 292);
+  ctx.fillStyle = "#9ca3af";
+  ctx.font = "600 16px Arial, sans-serif";
+  drawFitText(ctx, quoteMode === "internal" ? "Internal Mode" : quoteMode === "customer" ? "Customer Mode" : "Quotation Mode", width - 356, 291, 292);
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "700 52px Arial, sans-serif";
-  ctx.fillText("BIG CAR RDD", 64, 92);
+  ctx.fillText("ใบเสนอราคา", 64, 92);
 
   ctx.fillStyle = "#22c55e";
   ctx.font = "700 26px Arial, sans-serif";
-  ctx.fillText("ตารางค่างวดรถมือสอง", 64, 138);
+  ctx.fillText("Modern Automotive Sales Proposal", 64, 138);
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "700 30px Arial, sans-serif";
   drawCanvasPill(ctx, "รุ่นรถ", carModel.trim() || "-", 64, 182, 560);
-  drawCanvasPill(ctx, "ปีรถ", actualYear.trim() || "-", 64, 240, 210);
-  drawCanvasPill(ctx, "ราคารถ", `${formatWholeMoney(carPrice)} บาท`, 300, 240, 300);
-  drawCanvasPill(ctx, "ประเภท", rate.vehicleType, 626, 240, 210);
+  drawCanvasPill(ctx, "ปีรถ", actualYear.trim() || "-", 64, 240, 180);
+  drawCanvasPill(ctx, "สี", carColor.trim() || "-", 262, 240, 170);
+  drawCanvasPill(ctx, "เลขไมล์", mileage.trim() || "-", 450, 240, 180);
+  drawCanvasPill(ctx, "ราคารถ", `${formatWholeMoney(carPrice)} บาท`, 648, 240, 240);
+  drawCanvasPill(ctx, "สถานะรถ", vehicleStatus.trim() || "พร้อมขาย", 906, 240, 260);
+  drawCanvasPill(ctx, "ประเภท", rate.vehicleType, 64, 298, 420);
+  drawCanvasPill(ctx, "ดาวน์ที่เสนอ", selectedQuoteRow ? `${selectedQuoteRow.label} (${formatWholeMoney(selectedQuoteRow.downPayment)} บาท)` : "-", 502, 298, 390);
+  drawCanvasPill(ctx, "ระยะผ่อนที่เสนอ", `${selectedTerm.label} งวด • ${formatWholeMoney(selectedPayment)} บาท/งวด`, 910, 298, 256);
+
+  if (carImage) {
+    ctx.fillStyle = "#0b1118";
+    roundRect(ctx, 64, 354, 420, 96, 16);
+    ctx.fill();
+    ctx.strokeStyle = "#263241";
+    ctx.lineWidth = 1;
+    roundRect(ctx, 64, 354, 420, 96, 16);
+    ctx.stroke();
+    drawImageContain(ctx, carImage, 72, 362, 404, 80);
+  }
+  if (importantNote.trim()) {
+    ctx.fillStyle = "#0b1118";
+    roundRect(ctx, 502, 354, 664, 96, 16);
+    ctx.fill();
+    ctx.strokeStyle = "#263241";
+    ctx.lineWidth = 1;
+    roundRect(ctx, 502, 354, 664, 96, 16);
+    ctx.stroke();
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = "700 14px Arial, sans-serif";
+    ctx.fillText("หมายเหตุสำคัญ", 518, 378);
+    ctx.fillStyle = "#e5e7eb";
+    ctx.font = "600 18px Arial, sans-serif";
+    drawFitText(ctx, importantNote.trim(), 518, 410, 632);
+  }
 
   const columns = [
     { label: "เรทดาวน์", rate: "", x: 64, width: 128, align: "left" },
@@ -576,17 +706,17 @@ async function exportInstallmentImage({
   ctx.fillStyle = "#22c55e";
   ctx.font = "700 18px Arial, sans-serif";
   ctx.textAlign = "right";
-  ctx.fillText("BIG CAR RDD CRM", width - 64, height - 64);
+  ctx.fillText("ใบเสนอราคาสำหรับลูกค้า", width - 64, height - 64);
   ctx.textAlign = "left";
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
   if (!blob) throw new Error("ไม่สามารถสร้างไฟล์รูปได้");
 
-  const fileName = `bigcar-installment-${Date.now()}.png`;
+  const fileName = `quotation-${Date.now()}.png`;
   const file = new File([blob], fileName, { type: "image/png" });
   const shareData = {
-    title: "ตารางค่างวดรถมือสอง",
-    text: "ตารางค่างวดจาก Big Car CRM",
+    title: "ใบเสนอราคา",
+    text: "ใบเสนอราคาและตารางค่างวด",
     files: [file]
   };
 

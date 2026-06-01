@@ -14,8 +14,7 @@ import {
   SearchField,
   StickyFilterBar,
 } from "@/app/components/ui";
-import type { StockVehicle } from "@/lib/types";
-import type { DriveUploadResult, LineGroup } from "@/lib/types";
+import type { DriveUploadResult, LineGroup, ReportHistoryItem, StockVehicle } from "@/lib/types";
 import { salesLineGroupStorageKey } from "@/lib/client-settings";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import { hasStockFieldData, realStockFieldLabels, stockRawValue } from "@/lib/stock/stock-field-aliases";
@@ -60,6 +59,8 @@ type StockExportContact = {
   avatarImage: HTMLImageElement | null;
   lineQrImage: HTMLImageElement | null;
 };
+
+type BookingMatchStatus = "ติดจองรอคอนเฟิร์ม" | "พร้อมขาย" | "ไม่พบข้อมูลจอง";
 
 type AdvancedStockFilters = {
   models: string[];
@@ -365,6 +366,13 @@ function shortLocation(value?: string) {
 
 function normalizePlate(value: string) {
   return String(value || "").replace(/\s+/g, "").toUpperCase();
+}
+
+function normalizePlateForMatch(value: string) {
+  return String(value || "")
+    .toUpperCase()
+    .replace(/[.\-_/\\\s]+/g, "")
+    .trim();
 }
 
 function displayPlate(value?: string) {
@@ -794,6 +802,8 @@ export default function StockExportPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [showYearDebug, setShowYearDebug] = useState(false);
+  const [bookingReports, setBookingReports] = useState<ReportHistoryItem[]>([]);
+  const [bookingInputText, setBookingInputText] = useState("");
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -976,9 +986,49 @@ export default function StockExportPage() {
     [vehicles]
   );
 
+  const bookingReservedPlateSet = useMemo(() => {
+    const set = new Set<string>();
+    bookingReports.forEach((report) => {
+      if (report.type !== "booking") return;
+      if (String(report.status || "").toLowerCase() === "deleted") return;
+      const normalized = normalizePlateForMatch(report.plate);
+      if (normalized) set.add(normalized);
+    });
+    return set;
+  }, [bookingReports]);
+
+  const stockPlateSet = useMemo(() => {
+    const set = new Set<string>();
+    vehicles.forEach((vehicle) => {
+      const normalized = normalizePlateForMatch(vehicle.plate);
+      if (normalized) set.add(normalized);
+    });
+    return set;
+  }, [vehicles]);
+
+  const bookingInputChecks = useMemo(() => {
+    const lines = bookingInputText
+      .split(/\r?\n|,/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const unique = Array.from(new Set(lines));
+    return unique.map((raw) => {
+      const normalized = normalizePlateForMatch(raw);
+      const booked = normalized ? bookingReservedPlateSet.has(normalized) : false;
+      const inStock = normalized ? stockPlateSet.has(normalized) : false;
+      const status: BookingMatchStatus = booked
+        ? "ติดจองรอคอนเฟิร์ม"
+        : inStock
+          ? "พร้อมขาย"
+          : "ไม่พบข้อมูลจอง";
+      return { raw, normalized, inStock, booked, status };
+    });
+  }, [bookingInputText, bookingReservedPlateSet, stockPlateSet]);
+
   useEffect(() => {
     loadStock();
     loadLineGroups();
+    loadBookingReports();
     try {
       const raw = window.localStorage.getItem("bigcar-stock-filter-presets");
       if (raw) {
@@ -1039,6 +1089,15 @@ export default function StockExportPage() {
     } catch {
       setLineGroups([]);
       setSelectedLineGroupId("");
+    }
+  }
+
+  async function loadBookingReports() {
+    try {
+      const data = await api<{ reports: ReportHistoryItem[] }>("/api/reports/history?type=booking&q=");
+      setBookingReports(data.reports || []);
+    } catch {
+      setBookingReports([]);
     }
   }
 
@@ -1207,7 +1266,7 @@ export default function StockExportPage() {
 
     for (const group of exportGroups) {
       for (let index = 0; index < group.pages.length; index += 1) {
-        renderStockTableCanvas(canvas, group.pages[index], exportMode, index + 1, group.pages.length, group.name, group.vehicles.length, exportVehicles.length, contact, extraColumns, hasRegistrationYear);
+        renderStockTableCanvas(canvas, group.pages[index], exportMode, index + 1, group.pages.length, group.name, group.vehicles.length, exportVehicles.length, contact, extraColumns, hasRegistrationYear, bookingReservedPlateSet);
         if (format === "pdf") {
           const jpegBlob = await canvasToBlob(canvas, "image/jpeg", 0.92);
           pdfImages.push({ bytes: new Uint8Array(await jpegBlob.arrayBuffer()), width: canvas.width, height: canvas.height });
@@ -1242,7 +1301,7 @@ export default function StockExportPage() {
       if (!canvas) throw new Error("Canvas is not ready");
       const firstGroup = exportGroups[0];
       const contact = await stockExportContactProfile(salesProfile);
-      renderStockTableCanvas(canvas, firstGroup.pages[0] || firstGroup.vehicles, exportMode, 1, Math.max(firstGroup.pages.length, 1), firstGroup.name, firstGroup.vehicles.length, exportVehicles.length, contact, extraColumns, hasRegistrationYear);
+      renderStockTableCanvas(canvas, firstGroup.pages[0] || firstGroup.vehicles, exportMode, 1, Math.max(firstGroup.pages.length, 1), firstGroup.name, firstGroup.vehicles.length, exportVehicles.length, contact, extraColumns, hasRegistrationYear, bookingReservedPlateSet);
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
       if (!blob || !navigator.clipboard || typeof ClipboardItem === "undefined") throw new Error("เครื่องนี้ยังไม่รองรับ Copy Image");
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
@@ -1558,12 +1617,75 @@ export default function StockExportPage() {
         <NativeCard>
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="flex items-center gap-2 text-lg font-black text-white">
+              <CheckCircle2 size={18} className="text-brand" />
+              ตรวจทะเบียนติดจองจากรายงานจอง
+            </h2>
+            <NativeBadge tone="muted">{bookingReports.length.toLocaleString("th-TH")} รายการจอง</NativeBadge>
+          </div>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">วางทะเบียนจาก LINE หรือพิมพ์ทีละบรรทัด</span>
+            <textarea
+              value={bookingInputText}
+              onChange={(event) => setBookingInputText(event.target.value)}
+              rows={4}
+              placeholder={"ตัวอย่าง:\n1ขย 4313\n1ฒศ 4326"}
+              className="w-full rounded-lg border border-line bg-[#0b0d11] p-3 text-sm text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
+            />
+          </label>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <div className="rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-sm text-amber-100">
+              ติดจองรอคอนเฟิร์ม: {bookingInputChecks.filter((item) => item.status === "ติดจองรอคอนเฟิร์ม").length}
+            </div>
+            <div className="rounded-lg border border-green-300/30 bg-green-300/10 px-3 py-2 text-sm text-green-100">
+              พร้อมขาย: {bookingInputChecks.filter((item) => item.status === "พร้อมขาย").length}
+            </div>
+            <div className="rounded-lg border border-white/10 bg-[#0b0d11] px-3 py-2 text-sm text-soft">
+              ไม่พบข้อมูลจอง: {bookingInputChecks.filter((item) => item.status === "ไม่พบข้อมูลจอง").length}
+            </div>
+          </div>
+          {bookingInputChecks.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {bookingInputChecks.map((item) => (
+                <div key={`${item.raw}-${item.normalized}`} className="flex items-center justify-between rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-sm">
+                  <span className="font-bold text-white">{item.raw}</span>
+                  <span
+                    className={`rounded-full px-2 py-1 text-xs font-black ${
+                      item.status === "ติดจองรอคอนเฟิร์ม"
+                        ? "bg-amber-300/20 text-amber-200"
+                        : item.status === "พร้อมขาย"
+                          ? "bg-green-300/20 text-green-200"
+                          : "bg-white/10 text-soft"
+                    }`}
+                  >
+                    {item.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft">
+              วางทะเบียนเพื่อให้ระบบตรวจสถานะ “ติดจองรอคอนเฟิร์ม / พร้อมขาย / ไม่พบข้อมูลจอง”
+            </p>
+          )}
+        </NativeCard>
+
+        <NativeCard>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-lg font-black text-white">
               <FileImage size={18} className="text-brand" />
               Preview รูป
             </h2>
             <NativeBadge>{exportPageCount.toLocaleString("th-TH")} หน้า</NativeBadge>
           </div>
-          <StockPreview vehicles={exportVehicles} mode={exportMode} pageCount={exportPageCount} groupCount={exportGroups.length} extraColumns={extraColumns} hasRegistrationYear={hasRegistrationYear} />
+          <StockPreview
+            vehicles={exportVehicles}
+            mode={exportMode}
+            pageCount={exportPageCount}
+            groupCount={exportGroups.length}
+            extraColumns={extraColumns}
+            hasRegistrationYear={hasRegistrationYear}
+            bookingReservedPlateSet={bookingReservedPlateSet}
+          />
           <div className="grid gap-2 rounded-lg border border-line bg-[#0b0d11] p-3 sm:grid-cols-[1fr_auto]">
             <label>
               <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">ส่งรูปสต็อกเข้า LINE กลุ่ม</span>
@@ -1661,6 +1783,7 @@ export default function StockExportPage() {
                   visibleVehicles.map((vehicle) => {
                     const pdiRemark = stockPdiRemark(vehicle);
                     const hasRemark = hasPdiRemark(pdiRemark);
+                    const isBookingReserved = bookingReservedPlateSet.has(normalizePlateForMatch(vehicle.plate));
                     return (
                       <div
                         key={`${vehicle.plate}-${vehicle.vin || vehicle.model}`}
@@ -1669,6 +1792,15 @@ export default function StockExportPage() {
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <p className="font-bold text-white">{vehicle.plate || "-"}</p>
+                            <div className="mt-1">
+                              <span
+                                className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                                  isBookingReserved ? "bg-amber-300/20 text-amber-200" : "bg-green-300/20 text-green-200"
+                                }`}
+                              >
+                                {isBookingReserved ? "ติดจองรอคอนเฟิร์ม" : "พร้อมขาย"}
+                              </span>
+                            </div>
                             <p className="mt-1 line-clamp-2 text-sm text-soft">{vehicleTitle(vehicle)}</p>
                           </div>
                           <span className="rounded-full bg-[#0b0d11] px-2 py-1 text-xs font-bold text-soft">
@@ -1676,7 +1808,7 @@ export default function StockExportPage() {
                           </span>
                         </div>
                         <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-soft">
-                          <span>สถานะ: <b className="text-white">{vehicle.status || "-"}</b></span>
+                          <span>สถานะ: <b className="text-white">{isBookingReserved ? "ติดจองรอคอนเฟิร์ม" : vehicle.status || "พร้อมขาย"}</b></span>
                           <span>กลุ่ม: <b className="text-white">{vehicle.vehicleGroup || "-"}</b></span>
                           <span>Location: <b className="text-white">{vehicle.parkingLocation || "-"}</b></span>
                           <span>ปีจด: <b className="text-white">{stockRegistrationYear(vehicle) || "-"}</b></span>
@@ -2275,7 +2407,8 @@ function StockPreview({
   pageCount,
   groupCount,
   extraColumns,
-  hasRegistrationYear
+  hasRegistrationYear,
+  bookingReservedPlateSet
 }: {
   vehicles: StockVehicle[];
   mode: ExportMode;
@@ -2283,6 +2416,7 @@ function StockPreview({
   groupCount: number;
   extraColumns: ExtraColumnKey[];
   hasRegistrationYear: boolean;
+  bookingReservedPlateSet: Set<string>;
 }) {
   const columns = stockExportColumns(mode, extraColumns, hasRegistrationYear);
 
@@ -2318,11 +2452,15 @@ function StockPreview({
               <tr key={vehicle.plate} className="bg-white">
                 {columns.map((column) => {
                   const value = previewColumnValue(vehicle, column, mode);
+                  const isReserved = bookingReservedPlateSet.has(normalizePlateForMatch(vehicle.plate));
                   return (
                     <td
                       key={`${vehicle.plate}-${column.key}`}
                       style={column.key === "plate" ? { width: "128px", minWidth: "128px", maxWidth: "128px" } : undefined}
                       className={`border border-[#dce3e1] px-2 py-1 ${
+                        column.key === "plate" && isReserved
+                          ? "bg-[#fff7ed] text-left"
+                          :
                         column.key === "price"
                           ? "bg-[#e6fbf3] text-right text-sm font-black"
                           : column.key === "pdi"
@@ -2330,7 +2468,16 @@ function StockPreview({
                             : column.key === "mileage" ? "text-right" : column.key === "model" || column.key === "location" || column.key === "plate" ? "text-left" : "text-center"
                       }`}
                     >
-                      <span className={column.key === "plate" ? "block truncate whitespace-nowrap" : ""}>{value}</span>
+                      {column.key === "plate" ? (
+                        <span className="block">
+                          <span className="block truncate whitespace-nowrap">{value}</span>
+                          <span className={`mt-0.5 block text-[10px] font-bold ${isReserved ? "text-amber-700" : "text-green-700"}`}>
+                            {isReserved ? "ติดจองรอคอนเฟิร์ม" : "พร้อมขาย"}
+                          </span>
+                        </span>
+                      ) : (
+                        <span>{value}</span>
+                      )}
                     </td>
                   );
                 })}
@@ -2369,7 +2516,8 @@ function renderStockTableCanvas(
   exportTotal: number,
   contact: StockExportContact | null = null,
   extraColumns: ExtraColumnKey[] = [],
-  hasRegistrationYear = false
+  hasRegistrationYear = false,
+  bookingReservedPlateSet: Set<string> = new Set()
 ) {
   const margin = 44;
   const headerHeight = 126;
@@ -2442,6 +2590,7 @@ function renderStockTableCanvas(
   });
 
   rows.forEach((vehicle, rowIndex) => {
+    const isReserved = bookingReservedPlateSet.has(normalizePlateForMatch(vehicle.plate));
     const rowY = tableTop + headerRowHeight + rowIndex * rowHeight;
     const values: Record<string, string> = {
       location: shortLocation(vehicle.parkingLocation),
@@ -2458,7 +2607,8 @@ function renderStockTableCanvas(
     x = margin;
     columns.forEach((column) => {
       if (column.extraKey) values[column.key] = defaultColumnValue(vehicle, column.extraKey);
-      ctx.fillStyle = column.key === "price" ? "#e8fbf2" : rowIndex % 2 ? "#fbfcfc" : "#ffffff";
+      if (column.key === "plate" && isReserved) ctx.fillStyle = "#fff7ed";
+      else ctx.fillStyle = column.key === "price" ? "#e8fbf2" : rowIndex % 2 ? "#fbfcfc" : "#ffffff";
       ctx.fillRect(x, rowY, column.width, rowHeight);
       ctx.strokeStyle = "#dce3e1";
       ctx.lineWidth = 1;
@@ -2499,6 +2649,14 @@ function renderStockTableCanvas(
       } else {
         const cellPadding = column.key === "plate" ? 30 : 20;
         drawClippedText(ctx, values[column.key], textX, rowY + Math.floor(rowHeight / 2) + 7, column.width - cellPadding);
+        if (column.key === "plate" && isReserved) {
+          ctx.save();
+          ctx.fillStyle = "#b45309";
+          ctx.font = "700 14px Arial, Tahoma, sans-serif";
+          ctx.textAlign = "left";
+          drawClippedText(ctx, "ติดจองรอคอนเฟิร์ม", x + 12, rowY + rowHeight - 10, column.width - 20, 18, 14);
+          ctx.restore();
+        }
       }
       x += column.width;
     });
