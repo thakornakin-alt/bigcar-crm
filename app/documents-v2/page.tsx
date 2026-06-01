@@ -63,6 +63,7 @@ export default function DocumentsV2Page() {
   const [mapping, setMapping] = useState<DocumentV2FieldMapping>({});
   const [probeField, setProbeField] = useState("");
   const [probeValue, setProbeValue] = useState("TEST-123");
+  const [reportSource, setReportSource] = useState<"sales" | "booking">("sales");
 
   const selectedTemplate = documentTemplatesV2[templateId];
   const isDev = process.env.NODE_ENV === "development";
@@ -112,16 +113,16 @@ export default function DocumentsV2Page() {
 
   async function loadReports() {
     setError("");
-    const res = await api<{ reports: ReportHistoryItem[] }>("/api/reports/history?type=all");
+    const res = await api<{ reports: ReportHistoryItem[] }>(`/api/reports/history?type=${reportSource}`);
     const all = res.reports || [];
-    const bookingLike = all.filter((r) => {
-      const typeOk = String(r.type || "").toLowerCase() === "booking";
+    const filtered = all.filter((r) => {
+      const typeOk = String(r.type || "").toLowerCase() === reportSource;
       const hasCore = Boolean(String(r.customerName || "").trim() || String(r.plate || "").trim());
       return typeOk || hasCore;
     });
-    setReports(bookingLike);
-    if (!bookingLike.length) {
-      setError("ไม่พบรายงานจองในระบบ");
+    setReports(filtered);
+    if (!filtered.length) {
+      setError(reportSource === "sales" ? "ไม่พบรายงานขายในระบบ" : "ไม่พบรายงานจองในระบบ");
     }
   }
 
@@ -234,6 +235,22 @@ export default function DocumentsV2Page() {
       {error ? <div className="rounded border border-red-500/40 bg-red-900/30 p-3 text-red-100">{error}</div> : null}
 
       <div className="rounded border border-white/10 p-3">
+        <label className="mb-2 block text-sm">แหล่งข้อมูล</label>
+        <select
+          value={reportSource}
+          onChange={(e) => {
+            setReportSource(e.target.value as "sales" | "booking");
+            setSelectedReportId("");
+            setReports([]);
+          }}
+          className="w-full rounded bg-black/40 p-2"
+        >
+          <option value="sales">รายงานขาย (แนะนำ)</option>
+          <option value="booking">รายงานจอง</option>
+        </select>
+      </div>
+
+      <div className="rounded border border-white/10 p-3">
         <label className="mb-2 block text-sm">Template</label>
         <select
           value={templateId}
@@ -313,7 +330,7 @@ export default function DocumentsV2Page() {
         <label className="mb-2 block text-sm">เลือกรายงานจอง</label>
         <select value={selectedReportId} onChange={(e) => setSelectedReportId(e.target.value)} className="w-full rounded bg-black/40 p-2">
           <option value="">-- เลือก --</option>
-          {reports.map((r) => <option key={r.id} value={r.id}>{r.id} · {r.customerName} · {r.plate}</option>)}
+          {reports.map((r) => <option key={r.id} value={r.id}>{r.id} · {r.customerName} · {r.plate} · {r.type}</option>)}
         </select>
       </div>
 
