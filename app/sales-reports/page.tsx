@@ -311,6 +311,43 @@ export default function SalesReportsPage() {
     }));
   }, [salesProfile]);
 
+  useEffect(() => {
+    const plate = String(form.plate || "").trim();
+    if (!plate) return;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const result = await fetch(`/api/stock/lookup?plate=${encodeURIComponent(plate)}`, {
+          signal: controller.signal,
+          cache: "no-store"
+        });
+        if (!result.ok) return;
+        const data = await result.json();
+        const vehicle = data?.vehicle || null;
+        if (!vehicle) return;
+        setForm((current) => {
+          if (String(current.plate || "").trim() !== plate) return current;
+          return {
+            ...current,
+            brand: current.brand || vehicle.brand || "",
+            model: current.model || vehicle.model || "",
+            year: current.year || vehicle.year || "",
+            color: current.color || vehicle.color || "",
+            engineNo: current.engineNo || vehicle.engineNo || vehicle.engineNumber || vehicle["เลขเครื่อง"] || vehicle["เลขเครื่องยนต์"] || "",
+            chassisNo: current.chassisNo || vehicle.vin || vehicle.chassisNo || vehicle.chassisNumber || vehicle["เลขตัวถัง"] || vehicle["เลขตัวรถ"] || "",
+            address: current.address || vehicle.customerAddress || vehicle.address || ""
+          };
+        });
+      } catch {
+        // ignore lookup error to avoid disturbing existing flow
+      }
+    }, 300);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [form.plate]);
+
   function update(field: keyof SalesReportInput, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
   }
