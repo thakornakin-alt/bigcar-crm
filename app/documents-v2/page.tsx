@@ -3,9 +3,16 @@
 import { useMemo, useState } from "react";
 import { Download, Eye, FileText, Image as ImageIcon, Loader2 } from "lucide-react";
 import type { ReportHistoryItem } from "@/lib/types";
+import { DOC_V2_TEMPLATE_ID } from "@/lib/documents-v2/types";
+import { documentTemplatesV2, getDocumentV2Templates, type DocumentV2TemplateId } from "@/lib/documents-v2/template-config";
 
 type FieldItem = { name: string; type: string };
-type FieldsDebug = { pdfUrl: string; fieldsCount: number; fieldNames: string[] };
+type FieldsDebug = {
+  selectedTemplate: { id: string; fileName: string; path: string };
+  fetchStatus: number;
+  fieldsCount: number;
+  fieldNames: string[];
+};
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
@@ -22,6 +29,7 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export default function DocumentsV2Page() {
+  const templates = getDocumentV2Templates();
   const [fields, setFields] = useState<FieldItem[]>([]);
   const [reports, setReports] = useState<ReportHistoryItem[]>([]);
   const [selectedReportId, setSelectedReportId] = useState("");
@@ -29,9 +37,13 @@ export default function DocumentsV2Page() {
   const [pngUrl, setPngUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [templateFile, setTemplateFile] = useState("contract.pdf");
+  const [templateId, setTemplateId] = useState<DocumentV2TemplateId>(DOC_V2_TEMPLATE_ID);
   const [loadedTemplateFile, setLoadedTemplateFile] = useState("");
   const [debug, setDebug] = useState<FieldsDebug | null>(null);
+  const [isTemplateReady, setIsTemplateReady] = useState(false);
+
+  const selectedTemplate = documentTemplatesV2[templateId];
+  const isDev = process.env.NODE_ENV === "development";
 
   const selectedReport = useMemo(
     () => reports.find((r) => r.id === selectedReportId) || null,
@@ -41,28 +53,38 @@ export default function DocumentsV2Page() {
   async function loadFields() {
     try {
       setError("");
+      setIsTemplateReady(false);
+      const templateProbe = await fetch(selectedTemplate.path, { method: "GET", cache: "no-store" });
+      if (!templateProbe.ok) {
+        setDebug({
+          selectedTemplate: selectedTemplate,
+          fetchStatus: templateProbe.status,
+          fieldsCount: 0,
+          fieldNames: []
+        });
+        throw new Error("ไม่พบไฟล์ template");
+      }
       const res = await api<{
         ok: boolean;
         fields: FieldItem[];
+        templateId?: string;
         templateFile?: string;
         debug?: FieldsDebug;
-      }>(`/api/documents-v2/fields?templateFile=${encodeURIComponent(templateFile)}`);
+      }>(`/api/documents-v2/fields?templateId=${encodeURIComponent(templateId)}`);
       setFields(res.fields || []);
-      setLoadedTemplateFile(String(res.templateFile || templateFile));
+      setLoadedTemplateFile(String(res.templateFile || selectedTemplate.fileName));
       setDebug(res.debug || null);
       if (!res.fields?.length) {
-        setError(`ไม่พบ AcroForm fields ในไฟล์นี้ (${res.templateFile || templateFile})`);
+        setError("ไม่พบ AcroForm fields ในไฟล์นี้");
+        return;
       }
+      setIsTemplateReady(true);
     } catch (e) {
       setFields([]);
-      setLoadedTemplateFile(templateFile);
+      setLoadedTemplateFile(selectedTemplate.fileName);
       const message = e instanceof Error ? e.message : "โหลด fields ไม่สำเร็จ";
       setError(message);
-      setDebug({
-        pdfUrl: `/document-templates/${templateFile}`,
-        fieldsCount: 0,
-        fieldNames: []
-      });
+      setIsTemplateReady(false);
     }
   }
 
@@ -73,13 +95,17 @@ export default function DocumentsV2Page() {
   }
 
   async function preview() {
+    if (!isTemplateReady) {
+      setError("ไม่พบ AcroForm fields ในไฟล์นี้");
+      return;
+    }
     try {
       setLoading(true);
       setError("");
       const blob = await api<Blob>("/api/documents-v2/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report: selectedReport, templateFile })
+        body: JSON.stringify({ report: selectedReport, templateId })
       });
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(URL.createObjectURL(blob));
@@ -91,13 +117,17 @@ export default function DocumentsV2Page() {
   }
 
   async function exportPng() {
+    if (!isTemplateReady) {
+      setError("ไม่พบ AcroForm fields ในไฟล์นี้");
+      return;
+    }
     try {
       setLoading(true);
       setError("");
       const blob = await api<Blob>("/api/documents-v2/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report: selectedReport, templateFile })
+        body: JSON.stringify({ report: selectedReport, templateId })
       });
       const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as any;
       pdfjs.GlobalWorkerOptions.workerSrc = "";
@@ -129,13 +159,24 @@ export default function DocumentsV2Page() {
       {error ? <div className="rounded border border-red-500/40 bg-red-900/30 p-3 text-red-100">{error}</div> : null}
 
       <div className="rounded border border-white/10 p-3">
-        <label className="mb-2 block text-sm">ไฟล์ Template ที่จะโหลด fields</label>
-        <input
-          value={templateFile}
-          onChange={(e) => setTemplateFile(e.target.value)}
+        <label className="mb-2 block text-sm">Template</label>
+        <select
+          value={templateId}
+          onChange={(e) => {
+            setTemplateId(e.target.value as DocumentV2TemplateId);
+            setFields([]);
+            setDebug(null);
+            setError("");
+            setIsTemplateReady(false);
+          }}
           className="w-full rounded bg-black/40 p-2"
-          placeholder="เช่น temporary-receipt.pdf หรือ สัญญาซื้อขายรถยนต์.PDF"
-        />
+        >
+          {templates.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.title} ({t.fileName})
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -156,7 +197,7 @@ export default function DocumentsV2Page() {
       <div className="rounded border border-white/10 p-3">
         <h2 className="mb-2 flex items-center gap-2 font-semibold"><FileText size={16} /> Fields</h2>
         <p className="mb-2 text-xs text-gray-300">โหลดไฟล์จริง: {loadedTemplateFile || "-"}</p>
-        {debug ? (
+        {isDev && debug ? (
           <pre className="mb-2 max-h-40 overflow-auto text-xs text-emerald-200">
             {JSON.stringify(debug, null, 2)}
           </pre>
@@ -168,7 +209,7 @@ export default function DocumentsV2Page() {
         <div className="rounded border border-white/10 p-3">
           <h2 className="mb-2 font-semibold">Preview PDF</h2>
           <iframe src={previewUrl} className="h-[70vh] w-full rounded bg-white" />
-          <a href={previewUrl} download={loadedTemplateFile || templateFile || "document-v2.pdf"} className="mt-2 inline-flex items-center gap-2 rounded bg-emerald-500 px-3 py-2 font-semibold text-black">
+          <a href={previewUrl} download={loadedTemplateFile || selectedTemplate.fileName || "document-v2.pdf"} className="mt-2 inline-flex items-center gap-2 rounded bg-emerald-500 px-3 py-2 font-semibold text-black">
             <Download size={16} /> Download PDF
           </a>
         </div>
@@ -178,7 +219,7 @@ export default function DocumentsV2Page() {
         <div className="rounded border border-white/10 p-3">
           <h2 className="mb-2 font-semibold">PNG</h2>
           <img src={pngUrl} alt="PNG preview" className="max-w-full rounded bg-white" />
-          <a href={pngUrl} download={`${(loadedTemplateFile || templateFile || "document-v2").replace(/\.pdf$/i, "")}.png`} className="mt-2 inline-flex items-center gap-2 rounded bg-emerald-500 px-3 py-2 font-semibold text-black">
+          <a href={pngUrl} download={`${(loadedTemplateFile || selectedTemplate.fileName || "document-v2").replace(/\.pdf$/i, "")}.png`} className="mt-2 inline-flex items-center gap-2 rounded bg-emerald-500 px-3 py-2 font-semibold text-black">
             <Download size={16} /> Download PNG
           </a>
         </div>

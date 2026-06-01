@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { generateDocumentV2 } from "@/lib/documents-v2/generator";
 import { mapBookingToDocumentV2 } from "@/lib/documents-v2/types";
 import type { ReportHistoryItem } from "@/lib/types";
+import { getTemplateById } from "@/lib/documents-v2/template-config";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -11,10 +12,11 @@ export async function POST(request: Request) {
     const body = await request.json();
     const report = (body.report || null) as ReportHistoryItem | null;
     const override = (body.data || {}) as Record<string, string>;
-    const templateFile = String(body.templateFile || "").trim() || undefined;
+    const templateId = String(body.templateId || "").trim() || undefined;
+    const template = getTemplateById(templateId);
     const data = { ...mapBookingToDocumentV2(report), ...override };
-    const pdfBytes = await generateDocumentV2(data, templateFile);
-    const outputName = templateFile || "temporary-receipt.pdf";
+    const pdfBytes = await generateDocumentV2(data, template.id);
+    const outputName = template.fileName;
     return new NextResponse(Buffer.from(pdfBytes), {
       headers: {
         "Content-Type": "application/pdf",

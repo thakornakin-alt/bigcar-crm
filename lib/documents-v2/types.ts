@@ -1,6 +1,6 @@
 import type { ReportHistoryItem } from "@/lib/types";
 
-export const DOC_V2_TEMPLATE_ID = "temporary-receipt" as const;
+export const DOC_V2_TEMPLATE_ID = "sale-contract" as const;
 
 export type DocumentV2FieldDebug = {
   name: string;
@@ -24,4 +24,3 @@ export function mapBookingToDocumentV2(report?: ReportHistoryItem | null): Docum
     deposit: ""
   };
 }
-
