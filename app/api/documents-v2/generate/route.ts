@@ -22,6 +22,15 @@ function extractFromReportText(text: string, patterns: RegExp[]) {
   return "";
 }
 
+function objectValue(source: Record<string, unknown>, keys: string[]) {
+  const extra = source.extraFields && typeof source.extraFields === "object" ? source.extraFields as Record<string, unknown> : {};
+  for (const key of keys) {
+    const value = source[key] ?? extra[key];
+    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+  }
+  return "";
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -51,11 +60,11 @@ export async function POST(request: Request) {
     const isSamePlate = normalizedReportPlate && normalizePlate(stockPlateRaw) === normalizedReportPlate;
 
     const engineFromReportText = extractFromReportText(reportText, [
-      /เลขเครื่อง(?:ยนต์)?\s*[:：]\s*([A-Za-z0-9\-]+)/i
+      /เลขเครื่อง(?:ยนต์)?\s*[:：]\s*([^\r\n]+)/i
     ]);
     const chassisFromReportText = extractFromReportText(reportText, [
-      /เลขตัวถัง\s*[:：]\s*([A-Za-z0-9\-]+)/i,
-      /VIN\s*[:：]\s*([A-Za-z0-9\-]+)/i
+      /เลขตัวถัง\s*[:：]\s*([^\r\n]+)/i,
+      /VIN\s*[:：]\s*([^\r\n]+)/i
     ]);
 
     const data = {
@@ -65,20 +74,15 @@ export async function POST(request: Request) {
       plateNo: String(rawReport.plate || rawReport.licensePlate || stockRaw.plate || "").trim(),
       customerAddress: String(rawReport.address || rawReport.customerAddress || (isSamePlate ? (stockRaw.customerAddress || stockRaw.address) : "") || "").trim(),
       engineNo: String(
-        rawReport.engineNo ||
-        rawReport.engineNumber ||
-        rawReport["เลขเครื่อง"] ||
+        objectValue(rawReport, ["engineNo", "engineNumber", "เลขเครื่อง", "เลขเครื่องยนต์", "EngineNo", "EngineNumber"]) ||
         engineFromReportText ||
-        (isSamePlate ? (stockRaw.engineNo || stockRaw.engineNumber || stockRaw["เลขเครื่อง"] || stockRaw["เลขเครื่องยนต์"]) : "") ||
+        (isSamePlate ? objectValue(stockRaw, ["engineNo", "engineNumber", "เลขเครื่อง", "เลขเครื่องยนต์", "EngineNo", "EngineNumber"]) : "") ||
         ""
       ).trim(),
       chassisNo: String(
-        rawReport.chassisNo ||
-        rawReport.chassisNumber ||
-        rawReport.vin ||
-        rawReport["เลขตัวถัง"] ||
+        objectValue(rawReport, ["chassisNo", "chassisNumber", "vin", "เลขตัวถัง", "เลขตัวรถ", "VIN", "Chassis"]) ||
         chassisFromReportText ||
-        (isSamePlate ? (stockRaw.vin || stockRaw.chassisNo || stockRaw.chassisNumber || stockRaw["เลขตัวถัง"] || stockRaw["เลขตัวรถ"]) : "") ||
+        (isSamePlate ? objectValue(stockRaw, ["vin", "chassisNo", "chassisNumber", "เลขตัวถัง", "เลขตัวรถ", "VIN", "Chassis"]) : "") ||
         ""
       ).trim(),
       ...override

@@ -79,8 +79,11 @@ export function mapBookingToDocumentV2(report?: ReportHistoryItem | null): Docum
     currentDate,
     customerName: pick(raw, "customerName", "name", "buyerName")
       || extractFromReportText(reportText, [/ชื่อลูกค้า\s*[:：]\s*(.+)/i, /ชื่อ-นามสกุล\s*[:：]\s*(.+)/i]),
-    customerAddress: pick(raw, "address", "customerAddress")
-      || extractFromReportText(reportText, [/ที่อยู่\s*[:：]\s*(.+)/i]),
+    customerAddress: pick(raw, "address", "customerAddress", "shippingAddress")
+      || extractFromReportText(reportText, [
+        /ที่อยู่จัดส่งเอกสาร\s*[\r\n]+([^\r\n]+)/i,
+        /ที่อยู่\s*[:：]\s*(.+)/i
+      ]),
     idCard: pick(raw, "idCard", "citizenId", "taxId")
       || extractFromReportText(reportText, [/เลขบัตรประชาชน\s*[:：]\s*([0-9\-]+)/i]),
     plateNo: pick(raw, "plate", "licensePlate", "plateNo")
@@ -91,8 +94,10 @@ export function mapBookingToDocumentV2(report?: ReportHistoryItem | null): Docum
       || extractFromReportText(reportText, [/รุ่นรถ\s*[:：]\s*(.+)/i]),
     year: pick(raw, "year", "registeredYear", "modelYear"),
     color: pick(raw, "color", "carColor"),
-    engineNo: pick(raw, "engineNo", "engineNumber"),
-    chassisNo: pick(raw, "chassisNo", "vin", "chassisNumber"),
+    engineNo: pick(raw, "engineNo", "engineNumber", "เลขเครื่อง", "เลขเครื่องยนต์")
+      || extractFromReportText(reportText, [/เลขเครื่อง(?:ยนต์)?\s*[:：]\s*([^\r\n]+)/i]),
+    chassisNo: pick(raw, "chassisNo", "vin", "chassisNumber", "เลขตัวถัง", "เลขตัวรถ")
+      || extractFromReportText(reportText, [/เลขตัวถัง\s*[:：]\s*([^\r\n]+)/i, /VIN\s*[:：]\s*([^\r\n]+)/i]),
     sellPrice: normalizeMoney(pick(raw, "salePrice", "finalPrice", "netPayment", "carPrice") || rawFinal),
     deposit: normalizeMoney(String(rawDeposit || "")),
     remainingAmount: remaining > 0 ? remaining.toLocaleString("th-TH") : "",

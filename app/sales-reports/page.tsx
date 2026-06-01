@@ -197,6 +197,15 @@ function defaultSalesEmailSubject(input: SalesReportInput) {
   return ["รายงานขาย", input.customerName, input.model, input.plate].filter(Boolean).join(" - ");
 }
 
+function vehicleValue(vehicle: Record<string, any>, keys: string[]) {
+  const extra = vehicle?.extraFields && typeof vehicle.extraFields === "object" ? vehicle.extraFields : {};
+  for (const key of keys) {
+    const value = vehicle?.[key] ?? extra?.[key];
+    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+  }
+  return "";
+}
+
 export default function SalesReportsPage() {
   const { user: salesProfile } = useSalesProfile();
   const [query, setQuery] = useState("");
@@ -333,9 +342,8 @@ export default function SalesReportsPage() {
             model: current.model || vehicle.model || "",
             year: current.year || vehicle.year || "",
             color: current.color || vehicle.color || "",
-            engineNo: current.engineNo || vehicle.engineNo || vehicle.engineNumber || vehicle["เลขเครื่อง"] || vehicle["เลขเครื่องยนต์"] || "",
-            chassisNo: current.chassisNo || vehicle.vin || vehicle.chassisNo || vehicle.chassisNumber || vehicle["เลขตัวถัง"] || vehicle["เลขตัวรถ"] || "",
-            address: current.address || vehicle.customerAddress || vehicle.address || ""
+            engineNo: current.engineNo || vehicleValue(vehicle, ["engineNo", "engineNumber", "เลขเครื่อง", "เลขเครื่องยนต์", "EngineNo", "EngineNumber"]),
+            chassisNo: current.chassisNo || vehicleValue(vehicle, ["vin", "chassisNo", "chassisNumber", "เลขตัวถัง", "เลขตัวรถ", "VIN", "Chassis"])
           };
         });
       } catch {
