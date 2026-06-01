@@ -2297,13 +2297,13 @@ function StockPreview({
         </p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-max table-fixed border-collapse text-[11px]">
+        <table className="w-full min-w-max table-auto border-collapse text-[11px]">
           <thead>
             <tr className="bg-[#17211d] text-white">
               {columns.map((column) => (
                 <th
                   key={column.key}
-                  style={{ width: `${column.width}px`, minWidth: `${column.width}px` }}
+                  style={column.key === "plate" ? { width: "128px", minWidth: "128px", maxWidth: "128px" } : undefined}
                   className={`border border-[#2d3a35] px-3 py-2 font-bold ${
                     column.key === "pdi" ? "bg-[#7c4a03] text-left" : column.key === "plate" ? "text-left whitespace-nowrap" : "text-left"
                   }`}
@@ -2321,7 +2321,7 @@ function StockPreview({
                   return (
                     <td
                       key={`${vehicle.plate}-${column.key}`}
-                      style={{ width: `${column.width}px`, minWidth: `${column.width}px`, maxWidth: `${column.width}px` }}
+                      style={column.key === "plate" ? { width: "128px", minWidth: "128px", maxWidth: "128px" } : undefined}
                       className={`border border-[#dce3e1] px-2 py-1 ${
                         column.key === "price"
                           ? "bg-[#e6fbf3] text-right text-sm font-black"
@@ -2401,22 +2401,31 @@ function renderStockTableCanvas(
   ctx.lineWidth = 1.2;
   ctx.strokeRect(margin, 26, width - margin * 2, headerHeight);
 
+  const hasContactBadge = Boolean(contact?.lineQrImage || contact?.avatarImage);
+  const rightPanelWidth = hasContactBadge ? 300 : 180;
+  const leftBlockMaxWidth = Math.max(420, width - margin * 2 - rightPanelWidth - 28);
+
   ctx.fillStyle = "#111827";
   ctx.font = "900 48px Arial, Tahoma, sans-serif";
   ctx.textAlign = "left";
-  ctx.fillText(groupName || "Stock", margin + 30, 82);
+  drawClippedText(ctx, groupName || "Stock", margin + 30, 82, leftBlockMaxWidth, 64, 48);
   ctx.fillStyle = "#64748b";
   ctx.font = "600 24px Arial, Tahoma, sans-serif";
-  ctx.fillText(
+  drawClippedText(
+    ctx,
     `${groupTotal.toLocaleString("th-TH")} คัน | อัปเดต ${new Date().toLocaleDateString("th-TH")} | ${mode === "customer" ? "สำหรับลูกค้า" : "สำหรับภายใน"}`,
     margin + 30,
-    120
+    120,
+    leftBlockMaxWidth,
+    36,
+    28
   );
+
   ctx.textAlign = "right";
-  ctx.fillStyle = "#111827";
-  ctx.font = "800 30px Arial, Tahoma, sans-serif";
-  ctx.fillText(`หน้า ${page}/${totalPages}`, contact?.lineQrImage || contact?.avatarImage ? width - margin - 132 : width - margin - 28, 82);
-  drawStockExportContact(ctx, contact, width - margin - 28, 42);
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "800 26px Arial, Tahoma, sans-serif";
+  ctx.fillText(`หน้า ${page}/${totalPages}`, width - margin - 16, 62);
+  drawStockExportContact(ctx, contact, width - margin - 18, 78);
 
   let x = margin;
   ctx.font = "800 23px Arial, Tahoma, sans-serif";
@@ -2498,11 +2507,10 @@ function renderStockTableCanvas(
   ctx.textAlign = "left";
   ctx.fillStyle = "#6b7280";
   ctx.font = "600 20px Arial, Tahoma, sans-serif";
-  ctx.fillText(
-    contact ? `ผู้ติดต่อ ${contact.name}${contact.phone ? ` ${contact.phone}` : ""}${contact.lineId ? ` | LINE ${contact.lineId}` : ""}` : "Generated from latest stock",
-    margin,
-    height - 22
-  );
+  const footerContact = contact
+    ? `ผู้ติดต่อ ${contact.name}${contact.phone ? ` ${contact.phone}` : ""}${contact.lineId ? ` | LINE ${contact.lineId}` : ""}`
+    : "Generated from latest stock";
+  drawClippedText(ctx, footerContact, margin, height - 22, Math.max(300, width - margin * 2 - 300));
   ctx.textAlign = "right";
   ctx.fillText(`จำนวนรถทั้งหมด ${exportTotal.toLocaleString("th-TH")} คัน`, width - margin, height - 22);
   ctx.textAlign = "left";
@@ -2538,37 +2546,45 @@ function groupVehiclesForExport(vehicles: StockVehicle[]): StockExportGroup[] {
 function drawStockExportContact(ctx: CanvasRenderingContext2D, contact: StockExportContact | null, right: number, top: number) {
   if (!contact) return;
   const image = contact.lineQrImage || contact.avatarImage;
-  if (!image) return;
+  const blockWidth = image ? 286 : 250;
+  const blockHeight = image ? 76 : 54;
+  const blockLeft = right - blockWidth;
 
-  const size = contact.lineQrImage ? 86 : 70;
-  const left = right - size;
   ctx.save();
   ctx.fillStyle = "#ffffff";
-  drawRoundedRect(ctx, left - 8, top - 8, size + 16, size + 16, 14);
+  drawRoundedRect(ctx, blockLeft, top, blockWidth, blockHeight, 12);
   ctx.fill();
   ctx.strokeStyle = "#d9e1df";
-  ctx.lineWidth = 1.2;
+  ctx.lineWidth = 1;
   ctx.stroke();
 
-  if (contact.lineQrImage) {
-    ctx.drawImage(image, left, top, size, size);
-  } else {
-    ctx.beginPath();
-    ctx.arc(left + size / 2, top + size / 2, size / 2, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.drawImage(image, left, top, size, size);
+  let textStartX = blockLeft + 12;
+  if (image) {
+    const size = contact.lineQrImage ? 58 : 50;
+    const imageLeft = blockLeft + 10;
+    const imageTop = top + Math.floor((blockHeight - size) / 2);
+    if (contact.lineQrImage) {
+      ctx.drawImage(image, imageLeft, imageTop, size, size);
+    } else {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(imageLeft + size / 2, imageTop + size / 2, size / 2, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(image, imageLeft, imageTop, size, size);
+      ctx.restore();
+    }
+    textStartX = imageLeft + size + 10;
   }
-  ctx.restore();
 
-  ctx.save();
-  ctx.textAlign = "right";
+  const textMaxWidth = blockLeft + blockWidth - textStartX - 10;
+  ctx.textAlign = "left";
   ctx.fillStyle = "#111827";
-  ctx.font = "800 18px Arial, Tahoma, sans-serif";
-  ctx.fillText(contact.name, left - 16, top + 34);
-  ctx.fillStyle = "#64748b";
-  ctx.font = "700 16px Arial, Tahoma, sans-serif";
-  if (contact.phone) ctx.fillText(contact.phone, left - 16, top + 58);
-  if (contact.lineId) ctx.fillText(`LINE ${contact.lineId}`, left - 16, top + 82);
+  ctx.font = "800 14px Arial, Tahoma, sans-serif";
+  drawClippedText(ctx, contact.name || "BIG CAR CRM", textStartX, top + 23, textMaxWidth, 26, 18);
+  ctx.fillStyle = "#475569";
+  ctx.font = "700 12px Arial, Tahoma, sans-serif";
+  drawClippedText(ctx, contact.phone ? `โทร ${contact.phone}` : "-", textStartX, top + 41, textMaxWidth, 22, 16);
+  drawClippedText(ctx, contact.lineId ? `LINE ${contact.lineId}` : "-", textStartX, top + 57, textMaxWidth, 22, 16);
   ctx.restore();
 }
 
@@ -2587,12 +2603,20 @@ function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, wi
   ctx.closePath();
 }
 
-function drawClippedText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number) {
+function drawClippedText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  clipHeight = 34,
+  topOffset = 25
+) {
   ctx.save();
   const align = ctx.textAlign;
   const clipX = align === "right" ? x - maxWidth : align === "center" ? x - maxWidth / 2 : x;
   ctx.beginPath();
-  ctx.rect(clipX, y - 25, maxWidth, 34);
+  ctx.rect(clipX, y - topOffset, maxWidth, clipHeight);
   ctx.clip();
   ctx.fillText(text || "-", x, y);
   ctx.restore();
