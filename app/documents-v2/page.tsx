@@ -5,6 +5,7 @@ import { Download, Eye, FileText, Image as ImageIcon, Loader2 } from "lucide-rea
 import type { ReportHistoryItem } from "@/lib/types";
 import { DOC_V2_TEMPLATE_ID } from "@/lib/documents-v2/types";
 import { documentTemplatesV2, getDocumentV2Templates, type DocumentV2TemplateId } from "@/lib/documents-v2/template-config";
+import type { DocumentV2FieldKey, DocumentV2FieldMapping } from "@/lib/documents-v2/mapping-store";
 
 type FieldItem = { name: string; type: string };
 type FieldsDebug = {
@@ -13,6 +14,24 @@ type FieldsDebug = {
   fieldsCount: number;
   fieldNames: string[];
 };
+
+const mappingOptions: Array<{ key: DocumentV2FieldKey; label: string }> = [
+  { key: "contractDate", label: "วันที่สัญญา" },
+  { key: "customerName", label: "ชื่อลูกค้า" },
+  { key: "customerAddress", label: "ที่อยู่ลูกค้า" },
+  { key: "idCard", label: "เลขบัตรประชาชน" },
+  { key: "plateNo", label: "ทะเบียน" },
+  { key: "brand", label: "ยี่ห้อรถ" },
+  { key: "model", label: "รุ่นรถ" },
+  { key: "year", label: "ปีรถ" },
+  { key: "color", label: "สี" },
+  { key: "engineNo", label: "เลขเครื่อง" },
+  { key: "chassisNo", label: "เลขตัวถัง" },
+  { key: "sellPrice", label: "ราคาขาย" },
+  { key: "deposit", label: "เงินจอง" },
+  { key: "remainingAmount", label: "ยอดคงเหลือ" },
+  { key: "saleName", label: "ชื่อเซลล์" }
+];
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
@@ -41,6 +60,7 @@ export default function DocumentsV2Page() {
   const [loadedTemplateFile, setLoadedTemplateFile] = useState("");
   const [debug, setDebug] = useState<FieldsDebug | null>(null);
   const [isTemplateReady, setIsTemplateReady] = useState(false);
+  const [mapping, setMapping] = useState<DocumentV2FieldMapping>({});
 
   const selectedTemplate = documentTemplatesV2[templateId];
   const isDev = process.env.NODE_ENV === "development";
@@ -100,6 +120,26 @@ export default function DocumentsV2Page() {
     setReports(bookingLike);
     if (!bookingLike.length) {
       setError("ไม่พบรายงานจองในระบบ");
+    }
+  }
+
+  async function loadMapping() {
+    try {
+      const res = await api<{ ok: boolean; mapping: DocumentV2FieldMapping }>("/api/documents-v2/mapping");
+      setMapping(res.mapping || {});
+    } catch {}
+  }
+
+  async function saveMapping() {
+    try {
+      setError("");
+      await api<{ ok: boolean; mapping: DocumentV2FieldMapping }>("/api/documents-v2/mapping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mapping })
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "บันทึก mapping ไม่สำเร็จ");
     }
   }
 
@@ -191,8 +231,37 @@ export default function DocumentsV2Page() {
       <div className="flex flex-wrap gap-2">
         <button onClick={loadFields} className="rounded bg-emerald-500 px-4 py-2 font-semibold text-black">โหลดรายชื่อ Fields</button>
         <button onClick={loadReports} className="rounded border border-white/20 px-4 py-2">โหลดรายงานจอง</button>
+        <button onClick={loadMapping} className="rounded border border-white/20 px-4 py-2">โหลด Mapping</button>
+        <button onClick={saveMapping} className="rounded border border-white/20 px-4 py-2">บันทึก Mapping</button>
         <button onClick={preview} disabled={loading} className="rounded border border-white/20 px-4 py-2">{loading ? <Loader2 className="inline animate-spin" size={16} /> : <Eye className="inline" size={16} />} Preview PDF</button>
         <button onClick={exportPng} disabled={loading} className="rounded border border-white/20 px-4 py-2"><ImageIcon className="inline" size={16} /> Export PNG</button>
+      </div>
+
+      <div className="rounded border border-white/10 p-3">
+        <h2 className="mb-2 font-semibold">Field Mapping</h2>
+        {!fields.length ? (
+          <p className="text-sm text-gray-400">กดโหลดรายชื่อ Fields ก่อน</p>
+        ) : (
+          <div className="space-y-2">
+            {fields.map((f) => (
+              <div key={f.name} className="grid grid-cols-2 gap-2">
+                <div className="rounded bg-black/30 p-2 text-sm">{f.name}</div>
+                <select
+                  value={mapping[f.name] || ""}
+                  onChange={(e) => setMapping((prev) => ({ ...prev, [f.name]: e.target.value as DocumentV2FieldKey | "" }))}
+                  className="rounded bg-black/40 p-2 text-sm"
+                >
+                  <option value="">-- ไม่แมพ --</option>
+                  {mappingOptions.map((opt) => (
+                    <option key={opt.key} value={opt.key}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="rounded border border-white/10 p-3">

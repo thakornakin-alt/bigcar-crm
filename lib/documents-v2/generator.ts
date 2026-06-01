@@ -4,6 +4,7 @@ import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument } from "pdf-lib";
 import type { DocumentV2Data, DocumentV2FieldDebug } from "@/lib/documents-v2/types";
 import { getTemplateById, type DocumentV2TemplateId } from "@/lib/documents-v2/template-config";
+import type { DocumentV2FieldMapping, DocumentV2FieldKey } from "@/lib/documents-v2/mapping-store";
 
 export async function listTemplateFieldsV2(templateId?: string): Promise<{
   fields: DocumentV2FieldDebug[];
@@ -60,7 +61,8 @@ export async function generateDocumentV2(data: DocumentV2Data, templateId?: stri
 
 export async function generateDocumentV2WithBytes(
   data: DocumentV2Data,
-  bytes: Uint8Array
+  bytes: Uint8Array,
+  mapping?: DocumentV2FieldMapping
 ): Promise<Uint8Array> {
   const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
   pdf.registerFontkit(fontkit);
@@ -71,21 +73,29 @@ export async function generateDocumentV2WithBytes(
   if (!fields.length) throw new Error("PDF ไม่มี AcroForm fields");
   form.updateFieldAppearances(thaiFont);
 
-  setTextIfExists(form, ["Text1", "CUSTOMER_NAME", "customerName"], data.customerName, thaiFont);
-  setTextIfExists(form, ["Text3", "CONTRACT_DATE", "contractDate"], data.contractDate, thaiFont);
-  setTextIfExists(form, ["Text4", "CUSTOMER_ADDRESS", "customerAddress"], data.customerAddress, thaiFont);
-  setTextIfExists(form, ["Text6", "ID_CARD", "idCard"], data.idCard, thaiFont);
-  setTextIfExists(form, ["Text7", "LICENSE_PLATE", "plateNo"], data.plateNo, thaiFont);
-  setTextIfExists(form, ["Text8", "CAR_BRAND", "brand"], data.brand, thaiFont);
-  setTextIfExists(form, ["Text9", "CAR_MODEL", "model"], data.model, thaiFont);
-  setTextIfExists(form, ["Text10", "CAR_YEAR", "year"], data.year, thaiFont);
-  setTextIfExists(form, ["Text11", "CAR_COLOR", "color"], data.color, thaiFont);
-  setTextIfExists(form, ["Text12", "ENGINE_NO", "engineNo"], data.engineNo, thaiFont);
-  setTextIfExists(form, ["Text13", "CHASSIS_NO", "chassisNo"], data.chassisNo, thaiFont);
-  setTextIfExists(form, ["Text14", "SELL_PRICE", "sellPrice"], data.sellPrice, thaiFont);
-  setTextIfExists(form, ["Text15", "DOWN_PAYMENT", "deposit"], data.deposit, thaiFont);
-  setTextIfExists(form, ["Text16", "REMAINING_AMOUNT", "remainingAmount"], data.remainingAmount, thaiFont);
-  setTextIfExists(form, ["Text17", "SALES_NAME", "saleName"], data.saleName, thaiFont);
+  const fallback: DocumentV2FieldMapping = {
+    Text1: "customerName",
+    Text3: "contractDate",
+    Text4: "customerAddress",
+    Text6: "idCard",
+    Text7: "plateNo",
+    Text8: "brand",
+    Text9: "model",
+    Text10: "year",
+    Text11: "color",
+    Text12: "engineNo",
+    Text13: "chassisNo",
+    Text14: "sellPrice",
+    Text15: "deposit",
+    Text16: "remainingAmount",
+    Text17: "saleName"
+  };
+  const active = { ...fallback, ...(mapping || {}) };
+  for (const [pdfField, dataKey] of Object.entries(active)) {
+    if (!dataKey) continue;
+    const value = String((data as Record<string, string>)[dataKey as DocumentV2FieldKey] || "");
+    setTextIfExists(form, [pdfField], value, thaiFont);
+  }
 
   form.flatten();
   return pdf.save();

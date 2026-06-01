@@ -3,6 +3,7 @@ import { generateDocumentV2WithBytes } from "@/lib/documents-v2/generator";
 import { mapBookingToDocumentV2 } from "@/lib/documents-v2/types";
 import type { ReportHistoryItem } from "@/lib/types";
 import { getTemplateById } from "@/lib/documents-v2/template-config";
+import { readDocumentV2Mapping } from "@/lib/documents-v2/mapping-store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -19,7 +20,8 @@ export async function POST(request: Request) {
     if (!fileRes.ok) throw new Error("ไม่พบไฟล์ template");
     const templateBytes = new Uint8Array(await fileRes.arrayBuffer());
     const data = { ...mapBookingToDocumentV2(report), ...override };
-    const pdfBytes = await generateDocumentV2WithBytes(data, templateBytes);
+    const mapping = await readDocumentV2Mapping();
+    const pdfBytes = await generateDocumentV2WithBytes(data, templateBytes, mapping);
     const outputName = template.fileName;
     return new NextResponse(Buffer.from(pdfBytes), {
       headers: {
