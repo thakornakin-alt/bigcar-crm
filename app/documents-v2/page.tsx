@@ -6,6 +6,7 @@ import type { ReportHistoryItem } from "@/lib/types";
 import { DOC_V2_TEMPLATE_ID } from "@/lib/documents-v2/types";
 import { documentTemplatesV2, getDocumentV2Templates, type DocumentV2TemplateId } from "@/lib/documents-v2/template-config";
 import type { DocumentV2FieldKey, DocumentV2FieldMapping } from "@/lib/documents-v2/mapping-store";
+import { mapBookingToDocumentV2 } from "@/lib/documents-v2/types";
 
 type FieldItem = { name: string; type: string };
 type FieldsDebug = {
@@ -32,6 +33,10 @@ const mappingOptions: Array<{ key: DocumentV2FieldKey; label: string }> = [
   { key: "remainingAmount", label: "ยอดคงเหลือ" },
   { key: "saleName", label: "ชื่อเซลล์" }
 ];
+
+const keyLabel: Record<DocumentV2FieldKey, string> = Object.fromEntries(
+  mappingOptions.map((m) => [m.key, m.label])
+) as Record<DocumentV2FieldKey, string>;
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
@@ -72,6 +77,7 @@ export default function DocumentsV2Page() {
     () => reports.find((r) => r.id === selectedReportId) || null,
     [reports, selectedReportId]
   );
+  const sampleData = useMemo(() => mapBookingToDocumentV2(selectedReport), [selectedReport]);
 
   async function loadFields() {
     try {
@@ -310,18 +316,25 @@ export default function DocumentsV2Page() {
             {fields.map((f) => (
               <div key={f.name} className="grid grid-cols-2 gap-2">
                 <div className="rounded bg-black/30 p-2 text-sm">{f.name}</div>
-                <select
-                  value={mapping[f.name] || ""}
-                  onChange={(e) => setMapping((prev) => ({ ...prev, [f.name]: e.target.value as DocumentV2FieldKey | "" }))}
-                  className="rounded bg-black/40 p-2 text-sm"
-                >
-                  <option value="">-- ไม่แมพ --</option>
-                  {mappingOptions.map((opt) => (
-                    <option key={opt.key} value={opt.key}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
+                <div className="space-y-1">
+                  <select
+                    value={mapping[f.name] || ""}
+                    onChange={(e) => setMapping((prev) => ({ ...prev, [f.name]: e.target.value as DocumentV2FieldKey | "" }))}
+                    className="w-full rounded bg-black/40 p-2 text-sm"
+                  >
+                    <option value="">-- ไม่แมพ --</option>
+                    {mappingOptions.map((opt) => (
+                      <option key={opt.key} value={opt.key}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  {mapping[f.name] ? (
+                    <div className="text-xs text-emerald-300">
+                      ตัวอย่าง: {keyLabel[mapping[f.name] as DocumentV2FieldKey]} = {String((sampleData as any)[mapping[f.name] as DocumentV2FieldKey] || "ไม่มีข้อมูล")}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             ))}
           </div>
