@@ -4,7 +4,7 @@ import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument } from "pdf-lib";
 import type { DocumentV2Data, DocumentV2FieldDebug } from "@/lib/documents-v2/types";
 import { getTemplateById, type DocumentV2TemplateId } from "@/lib/documents-v2/template-config";
-import type { DocumentV2FieldMapping, DocumentV2FieldKey } from "@/lib/documents-v2/mapping-store";
+import type { DocumentV2FieldMapping, DocumentV2FieldKey, DocumentV2MappedValue } from "@/lib/documents-v2/mapping-store";
 
 export async function listTemplateFieldsV2(templateId?: string): Promise<{
   fields: DocumentV2FieldDebug[];
@@ -73,30 +73,21 @@ export async function generateDocumentV2WithBytes(
   if (!fields.length) throw new Error("PDF ไม่มี AcroForm fields");
   form.updateFieldAppearances(thaiFont);
 
-  const fallback: DocumentV2FieldMapping = {
-    Text1: "customerName",
-    Text3: "contractDate",
-    Text4: "customerAddress",
-    Text6: "idCard",
-    Text7: "plateNo",
-    Text8: "brand",
-    Text9: "model",
-    Text10: "year",
-    Text11: "color",
-    Text12: "engineNo",
-    Text13: "chassisNo",
-    Text14: "sellPrice",
-    Text15: "deposit",
-    Text16: "remainingAmount",
-    Text17: "saleName"
-  };
-  const active: DocumentV2FieldMapping = { ...fallback };
+  const active: DocumentV2FieldMapping = {};
   for (const [pdfField, mappedKey] of Object.entries(mapping || {})) {
-    active[pdfField] = (mappedKey || fallback[pdfField] || "") as DocumentV2FieldKey | "";
+    active[pdfField] = (mappedKey || "") as DocumentV2FieldKey | "";
   }
-  for (const [pdfField, dataKey] of Object.entries(active)) {
-    if (!dataKey) continue;
-    const value = String((data as Record<string, string>)[dataKey as DocumentV2FieldKey] || "");
+  const allData = data as Record<string, string>;
+  for (const [pdfField, mappedValue] of Object.entries(active)) {
+    if (!mappedValue) continue;
+    let value = "";
+    const mappingToken = mappedValue as DocumentV2MappedValue;
+    if (mappingToken.startsWith("raw:")) {
+      const rawKey = mappingToken.slice(4).trim();
+      value = String(allData[rawKey] || "");
+    } else {
+      value = String(allData[mappingToken as DocumentV2FieldKey] || "");
+    }
     setTextIfExists(form, [pdfField], value, thaiFont);
   }
 

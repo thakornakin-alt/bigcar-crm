@@ -4,6 +4,7 @@ export const DOCUMENT_V2_MAPPING_STORE = "documents-v2-field-mapping.json";
 
 export type DocumentV2FieldKey =
   | "contractDate"
+  | "currentDate"
   | "customerName"
   | "customerAddress"
   | "idCard"
@@ -19,7 +20,8 @@ export type DocumentV2FieldKey =
   | "remainingAmount"
   | "saleName";
 
-export type DocumentV2FieldMapping = Record<string, DocumentV2FieldKey | "">;
+export type DocumentV2MappedValue = DocumentV2FieldKey | `raw:${string}` | "";
+export type DocumentV2FieldMapping = Record<string, DocumentV2MappedValue>;
 type MappingByTemplate = Record<string, DocumentV2FieldMapping>;
 
 const DEFAULT_MAPPING: DocumentV2FieldMapping = {
@@ -53,7 +55,7 @@ export async function writeDocumentV2Mapping(templateId: string, mapping: Docume
   const stored = await readJsonStore<MappingByTemplate>(DOCUMENT_V2_MAPPING_STORE, {});
   const normalized: DocumentV2FieldMapping = {};
   for (const [key, value] of Object.entries(mapping || {})) {
-    normalized[String(key)] = (value || "") as DocumentV2FieldKey | "";
+    normalized[String(key)] = (value || "") as DocumentV2MappedValue;
   }
   const merged = { ...getDefaultDocumentV2Mapping(), ...normalized };
   const next: MappingByTemplate = { ...(stored || {}), [templateId]: merged };

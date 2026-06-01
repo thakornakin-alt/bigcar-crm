@@ -9,6 +9,7 @@ export type DocumentV2FieldDebug = {
 
 export type DocumentV2Data = {
   contractDate: string;
+  currentDate: string;
   customerName: string;
   customerAddress: string;
   idCard: string;
@@ -42,26 +43,40 @@ function extractFromReportText(text: string, patterns: RegExp[]) {
   return "";
 }
 
+function normalizeMoney(rawValue: string) {
+  const only = String(rawValue || "").replace(/[^0-9.\-]/g, "");
+  if (!only) return "";
+  const num = Number(only);
+  if (!Number.isFinite(num)) return "";
+  return num.toLocaleString("th-TH");
+}
+
 export function mapBookingToDocumentV2(report?: ReportHistoryItem | null): DocumentV2Data {
   const raw = (report || {}) as Record<string, any>;
   const reportText = String(raw.reportText || "");
 
-  const rawFinal = pick(raw, "finalPrice", "netPayment", "salePrice", "carPrice", "final_price")
+  const rawFinal = pick(raw, "finalPrice", "netPayment", "salePrice", "carPrice", "final_price", "ราคาตั้งขาย", "ราคาขาย")
     || extractFromReportText(reportText, [
+      /ราคามาตรฐาน.*?[:：]\s*([0-9,]+)/i,
       /ราคาตั้งขาย\s*[:：]\s*([0-9,]+)/i,
       /ราคาขาย\s*[:：]\s*([0-9,]+)/i,
+      /ราคาที่ขาย\s*[:：]\s*([0-9,]+)/i,
       /ราคาสุทธิ\s*[:：]\s*([0-9,]+)/i
     ]);
-  const rawDeposit = pick(raw, "bookingPrice", "downPayment", "deposit", "booking_price")
+  const rawDeposit = pick(raw, "bookingPrice", "downPayment", "deposit", "booking_price", "เงินจอง")
     || extractFromReportText(reportText, [
       /เงินจอง\s*[:：]\s*([0-9,]+)/i,
+      /จองรถยนต์\s*[:：]\s*([0-9,]+)/i,
       /มัดจำ\s*[:：]\s*([0-9,]+)/i
     ]);
   const finalPrice = Number(String(rawFinal || "").replace(/,/g, ""));
   const depositPrice = Number(String(rawDeposit || "").replace(/,/g, ""));
   const remaining = Number.isFinite(finalPrice) && Number.isFinite(depositPrice) ? Math.max(finalPrice - depositPrice, 0) : 0;
+  const now = new Date();
+  const currentDate = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
   return {
-    contractDate: pick(raw, "contractDate", "deliveryDate", "bookingDate", "createdAt").slice(0, 10),
+    contractDate: pick(raw, "contractDate", "deliveryDate", "bookingDate", "createdAt", "updatedAt").slice(0, 10),
+    currentDate,
     customerName: pick(raw, "customerName", "name", "buyerName")
       || extractFromReportText(reportText, [/ชื่อลูกค้า\s*[:：]\s*(.+)/i, /ชื่อ-นามสกุล\s*[:：]\s*(.+)/i]),
     customerAddress: pick(raw, "address", "customerAddress")
@@ -70,14 +85,16 @@ export function mapBookingToDocumentV2(report?: ReportHistoryItem | null): Docum
       || extractFromReportText(reportText, [/เลขบัตรประชาชน\s*[:：]\s*([0-9\-]+)/i]),
     plateNo: pick(raw, "plate", "licensePlate", "plateNo")
       || extractFromReportText(reportText, [/ทะเบียนรถ\s*[:：]\s*(.+)/i, /ทะเบียน\s*[:：]\s*(.+)/i]),
-    brand: pick(raw, "brand", "carBrand"),
-    model: pick(raw, "model", "carModel"),
+    brand: pick(raw, "brand", "carBrand")
+      || extractFromReportText(reportText, [/ยี่ห้อรถ\s*[:：]\s*(.+)/i]),
+    model: pick(raw, "model", "carModel", "รุ่นรถ")
+      || extractFromReportText(reportText, [/รุ่นรถ\s*[:：]\s*(.+)/i]),
     year: pick(raw, "year", "registeredYear", "modelYear"),
     color: pick(raw, "color", "carColor"),
     engineNo: pick(raw, "engineNo", "engineNumber"),
     chassisNo: pick(raw, "chassisNo", "vin", "chassisNumber"),
-    sellPrice: pick(raw, "salePrice", "finalPrice", "netPayment", "carPrice") || rawFinal,
-    deposit: String(rawDeposit || ""),
+    sellPrice: normalizeMoney(pick(raw, "salePrice", "finalPrice", "netPayment", "carPrice") || rawFinal),
+    deposit: normalizeMoney(String(rawDeposit || "")),
     remainingAmount: remaining > 0 ? remaining.toLocaleString("th-TH") : "",
     saleName: pick(raw, "saleName", "salesName", "ownerName")
       || extractFromReportText(reportText, [/เซลล์เจ้าของเคส\s*[:：]\s*(.+)/i, /ผู้ขาย\s*[:：]\s*(.+)/i])

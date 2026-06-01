@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Eye, FileText, Image as ImageIcon, Loader2 } from "lucide-react";
 import type { ReportHistoryItem } from "@/lib/types";
 import { DOC_V2_TEMPLATE_ID } from "@/lib/documents-v2/types";
 import { documentTemplatesV2, getDocumentV2Templates, type DocumentV2TemplateId } from "@/lib/documents-v2/template-config";
-import type { DocumentV2FieldKey, DocumentV2FieldMapping } from "@/lib/documents-v2/mapping-store";
+import type { DocumentV2FieldKey, DocumentV2FieldMapping, DocumentV2MappedValue } from "@/lib/documents-v2/mapping-store";
 import { mapBookingToDocumentV2 } from "@/lib/documents-v2/types";
 
 type FieldItem = { name: string; type: string };
@@ -18,6 +18,7 @@ type FieldsDebug = {
 
 const mappingOptions: Array<{ key: DocumentV2FieldKey; label: string }> = [
   { key: "contractDate", label: "วันที่สัญญา" },
+  { key: "currentDate", label: "วันที่ปัจจุบัน" },
   { key: "customerName", label: "ชื่อลูกค้า" },
   { key: "customerAddress", label: "ที่อยู่ลูกค้า" },
   { key: "idCard", label: "เลขบัตรประชาชน" },
@@ -69,6 +70,10 @@ export default function DocumentsV2Page() {
   const [probeField, setProbeField] = useState("");
   const [probeValue, setProbeValue] = useState("TEST-123");
   const reportSource: "sales" = "sales";
+  const [saveState, setSaveState] = useState<"idle" | "dirty" | "saving" | "saved" | "error">("idle");
+  const [lastSavedAt, setLastSavedAt] = useState("");
+  const [reportsLoaded, setReportsLoaded] = useState(false);
+  const isHydratingMappingRef = useRef(false);
 
   const selectedTemplate = documentTemplatesV2[templateId];
   const isDev = process.env.NODE_ENV === "development";
@@ -78,6 +83,24 @@ export default function DocumentsV2Page() {
     [reports, selectedReportId]
   );
   const sampleData = useMemo(() => mapBookingToDocumentV2(selectedReport), [selectedReport]);
+  const rawReportData = useMemo(
+    () => Object.fromEntries(Object.entries((selectedReport || {}) as Record<string, unknown>).map(([k, v]) => [k, v == null ? "" : String(v)])),
+    [selectedReport]
+  );
+  const reportRawKeys = useMemo(() => Object.keys(rawReportData).sort((a, b) => a.localeCompare(b)), [rawReportData]);
+  const mappedFieldCount = useMemo(
+    () => Object.values(mapping).filter(Boolean).length,
+    [mapping]
+  );
+  const mappedNonEmptyCount = useMemo(() => {
+    return Object.entries(mapping).reduce((acc, [, key]) => {
+      if (!key) return acc;
+      const value = (sampleData as Record<string, unknown>)[key];
+      if (value !== undefined && value !== null && String(value).trim() !== "") return acc + 1;
+      return acc;
+    }, 0);
+  }, [mapping, sampleData]);
+  const canRunGenerate = isTemplateReady && reportsLoaded && Boolean(selectedReport) && saveState !== "saving" && saveState !== "dirty";
 
   async function loadFields() {
     try {
@@ -123,6 +146,7 @@ export default function DocumentsV2Page() {
 
   async function loadReports() {
     setError("");
+    setReportsLoaded(false);
     const res = await api<{ reports: ReportHistoryItem[] }>(`/api/reports/history?type=${reportSource}`);
     const all = res.reports || [];
     const filtered = all.filter((r) => {
@@ -132,6 +156,7 @@ export default function DocumentsV2Page() {
     });
     setReports(filtered);
     setSelectedReportId(filtered[0]?.id || "");
+    setReportsLoaded(true);
     if (!filtered.length) {
       setError("ไม่พบรายงานขายในระบบ");
     }
@@ -139,25 +164,48 @@ export default function DocumentsV2Page() {
 
   async function loadMapping() {
     try {
+      isHydratingMappingRef.current = true;
       const res = await api<{ ok: boolean; mapping: DocumentV2FieldMapping }>(`/api/documents-v2/mapping?templateId=${encodeURIComponent(templateId)}`);
       setMapping(res.mapping || {});
+      setSaveState("saved");
+      setLastSavedAt(new Date().toLocaleTimeString("th-TH"));
     } catch (e) {
       setError(e instanceof Error ? e.message : "โหลด mapping ไม่สำเร็จ");
+      setSaveState("error");
+    } finally {
+      setTimeout(() => {
+        isHydratingMappingRef.current = false;
+      }, 0);
     }
   }
 
   async function saveMapping() {
     try {
       setError("");
+      setSaveState("saving");
       await api<{ ok: boolean; mapping: DocumentV2FieldMapping }>("/api/documents-v2/mapping", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ templateId, mapping })
       });
+      setSaveState("saved");
+      setLastSavedAt(new Date().toLocaleTimeString("th-TH"));
     } catch (e) {
       setError(e instanceof Error ? e.message : "บันทึก mapping ไม่สำเร็จ");
+      setSaveState("error");
     }
   }
+
+  useEffect(() => {
+    if (isHydratingMappingRef.current) return;
+    if (Object.keys(mapping).length === 0) return;
+    setSaveState((prev) => (prev === "saving" ? prev : "dirty"));
+    const timer = setTimeout(() => {
+      saveMapping();
+    }, 500);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapping, templateId]);
 
   async function preview() {
     if (!isTemplateReady) {
@@ -166,6 +214,14 @@ export default function DocumentsV2Page() {
     }
     if (!selectedReport) {
       setError("กรุณาโหลดและเลือกรายงานขายก่อน Preview");
+      return;
+    }
+    if (!reportsLoaded) {
+      setError("กรุณาโหลดรายงานขายก่อน");
+      return;
+    }
+    if (saveState === "saving" || saveState === "dirty") {
+      setError("กำลังบันทึก Mapping กรุณารอสักครู่แล้วลองใหม่");
       return;
     }
     try {
@@ -214,6 +270,14 @@ export default function DocumentsV2Page() {
     }
     if (!selectedReport) {
       setError("กรุณาโหลดและเลือกรายงานขายก่อน Export");
+      return;
+    }
+    if (!reportsLoaded) {
+      setError("กรุณาโหลดรายงานขายก่อน");
+      return;
+    }
+    if (saveState === "saving" || saveState === "dirty") {
+      setError("กำลังบันทึก Mapping กรุณารอสักครู่แล้วลองใหม่");
       return;
     }
     try {
@@ -283,10 +347,29 @@ export default function DocumentsV2Page() {
         <button onClick={loadFields} className="rounded bg-emerald-500 px-4 py-2 font-semibold text-black">โหลดรายชื่อ Fields</button>
         <button onClick={loadReports} className="rounded border border-white/20 px-4 py-2">โหลดรายงานขาย</button>
         <button onClick={loadMapping} className="rounded border border-white/20 px-4 py-2">โหลด Mapping</button>
-        <button onClick={saveMapping} className="rounded border border-white/20 px-4 py-2">บันทึก Mapping</button>
-        <button onClick={preview} disabled={loading} className="rounded border border-white/20 px-4 py-2">{loading ? <Loader2 className="inline animate-spin" size={16} /> : <Eye className="inline" size={16} />} Preview PDF</button>
+        <button
+          onClick={saveMapping}
+          disabled={saveState === "saving"}
+          className={`rounded border px-4 py-2 ${saveState === "saving" ? "border-emerald-400/40 bg-emerald-500/10" : "border-white/20"}`}
+        >
+          {saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "บันทึก Mapping"}
+        </button>
+        <button onClick={preview} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">{loading ? <Loader2 className="inline animate-spin" size={16} /> : <Eye className="inline" size={16} />} Preview PDF</button>
         <button onClick={previewProbe} disabled={loading} className="rounded border border-yellow-300/40 px-4 py-2 text-yellow-200">ทดสอบ Field</button>
-        <button onClick={exportPng} disabled={loading} className="rounded border border-white/20 px-4 py-2"><ImageIcon className="inline" size={16} /> Export PNG</button>
+        <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50"><ImageIcon className="inline" size={16} /> Export PNG</button>
+      </div>
+      <div className="text-xs text-gray-300 space-y-1">
+        <div>
+          สถานะ Mapping: {saveState === "dirty" ? "มีการแก้ไข (รอบันทึกอัตโนมัติ)" : saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "ยังไม่เริ่ม"} {lastSavedAt ? `· ล่าสุด ${lastSavedAt}` : ""}
+        </div>
+        <div>
+          ความพร้อมข้อมูล: แมพแล้ว {mappedFieldCount} ช่อง · มีข้อมูลจริง {mappedNonEmptyCount} ช่อง
+        </div>
+        {!canRunGenerate ? (
+          <div className="text-amber-300">
+            ยัง Preview/Export ไม่ได้: {!isTemplateReady ? "ยังไม่พร้อม template" : !reportsLoaded ? "ยังไม่โหลดรายงานขาย" : !selectedReport ? "ยังไม่เลือกรายงานขาย" : saveState === "saving" || saveState === "dirty" ? "กำลังบันทึก mapping" : "รอข้อมูล"}
+          </div>
+        ) : null}
       </div>
 
       <div className="rounded border border-white/10 p-3">
@@ -319,7 +402,7 @@ export default function DocumentsV2Page() {
                 <div className="space-y-1">
                   <select
                     value={mapping[f.name] || ""}
-                    onChange={(e) => setMapping((prev) => ({ ...prev, [f.name]: e.target.value as DocumentV2FieldKey | "" }))}
+                    onChange={(e) => setMapping((prev) => ({ ...prev, [f.name]: e.target.value as DocumentV2MappedValue }))}
                     className="w-full rounded bg-black/40 p-2 text-sm"
                   >
                     <option value="">-- ไม่แมพ --</option>
@@ -328,10 +411,18 @@ export default function DocumentsV2Page() {
                         {opt.label}
                       </option>
                     ))}
+                    {reportRawKeys.length ? <option value="" disabled>──────── รายงานขาย (raw) ────────</option> : null}
+                    {reportRawKeys.map((rawKey) => (
+                      <option key={`raw-${rawKey}`} value={`raw:${rawKey}`}>
+                        raw: {rawKey}
+                      </option>
+                    ))}
                   </select>
                   {mapping[f.name] ? (
                     <div className="text-xs text-emerald-300">
-                      ตัวอย่าง: {keyLabel[mapping[f.name] as DocumentV2FieldKey]} = {String((sampleData as any)[mapping[f.name] as DocumentV2FieldKey] || "ไม่มีข้อมูล")}
+                      {String(mapping[f.name]).startsWith("raw:")
+                        ? `ตัวอย่าง (raw): ${String(mapping[f.name]).slice(4)} = ${String(rawReportData[String(mapping[f.name]).slice(4)] || "ไม่มีข้อมูล")}`
+                        : `ตัวอย่าง: ${keyLabel[mapping[f.name] as DocumentV2FieldKey]} = ${String((sampleData as Record<string, unknown>)[mapping[f.name] as DocumentV2FieldKey] || "ไม่มีข้อมูล")}`}
                     </div>
                   ) : null}
                 </div>
