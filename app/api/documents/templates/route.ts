@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { listDocumentTemplatesWithOverrides, saveDocumentTemplateFields, saveDocumentTemplatePdf } from "@/lib/documents/template-config";
 import type { DocumentFieldConfig, DocumentTemplateId } from "@/lib/documents/document-types";
+import { PDFDocument } from "pdf-lib";
 
 export const dynamic = "force-dynamic";
 const primaryTemplateIds = new Set(["contract", "temporary-receipt"]);
@@ -43,8 +44,22 @@ export async function POST(request: Request) {
     if (!templateId) return NextResponse.json({ error: "กรุณาเลือก template" }, { status: 400 });
     if (!primaryTemplateIds.has(templateId)) return NextResponse.json({ error: "รองรับเฉพาะ Template หลักเท่านั้น" }, { status: 400 });
     if (mimeType && mimeType !== "application/pdf") return NextResponse.json({ error: "รองรับเฉพาะไฟล์ PDF" }, { status: 400 });
+    if (!base64) return NextResponse.json({ error: "ไม่พบข้อมูลไฟล์ PDF" }, { status: 400 });
+
+    // Validate AcroForm before saving override to avoid replacing a valid template with flattened PDF.
+    const bytes = Buffer.from(base64, "base64");
+    const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
+    const form = pdf.getForm();
+    const fieldCount = form.getFields().length;
+    if (fieldCount === 0) {
+      return NextResponse.json(
+        { error: "ไฟล์นี้ไม่มีช่องกรอก (AcroForm) กรุณาใช้ไฟล์ PDF ที่ยังมีฟิลด์จริง" },
+        { status: 400 }
+      );
+    }
+
     const template = await saveDocumentTemplatePdf({ templateId, fileName, mimeType, base64 });
-    return NextResponse.json({ template });
+    return NextResponse.json({ template, fieldCount });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "อัปโหลด PDF template ไม่สำเร็จ" },

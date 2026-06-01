@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDocumentTemplate } from "@/lib/documents/template-config";
 import { generateFilledDocumentPdf } from "@/lib/documents/pdf-generator";
+import { PDFDocument } from "pdf-lib";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -39,10 +40,21 @@ export async function GET(request: Request) {
             sellerName: "TEST"
           }
         });
+        let fieldCount = 0;
+        try {
+          const sourceBytes = template.backgroundBase64
+            ? Buffer.from(template.backgroundBase64, "base64")
+            : null;
+          if (sourceBytes) {
+            const src = await PDFDocument.load(sourceBytes, { ignoreEncryption: true });
+            fieldCount = src.getForm().getFields().length;
+          }
+        } catch {}
+
         checks.push({
           templateId,
           ok: true,
-          detail: `สร้าง PDF สำเร็จ (${bytes.length} bytes)`,
+          detail: `สร้าง PDF สำเร็จ (${bytes.length} bytes)${fieldCount ? ` / fields ${fieldCount}` : ""}`,
           required: templateId === primaryTemplate
         });
       } catch (error) {
