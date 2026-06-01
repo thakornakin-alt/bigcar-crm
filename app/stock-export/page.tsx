@@ -2303,6 +2303,7 @@ function StockPreview({
               {columns.map((column) => (
                 <th
                   key={column.key}
+                  style={{ width: `${column.width}px`, minWidth: `${column.width}px` }}
                   className={`border border-[#2d3a35] px-3 py-2 font-bold ${
                     column.key === "pdi" ? "bg-[#7c4a03] text-left" : column.key === "plate" ? "text-left whitespace-nowrap" : "text-left"
                   }`}
@@ -2320,6 +2321,7 @@ function StockPreview({
                   return (
                     <td
                       key={`${vehicle.plate}-${column.key}`}
+                      style={{ width: `${column.width}px`, minWidth: `${column.width}px`, maxWidth: `${column.width}px` }}
                       className={`border border-[#dce3e1] px-2 py-1 ${
                         column.key === "price"
                           ? "bg-[#e6fbf3] text-right text-sm font-black"
