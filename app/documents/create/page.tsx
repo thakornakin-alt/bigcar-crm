@@ -73,6 +73,20 @@ const initialData: DocumentFormData = {
   sellerLineId: "",
   approverName: "",
   signatureName: ""
+  ,
+  contractDate: "",
+  idCardIssueDate: "",
+  licensePlate: "",
+  engineNumber: "",
+  chassisNumber: "",
+  sellPrice: "",
+  depositAmount: "",
+  remainingAmount: "",
+  paymentDate: "",
+  buyerSignature: "",
+  sellerSignature: "",
+  buyerWitness: "",
+  sellerWitness: ""
 };
 
 const fieldLabels: Record<string, string> = {
@@ -116,6 +130,20 @@ const fieldLabels: Record<string, string> = {
   sellerLineId: "LINE ID",
   approverName: "ผู้อนุมัติ",
   signatureName: "ชื่อผู้ลงนาม"
+  ,
+  contractDate: "วันที่สัญญา",
+  idCardIssueDate: "วันที่ออกบัตร",
+  licensePlate: "ทะเบียน",
+  engineNumber: "เลขเครื่อง",
+  chassisNumber: "เลขตัวถัง",
+  sellPrice: "ราคารถ",
+  depositAmount: "เงินมัดจำ",
+  remainingAmount: "ยอดคงเหลือ",
+  paymentDate: "วันที่ชำระส่วนที่เหลือ",
+  buyerSignature: "ลายเซ็นผู้ซื้อ",
+  sellerSignature: "ลายเซ็นผู้ขาย",
+  buyerWitness: "พยานฝั่งผู้ซื้อ",
+  sellerWitness: "พยานฝั่งผู้ขาย"
 };
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {

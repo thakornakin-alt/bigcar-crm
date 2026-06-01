@@ -65,6 +65,18 @@ function fieldValue(fieldKey: string, field: DocumentFieldConfig, data: Document
     sellerName: ["saleName", "ชื่อผู้ขาย"],
     saleName: ["sellerName", "ชื่อผู้ขาย"],
     signatureName: ["customerName"]
+    ,
+    contractDate: ["transactionDate", "bookingDate", "createdAt"],
+    licensePlate: ["plate", "plateNumber"],
+    engineNumber: ["engineNo", "engineNumber"],
+    chassisNumber: ["vin", "chassisNo", "chassisNumber"],
+    sellPrice: ["salePrice", "price", "finalPrice"],
+    depositAmount: ["bookingPrice", "downPayment"],
+    remainingAmount: ["financeAmount", "netCarPrice"],
+    buyerSignature: ["customerName", "signatureName"],
+    sellerSignature: ["sellerName", "saleName"],
+    buyerWitness: ["customerName"],
+    sellerWitness: ["sellerName", "saleName"]
   };
 
   if (field.type === "date") return textValue(data[fieldKey]) || formatThaiDate();
