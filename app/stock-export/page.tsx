@@ -367,6 +367,11 @@ function normalizePlate(value: string) {
   return String(value || "").replace(/\s+/g, "").toUpperCase();
 }
 
+function displayPlate(value?: string) {
+  const normalizedSpacing = String(value || "").replace(/\s+/g, " ").trim();
+  return normalizedSpacing || "-";
+}
+
 function normalizeText(value: string) {
   return String(value || "").toLowerCase().replace(/\s+/g, "");
 }
@@ -686,7 +691,7 @@ function stockExportColumns(mode: ExportMode, selectedColumns: ExtraColumnKey[],
     mode === "internal"
       ? [
           { key: "location", label: "Location", width: 120 },
-          { key: "plate", label: "ทะเบียน", width: 130 },
+          { key: "plate", label: "ทะเบียน", width: 156 },
           { key: "registrationYear", label: "ปีจด", width: 82 },
           { key: "model", label: "รุ่นรถยนต์", width: 370 },
           { key: "gear", label: "เกียร์", width: 70 },
@@ -697,7 +702,7 @@ function stockExportColumns(mode: ExportMode, selectedColumns: ExtraColumnKey[],
         ]
       : [
           { key: "location", label: "Location", width: 165 },
-          { key: "plate", label: "ทะเบียน", width: 150 },
+          { key: "plate", label: "ทะเบียน", width: 172 },
           { key: "registrationYear", label: "ปีจด", width: 120 },
           { key: "model", label: "รุ่นรถยนต์", width: 620 },
           { key: "gear", label: "เกียร์", width: 95 },
@@ -2292,11 +2297,16 @@ function StockPreview({
         </p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-max border-collapse text-[11px]">
+        <table className="w-full min-w-max table-fixed border-collapse text-[11px]">
           <thead>
             <tr className="bg-[#17211d] text-white">
               {columns.map((column) => (
-                <th key={column.key} className={`border border-[#2d3a35] px-2 py-2 font-bold ${column.key === "pdi" ? "bg-[#7c4a03] text-left" : "text-left"}`}>
+                <th
+                  key={column.key}
+                  className={`border border-[#2d3a35] px-3 py-2 font-bold ${
+                    column.key === "pdi" ? "bg-[#7c4a03] text-left" : column.key === "plate" ? "text-left whitespace-nowrap" : "text-left"
+                  }`}
+                >
                   {column.label}
                 </th>
               ))}
@@ -2315,10 +2325,10 @@ function StockPreview({
                           ? "bg-[#e6fbf3] text-right text-sm font-black"
                           : column.key === "pdi"
                             ? hasPdiRemark(stockPdiRemark(vehicle)) ? "bg-[#fff7ed] text-left font-semibold text-[#7c2d12]" : "text-left text-[#64748b]"
-                            : column.key === "mileage" ? "text-right" : column.key === "model" || column.key === "location" ? "text-left" : "text-center"
+                            : column.key === "mileage" ? "text-right" : column.key === "model" || column.key === "location" || column.key === "plate" ? "text-left" : "text-center"
                       }`}
                     >
-                      {value}
+                      <span className={column.key === "plate" ? "block truncate whitespace-nowrap" : ""}>{value}</span>
                     </td>
                   );
                 })}
@@ -2335,7 +2345,7 @@ function StockPreview({
 function previewColumnValue(vehicle: StockVehicle, column: StockExportColumn, mode: ExportMode) {
   if (column.extraKey) return defaultColumnValue(vehicle, column.extraKey);
   if (column.key === "location") return shortLocation(vehicle.parkingLocation);
-  if (column.key === "plate") return vehicle.plate || "-";
+  if (column.key === "plate") return displayPlate(vehicle.plate);
   if (column.key === "registrationYear") return stockRegistrationYear(vehicle) || "-";
   if (column.key === "model") return vehicleTitle(vehicle);
   if (column.key === "gear") return vehicle.gear || "-";
@@ -2424,7 +2434,7 @@ function renderStockTableCanvas(
     const rowY = tableTop + headerRowHeight + rowIndex * rowHeight;
     const values: Record<string, string> = {
       location: shortLocation(vehicle.parkingLocation),
-      plate: vehicle.plate || "-",
+      plate: displayPlate(vehicle.plate),
       registrationYear: stockRegistrationYear(vehicle) || "-",
       model: vehicleTitle(vehicle),
       gear: vehicle.gear || "-",
@@ -2444,9 +2454,28 @@ function renderStockTableCanvas(
       ctx.strokeRect(x, rowY, column.width, rowHeight);
       ctx.fillStyle = "#111827";
       ctx.font = column.key === "price" ? "900 24px Arial, Tahoma, sans-serif" : column.key === "pdi" ? "600 18px Arial, Tahoma, sans-serif" : column.extraKey ? "600 18px Arial, Tahoma, sans-serif" : mode === "internal" ? "600 19px Arial, Tahoma, sans-serif" : "600 21px Arial, Tahoma, sans-serif";
-      ctx.textAlign = column.key === "price" || column.key === "mileage" ? "right" : column.key === "model" || column.key === "location" || column.key === "pdi" || column.extraKey === "vin" || column.extraKey === "engineNo" ? "left" : "center";
+      ctx.textAlign =
+        column.key === "price" || column.key === "mileage"
+          ? "right"
+          : column.key === "model" ||
+              column.key === "location" ||
+              column.key === "plate" ||
+              column.key === "pdi" ||
+              column.extraKey === "vin" ||
+              column.extraKey === "engineNo"
+            ? "left"
+            : "center";
       const textX =
-        column.key === "price" || column.key === "mileage" ? x + column.width - 14 : column.key === "model" || column.key === "location" || column.key === "pdi" || column.extraKey === "vin" || column.extraKey === "engineNo" ? x + 14 : x + column.width / 2;
+        column.key === "price" || column.key === "mileage"
+          ? x + column.width - 14
+          : column.key === "model" ||
+              column.key === "location" ||
+              column.key === "plate" ||
+              column.key === "pdi" ||
+              column.extraKey === "vin" ||
+              column.extraKey === "engineNo"
+            ? x + 14
+            : x + column.width / 2;
       if (column.key === "model") {
         drawWrappedCellText(ctx, values[column.key], textX, rowY + 23, column.width - 28, 25, 2);
       } else if (column.key === "pdi") {
@@ -2457,7 +2486,8 @@ function renderStockTableCanvas(
       } else if (column.key === "location" || column.key === "color") {
         drawBadgeCellText(ctx, values[column.key], textX, rowY + Math.floor(rowHeight / 2), column.width - 24);
       } else {
-        drawClippedText(ctx, values[column.key], textX, rowY + Math.floor(rowHeight / 2) + 7, column.width - 20);
+        const cellPadding = column.key === "plate" ? 30 : 20;
+        drawClippedText(ctx, values[column.key], textX, rowY + Math.floor(rowHeight / 2) + 7, column.width - cellPadding);
       }
       x += column.width;
     });
