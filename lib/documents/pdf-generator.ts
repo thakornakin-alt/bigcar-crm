@@ -1,5 +1,6 @@
 import { readFile } from "fs/promises";
 import path from "path";
+import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument } from "pdf-lib";
 import { formatThaiDate, getDocumentTemplate } from "@/lib/documents/template-config";
 import type { DocumentData, DocumentFieldConfig, DocumentTemplateId } from "@/lib/documents/document-types";
@@ -134,6 +135,14 @@ export async function generateFilledDocumentPdf(input: {
   }
 
   const pdf = await PDFDocument.load(backgroundBytes, { ignoreEncryption: true });
+  pdf.registerFontkit(fontkit);
+  let thaiFont;
+  try {
+    const fontBytes = await readAssetBytes("public/fonts/tahoma.ttf", input.baseUrl);
+    thaiFont = await pdf.embedFont(fontBytes, { subset: true });
+  } catch {
+    throw new Error("โหลดฟอนต์ภาษาไทยไม่สำเร็จ");
+  }
 
   const fields = input.fields || template.fields;
   const form = pdf.getForm();
@@ -141,6 +150,7 @@ export async function generateFilledDocumentPdf(input: {
   if (!formFields.length) {
     throw new Error("ไม่พบช่องกรอกใน PDF Template (AcroForm)");
   }
+  form.updateFieldAppearances(thaiFont);
 
   for (const formField of formFields) {
     const rawName = formField.getName();
