@@ -13,6 +13,15 @@ function normalizePlate(value: unknown) {
   return String(value || "").replace(/[\s\-_.]/g, "").trim();
 }
 
+function extractFromReportText(text: string, patterns: RegExp[]) {
+  const source = String(text || "");
+  for (const pattern of patterns) {
+    const matched = source.match(pattern);
+    if (matched?.[1]) return String(matched[1]).trim();
+  }
+  return "";
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -25,6 +34,7 @@ export async function POST(request: Request) {
     if (!fileRes.ok) throw new Error("ไม่พบไฟล์ template");
     const templateBytes = new Uint8Array(await fileRes.arrayBuffer());
     const rawReport = ((report || {}) as Record<string, unknown>);
+    const reportText = String(rawReport.reportText || "");
     const plateFromReport = String(rawReport.plate || rawReport.licensePlate || "").trim();
     const normalizedReportPlate = normalizePlate(plateFromReport);
     let stock = plateFromReport ? await lookupStockByPlate(plateFromReport) : null;
@@ -40,6 +50,14 @@ export async function POST(request: Request) {
     const stockPlateRaw = String(stockRaw.plate || "");
     const isSamePlate = normalizedReportPlate && normalizePlate(stockPlateRaw) === normalizedReportPlate;
 
+    const engineFromReportText = extractFromReportText(reportText, [
+      /เลขเครื่อง(?:ยนต์)?\s*[:：]\s*([A-Za-z0-9\-]+)/i
+    ]);
+    const chassisFromReportText = extractFromReportText(reportText, [
+      /เลขตัวถัง\s*[:：]\s*([A-Za-z0-9\-]+)/i,
+      /VIN\s*[:：]\s*([A-Za-z0-9\-]+)/i
+    ]);
+
     const data = {
       ...Object.fromEntries(Object.entries(rawReport).map(([k, v]) => [k, v == null ? "" : String(v)])),
       ...Object.fromEntries(Object.entries(stockRaw).map(([k, v]) => [k, v == null ? "" : String(v)])),
@@ -50,6 +68,7 @@ export async function POST(request: Request) {
         rawReport.engineNo ||
         rawReport.engineNumber ||
         rawReport["เลขเครื่อง"] ||
+        engineFromReportText ||
         (isSamePlate ? (stockRaw.engineNo || stockRaw.engineNumber || stockRaw["เลขเครื่อง"] || stockRaw["เลขเครื่องยนต์"]) : "") ||
         ""
       ).trim(),
@@ -58,6 +77,7 @@ export async function POST(request: Request) {
         rawReport.chassisNumber ||
         rawReport.vin ||
         rawReport["เลขตัวถัง"] ||
+        chassisFromReportText ||
         (isSamePlate ? (stockRaw.vin || stockRaw.chassisNo || stockRaw.chassisNumber || stockRaw["เลขตัวถัง"] || stockRaw["เลขตัวรถ"]) : "") ||
         ""
       ).trim(),
