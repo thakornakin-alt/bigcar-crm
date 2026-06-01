@@ -3,25 +3,7 @@ import path from "path";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument } from "pdf-lib";
 import type { DocumentV2Data, DocumentV2FieldDebug } from "@/lib/documents-v2/types";
-import { DOC_V2_TEMPLATE_ID } from "@/lib/documents-v2/types";
 import { getTemplateById, type DocumentV2TemplateId } from "@/lib/documents-v2/template-config";
-
-function toRelativePublicPath(publicPath: string): string {
-  return `public${publicPath}`.replace(/\\/g, "/");
-}
-
-async function loadTemplateBytes(templateId?: string) {
-  const template = getTemplateById(templateId || DOC_V2_TEMPLATE_ID);
-  const rel = toRelativePublicPath(template.path);
-  const abs = path.join(process.cwd(), rel);
-  let bytes: Buffer;
-  try {
-    bytes = await readFile(abs);
-  } catch {
-    throw new Error("ไม่พบไฟล์ template");
-  }
-  return { bytes, template };
-}
 
 export async function listTemplateFieldsV2(templateId?: string): Promise<{
   fields: DocumentV2FieldDebug[];
@@ -29,7 +11,20 @@ export async function listTemplateFieldsV2(templateId?: string): Promise<{
   templatePath: string;
   templateFile: string;
 }> {
-  const { bytes, template } = await loadTemplateBytes(templateId);
+  const template = getTemplateById(templateId);
+  throw new Error("internal: use listTemplateFieldsV2WithBytes");
+}
+
+export async function listTemplateFieldsV2WithBytes(
+  templateId: string | undefined,
+  bytes: Uint8Array
+): Promise<{
+  fields: DocumentV2FieldDebug[];
+  templateId: DocumentV2TemplateId;
+  templatePath: string;
+  templateFile: string;
+}> {
+  const template = getTemplateById(templateId);
   const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
   const form = pdf.getForm();
   const fields = form.getFields();
@@ -53,7 +48,13 @@ function setTextIfExists(form: ReturnType<PDFDocument["getForm"]>, names: string
 }
 
 export async function generateDocumentV2(data: DocumentV2Data, templateId?: string): Promise<Uint8Array> {
-  const { bytes } = await loadTemplateBytes(templateId);
+  throw new Error("internal: use generateDocumentV2WithBytes");
+}
+
+export async function generateDocumentV2WithBytes(
+  data: DocumentV2Data,
+  bytes: Uint8Array
+): Promise<Uint8Array> {
   const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
   pdf.registerFontkit(fontkit);
   const fontBytes = await readFile(path.join(process.cwd(), "public/fonts/tahoma.ttf"));
