@@ -451,8 +451,31 @@ export function DocumentCenter() {
       <PageTitle
         title="Document Center"
         subtitle="ดาวน์โหลดเอกสารเปล่า สร้างเอกสารอัตโนมัติ OCR และ Draft ในหน้าเดียว"
-        actions={<TopMenuButton href="/documents/templates" icon={<FileText size={18} />}>ตั้งค่า Template</TopMenuButton>}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <TopMenuButton href="/documents-v2" icon={<FileText size={18} />}>Document V2</TopMenuButton>
+            <TopMenuButton href="/documents/templates" icon={<FileText size={18} />}>ตั้งค่า Template</TopMenuButton>
+          </div>
+        }
       />
+
+      <div className="mb-4 rounded-lg border border-brand/40 bg-brand/10 p-4">
+        <p className="text-sm font-black uppercase tracking-[0.16em] text-brand">New test flow</p>
+        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-xl font-black text-white">DocumentGeneratorV2</h2>
+            <p className="mt-1 text-sm leading-6 text-soft">
+              ใช้ AcroForm PDF จริงเท่านั้น แยกจากระบบเอกสารเดิม สำหรับทดสอบ temporary-receipt ก่อน
+            </p>
+          </div>
+          <a
+            href="/documents-v2"
+            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand px-4 font-black text-ink"
+          >
+            เปิดหน้า V2
+          </a>
+        </div>
+      </div>
 
       {(message || error) && (
         <div className={`mb-4 rounded-lg border px-4 py-3 text-sm font-bold ${error ? "border-red-400/40 bg-red-950/30 text-red-100" : "border-brand/40 bg-brand/10 text-brand"}`}>
