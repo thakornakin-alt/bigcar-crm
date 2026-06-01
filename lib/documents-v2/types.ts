@@ -25,34 +25,61 @@ export type DocumentV2Data = {
   saleName: string;
 };
 
+function pick(obj: Record<string, any>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = obj?.[key];
+    if (value !== undefined && value !== null && String(value).trim() !== "") return String(value);
+  }
+  return "";
+}
+
+function extractFromReportText(text: string, patterns: RegExp[]) {
+  const source = String(text || "");
+  for (const pattern of patterns) {
+    const m = source.match(pattern);
+    if (m?.[1]) return String(m[1]).trim();
+  }
+  return "";
+}
+
 export function mapBookingToDocumentV2(report?: ReportHistoryItem | null): DocumentV2Data {
-  const rawFinal =
-    (report as any)?.finalPrice ??
-    (report as any)?.netPayment ??
-    (report as any)?.salePrice ??
-    "";
-  const rawDeposit =
-    (report as any)?.bookingPrice ??
-    (report as any)?.downPayment ??
-    "";
+  const raw = (report || {}) as Record<string, any>;
+  const reportText = String(raw.reportText || "");
+
+  const rawFinal = pick(raw, "finalPrice", "netPayment", "salePrice", "carPrice", "final_price")
+    || extractFromReportText(reportText, [
+      /ราคาตั้งขาย\s*[:：]\s*([0-9,]+)/i,
+      /ราคาขาย\s*[:：]\s*([0-9,]+)/i,
+      /ราคาสุทธิ\s*[:：]\s*([0-9,]+)/i
+    ]);
+  const rawDeposit = pick(raw, "bookingPrice", "downPayment", "deposit", "booking_price")
+    || extractFromReportText(reportText, [
+      /เงินจอง\s*[:：]\s*([0-9,]+)/i,
+      /มัดจำ\s*[:：]\s*([0-9,]+)/i
+    ]);
   const finalPrice = Number(String(rawFinal || "").replace(/,/g, ""));
   const depositPrice = Number(String(rawDeposit || "").replace(/,/g, ""));
   const remaining = Number.isFinite(finalPrice) && Number.isFinite(depositPrice) ? Math.max(finalPrice - depositPrice, 0) : 0;
   return {
-    contractDate: String(report?.createdAt || "").slice(0, 10),
-    customerName: String(report?.customerName || ""),
-    customerAddress: String((report as any)?.address || ""),
-    idCard: String(report?.idCard || ""),
-    plateNo: String(report?.plate || ""),
-    brand: String(report?.brand || ""),
-    model: String(report?.model || ""),
-    year: String(report?.year || ""),
-    color: String(report?.color || ""),
-    engineNo: String((report as any)?.engineNo || ""),
-    chassisNo: String((report as any)?.chassisNo || (report as any)?.vin || ""),
-    sellPrice: String((report as any)?.salePrice || rawFinal || ""),
+    contractDate: pick(raw, "contractDate", "deliveryDate", "bookingDate", "createdAt").slice(0, 10),
+    customerName: pick(raw, "customerName", "name", "buyerName")
+      || extractFromReportText(reportText, [/ชื่อลูกค้า\s*[:：]\s*(.+)/i, /ชื่อ-นามสกุล\s*[:：]\s*(.+)/i]),
+    customerAddress: pick(raw, "address", "customerAddress")
+      || extractFromReportText(reportText, [/ที่อยู่\s*[:：]\s*(.+)/i]),
+    idCard: pick(raw, "idCard", "citizenId", "taxId")
+      || extractFromReportText(reportText, [/เลขบัตรประชาชน\s*[:：]\s*([0-9\-]+)/i]),
+    plateNo: pick(raw, "plate", "licensePlate", "plateNo")
+      || extractFromReportText(reportText, [/ทะเบียนรถ\s*[:：]\s*(.+)/i, /ทะเบียน\s*[:：]\s*(.+)/i]),
+    brand: pick(raw, "brand", "carBrand"),
+    model: pick(raw, "model", "carModel"),
+    year: pick(raw, "year", "registeredYear", "modelYear"),
+    color: pick(raw, "color", "carColor"),
+    engineNo: pick(raw, "engineNo", "engineNumber"),
+    chassisNo: pick(raw, "chassisNo", "vin", "chassisNumber"),
+    sellPrice: pick(raw, "salePrice", "finalPrice", "netPayment", "carPrice") || rawFinal,
     deposit: String(rawDeposit || ""),
     remainingAmount: remaining > 0 ? remaining.toLocaleString("th-TH") : "",
-    saleName: String(report?.saleName || "")
+    saleName: pick(raw, "saleName", "salesName", "ownerName")
+      || extractFromReportText(reportText, [/เซลล์เจ้าของเคส\s*[:：]\s*(.+)/i, /ผู้ขาย\s*[:：]\s*(.+)/i])
   };
 }

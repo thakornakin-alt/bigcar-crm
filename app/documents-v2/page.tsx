@@ -101,6 +101,10 @@ export default function DocumentsV2Page() {
         setError("ไม่พบ AcroForm fields ในไฟล์นี้");
         return;
       }
+      try {
+        const mappingRes = await api<{ ok: boolean; mapping: DocumentV2FieldMapping }>(`/api/documents-v2/mapping?templateId=${encodeURIComponent(templateId)}`);
+        setMapping(mappingRes.mapping || {});
+      } catch {}
       setIsTemplateReady(true);
     } catch (e) {
       setFields([]);
@@ -121,6 +125,7 @@ export default function DocumentsV2Page() {
       return typeOk || hasCore;
     });
     setReports(filtered);
+    setSelectedReportId(filtered[0]?.id || "");
     if (!filtered.length) {
       setError("ไม่พบรายงานขายในระบบ");
     }
@@ -151,6 +156,10 @@ export default function DocumentsV2Page() {
   async function preview() {
     if (!isTemplateReady) {
       setError("ไม่พบ AcroForm fields ในไฟล์นี้");
+      return;
+    }
+    if (!selectedReport) {
+      setError("กรุณาโหลดและเลือกรายงานขายก่อน Preview");
       return;
     }
     try {
@@ -195,6 +204,10 @@ export default function DocumentsV2Page() {
   async function exportPng() {
     if (!isTemplateReady) {
       setError("ไม่พบ AcroForm fields ในไฟล์นี้");
+      return;
+    }
+    if (!selectedReport) {
+      setError("กรุณาโหลดและเลือกรายงานขายก่อน Export");
       return;
     }
     try {
