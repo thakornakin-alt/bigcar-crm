@@ -63,7 +63,7 @@ export default function DocumentsV2Page() {
   const [mapping, setMapping] = useState<DocumentV2FieldMapping>({});
   const [probeField, setProbeField] = useState("");
   const [probeValue, setProbeValue] = useState("TEST-123");
-  const [reportSource, setReportSource] = useState<"sales" | "booking">("sales");
+  const reportSource: "sales" = "sales";
 
   const selectedTemplate = documentTemplatesV2[templateId];
   const isDev = process.env.NODE_ENV === "development";
@@ -122,7 +122,7 @@ export default function DocumentsV2Page() {
     });
     setReports(filtered);
     if (!filtered.length) {
-      setError(reportSource === "sales" ? "ไม่พบรายงานขายในระบบ" : "ไม่พบรายงานจองในระบบ");
+      setError("ไม่พบรายงานขายในระบบ");
     }
   }
 
@@ -236,18 +236,7 @@ export default function DocumentsV2Page() {
 
       <div className="rounded border border-white/10 p-3">
         <label className="mb-2 block text-sm">แหล่งข้อมูล</label>
-        <select
-          value={reportSource}
-          onChange={(e) => {
-            setReportSource(e.target.value as "sales" | "booking");
-            setSelectedReportId("");
-            setReports([]);
-          }}
-          className="w-full rounded bg-black/40 p-2"
-        >
-          <option value="sales">รายงานขาย (แนะนำ)</option>
-          <option value="booking">รายงานจอง</option>
-        </select>
+        <div className="rounded bg-black/40 p-2 text-sm">รายงานขาย (ล็อกถาวร)</div>
       </div>
 
       <div className="rounded border border-white/10 p-3">
@@ -273,7 +262,7 @@ export default function DocumentsV2Page() {
 
       <div className="flex flex-wrap gap-2">
         <button onClick={loadFields} className="rounded bg-emerald-500 px-4 py-2 font-semibold text-black">โหลดรายชื่อ Fields</button>
-        <button onClick={loadReports} className="rounded border border-white/20 px-4 py-2">โหลดรายงานจอง</button>
+        <button onClick={loadReports} className="rounded border border-white/20 px-4 py-2">โหลดรายงานขาย</button>
         <button onClick={loadMapping} className="rounded border border-white/20 px-4 py-2">โหลด Mapping</button>
         <button onClick={saveMapping} className="rounded border border-white/20 px-4 py-2">บันทึก Mapping</button>
         <button onClick={preview} disabled={loading} className="rounded border border-white/20 px-4 py-2">{loading ? <Loader2 className="inline animate-spin" size={16} /> : <Eye className="inline" size={16} />} Preview PDF</button>
@@ -327,7 +316,7 @@ export default function DocumentsV2Page() {
       </div>
 
       <div className="rounded border border-white/10 p-3">
-        <label className="mb-2 block text-sm">เลือกรายงานจอง</label>
+        <label className="mb-2 block text-sm">เลือกรายงานขาย</label>
         <select value={selectedReportId} onChange={(e) => setSelectedReportId(e.target.value)} className="w-full rounded bg-black/40 p-2">
           <option value="">-- เลือก --</option>
           {reports.map((r) => <option key={r.id} value={r.id}>{r.id} · {r.customerName} · {r.plate} · {r.type}</option>)}
