@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { LineWebhookEvent, verifyLineSignature } from "@/lib/line";
 import { saveLineGroup, saveLineWebhookLog } from "@/lib/apps-script";
+import { applyLineReservationCommand } from "@/lib/line-reservations";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,17 @@ export async function POST(request: Request) {
     .filter((group): group is { groupId: string; type: string; name: string; lastSeenAt: string } => Boolean(group));
 
   void Promise.all(groupsToSave.map((group) => saveLineGroup(group))).catch(() => undefined);
+
+  for (const event of events) {
+    const messageText = String(event.message?.text || "").trim();
+    if (!messageText) continue;
+    const sourceGroupId = event.source?.groupId || event.source?.roomId || "";
+    void applyLineReservationCommand({
+      text: messageText,
+      sourceGroupId,
+      receivedAt: new Date().toISOString()
+    }).catch(() => undefined);
+  }
 
   return NextResponse.json({ ok: true, queued: groupsToSave.length });
 }

@@ -803,6 +803,7 @@ export default function StockExportPage() {
   const [error, setError] = useState("");
   const [showYearDebug, setShowYearDebug] = useState(false);
   const [bookingReports, setBookingReports] = useState<ReportHistoryItem[]>([]);
+  const [lineReservedPlateKeys, setLineReservedPlateKeys] = useState<string[]>([]);
   const [bookingInputText, setBookingInputText] = useState("");
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -994,8 +995,12 @@ export default function StockExportPage() {
       const normalized = normalizePlateForMatch(report.plate);
       if (normalized) set.add(normalized);
     });
+    lineReservedPlateKeys.forEach((plateKey) => {
+      const normalized = normalizePlateForMatch(plateKey);
+      if (normalized) set.add(normalized);
+    });
     return set;
-  }, [bookingReports]);
+  }, [bookingReports, lineReservedPlateKeys]);
 
   const stockPlateSet = useMemo(() => {
     const set = new Set<string>();
@@ -1029,6 +1034,7 @@ export default function StockExportPage() {
     loadStock();
     loadLineGroups();
     loadBookingReports();
+    loadLineReservations();
     try {
       const raw = window.localStorage.getItem("bigcar-stock-filter-presets");
       if (raw) {
@@ -1098,6 +1104,15 @@ export default function StockExportPage() {
       setBookingReports(data.reports || []);
     } catch {
       setBookingReports([]);
+    }
+  }
+
+  async function loadLineReservations() {
+    try {
+      const data = await api<{ activePlates: string[] }>("/api/line/reservations");
+      setLineReservedPlateKeys(Array.isArray(data.activePlates) ? data.activePlates : []);
+    } catch {
+      setLineReservedPlateKeys([]);
     }
   }
 

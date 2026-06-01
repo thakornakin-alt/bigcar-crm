@@ -2,6 +2,10 @@ import { createHmac, timingSafeEqual } from "crypto";
 
 export type LineWebhookEvent = {
   type: string;
+  message?: {
+    type?: string;
+    text?: string;
+  };
   source?: {
     type?: string;
     groupId?: string;
