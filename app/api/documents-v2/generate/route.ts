@@ -11,12 +11,14 @@ export async function POST(request: Request) {
     const body = await request.json();
     const report = (body.report || null) as ReportHistoryItem | null;
     const override = (body.data || {}) as Record<string, string>;
+    const templateFile = String(body.templateFile || "").trim() || undefined;
     const data = { ...mapBookingToDocumentV2(report), ...override };
-    const pdfBytes = await generateDocumentV2(data);
+    const pdfBytes = await generateDocumentV2(data, templateFile);
+    const outputName = templateFile || "temporary-receipt.pdf";
     return new NextResponse(Buffer.from(pdfBytes), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="temporary-receipt-v2.pdf"`,
+        "Content-Disposition": `inline; filename="${outputName.replace(/"/g, "")}"`,
         "Cache-Control": "no-store"
       }
     });
@@ -27,4 +29,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

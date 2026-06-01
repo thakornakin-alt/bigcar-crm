@@ -5,6 +5,7 @@ import { Download, Eye, FileText, Image as ImageIcon, Loader2 } from "lucide-rea
 import type { ReportHistoryItem } from "@/lib/types";
 
 type FieldItem = { name: string; type: string };
+type FieldsDebug = { pdfUrl: string; fieldsCount: number; fieldNames: string[] };
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
@@ -28,6 +29,9 @@ export default function DocumentsV2Page() {
   const [pngUrl, setPngUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [templateFile, setTemplateFile] = useState("contract.pdf");
+  const [loadedTemplateFile, setLoadedTemplateFile] = useState("");
+  const [debug, setDebug] = useState<FieldsDebug | null>(null);
 
   const selectedReport = useMemo(
     () => reports.find((r) => r.id === selectedReportId) || null,
@@ -35,9 +39,31 @@ export default function DocumentsV2Page() {
   );
 
   async function loadFields() {
-    setError("");
-    const res = await api<{ ok: boolean; fields: FieldItem[] }>("/api/documents-v2/fields");
-    setFields(res.fields || []);
+    try {
+      setError("");
+      const res = await api<{
+        ok: boolean;
+        fields: FieldItem[];
+        templateFile?: string;
+        debug?: FieldsDebug;
+      }>(`/api/documents-v2/fields?templateFile=${encodeURIComponent(templateFile)}`);
+      setFields(res.fields || []);
+      setLoadedTemplateFile(String(res.templateFile || templateFile));
+      setDebug(res.debug || null);
+      if (!res.fields?.length) {
+        setError(`ไม่พบ AcroForm fields ในไฟล์นี้ (${res.templateFile || templateFile})`);
+      }
+    } catch (e) {
+      setFields([]);
+      setLoadedTemplateFile(templateFile);
+      const message = e instanceof Error ? e.message : "โหลด fields ไม่สำเร็จ";
+      setError(message);
+      setDebug({
+        pdfUrl: `/document-templates/${templateFile}`,
+        fieldsCount: 0,
+        fieldNames: []
+      });
+    }
   }
 
   async function loadReports() {
@@ -53,7 +79,7 @@ export default function DocumentsV2Page() {
       const blob = await api<Blob>("/api/documents-v2/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report: selectedReport })
+        body: JSON.stringify({ report: selectedReport, templateFile })
       });
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(URL.createObjectURL(blob));
@@ -71,7 +97,7 @@ export default function DocumentsV2Page() {
       const blob = await api<Blob>("/api/documents-v2/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report: selectedReport })
+        body: JSON.stringify({ report: selectedReport, templateFile })
       });
       const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as any;
       pdfjs.GlobalWorkerOptions.workerSrc = "";
@@ -99,8 +125,18 @@ export default function DocumentsV2Page() {
   return (
     <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 text-white">
       <h1 className="text-2xl font-bold">DocumentGeneratorV2</h1>
-      <p className="text-sm text-gray-300">AcroForm only · temporary-receipt.pdf</p>
+      <p className="text-sm text-gray-300">AcroForm only · ใช้ไฟล์เดียวกันทั้ง Load Fields + Preview/Export</p>
       {error ? <div className="rounded border border-red-500/40 bg-red-900/30 p-3 text-red-100">{error}</div> : null}
+
+      <div className="rounded border border-white/10 p-3">
+        <label className="mb-2 block text-sm">ไฟล์ Template ที่จะโหลด fields</label>
+        <input
+          value={templateFile}
+          onChange={(e) => setTemplateFile(e.target.value)}
+          className="w-full rounded bg-black/40 p-2"
+          placeholder="เช่น temporary-receipt.pdf หรือ สัญญาซื้อขายรถยนต์.PDF"
+        />
+      </div>
 
       <div className="flex flex-wrap gap-2">
         <button onClick={loadFields} className="rounded bg-emerald-500 px-4 py-2 font-semibold text-black">โหลดรายชื่อ Fields</button>
@@ -119,6 +155,12 @@ export default function DocumentsV2Page() {
 
       <div className="rounded border border-white/10 p-3">
         <h2 className="mb-2 flex items-center gap-2 font-semibold"><FileText size={16} /> Fields</h2>
+        <p className="mb-2 text-xs text-gray-300">โหลดไฟล์จริง: {loadedTemplateFile || "-"}</p>
+        {debug ? (
+          <pre className="mb-2 max-h-40 overflow-auto text-xs text-emerald-200">
+            {JSON.stringify(debug, null, 2)}
+          </pre>
+        ) : null}
         <pre className="max-h-56 overflow-auto text-xs text-gray-300">{JSON.stringify(fields, null, 2)}</pre>
       </div>
 
@@ -126,7 +168,7 @@ export default function DocumentsV2Page() {
         <div className="rounded border border-white/10 p-3">
           <h2 className="mb-2 font-semibold">Preview PDF</h2>
           <iframe src={previewUrl} className="h-[70vh] w-full rounded bg-white" />
-          <a href={previewUrl} download="temporary-receipt-v2.pdf" className="mt-2 inline-flex items-center gap-2 rounded bg-emerald-500 px-3 py-2 font-semibold text-black">
+          <a href={previewUrl} download={loadedTemplateFile || templateFile || "document-v2.pdf"} className="mt-2 inline-flex items-center gap-2 rounded bg-emerald-500 px-3 py-2 font-semibold text-black">
             <Download size={16} /> Download PDF
           </a>
         </div>
@@ -136,7 +178,7 @@ export default function DocumentsV2Page() {
         <div className="rounded border border-white/10 p-3">
           <h2 className="mb-2 font-semibold">PNG</h2>
           <img src={pngUrl} alt="PNG preview" className="max-w-full rounded bg-white" />
-          <a href={pngUrl} download="temporary-receipt-v2.png" className="mt-2 inline-flex items-center gap-2 rounded bg-emerald-500 px-3 py-2 font-semibold text-black">
+          <a href={pngUrl} download={`${(loadedTemplateFile || templateFile || "document-v2").replace(/\.pdf$/i, "")}.png`} className="mt-2 inline-flex items-center gap-2 rounded bg-emerald-500 px-3 py-2 font-semibold text-black">
             <Download size={16} /> Download PNG
           </a>
         </div>
@@ -144,4 +186,3 @@ export default function DocumentsV2Page() {
     </div>
   );
 }
-
