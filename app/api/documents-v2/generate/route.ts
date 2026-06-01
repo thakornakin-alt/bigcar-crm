@@ -38,8 +38,21 @@ export async function POST(request: Request) {
       ...mapBookingToDocumentV2(report),
       plateNo: String(rawReport.plate || rawReport.licensePlate || stockRaw.plate || "").trim(),
       customerAddress: String(rawReport.address || rawReport.customerAddress || (isSamePlate ? (stockRaw.customerAddress || stockRaw.address) : "") || "").trim(),
-      engineNo: String(rawReport.engineNo || rawReport.engineNumber || (isSamePlate ? (stockRaw.engineNo || stockRaw.engineNumber) : "") || "").trim(),
-      chassisNo: String(rawReport.chassisNo || rawReport.chassisNumber || rawReport.vin || (isSamePlate ? (stockRaw.vin || stockRaw.chassisNo || stockRaw.chassisNumber) : "") || "").trim(),
+      engineNo: String(
+        rawReport.engineNo ||
+        rawReport.engineNumber ||
+        rawReport["เลขเครื่อง"] ||
+        (isSamePlate ? (stockRaw.engineNo || stockRaw.engineNumber || stockRaw["เลขเครื่อง"] || stockRaw["เลขเครื่องยนต์"]) : "") ||
+        ""
+      ).trim(),
+      chassisNo: String(
+        rawReport.chassisNo ||
+        rawReport.chassisNumber ||
+        rawReport.vin ||
+        rawReport["เลขตัวถัง"] ||
+        (isSamePlate ? (stockRaw.vin || stockRaw.chassisNo || stockRaw.chassisNumber || stockRaw["เลขตัวถัง"] || stockRaw["เลขตัวรถ"]) : "") ||
+        ""
+      ).trim(),
       ...override
     };
     const mapping = await readDocumentV2Mapping(template.id);
