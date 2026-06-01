@@ -37,11 +37,18 @@ export async function listTemplateFieldsV2WithBytes(
   };
 }
 
-function setTextIfExists(form: ReturnType<PDFDocument["getForm"]>, names: string[], value: string) {
+function setTextIfExists(
+  form: ReturnType<PDFDocument["getForm"]>,
+  names: string[],
+  value: string,
+  thaiFont: Awaited<ReturnType<PDFDocument["embedFont"]>>
+) {
   if (!value) return;
   for (const n of names) {
     try {
-      form.getTextField(n).setText(value);
+      const field = form.getTextField(n);
+      field.setText(value);
+      field.updateAppearances(thaiFont);
       return;
     } catch {}
   }
@@ -64,11 +71,21 @@ export async function generateDocumentV2WithBytes(
   if (!fields.length) throw new Error("PDF ไม่มี AcroForm fields");
   form.updateFieldAppearances(thaiFont);
 
-  setTextIfExists(form, ["CUSTOMER_NAME", "customerName", "Text1"], data.customerName);
-  setTextIfExists(form, ["LICENSE_PLATE", "plateNo", "Text2"], data.plateNo);
-  setTextIfExists(form, ["CHASSIS_NO", "chassisNo", "Text3"], data.chassisNo);
-  setTextIfExists(form, ["SELL_PRICE", "sellPrice", "Text4"], data.sellPrice);
-  setTextIfExists(form, ["DOWN_PAYMENT", "deposit", "Text5"], data.deposit);
+  setTextIfExists(form, ["Text1", "CUSTOMER_NAME", "customerName"], data.customerName, thaiFont);
+  setTextIfExists(form, ["Text3", "CONTRACT_DATE", "contractDate"], data.contractDate, thaiFont);
+  setTextIfExists(form, ["Text4", "CUSTOMER_ADDRESS", "customerAddress"], data.customerAddress, thaiFont);
+  setTextIfExists(form, ["Text6", "ID_CARD", "idCard"], data.idCard, thaiFont);
+  setTextIfExists(form, ["Text7", "LICENSE_PLATE", "plateNo"], data.plateNo, thaiFont);
+  setTextIfExists(form, ["Text8", "CAR_BRAND", "brand"], data.brand, thaiFont);
+  setTextIfExists(form, ["Text9", "CAR_MODEL", "model"], data.model, thaiFont);
+  setTextIfExists(form, ["Text10", "CAR_YEAR", "year"], data.year, thaiFont);
+  setTextIfExists(form, ["Text11", "CAR_COLOR", "color"], data.color, thaiFont);
+  setTextIfExists(form, ["Text12", "ENGINE_NO", "engineNo"], data.engineNo, thaiFont);
+  setTextIfExists(form, ["Text13", "CHASSIS_NO", "chassisNo"], data.chassisNo, thaiFont);
+  setTextIfExists(form, ["Text14", "SELL_PRICE", "sellPrice"], data.sellPrice, thaiFont);
+  setTextIfExists(form, ["Text15", "DOWN_PAYMENT", "deposit"], data.deposit, thaiFont);
+  setTextIfExists(form, ["Text16", "REMAINING_AMOUNT", "remainingAmount"], data.remainingAmount, thaiFont);
+  setTextIfExists(form, ["Text17", "SALES_NAME", "saleName"], data.saleName, thaiFont);
 
   form.flatten();
   return pdf.save();
