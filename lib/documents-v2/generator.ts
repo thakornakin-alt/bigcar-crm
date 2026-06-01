@@ -1,4 +1,4 @@
-import { readFile } from "fs/promises";
+import { readFile, readdir } from "fs/promises";
 import path from "path";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument } from "pdf-lib";
@@ -15,12 +15,32 @@ function normalizeTemplateFile(input?: string) {
   return file || DEFAULT_TEMPLATE_FILE;
 }
 
+function normalizeNameForMatch(name: string) {
+  return String(name || "")
+    .normalize("NFC")
+    .trim()
+    .toLowerCase();
+}
+
 async function loadTemplateBytes(templateFile?: string) {
   const normalizedFile = normalizeTemplateFile(templateFile);
+  const target = normalizeNameForMatch(normalizedFile);
   for (const dir of CANDIDATE_TEMPLATE_DIRS) {
-    const rel = `${dir}/${normalizedFile}`;
-    const p = path.join(process.cwd(), rel);
+    const absDir = path.join(process.cwd(), dir);
     try {
+      const entries = await readdir(absDir, { withFileTypes: true });
+      const fileNames = entries.filter((e) => e.isFile()).map((e) => e.name);
+
+      // 1) exact typed name first
+      let matchedName = fileNames.find((name) => name === normalizedFile);
+      // 2) case/Unicode-insensitive fallback
+      if (!matchedName) {
+        matchedName = fileNames.find((name) => normalizeNameForMatch(name) === target);
+      }
+
+      if (!matchedName) continue;
+      const rel = `${dir}/${matchedName}`;
+      const p = path.join(process.cwd(), rel);
       const bytes = await readFile(p);
       return { bytes, path: rel };
     } catch {}
