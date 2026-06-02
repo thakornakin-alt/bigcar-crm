@@ -5,6 +5,8 @@ export type DocumentV2Template = {
   title: string;
   fileName: string;
   path: string;
+  mappingLocked?: boolean;
+  hideFieldBorders?: boolean;
 };
 
 export const documentTemplatesV2: Record<DocumentV2TemplateId, DocumentV2Template> = {
@@ -12,7 +14,9 @@ export const documentTemplatesV2: Record<DocumentV2TemplateId, DocumentV2Templat
     id: "contract-field",
     title: "สัญญาซื้อขายรถยนต์",
     fileName: "contract-field.pdf",
-    path: "/document-templates/contract-field.pdf"
+    path: "/document-templates/contract-field.pdf",
+    mappingLocked: true,
+    hideFieldBorders: false
   }
 };
 

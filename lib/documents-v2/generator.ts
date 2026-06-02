@@ -75,7 +75,8 @@ export async function generateDocumentV2(data: DocumentV2Data, templateId?: stri
 export async function generateDocumentV2WithBytes(
   data: DocumentV2Data,
   bytes: Uint8Array,
-  mapping?: DocumentV2FieldMapping
+  mapping?: DocumentV2FieldMapping,
+  options: { hideFieldBorders?: boolean } = {}
 ): Promise<Uint8Array> {
   const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
   pdf.registerFontkit(fontkit);
@@ -85,7 +86,7 @@ export async function generateDocumentV2WithBytes(
   const fields = form.getFields();
   if (!fields.length) throw new Error("PDF ไม่มี AcroForm fields");
   fields.forEach((field) => {
-    makeFieldWidgetsInvisible(field);
+    if (options.hideFieldBorders) makeFieldWidgetsInvisible(field);
     try {
       form.getTextField(field.getName()).setText("");
     } catch {}

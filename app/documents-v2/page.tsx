@@ -66,6 +66,7 @@ function downloadObjectUrl(url: string, fileName: string) {
   const link = document.createElement("a");
   link.href = url;
   link.download = fileName;
+  link.rel = "noopener";
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -78,6 +79,7 @@ export default function DocumentsV2Page() {
   const [selectedReportId, setSelectedReportId] = useState("");
   const [previewUrl, setPreviewUrl] = useState("");
   const [pngUrl, setPngUrl] = useState("");
+  const [pngFileName, setPngFileName] = useState("document-v2.png");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [templateId, setTemplateId] = useState<DocumentV2TemplateId>(DOC_V2_TEMPLATE_ID);
@@ -97,6 +99,7 @@ export default function DocumentsV2Page() {
   const isHydratingMappingRef = useRef(false);
 
   const selectedTemplate = documentTemplatesV2[templateId];
+  const isMappingLocked = Boolean(selectedTemplate.mappingLocked);
   const isDev = process.env.NODE_ENV === "development";
 
   const selectedReport = useMemo(
@@ -252,6 +255,7 @@ export default function DocumentsV2Page() {
   }
 
   useEffect(() => {
+    if (isMappingLocked) return;
     if (isHydratingMappingRef.current) return;
     if (Object.keys(mapping).length === 0) return;
     setSaveState((prev) => (prev === "saving" ? prev : "dirty"));
@@ -260,7 +264,7 @@ export default function DocumentsV2Page() {
     }, 500);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapping, templateId]);
+  }, [isMappingLocked, mapping, templateId]);
 
   async function preview() {
     if (!isTemplateReady) {
@@ -354,17 +358,17 @@ export default function DocumentsV2Page() {
       canvas.width = viewport.width;
       canvas.height = viewport.height;
       await page.render({ canvasContext: ctx, viewport }).promise;
-      const pngBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 0.95));
-      if (!pngBlob) throw new Error("แปลง PNG ไม่สำเร็จ");
-      if (pngUrl) URL.revokeObjectURL(pngUrl);
-      const url = URL.createObjectURL(pngBlob);
-      setPngUrl(url);
+      if (pngUrl.startsWith("blob:")) URL.revokeObjectURL(pngUrl);
       const fileBase = [
         "sale-contract",
         safeFilePart(sampleData.customerName),
         safeFilePart(sampleData.plateNo)
       ].filter(Boolean).join("-");
-      downloadObjectUrl(url, `${fileBase || "document-v2"}.png`);
+      const fileName = `${fileBase || "document-v2"}.png`;
+      const url = canvas.toDataURL("image/png");
+      setPngUrl(url);
+      setPngFileName(fileName);
+      downloadObjectUrl(url, fileName);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Export PNG ไม่สำเร็จ");
     } finally {
@@ -410,10 +414,10 @@ export default function DocumentsV2Page() {
         <button onClick={loadMapping} className="rounded border border-white/20 px-4 py-2">โหลด Mapping</button>
         <button
           onClick={saveMapping}
-          disabled={saveState === "saving"}
+          disabled={saveState === "saving" || isMappingLocked}
           className={`rounded border px-4 py-2 ${saveState === "saving" ? "border-emerald-400/40 bg-emerald-500/10" : "border-white/20"}`}
         >
-          {saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "บันทึก Mapping"}
+          {isMappingLocked ? "Mapping ล็อกแล้ว" : saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "บันทึก Mapping"}
         </button>
         <button onClick={preview} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">{loading ? <Loader2 className="inline animate-spin" size={16} /> : <Eye className="inline" size={16} />} Preview PDF</button>
         <button onClick={previewProbe} disabled={loading} className="rounded border border-yellow-300/40 px-4 py-2 text-yellow-200">ทดสอบ Field</button>
@@ -421,7 +425,7 @@ export default function DocumentsV2Page() {
       </div>
       <div className="text-xs text-gray-300 space-y-1">
         <div>
-          สถานะ Mapping: {saveState === "dirty" ? "มีการแก้ไข (รอบันทึกอัตโนมัติ)" : saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "ยังไม่เริ่ม"} {lastSavedAt ? `· ล่าสุด ${lastSavedAt}` : ""}
+          สถานะ Mapping: {isMappingLocked ? "ล็อกสำหรับ PDF สัญญาซื้อขายรถยนต์" : saveState === "dirty" ? "มีการแก้ไข (รอบันทึกอัตโนมัติ)" : saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "ยังไม่เริ่ม"} {lastSavedAt && !isMappingLocked ? `· ล่าสุด ${lastSavedAt}` : ""}
         </div>
         <div>
           ความพร้อมข้อมูล: แมพแล้ว {mappedFieldCount} ช่อง · มีข้อมูลจริง {mappedNonEmptyCount} ช่อง
@@ -472,6 +476,11 @@ export default function DocumentsV2Page() {
 
       <div className="rounded border border-white/10 p-3">
         <h2 className="mb-2 font-semibold">Field Mapping</h2>
+        {isMappingLocked ? (
+          <p className="mb-3 rounded border border-emerald-400/20 bg-emerald-500/10 p-2 text-sm text-emerald-100">
+            PDF นี้ล็อก Mapping แล้ว เพื่อไม่ให้ตำแหน่ง/ช่องที่ตั้งไว้ขยับโดยไม่ตั้งใจ
+          </p>
+        ) : null}
         {!fields.length ? (
           <p className="text-sm text-gray-400">กดโหลดรายชื่อ Fields ก่อน</p>
         ) : (
@@ -482,8 +491,9 @@ export default function DocumentsV2Page() {
                 <div className="space-y-1">
                   <select
                     value={mapping[f.name] || ""}
+                    disabled={isMappingLocked}
                     onChange={(e) => setMapping((prev) => ({ ...prev, [f.name]: e.target.value as DocumentV2MappedValue }))}
-                    className="w-full rounded bg-black/40 p-2 text-sm"
+                    className="w-full rounded bg-black/40 p-2 text-sm disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     <option value="">-- ไม่แมพ --</option>
                     {mappingOptions.map((opt) => (
@@ -545,7 +555,8 @@ export default function DocumentsV2Page() {
         <div className="rounded border border-white/10 p-3">
           <h2 className="mb-2 font-semibold">PNG</h2>
           <img src={pngUrl} alt="PNG preview" className="max-w-full rounded bg-white" />
-          <a href={pngUrl} download={`${(loadedTemplateFile || selectedTemplate.fileName || "document-v2").replace(/\.pdf$/i, "")}.png`} className="mt-2 inline-flex items-center gap-2 rounded bg-emerald-500 px-3 py-2 font-semibold text-black">
+          <p className="mt-2 text-xs text-gray-300">ถ้ามือถือไม่ดาวน์โหลดอัตโนมัติ ให้กดปุ่มด้านล่าง หรือกดค้างที่รูปเพื่อบันทึก</p>
+          <a href={pngUrl} download={pngFileName} className="mt-2 inline-flex items-center gap-2 rounded bg-emerald-500 px-3 py-2 font-semibold text-black">
             <Download size={16} /> Download PNG
           </a>
         </div>
