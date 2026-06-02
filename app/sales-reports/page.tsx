@@ -361,7 +361,7 @@ export default function SalesReportsPage() {
         if (!result.ok) return;
         const data = await result.json();
         let vehicle = data?.vehicle || null;
-        if (vehicle && !vehicleValue(vehicle, engineNoKeys)) {
+        if (vehicle && (!vehicleValue(vehicle, engineNoKeys) || !vehicleValue(vehicle, chassisNoKeys))) {
           const listResult = await fetch(`/api/stock/list?query=${encodeURIComponent(plate)}&limit=10`, {
             signal: controller.signal,
             cache: "no-store"
@@ -372,7 +372,14 @@ export default function SalesReportsPage() {
             const fromList = (listData?.vehicles || []).find((item: Record<string, any>) =>
               String(item?.plate || "").replace(/\s+/g, "").toUpperCase() === normalizedPlate
             );
-            if (fromList) vehicle = { ...fromList, ...vehicle, engineNo: vehicleValue(vehicle, engineNoKeys) || vehicleValue(fromList, engineNoKeys) };
+            if (fromList) {
+              vehicle = {
+                ...fromList,
+                ...vehicle,
+                engineNo: vehicleValue(vehicle, engineNoKeys) || vehicleValue(fromList, engineNoKeys),
+                vin: vehicleValue(vehicle, chassisNoKeys) || vehicleValue(fromList, chassisNoKeys)
+              };
+            }
           }
         }
         if (!vehicle) return;

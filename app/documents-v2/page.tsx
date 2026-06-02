@@ -7,6 +7,7 @@ import { DOC_V2_TEMPLATE_ID } from "@/lib/documents-v2/types";
 import { documentTemplatesV2, getDocumentV2Templates, type DocumentV2TemplateId } from "@/lib/documents-v2/template-config";
 import type { DocumentV2FieldKey, DocumentV2FieldMapping, DocumentV2MappedValue } from "@/lib/documents-v2/mapping-store";
 import { mapBookingToDocumentV2 } from "@/lib/documents-v2/types";
+import type { DocumentV2ResolveDebug, ResolvedDocumentV2Data } from "@/lib/documents-v2/resolve-data";
 
 type FieldItem = { name: string; type: string };
 type FieldsDebug = {
@@ -73,6 +74,9 @@ export default function DocumentsV2Page() {
   const [saveState, setSaveState] = useState<"idle" | "dirty" | "saving" | "saved" | "error">("idle");
   const [lastSavedAt, setLastSavedAt] = useState("");
   const [reportsLoaded, setReportsLoaded] = useState(false);
+  const [resolvedData, setResolvedData] = useState<ResolvedDocumentV2Data | null>(null);
+  const [resolveDebug, setResolveDebug] = useState<DocumentV2ResolveDebug | null>(null);
+  const [resolvingData, setResolvingData] = useState(false);
   const isHydratingMappingRef = useRef(false);
 
   const selectedTemplate = documentTemplatesV2[templateId];
@@ -82,10 +86,13 @@ export default function DocumentsV2Page() {
     () => reports.find((r) => r.id === selectedReportId) || null,
     [reports, selectedReportId]
   );
-  const sampleData = useMemo(() => mapBookingToDocumentV2(selectedReport), [selectedReport]);
+  const sampleData = useMemo(() => resolvedData || mapBookingToDocumentV2(selectedReport), [resolvedData, selectedReport]);
   const rawReportData = useMemo(
-    () => Object.fromEntries(Object.entries((selectedReport || {}) as Record<string, unknown>).map(([k, v]) => [k, v == null ? "" : String(v)])),
-    [selectedReport]
+    () => ({
+      ...Object.fromEntries(Object.entries((selectedReport || {}) as Record<string, unknown>).map(([k, v]) => [k, v == null ? "" : String(v)])),
+      ...(resolvedData || {})
+    }),
+    [resolvedData, selectedReport]
   );
   const reportRawKeys = useMemo(() => Object.keys(rawReportData).sort((a, b) => a.localeCompare(b)), [rawReportData]);
   const mappedFieldCount = useMemo(
@@ -102,7 +109,7 @@ export default function DocumentsV2Page() {
       return acc;
     }, 0);
   }, [mapping, rawReportData, sampleData]);
-  const canRunGenerate = isTemplateReady && reportsLoaded && Boolean(selectedReport) && saveState !== "saving" && saveState !== "dirty";
+  const canRunGenerate = isTemplateReady && reportsLoaded && Boolean(selectedReport) && !resolvingData && saveState !== "saving" && saveState !== "dirty";
 
   async function loadFields() {
     try {
@@ -163,6 +170,35 @@ export default function DocumentsV2Page() {
       setError("ไม่พบรายงานขายในระบบ");
     }
   }
+
+  async function loadResolvedData(report: ReportHistoryItem | null) {
+    if (!report) {
+      setResolvedData(null);
+      setResolveDebug(null);
+      return;
+    }
+    try {
+      setResolvingData(true);
+      const res = await api<{ ok: boolean; data: ResolvedDocumentV2Data; debug: DocumentV2ResolveDebug }>("/api/documents-v2/resolve-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ report, templateId })
+      });
+      setResolvedData(res.data || null);
+      setResolveDebug(res.debug || null);
+    } catch (e) {
+      setResolvedData(mapBookingToDocumentV2(report) as ResolvedDocumentV2Data);
+      setResolveDebug(null);
+      setError(e instanceof Error ? e.message : "โหลดข้อมูลที่จะใช้จริงไม่สำเร็จ");
+    } finally {
+      setResolvingData(false);
+    }
+  }
+
+  useEffect(() => {
+    loadResolvedData(selectedReport);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedReportId, templateId]);
 
   async function loadMapping() {
     try {
@@ -369,8 +405,27 @@ export default function DocumentsV2Page() {
         </div>
         {!canRunGenerate ? (
           <div className="text-amber-300">
-            ยัง Preview/Export ไม่ได้: {!isTemplateReady ? "ยังไม่พร้อม template" : !reportsLoaded ? "ยังไม่โหลดรายงานขาย" : !selectedReport ? "ยังไม่เลือกรายงานขาย" : saveState === "saving" || saveState === "dirty" ? "กำลังบันทึก mapping" : "รอข้อมูล"}
+            ยัง Preview/Export ไม่ได้: {!isTemplateReady ? "ยังไม่พร้อม template" : !reportsLoaded ? "ยังไม่โหลดรายงานขาย" : !selectedReport ? "ยังไม่เลือกรายงานขาย" : resolvingData ? "กำลังดึงข้อมูลจริงจากทะเบียน" : saveState === "saving" || saveState === "dirty" ? "กำลังบันทึก mapping" : "รอข้อมูล"}
           </div>
+        ) : null}
+      </div>
+
+      <div className="rounded border border-emerald-400/20 bg-emerald-500/5 p-3">
+        <h2 className="mb-2 font-semibold">ข้อมูลที่จะใช้จริง</h2>
+        {resolvingData ? (
+          <p className="text-sm text-emerald-200">กำลังดึงข้อมูลจากรายงานขายและสต็อกตามทะเบียน...</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
+            <div className="rounded bg-black/30 p-2">ทะเบียน: {sampleData.plateNo || "ไม่มีข้อมูล"}</div>
+            <div className="rounded bg-black/30 p-2">เลขเครื่อง: {sampleData.engineNo || "ไม่มีข้อมูล"}</div>
+            <div className="rounded bg-black/30 p-2">เลขตัวถัง: {sampleData.chassisNo || "ไม่มีข้อมูล"}</div>
+            <div className="rounded bg-black/30 p-2">ที่อยู่: {sampleData.customerAddress || "ไม่มีข้อมูล"}</div>
+          </div>
+        )}
+        {resolveDebug ? (
+          <p className="mt-2 text-xs text-gray-400">
+            Stock lookup: {resolveDebug.stockFound ? "พบรถ" : "ไม่พบรถ"} · engine={resolveDebug.resolvedEngineNo || "-"} · chassis={resolveDebug.resolvedChassisNo || "-"}
+          </p>
         ) : null}
       </div>
 
