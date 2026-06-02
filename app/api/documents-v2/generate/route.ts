@@ -5,6 +5,7 @@ import type { ReportHistoryItem } from "@/lib/types";
 import { getTemplateById } from "@/lib/documents-v2/template-config";
 import { readDocumentV2Mapping } from "@/lib/documents-v2/mapping-store";
 import { listStockVehicles, lookupStockByPlate } from "@/lib/apps-script";
+import { mergeStockExtraFields } from "@/lib/stock-extra-fields";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -24,9 +25,18 @@ function extractFromReportText(text: string, patterns: RegExp[]) {
 
 function objectValue(source: Record<string, unknown>, keys: string[]) {
   const extra = source.extraFields && typeof source.extraFields === "object" ? source.extraFields as Record<string, unknown> : {};
+  const normalize = (value: string) => value.toLowerCase().replace(/\s+/g, "").replace(/[()/_\-.]/g, "");
   for (const key of keys) {
     const value = source[key] ?? extra[key];
     if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+  }
+  const extraEntries = Object.entries(extra);
+  for (const key of keys) {
+    const normalizedKey = normalize(key);
+    const matched = extraEntries.find(([extraKey]) => normalize(String(extraKey || "")) === normalizedKey);
+    if (matched && matched[1] !== undefined && matched[1] !== null && String(matched[1]).trim()) {
+      return String(matched[1]).trim();
+    }
   }
   return "";
 }
@@ -47,11 +57,16 @@ export async function POST(request: Request) {
     const plateFromReport = String(rawReport.plate || rawReport.licensePlate || "").trim();
     const normalizedReportPlate = normalizePlate(plateFromReport);
     let stock = plateFromReport ? await lookupStockByPlate(plateFromReport) : null;
+    if (stock) {
+      const [mergedStock] = await mergeStockExtraFields([stock]);
+      stock = mergedStock || stock;
+    }
     if (!stock && plateFromReport) {
       const shortQuery = plateFromReport.replace(/\s+/g, "").slice(0, 4);
       if (shortQuery) {
         const listed = await listStockVehicles({ query: shortQuery, limit: 50 });
-        const match = (listed.vehicles || []).find((v) => normalizePlate(v.plate) === normalizePlate(plateFromReport));
+        const mergedListed = await mergeStockExtraFields(listed.vehicles || []);
+        const match = mergedListed.find((v) => normalizePlate(v.plate) === normalizePlate(plateFromReport));
         stock = match || null;
       }
     }
@@ -72,11 +87,15 @@ export async function POST(request: Request) {
       ...Object.fromEntries(Object.entries(stockRaw).map(([k, v]) => [k, v == null ? "" : String(v)])),
       ...mapBookingToDocumentV2(report),
       plateNo: String(rawReport.plate || rawReport.licensePlate || stockRaw.plate || "").trim(),
-      customerAddress: String(rawReport.address || rawReport.customerAddress || (isSamePlate ? (stockRaw.customerAddress || stockRaw.address) : "") || "").trim(),
+      customerAddress: String(
+        objectValue(rawReport, ["address", "customerAddress", "shippingAddress", "ที่อยู่", "ที่อยู่จัดส่งเอกสาร"]) ||
+        (isSamePlate ? objectValue(stockRaw, ["customerAddress", "address", "shippingAddress", "ที่อยู่", "ที่อยู่จัดส่งเอกสาร"]) : "") ||
+        ""
+      ).trim(),
       engineNo: String(
-        objectValue(rawReport, ["engineNo", "engineNumber", "เลขเครื่อง", "เลขเครื่องยนต์", "EngineNo", "EngineNumber"]) ||
+        objectValue(rawReport, ["engineNo", "engineNumber", "engine", "Engine", "EngineNo", "Engine No", "Engine No.", "EngineNumber", "Engine Number", "เลขเครื่อง", "เลขเครื่องยนต์", "MotorNo", "Motor No"]) ||
         engineFromReportText ||
-        (isSamePlate ? objectValue(stockRaw, ["engineNo", "engineNumber", "เลขเครื่อง", "เลขเครื่องยนต์", "EngineNo", "EngineNumber"]) : "") ||
+        (isSamePlate ? objectValue(stockRaw, ["engineNo", "engineNumber", "engine", "Engine", "EngineNo", "Engine No", "Engine No.", "EngineNumber", "Engine Number", "เลขเครื่อง", "เลขเครื่องยนต์", "MotorNo", "Motor No"]) : "") ||
         ""
       ).trim(),
       chassisNo: String(

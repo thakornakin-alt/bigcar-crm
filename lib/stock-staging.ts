@@ -60,6 +60,8 @@ export type StockStagingStore = {
 const storeName = "stock-import-staging.json";
 const maxItems = 40;
 const defaultHeaderRow = 5;
+const vinFallbackColumnIndex = 20;
+const engineNoFallbackColumnIndex = 21;
 const allowedSender = "sirinada.p@tgh.co.th";
 const subjectKeywords = ["pricing", "pricig", "status update", "new format"];
 const blacklistKeywords = ["rt price delay 7 days", "price delay 7 days", "delay 7 days", "rt price delay"];
@@ -86,7 +88,7 @@ const aliases: Record<keyof StockVehicle, string[]> = {
   sellerName: ["ชื่อผู้ขาย", "salename", "salesname", "sellername"],
   bookingSaleDate: ["วันที่จอง/ขาย", "วันที่จอง", "วันที่ขาย", "bookingsaledate", "bookingdate", "solddate"],
   pdiStatus: ["สถานะปรับสภาพ pdi", "pdistatus", "สถานะ pdi"],
-  engineNo: ["เลขเครื่อง", "เลขเครื่องยนต์", "engineno", "enginenumber"],
+  engineNo: ["เลขเครื่อง", "เลขเครื่องยนต์", "engine", "engine no", "engine no.", "engine number", "engineno", "enginenumber", "motor no", "motorno"],
   financeName: ["ไฟแนนซ์", "บริษัทไฟแนนซ์", "finance", "financename"],
   vin: ["เลขตัวรถ", "เลขตัวถัง", "vin", "chassis"],
   finalGrade: ["เกรด final", "เกรดfinal", "finalgrade", "grade"],
@@ -157,6 +159,10 @@ function yearOnly(value: unknown) {
   return "";
 }
 
+function sheetCell(sheet: XLSX.WorkSheet, columnIndex: number, rowNumber: number) {
+  return text(sheet[XLSX.utils.encode_cell({ c: columnIndex, r: rowNumber })]?.v);
+}
+
 function normalizePlate(value: string) {
   return String(value || "").replace(/\s+/g, "").toUpperCase();
 }
@@ -223,41 +229,44 @@ export function parseStockWorkbook(bytes: Buffer) {
       if (!mapping.plate) continue;
 
       const mappedRows = rawRows
-        .map((row) => ({
-          plate: text(row[mapping.plate]),
-          brand: text(row[mapping.brand]),
-          model: text(row[mapping.model]),
-          year: yearOnly(row[mapping.year]),
-          color: text(row[mapping.color]),
-          salePrice: money(row[mapping.salePrice]),
-          source: text(row[mapping.source]),
-          ownership: text(row[mapping.ownership]),
-          reportReturnDate: text(row[mapping.reportReturnDate]),
-          agingGroup: text(row[mapping.agingGroup]),
-          aging: text(row[mapping.aging]),
-          customerName: text(row[mapping.customerName]),
-          project: text(row[mapping.project]),
-          campaign: text(row[mapping.campaign]),
-          colorGroup: text(row[mapping.colorGroup]),
-          closedSales: text(row[mapping.closedSales]),
-          inspection: text(row[mapping.inspection]),
-          extendedWarranty: text(row[mapping.extendedWarranty]),
-          sellerName: text(row[mapping.sellerName]),
-          bookingSaleDate: text(row[mapping.bookingSaleDate]),
-          vin: text(row[mapping.vin]),
-          engineNo: text(row[mapping.engineNo]),
-          financeName: text(row[mapping.financeName]),
-          finalGrade: text(row[mapping.finalGrade]),
-          program: text(row[mapping.program]),
-          parkingLocation: text(row[mapping.parkingLocation]),
-          status: text(row[mapping.status]),
-          gear: text(row[mapping.gear]),
-          mileage: money(row[mapping.mileage]),
-          pdiStatus: text(row[mapping.pdiStatus]),
-          pdiNote: text(row[mapping.pdiNote]),
-          vehicleGroup: text(row[mapping.vehicleGroup]),
-          extraFields: {}
-        }))
+        .map((row) => {
+          const rowNumber = typeof row.__rowNum__ === "number" ? row.__rowNum__ : 0;
+          return {
+            plate: text(row[mapping.plate]),
+            brand: text(row[mapping.brand]),
+            model: text(row[mapping.model]),
+            year: yearOnly(row[mapping.year]),
+            color: text(row[mapping.color]),
+            salePrice: money(row[mapping.salePrice]),
+            source: text(row[mapping.source]),
+            ownership: text(row[mapping.ownership]),
+            reportReturnDate: text(row[mapping.reportReturnDate]),
+            agingGroup: text(row[mapping.agingGroup]),
+            aging: text(row[mapping.aging]),
+            customerName: text(row[mapping.customerName]),
+            project: text(row[mapping.project]),
+            campaign: text(row[mapping.campaign]),
+            colorGroup: text(row[mapping.colorGroup]),
+            closedSales: text(row[mapping.closedSales]),
+            inspection: text(row[mapping.inspection]),
+            extendedWarranty: text(row[mapping.extendedWarranty]),
+            sellerName: text(row[mapping.sellerName]),
+            bookingSaleDate: text(row[mapping.bookingSaleDate]),
+            vin: text(row[mapping.vin]) || sheetCell(sheet, vinFallbackColumnIndex, rowNumber),
+            engineNo: text(row[mapping.engineNo]) || sheetCell(sheet, engineNoFallbackColumnIndex, rowNumber),
+            financeName: text(row[mapping.financeName]),
+            finalGrade: text(row[mapping.finalGrade]),
+            program: text(row[mapping.program]),
+            parkingLocation: text(row[mapping.parkingLocation]),
+            status: text(row[mapping.status]),
+            gear: text(row[mapping.gear]),
+            mileage: money(row[mapping.mileage]),
+            pdiStatus: text(row[mapping.pdiStatus]),
+            pdiNote: text(row[mapping.pdiNote]),
+            vehicleGroup: text(row[mapping.vehicleGroup]),
+            extraFields: {}
+          };
+        })
         .filter((row) => row.plate);
 
       if (mappedRows.length > best.rows.length) {

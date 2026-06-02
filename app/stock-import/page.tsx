@@ -40,6 +40,8 @@ const defaultHeaderRow = 5;
 const hiddenColumnPolicyStorageKey = "bigcar-stock-hidden-column-policy-v1";
 const vinFallbackKey = "__BIGCAR_COL_U";
 const vinFallbackLabel = "คอลัมน์ U (ล็อกอัตโนมัติ)";
+const engineNoFallbackKey = "__BIGCAR_COL_V";
+const engineNoFallbackLabel = "คอลัมน์ V (ล็อกอัตโนมัติ)";
 const vehicleGroupFallbackKey = "__BIGCAR_COL_H";
 const vehicleGroupFallbackLabel = "คอลัมน์ H (ล็อกอัตโนมัติ)";
 const fieldLabels: Array<{ key: keyof StockVehicle; label: string; aliases: string[] }> = [
@@ -64,7 +66,7 @@ const fieldLabels: Array<{ key: keyof StockVehicle; label: string; aliases: stri
   { key: "sellerName", label: "ชื่อผู้ขาย", aliases: ["ชื่อผู้ขาย", "salename", "salesname", "sellername"] },
   { key: "bookingSaleDate", label: "วันที่จอง/ขาย", aliases: ["วันที่จอง/ขาย", "วันที่จอง", "วันที่ขาย", "bookingsaledate", "bookingdate", "solddate"] },
   { key: "vin", label: "เลขตัวรถ", aliases: ["เลขตัวรถ", "เลขตัวถัง", "vin", "chassis"] },
-  { key: "engineNo", label: "เลขเครื่อง", aliases: ["เลขเครื่อง", "เลขเครื่องยนต์", "engineno", "enginenumber"] },
+  { key: "engineNo", label: "เลขเครื่อง", aliases: ["เลขเครื่อง", "เลขเครื่องยนต์", "engine", "engine no", "engine no.", "engine number", "engineno", "enginenumber", "motor no", "motorno"] },
   { key: "financeName", label: "ไฟแนนซ์", aliases: ["ไฟแนนซ์", "บริษัทไฟแนนซ์", "finance", "financename"] },
   { key: "finalGrade", label: "เกรด Final", aliases: ["เกรด final", "เกรดfinal", "finalgrade", "grade"] },
   { key: "program", label: "Program", aliases: ["program", "PROGRAM"] },
@@ -105,7 +107,7 @@ async function fileToBase64(file: File) {
 }
 
 function normalizeHeader(value: string) {
-  return value.toLowerCase().replace(/\s+/g, "").replace(/[()/_-]/g, "");
+  return value.toLowerCase().replace(/\s+/g, "").replace(/[()/_\-.]/g, "");
 }
 
 function columnLetter(index: number) {
@@ -168,7 +170,15 @@ function detectMapping(headers: string[], hiddenColumns: HiddenColumnInfo[] = []
 
   return fieldLabels.reduce<Record<keyof StockVehicle, string>>((mapping, field) => {
     const found = normalized.find((item) => field.aliases.some((alias) => item.normalized === normalizeHeader(alias)));
-    mapping[field.key] = found?.header || (field.key === "vin" ? vinFallbackKey : field.key === "vehicleGroup" ? vehicleGroupFallbackKey : "");
+    mapping[field.key] =
+      found?.header ||
+      (field.key === "vin"
+        ? vinFallbackKey
+        : field.key === "engineNo"
+          ? engineNoFallbackKey
+          : field.key === "vehicleGroup"
+            ? vehicleGroupFallbackKey
+            : "");
     return mapping;
   }, {} as Record<keyof StockVehicle, string>);
 }
@@ -227,7 +237,7 @@ function mapRows(rows: RawRow[], mapping: Record<keyof StockVehicle, string>, im
         sellerName: cell(row[mapping.sellerName]),
         bookingSaleDate: cell(row[mapping.bookingSaleDate]),
         vin: cell(row[mapping.vin]) || cell(row[vinFallbackKey]),
-        engineNo: cell(row[mapping.engineNo]),
+        engineNo: cell(row[mapping.engineNo]) || cell(row[engineNoFallbackKey]),
         financeName: cell(row[mapping.financeName]),
         finalGrade: cell(row[mapping.finalGrade]),
         program: cell(row[mapping.program]),
@@ -256,9 +266,16 @@ function readSheetRows(sheet: XLSX.WorkSheet | undefined, headerRow: number) {
     return {
       ...row,
       [vehicleGroupFallbackKey]: cell(sheet[XLSX.utils.encode_cell({ c: 7, r: rowNumber })]?.v),
-      [vinFallbackKey]: cell(sheet[XLSX.utils.encode_cell({ c: 20, r: rowNumber })]?.v)
+      [vinFallbackKey]: cell(sheet[XLSX.utils.encode_cell({ c: 20, r: rowNumber })]?.v),
+      [engineNoFallbackKey]: cell(sheet[XLSX.utils.encode_cell({ c: 21, r: rowNumber })]?.v)
     };
   });
+}
+
+function stockFieldValue(row: StockVehicle, key: keyof StockVehicle) {
+  const value = row[key];
+  if (key === "extraFields") return "";
+  return cell(value);
 }
 
 export default function StockImportPage() {
@@ -302,6 +319,7 @@ export default function StockImportPage() {
   const previewRows = parsedRows.slice(0, 8);
   const missingPlate = !mapping.plate;
   const parsedVinCount = useMemo(() => parsedRows.filter((row) => row.vin).length, [parsedRows]);
+  const parsedEngineNoCount = useMemo(() => parsedRows.filter((row) => row.engineNo).length, [parsedRows]);
   const parsedStatusCount = useMemo(() => parsedRows.filter((row) => row.status).length, [parsedRows]);
   const parsedVehicleGroupCount = useMemo(() => parsedRows.filter((row) => row.vehicleGroup).length, [parsedRows]);
   const parsedPdiNoteCount = useMemo(() => parsedRows.filter((row) => row.pdiNote).length, [parsedRows]);
@@ -502,11 +520,14 @@ export default function StockImportPage() {
     let updated = 0;
     let skipped = 0;
     let clientVinRows = 0;
+    let clientEngineNoRows = 0;
     let clientStatusRows = 0;
     let clientVehicleGroupRows = 0;
     let clientPdiNoteRows = 0;
     let vinReceived = 0;
     let vinWritten = 0;
+    let engineNoReceived = 0;
+    let engineNoWritten = 0;
     let pdiReceived = 0;
     let pdiWritten = 0;
     let importedAt = "";
@@ -530,11 +551,14 @@ export default function StockImportPage() {
         updated += data.result.updated;
         skipped += data.result.skipped;
         clientVinRows += data.result.clientVinRows || 0;
+        clientEngineNoRows += data.result.clientEngineNoRows || 0;
         clientStatusRows += data.result.clientStatusRows || 0;
         clientVehicleGroupRows += data.result.clientVehicleGroupRows || 0;
         clientPdiNoteRows += data.result.clientPdiNoteRows || 0;
         vinReceived += data.result.vinReceived || 0;
         vinWritten += data.result.vinWritten || 0;
+        engineNoReceived += data.result.engineNoReceived || 0;
+        engineNoWritten += data.result.engineNoWritten || 0;
         pdiReceived += data.result.pdiReceived || 0;
         pdiWritten += data.result.pdiWritten || 0;
         importedAt = data.result.importedAt || importedAt;
@@ -542,7 +566,7 @@ export default function StockImportPage() {
       }
 
       setMessage(
-        `Import สำเร็จ: เพิ่ม ${imported} / อัปเดต ${updated} / ข้าม ${skipped} / เลขตัวรถ ${clientVinRows} / สถานะ ${clientStatusRows} / กลุ่มรถยนต์ ${clientVehicleGroupRows} / หมายเหตุ PDI ${clientPdiNoteRows} / Apps Script รับ PDI ${pdiReceived} / เขียน ${pdiWritten} / รับเลขตัวรถ ${vinReceived} / เขียน ${vinWritten}`
+        `Import สำเร็จ: เพิ่ม ${imported} / อัปเดต ${updated} / ข้าม ${skipped} / เลขตัวรถ ${clientVinRows} / เลขเครื่อง ${clientEngineNoRows} / สถานะ ${clientStatusRows} / กลุ่มรถยนต์ ${clientVehicleGroupRows} / หมายเหตุ PDI ${clientPdiNoteRows} / Apps Script รับ PDI ${pdiReceived} / เขียน ${pdiWritten} / รับเลขตัวรถ ${vinReceived} / เขียน ${vinWritten} / รับเลขเครื่อง ${engineNoReceived} / เขียน ${engineNoWritten}`
       );
       setStatus((current) => ({
         total: clearExisting ? imported : current.total + imported,
@@ -876,6 +900,7 @@ export default function StockImportPage() {
                     >
                       <option value="">ไม่ใช้</option>
                       {field.key === "vin" && <option value={vinFallbackKey}>{vinFallbackLabel}</option>}
+                      {field.key === "engineNo" && <option value={engineNoFallbackKey}>{engineNoFallbackLabel}</option>}
                       {field.key === "vehicleGroup" && <option value={vehicleGroupFallbackKey}>{vehicleGroupFallbackLabel}</option>}
                       {visibleHeaders.map((header) => (
                         <option key={header} value={header}>
@@ -897,7 +922,7 @@ export default function StockImportPage() {
                   <h2 className="text-lg font-bold text-white">Preview</h2>
                   <p className="text-xs text-soft">พบข้อมูลพร้อม import {parsedRows.length.toLocaleString("th-TH")} แถว</p>
                   <p className="mt-1 text-xs text-soft">
-                    เลขตัวรถ {parsedVinCount.toLocaleString("th-TH")} / สถานะ {parsedStatusCount.toLocaleString("th-TH")} / กลุ่มรถยนต์{" "}
+                    เลขตัวรถ {parsedVinCount.toLocaleString("th-TH")} / เลขเครื่อง {parsedEngineNoCount.toLocaleString("th-TH")} / สถานะ {parsedStatusCount.toLocaleString("th-TH")} / กลุ่มรถยนต์{" "}
                     {parsedVehicleGroupCount.toLocaleString("th-TH")} / หมายเหตุ PDI {parsedPdiNoteCount.toLocaleString("th-TH")} แถว
                   </p>
                 </div>
@@ -930,25 +955,9 @@ export default function StockImportPage() {
                   <tbody>
                     {previewRows.map((row, index) => (
                       <tr key={`${row.plate}-${index}`} className="border-t border-line text-[#dce2eb]">
-                        <td className="px-3 py-2">{row.plate}</td>
-                        <td className="px-3 py-2">{row.brand}</td>
-                        <td className="px-3 py-2">{row.model}</td>
-                        <td className="px-3 py-2">{row.year}</td>
-                        <td className="px-3 py-2">{row.color}</td>
-                        <td className="px-3 py-2">{row.salePrice}</td>
-                        <td className="px-3 py-2">{row.source}</td>
-                        <td className="px-3 py-2">{row.ownership}</td>
-                        <td className="px-3 py-2">{row.project}</td>
-                        <td className="px-3 py-2">{row.campaign}</td>
-                        <td className="px-3 py-2">{row.vin}</td>
-                        <td className="px-3 py-2">{row.finalGrade}</td>
-                        <td className="px-3 py-2">{row.program}</td>
-                        <td className="px-3 py-2">{row.parkingLocation}</td>
-                        <td className="px-3 py-2">{row.status}</td>
-                        <td className="px-3 py-2">{row.gear}</td>
-                        <td className="px-3 py-2">{row.mileage}</td>
-                        <td className="px-3 py-2">{row.pdiNote}</td>
-                        <td className="px-3 py-2">{row.vehicleGroup}</td>
+                        {fieldLabels.map((field) => (
+                          <td key={field.key} className="px-3 py-2">{stockFieldValue(row, field.key)}</td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>

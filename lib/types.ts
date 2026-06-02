@@ -183,11 +183,14 @@ export type StockImportResult = {
   total: number;
   importedAt: string;
   clientVinRows?: number;
+  clientEngineNoRows?: number;
   clientStatusRows?: number;
   clientVehicleGroupRows?: number;
   clientPdiNoteRows?: number;
   vinReceived?: number;
   vinWritten?: number;
+  engineNoReceived?: number;
+  engineNoWritten?: number;
   pdiReceived?: number;
   pdiWritten?: number;
 };
@@ -356,6 +359,7 @@ export type ReportHistoryItem = {
   updatedAt: string;
   status: string;
   customerName: string;
+  address?: string;
   phone: string;
   idCard: string;
   plate: string;
@@ -363,6 +367,8 @@ export type ReportHistoryItem = {
   model: string;
   year: string;
   color: string;
+  engineNo?: string;
+  chassisNo?: string;
   saleName: string;
   teamName: string;
   emailSubject: string;
@@ -388,6 +394,7 @@ export type ApprovalStaff = {
 export type ApprovalStockVehicle = {
   plate: string;
   vin: string;
+  engineNo?: string;
   model: string;
   registeredYear: string;
   finalGrade: string;

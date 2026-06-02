@@ -27,9 +27,19 @@ export type DocumentV2Data = {
 };
 
 function pick(obj: Record<string, any>, ...keys: string[]) {
+  const normalize = (value: string) => value.toLowerCase().replace(/\s+/g, "").replace(/[()/_\-.]/g, "");
+  const extra = obj?.extraFields && typeof obj.extraFields === "object" ? obj.extraFields : {};
   for (const key of keys) {
-    const value = obj?.[key];
+    const value = obj?.[key] ?? extra?.[key];
     if (value !== undefined && value !== null && String(value).trim() !== "") return String(value);
+  }
+  const extraEntries = Object.entries(extra || {});
+  for (const key of keys) {
+    const normalizedKey = normalize(key);
+    const matched = extraEntries.find(([extraKey]) => normalize(String(extraKey || "")) === normalizedKey);
+    if (matched && matched[1] !== undefined && matched[1] !== null && String(matched[1]).trim() !== "") {
+      return String(matched[1]);
+    }
   }
   return "";
 }
@@ -79,7 +89,7 @@ export function mapBookingToDocumentV2(report?: ReportHistoryItem | null): Docum
     currentDate,
     customerName: pick(raw, "customerName", "name", "buyerName")
       || extractFromReportText(reportText, [/ชื่อลูกค้า\s*[:：]\s*(.+)/i, /ชื่อ-นามสกุล\s*[:：]\s*(.+)/i]),
-    customerAddress: pick(raw, "address", "customerAddress", "shippingAddress")
+    customerAddress: pick(raw, "address", "customerAddress", "shippingAddress", "ที่อยู่", "ที่อยู่จัดส่งเอกสาร")
       || extractFromReportText(reportText, [
         /ที่อยู่จัดส่งเอกสาร\s*[\r\n]+([^\r\n]+)/i,
         /ที่อยู่\s*[:：]\s*(.+)/i
@@ -94,9 +104,9 @@ export function mapBookingToDocumentV2(report?: ReportHistoryItem | null): Docum
       || extractFromReportText(reportText, [/รุ่นรถ\s*[:：]\s*(.+)/i]),
     year: pick(raw, "year", "registeredYear", "modelYear"),
     color: pick(raw, "color", "carColor"),
-    engineNo: pick(raw, "engineNo", "engineNumber", "เลขเครื่อง", "เลขเครื่องยนต์")
+    engineNo: pick(raw, "engineNo", "engineNumber", "engine", "Engine", "EngineNo", "Engine No", "Engine No.", "EngineNumber", "Engine Number", "เลขเครื่อง", "เลขเครื่องยนต์", "MotorNo", "Motor No")
       || extractFromReportText(reportText, [/เลขเครื่อง(?:ยนต์)?\s*[:：]\s*([^\r\n]+)/i]),
-    chassisNo: pick(raw, "chassisNo", "vin", "chassisNumber", "เลขตัวถัง", "เลขตัวรถ")
+    chassisNo: pick(raw, "chassisNo", "vin", "chassisNumber", "เลขตัวถัง", "เลขตัวรถ", "VIN", "Chassis")
       || extractFromReportText(reportText, [/เลขตัวถัง\s*[:：]\s*([^\r\n]+)/i, /VIN\s*[:：]\s*([^\r\n]+)/i]),
     sellPrice: normalizeMoney(pick(raw, "salePrice", "finalPrice", "netPayment", "carPrice") || rawFinal),
     deposit: normalizeMoney(String(rawDeposit || "")),

@@ -24,6 +24,9 @@ function normalizeStockVehicle(vehicle: StockVehicle) {
     pdiNote:
       text(vehicle.pdiNote) ||
       pickValue(raw, ["PdiNote", "PDINote", "pdi", "PDI", "pdi_note", "pdiRemark", "remark", "note", "หมายเหตุ PDI", "หมายเหตุPDI", "หมายเหตุ"]),
+    engineNo:
+      text(vehicle.engineNo) ||
+      pickValue(raw, ["engineNo", "engineNumber", "engine", "Engine", "EngineNo", "Engine No", "Engine No.", "EngineNumber", "Engine Number", "เลขเครื่อง", "เลขเครื่องยนต์", "MotorNo", "Motor No"]),
     vehicleGroup:
       text(vehicle.vehicleGroup) ||
       pickValue(raw, ["VehicleGroup", "vehicle_group", "กลุ่มรถยนต์", "กลุ่มรถ", "กลุ่ม"])

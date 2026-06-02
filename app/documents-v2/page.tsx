@@ -95,11 +95,13 @@ export default function DocumentsV2Page() {
   const mappedNonEmptyCount = useMemo(() => {
     return Object.entries(mapping).reduce((acc, [, key]) => {
       if (!key) return acc;
-      const value = (sampleData as Record<string, unknown>)[key];
+      const value = String(key).startsWith("raw:")
+        ? rawReportData[String(key).slice(4)]
+        : (sampleData as Record<string, unknown>)[key];
       if (value !== undefined && value !== null && String(value).trim() !== "") return acc + 1;
       return acc;
     }, 0);
-  }, [mapping, sampleData]);
+  }, [mapping, rawReportData, sampleData]);
   const canRunGenerate = isTemplateReady && reportsLoaded && Boolean(selectedReport) && saveState !== "saving" && saveState !== "dirty";
 
   async function loadFields() {

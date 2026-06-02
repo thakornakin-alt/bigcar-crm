@@ -206,6 +206,34 @@ function vehicleValue(vehicle: Record<string, any>, keys: string[]) {
   return "";
 }
 
+const engineNoKeys = [
+  "engineNo",
+  "engineNumber",
+  "engine",
+  "เลขเครื่อง",
+  "เลขเครื่องยนต์",
+  "Engine",
+  "EngineNo",
+  "Engine No",
+  "Engine No.",
+  "EngineNumber",
+  "Engine Number",
+  "ENGINE_NO",
+  "Motor No",
+  "MotorNo",
+  "motorNo"
+];
+
+const chassisNoKeys = [
+  "vin",
+  "chassisNo",
+  "chassisNumber",
+  "เลขตัวถัง",
+  "เลขตัวรถ",
+  "VIN",
+  "Chassis"
+];
+
 export default function SalesReportsPage() {
   const { user: salesProfile } = useSalesProfile();
   const [query, setQuery] = useState("");
@@ -332,7 +360,21 @@ export default function SalesReportsPage() {
         });
         if (!result.ok) return;
         const data = await result.json();
-        const vehicle = data?.vehicle || null;
+        let vehicle = data?.vehicle || null;
+        if (vehicle && !vehicleValue(vehicle, engineNoKeys)) {
+          const listResult = await fetch(`/api/stock/list?query=${encodeURIComponent(plate)}&limit=10`, {
+            signal: controller.signal,
+            cache: "no-store"
+          });
+          if (listResult.ok) {
+            const listData = await listResult.json();
+            const normalizedPlate = plate.replace(/\s+/g, "").toUpperCase();
+            const fromList = (listData?.vehicles || []).find((item: Record<string, any>) =>
+              String(item?.plate || "").replace(/\s+/g, "").toUpperCase() === normalizedPlate
+            );
+            if (fromList) vehicle = { ...fromList, ...vehicle, engineNo: vehicleValue(vehicle, engineNoKeys) || vehicleValue(fromList, engineNoKeys) };
+          }
+        }
         if (!vehicle) return;
         setForm((current) => {
           if (String(current.plate || "").trim() !== plate) return current;
@@ -342,8 +384,8 @@ export default function SalesReportsPage() {
             model: current.model || vehicle.model || "",
             year: current.year || vehicle.year || "",
             color: current.color || vehicle.color || "",
-            engineNo: current.engineNo || vehicleValue(vehicle, ["engineNo", "engineNumber", "เลขเครื่อง", "เลขเครื่องยนต์", "EngineNo", "EngineNumber"]),
-            chassisNo: current.chassisNo || vehicleValue(vehicle, ["vin", "chassisNo", "chassisNumber", "เลขตัวถัง", "เลขตัวรถ", "VIN", "Chassis"])
+            engineNo: current.engineNo || vehicleValue(vehicle, engineNoKeys),
+            chassisNo: current.chassisNo || vehicleValue(vehicle, chassisNoKeys)
           };
         });
       } catch {

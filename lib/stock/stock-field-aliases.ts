@@ -60,14 +60,14 @@ export const stockFieldAliases: Record<RealStockFieldKey, string[]> = {
   pdiStatus: ["pdiStatus", "สถานะปรับสภาพ PDI", "PDIStatus", "PdiStatus"],
   pdiNote: ["pdiNote", "หมายเหตุ PDI", "หมายเหตุPDI", "PdiNote"],
   vin: ["vin", "เลขตัวถัง", "เลขตัวรถ", "VIN", "Chassis"],
-  engineNo: ["engineNo", "เลขเครื่อง", "EngineNo", "EngineNumber"],
+  engineNo: ["engineNo", "engineNumber", "engine", "Engine", "EngineNo", "Engine No", "Engine No.", "EngineNumber", "Engine Number", "เลขเครื่อง", "เลขเครื่องยนต์", "MotorNo", "Motor No"],
   financeName: ["financeName", "finance", "ไฟแนนซ์", "บริษัทไฟแนนซ์", "Finance"]
 };
 
 export function stockRawValue(vehicle: StockVehicle, key: RealStockFieldKey) {
   const raw = vehicle as StockVehicle & Record<string, unknown>;
   const extra = (raw.extraFields && typeof raw.extraFields === "object" ? (raw.extraFields as Record<string, unknown>) : {}) as Record<string, unknown>;
-  const normalize = (value: string) => value.toLowerCase().replace(/\s+/g, "");
+  const normalize = (value: string) => value.toLowerCase().replace(/\s+/g, "").replace(/[()/_\-.]/g, "");
   for (const alias of stockFieldAliases[key]) {
     const value = raw[alias];
     if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();

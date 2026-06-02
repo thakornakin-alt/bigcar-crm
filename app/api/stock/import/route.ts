@@ -69,6 +69,7 @@ export async function POST(request: Request) {
       result: {
         ...result,
         clientVinRows: rows.filter((row: StockVehicle) => row.vin).length,
+        clientEngineNoRows: rows.filter((row: StockVehicle) => row.engineNo).length,
         clientStatusRows: rows.filter((row: StockVehicle) => row.status).length,
         clientVehicleGroupRows: rows.filter((row: StockVehicle) => row.vehicleGroup).length,
         clientPdiNoteRows: rows.filter((row: StockVehicle) => row.pdiNote).length
