@@ -1056,9 +1056,9 @@ export default function StockExportPage() {
   }, [selectedLineGroupId]);
 
   useEffect(() => {
-    const availableGroups = new Set(vehicleGroupOptions.map((group) => group.name));
+    const availableGroups = new Set(vehicles.map((vehicle) => stockVehicleGroup(vehicle)).filter(Boolean));
     setSelectedVehicleGroups((current) => current.filter((group) => availableGroups.has(group)));
-  }, [vehicleGroupOptions]);
+  }, [vehicles]);
 
   useEffect(() => {
     setVisibleCount(20);
@@ -1508,34 +1508,32 @@ export default function StockExportPage() {
             )}
             <div className="space-y-2">
               <p className="text-sm font-semibold text-white">สถานะ</p>
-              <select
-                value={selectedStatuses[0] || "__all__"}
-                onChange={(event) => setSelectedStatuses(event.target.value === "__all__" ? [] : [event.target.value])}
-                className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-semibold text-white outline-none focus:border-brand"
-              >
-                <option value="__all__">ทั้งหมด</option>
-                {statusOptions.map((status) => (
-                  <option key={status} value={status}>
-                    {status} ({statusCounts[status] || 0})
-                  </option>
-                ))}
-              </select>
+              <MultiFilter
+                label="สถานะ"
+                values={selectedStatuses}
+                options={statusOptions}
+                onToggle={(value) =>
+                  setSelectedStatuses((current) =>
+                    current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
+                  )
+                }
+                onClear={() => setSelectedStatuses([])}
+              />
             </div>
             <div className="space-y-2">
               <p className="text-sm font-semibold text-white">กลุ่มรถยนต์</p>
               {vehicleGroupOptions.length ? (
-                <select
-                  value={selectedVehicleGroups[0] || "__all__"}
-                  onChange={(event) => setSelectedVehicleGroups(event.target.value === "__all__" ? [] : [event.target.value])}
-                  className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-semibold text-white outline-none focus:border-brand"
-                >
-                  <option value="__all__">ทั้งหมด</option>
-                  {vehicleGroupOptions.map((group) => (
-                    <option key={group.name} value={group.name}>
-                      {group.name} ({group.count})
-                    </option>
-                  ))}
-                </select>
+                <MultiFilter
+                  label="กลุ่มรถยนต์"
+                  values={selectedVehicleGroups}
+                  options={vehicleGroupOptions.map((group) => group.name)}
+                  onToggle={(value) =>
+                    setSelectedVehicleGroups((current) =>
+                      current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
+                    )
+                  }
+                  onClear={() => setSelectedVehicleGroups([])}
+                />
               ) : (
                 <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft">
                   ยังไม่พบกลุ่มรถยนต์ในสต็อก
@@ -2218,6 +2216,59 @@ function FilterAccordion({ title, children, defaultOpen = false }: { title: stri
       </button>
       {open ? <div className="space-y-3 border-t border-line p-3">{children}</div> : null}
     </section>
+  );
+}
+
+function MultiChoicePills({
+  values,
+  options,
+  onChange
+}: {
+  values: string[];
+  options: Array<{ value: string; label: string; count: number }>;
+  onChange: (values: string[]) => void;
+}) {
+  function toggle(value: string) {
+    onChange(values.includes(value) ? values.filter((item) => item !== value) : [...values, value]);
+  }
+
+  return (
+    <div className="rounded-lg border border-line bg-[#0b0d11] p-2">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => onChange([])}
+          className={`min-h-9 rounded-lg border px-3 text-sm font-black transition ${
+            values.length === 0 ? "border-brand bg-brand text-ink" : "border-line bg-panel text-soft"
+          }`}
+        >
+          ทั้งหมด
+        </button>
+        {values.length ? (
+          <span className="text-xs font-bold text-brand">เลือก {values.length.toLocaleString("th-TH")} รายการ</span>
+        ) : (
+          <span className="text-xs text-soft">แตะเพื่อเลือกได้หลายรายการ</span>
+        )}
+      </div>
+      <div className="flex max-h-36 flex-wrap gap-2 overflow-y-auto pr-1">
+        {options.map((option) => {
+          const active = values.includes(option.value);
+          return (
+            <label
+              key={option.value}
+              className={`flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3 text-left text-sm font-bold transition ${
+                active ? "border-brand bg-brand/15 text-brand" : "border-line bg-panel text-white"
+              }`}
+            >
+              <input type="checkbox" checked={active} onChange={() => toggle(option.value)} className="h-4 w-4 accent-brand" />
+              <span>
+                {option.label} <span className={active ? "text-brand/80" : "text-soft"}>({option.count.toLocaleString("th-TH")})</span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
