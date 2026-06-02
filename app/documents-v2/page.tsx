@@ -54,6 +54,23 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
   return (await response.blob()) as T;
 }
 
+function safeFilePart(value: unknown) {
+  return String(value || "")
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, "-")
+    .slice(0, 80);
+}
+
+function downloadObjectUrl(url: string, fileName: string) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 export default function DocumentsV2Page() {
   const templates = getDocumentV2Templates();
   const [fields, setFields] = useState<FieldItem[]>([]);
@@ -342,6 +359,12 @@ export default function DocumentsV2Page() {
       if (pngUrl) URL.revokeObjectURL(pngUrl);
       const url = URL.createObjectURL(pngBlob);
       setPngUrl(url);
+      const fileBase = [
+        "sale-contract",
+        safeFilePart(sampleData.customerName),
+        safeFilePart(sampleData.plateNo)
+      ].filter(Boolean).join("-");
+      downloadObjectUrl(url, `${fileBase || "document-v2"}.png`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Export PNG ไม่สำเร็จ");
     } finally {
@@ -394,7 +417,7 @@ export default function DocumentsV2Page() {
         </button>
         <button onClick={preview} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">{loading ? <Loader2 className="inline animate-spin" size={16} /> : <Eye className="inline" size={16} />} Preview PDF</button>
         <button onClick={previewProbe} disabled={loading} className="rounded border border-yellow-300/40 px-4 py-2 text-yellow-200">ทดสอบ Field</button>
-        <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50"><ImageIcon className="inline" size={16} /> Export PNG</button>
+        <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50"><ImageIcon className="inline" size={16} /> เซฟ PNG</button>
       </div>
       <div className="text-xs text-gray-300 space-y-1">
         <div>

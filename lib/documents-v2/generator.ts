@@ -55,6 +55,19 @@ function setTextIfExists(
   }
 }
 
+function makeFieldWidgetsInvisible(field: ReturnType<ReturnType<PDFDocument["getForm"]>["getFields"]>[number]) {
+  try {
+    const widgets = field.acroField.getWidgets();
+    widgets.forEach((widget) => {
+      widget.getOrCreateBorderStyle().setWidth(0);
+      const appearance = widget.getOrCreateAppearanceCharacteristics();
+      appearance.setBorderColor([]);
+    });
+  } catch {
+    // Some PDFs have unusual field dictionaries. Keep generation alive.
+  }
+}
+
 export async function generateDocumentV2(data: DocumentV2Data, templateId?: string): Promise<Uint8Array> {
   throw new Error("internal: use generateDocumentV2WithBytes");
 }
@@ -71,7 +84,12 @@ export async function generateDocumentV2WithBytes(
   const form = pdf.getForm();
   const fields = form.getFields();
   if (!fields.length) throw new Error("PDF ไม่มี AcroForm fields");
-  form.updateFieldAppearances(thaiFont);
+  fields.forEach((field) => {
+    makeFieldWidgetsInvisible(field);
+    try {
+      form.getTextField(field.getName()).setText("");
+    } catch {}
+  });
 
   const active: DocumentV2FieldMapping = {};
   for (const [pdfField, mappedKey] of Object.entries(mapping || {})) {
@@ -90,6 +108,7 @@ export async function generateDocumentV2WithBytes(
     }
     setTextIfExists(form, [pdfField], value, thaiFont);
   }
+  form.updateFieldAppearances(thaiFont);
 
   form.flatten();
   return pdf.save();
