@@ -1,5 +1,7 @@
 export type DocumentV2TemplateId = "contract-field" | "temporary-receipt";
 
+export const DOCUMENT_V2_TEMPLATE_REGISTRY_VERSION = "2026-06-03-1";
+
 export type DocumentV2Template = {
   id: DocumentV2TemplateId;
   title: string;
