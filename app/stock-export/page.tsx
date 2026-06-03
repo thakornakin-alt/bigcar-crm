@@ -6,7 +6,6 @@ import {
   ActiveFilterTag,
   BottomSheet,
   FilterChip,
-  NativeAppHeader,
   NativeAppShell,
   NativeBadge,
   NativeButton,
@@ -1330,12 +1329,6 @@ export default function StockExportPage() {
 
   return (
     <NativeAppShell className="max-w-5xl pb-28">
-      <NativeAppHeader
-        title="Stock Studio"
-        subtitle="Live Board Creator"
-        actions={<NativeBadge>{exportVehicles.length.toLocaleString("th-TH")} คันที่เลือก</NativeBadge>}
-      />
-
       {(message || error) && (
         <div
           className={`mb-4 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${
