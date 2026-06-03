@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, Eye, FileText, Image as ImageIcon, Loader2 } from "lucide-react";
+import { Download, Eye, ExternalLink, FileText, Image as ImageIcon, Loader2, Share2 } from "lucide-react";
 import type { ReportHistoryItem } from "@/lib/types";
 import { DOC_V2_TEMPLATE_ID } from "@/lib/documents-v2/types";
 import { documentTemplatesV2, getDocumentV2Templates, type DocumentV2TemplateId } from "@/lib/documents-v2/template-config";
@@ -79,6 +79,7 @@ export default function DocumentsV2Page() {
   const [selectedReportId, setSelectedReportId] = useState("");
   const [previewUrl, setPreviewUrl] = useState("");
   const [pngUrl, setPngUrl] = useState("");
+  const [pngBlob, setPngBlob] = useState<Blob | null>(null);
   const [pngFileName, setPngFileName] = useState("document-v2.png");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -358,6 +359,8 @@ export default function DocumentsV2Page() {
       canvas.width = viewport.width;
       canvas.height = viewport.height;
       await page.render({ canvasContext: ctx, viewport }).promise;
+      const nextPngBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+      if (!nextPngBlob) throw new Error("แปลง PNG ไม่สำเร็จ");
       if (pngUrl.startsWith("blob:")) URL.revokeObjectURL(pngUrl);
       const fileBase = [
         "sale-contract",
@@ -365,8 +368,9 @@ export default function DocumentsV2Page() {
         safeFilePart(sampleData.plateNo)
       ].filter(Boolean).join("-");
       const fileName = `${fileBase || "document-v2"}.png`;
-      const url = canvas.toDataURL("image/png");
+      const url = URL.createObjectURL(nextPngBlob);
       setPngUrl(url);
+      setPngBlob(nextPngBlob);
       setPngFileName(fileName);
       downloadObjectUrl(url, fileName);
     } catch (e) {
@@ -374,6 +378,40 @@ export default function DocumentsV2Page() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function sharePng() {
+    if (!pngBlob) {
+      setError("ยังไม่มีไฟล์ PNG กรุณากดเซฟ PNG ก่อน");
+      return;
+    }
+    try {
+      const file = new File([pngBlob], pngFileName, { type: "image/png" });
+      const nav = navigator as Navigator & {
+        canShare?: (data: { files?: File[] }) => boolean;
+        share?: (data: { files?: File[]; title?: string; text?: string }) => Promise<void>;
+      };
+      if (nav.share && (!nav.canShare || nav.canShare({ files: [file] }))) {
+        await nav.share({
+          files: [file],
+          title: "สัญญาซื้อขายรถยนต์",
+          text: "เอกสาร PNG จาก BIG CAR CRM"
+        });
+        return;
+      }
+      if (pngUrl) window.open(pngUrl, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      setError(e instanceof Error ? e.message : "แชร์/บันทึกรูปไม่สำเร็จ");
+    }
+  }
+
+  function openPng() {
+    if (!pngUrl) {
+      setError("ยังไม่มีไฟล์ PNG กรุณากดเซฟ PNG ก่อน");
+      return;
+    }
+    window.open(pngUrl, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -555,10 +593,18 @@ export default function DocumentsV2Page() {
         <div className="rounded border border-white/10 p-3">
           <h2 className="mb-2 font-semibold">PNG</h2>
           <img src={pngUrl} alt="PNG preview" className="max-w-full rounded bg-white" />
-          <p className="mt-2 text-xs text-gray-300">ถ้ามือถือไม่ดาวน์โหลดอัตโนมัติ ให้กดปุ่มด้านล่าง หรือกดค้างที่รูปเพื่อบันทึก</p>
-          <a href={pngUrl} download={pngFileName} className="mt-2 inline-flex items-center gap-2 rounded bg-emerald-500 px-3 py-2 font-semibold text-black">
-            <Download size={16} /> Download PNG
-          </a>
+          <p className="mt-2 text-xs text-gray-300">บน iPhone ถ้าปุ่ม Download ไม่เข้า Photos ให้กด “แชร์/บันทึกรูป” แล้วเลือก Save Image</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <a href={pngUrl} download={pngFileName} className="inline-flex items-center gap-2 rounded bg-emerald-500 px-3 py-2 font-semibold text-black">
+              <Download size={16} /> Download PNG
+            </a>
+            <button onClick={sharePng} className="inline-flex items-center gap-2 rounded border border-white/20 px-3 py-2 font-semibold text-white">
+              <Share2 size={16} /> แชร์/บันทึกรูป
+            </button>
+            <button onClick={openPng} className="inline-flex items-center gap-2 rounded border border-white/20 px-3 py-2 font-semibold text-white">
+              <ExternalLink size={16} /> เปิดรูปเต็ม
+            </button>
+          </div>
         </div>
       ) : null}
     </div>
