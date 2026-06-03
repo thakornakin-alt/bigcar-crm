@@ -17,6 +17,10 @@ type FieldsDebug = {
   fieldNames: string[];
 };
 
+function isNamedPdfField(name: string) {
+  return !/^fill_\d+$/i.test(name) && !/^undefined_\d+$/i.test(name);
+}
+
 const editableFieldOrder: Array<keyof ResolvedDocumentV2Data> = [
   "contractDate",
   "contractDateDay",
@@ -111,6 +115,12 @@ function downloadObjectUrl(url: string, fileName: string) {
   link.remove();
 }
 
+function formatDatePartValue(value: string, fallback: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return fallback;
+  return raw;
+}
+
 export default function DocumentsV2Page() {
   const templates = getDocumentV2Templates();
   const [fields, setFields] = useState<FieldItem[]>([]);
@@ -157,6 +167,8 @@ export default function DocumentsV2Page() {
     [resolvedData, selectedReport]
   );
   const reportRawKeys = useMemo(() => Object.keys(rawReportData).sort((a, b) => a.localeCompare(b)), [rawReportData]);
+  const namedFields = useMemo(() => fields.filter((field) => isNamedPdfField(field.name)), [fields]);
+  const unnamedFields = useMemo(() => fields.filter((field) => !isNamedPdfField(field.name)), [fields]);
   const mappedFieldCount = useMemo(
     () => Object.values(mapping).filter(Boolean).length,
     [mapping]
@@ -209,6 +221,8 @@ export default function DocumentsV2Page() {
       try {
         const mappingRes = await api<{ ok: boolean; mapping: DocumentV2FieldMapping }>(`/api/documents-v2/mapping?templateId=${encodeURIComponent(templateId)}`);
         setMapping(mappingRes.mapping || {});
+        setSaveState("saved");
+        setLastSavedAt(new Date().toLocaleTimeString("th-TH"));
       } catch {}
       setIsTemplateReady(true);
     } catch (e) {
@@ -635,21 +649,62 @@ export default function DocumentsV2Page() {
           </div>
           <p className="mb-3 text-xs text-gray-300">แตะช่องด้านล่างเพื่อแก้ค่าก่อนสร้าง Preview / PNG ได้เลย</p>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {editableFieldOrder.map((key) => (
-              <label key={key} className="space-y-1">
-                <span className="block text-xs text-gray-300">{keyLabel[key as DocumentV2FieldKey] || key}</span>
-                {(() => {
-                  const editableSource = (editableData || sampleData || {}) as Record<string, string>;
-                  return (
-                <input
-                  value={String(editableSource[String(key)] || "")}
-                  onChange={(e) => updateEditableField(key, e.target.value)}
-                  className="w-full rounded bg-black/40 p-2 text-sm"
-                />
-                  );
-                })()}
-              </label>
-            ))}
+            {editableFieldOrder.map((key) => {
+              const editableSource = (editableData || sampleData || {}) as Record<string, string>;
+              const currentValue = String(editableSource[String(key)] || "");
+              const isDatePart = String(key).endsWith("Day") || String(key).endsWith("Month") || String(key).endsWith("Year");
+              const isDateHead = String(key) === "contractDate" || String(key) === "currentDate";
+              if (isDatePart) {
+                return null;
+              }
+              if (isDateHead) {
+                const base = String(key).replace(/Date$/, "Date") as "contractDate" | "currentDate";
+                const dayKey = `${base}Day` as keyof ResolvedDocumentV2Data;
+                const monthKey = `${base}Month` as keyof ResolvedDocumentV2Data;
+                const yearKey = `${base}Year` as keyof ResolvedDocumentV2Data;
+                return (
+                  <div key={key} className="space-y-1 md:col-span-2">
+                    <span className="block text-xs text-gray-300">{keyLabel[key as DocumentV2FieldKey] || key}</span>
+                    <div className="grid grid-cols-[1fr_auto_1fr_auto_1.4fr] items-center gap-2">
+                      <input
+                        value={formatDatePartValue(String(editableSource[String(dayKey)] || ""), "XX")}
+                        onChange={(e) => updateEditableField(dayKey, e.target.value)}
+                        placeholder="XX"
+                        inputMode="numeric"
+                        className="w-full min-w-0 rounded bg-black/40 p-2 text-center text-sm tracking-[0.25em]"
+                      />
+                      <span className="text-center text-xs text-gray-500">/</span>
+                      <input
+                        value={formatDatePartValue(String(editableSource[String(monthKey)] || ""), "XX")}
+                        onChange={(e) => updateEditableField(monthKey, e.target.value)}
+                        placeholder="XX"
+                        inputMode="numeric"
+                        className="w-full min-w-0 rounded bg-black/40 p-2 text-center text-sm tracking-[0.25em]"
+                      />
+                      <span className="text-center text-xs text-gray-500">/</span>
+                      <input
+                        value={formatDatePartValue(String(editableSource[String(yearKey)] || ""), "XXXX")}
+                        onChange={(e) => updateEditableField(yearKey, e.target.value)}
+                        placeholder="XXXX"
+                        inputMode="numeric"
+                        className="w-full min-w-0 rounded bg-black/40 p-2 text-center text-sm tracking-[0.25em]"
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-500">แสดงเป็นวัน / เดือน / ปี แบบแยกช่อง เพื่อคุม layout ให้คงที่</p>
+                  </div>
+                );
+              }
+              return (
+                <label key={key} className="space-y-1">
+                  <span className="block text-xs text-gray-300">{keyLabel[key as DocumentV2FieldKey] || key}</span>
+                  <input
+                    value={currentValue}
+                    onChange={(e) => updateEditableField(key, e.target.value)}
+                    className="w-full rounded bg-black/40 p-2 text-sm"
+                  />
+                </label>
+              );
+            })}
           </div>
         </div>
       ) : null}
@@ -670,7 +725,24 @@ export default function DocumentsV2Page() {
             {JSON.stringify(debug, null, 2)}
           </pre>
         ) : null}
-        <pre className="max-h-56 overflow-auto text-xs text-gray-300">{JSON.stringify(fields, null, 2)}</pre>
+        {fields.length ? (
+          <div className="mb-2 rounded border border-emerald-400/20 bg-emerald-500/5 p-2 text-xs text-emerald-100">
+            พบฟิลด์ทั้งหมด {fields.length} ช่อง · ฟิลด์ชื่อจริง {namedFields.length} ช่อง · field ที่อ่านได้จากฟอร์มนี้:{" "}
+            {fields
+              .filter((f) => ["Model_Year", "Color", "DATE_DAY", "DATE_month", "DATE_Year", "Brand"].includes(f.name))
+              .map((f) => f.name)
+              .join(", ") || "ยังไม่แสดงในชุดนี้"}
+          </div>
+        ) : null}
+        {namedFields.length ? (
+          <pre className="max-h-56 overflow-auto text-xs text-gray-300">{JSON.stringify(namedFields, null, 2)}</pre>
+        ) : null}
+        {unnamedFields.length ? (
+          <details className="mt-2 rounded border border-white/10 bg-black/20 p-2 text-xs text-gray-400">
+            <summary className="cursor-pointer">Unnamed widgets ({unnamedFields.length})</summary>
+            <pre className="mt-2 max-h-56 overflow-auto text-xs text-gray-400">{JSON.stringify(unnamedFields, null, 2)}</pre>
+          </details>
+        ) : null}
       </div>
 
       {previewUrl ? (
