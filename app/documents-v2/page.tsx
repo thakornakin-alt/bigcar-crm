@@ -72,32 +72,6 @@ function downloadObjectUrl(url: string, fileName: string) {
   link.remove();
 }
 
-async function saveBlobToDevice(blob: Blob, fileName: string) {
-  const win = window as Window & {
-    showSaveFilePicker?: (options?: {
-      suggestedName?: string;
-      types?: Array<{ description?: string; accept: Record<string, string[]> }>;
-    }) => Promise<FileSystemFileHandle>;
-  };
-  if (win.showSaveFilePicker) {
-    const handle = await win.showSaveFilePicker({
-      suggestedName: fileName,
-      types: [{ description: "PNG Image", accept: { "image/png": [".png"] } }]
-    });
-    const writable = await handle.createWritable();
-    await writable.write(blob);
-    await writable.close();
-    return;
-  }
-
-  const url = URL.createObjectURL(blob);
-  try {
-    downloadObjectUrl(url, fileName);
-  } finally {
-    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-  }
-}
-
 export default function DocumentsV2Page() {
   const templates = getDocumentV2Templates();
   const [fields, setFields] = useState<FieldItem[]>([]);
@@ -369,6 +343,7 @@ export default function DocumentsV2Page() {
     try {
       setLoading(true);
       setError("");
+      const popup = window.open("", "_blank", "noopener,noreferrer");
       const blob = await api<Blob>("/api/documents-v2/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -400,7 +375,11 @@ export default function DocumentsV2Page() {
       setPngUrl(url);
       setPngBlob(nextPngBlob);
       setPngFileName(fileName);
-      await saveBlobToDevice(nextPngBlob, fileName);
+      if (popup) {
+        popup.location.href = url;
+      } else {
+        downloadObjectUrl(url, fileName);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Export PNG ไม่สำเร็จ");
     } finally {
@@ -427,7 +406,7 @@ export default function DocumentsV2Page() {
         });
         return;
       }
-      await saveBlobToDevice(pngBlob, pngFileName);
+      if (pngUrl) window.open(pngUrl, "_blank", "noopener,noreferrer");
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : "แชร์/บันทึกรูปไม่สำเร็จ");
