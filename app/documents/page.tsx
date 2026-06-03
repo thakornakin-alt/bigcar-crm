@@ -9,7 +9,13 @@ export default function DocumentsPage() {
   const [view, setView] = useState<"download" | "generate">("download");
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      <div className="mx-auto w-full max-w-3xl px-1 pt-1">
+        <p className="text-xs font-black uppercase tracking-[0.22em] text-brand">Document Center</p>
+        <h1 className="mt-2 text-3xl font-black text-white">งานเอกสาร</h1>
+        <p className="mt-2 text-sm leading-6 text-soft">สลับดูเอกสารเปล่าหรือสร้างเอกสารได้จากหน้านี้</p>
+      </div>
+
       <div className="mx-auto grid w-full max-w-3xl grid-cols-2 gap-3 rounded-2xl border border-line bg-[#0b0d11] p-3">
         <button
           type="button"
