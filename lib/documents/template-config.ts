@@ -11,7 +11,7 @@ export const documentTemplates: DocumentTemplateConfig[] = [
     title: "รายละเอียดการชำระเงิน / ใบรับเงินชั่วคราว",
     description: "กรอกข้อมูลลงฟอร์ม PDF ใบรับเงินชั่วคราว",
     fileName: "temporary-receipt.pdf",
-    backgroundPath: "public/document-templates/payment-receipt.pdf",
+    backgroundPath: "public/document-templates/temporary-receipt.pdf",
     fields: {
       customerName: { page: 1, x: 84, y: 692, fontSize: 10, pdfFieldName: "CUSTOMER_NAME" },
       idCard: { page: 1, x: 132, y: 672, fontSize: 10, pdfFieldName: "CUSTOMER_ID_CARD" },

@@ -1,4 +1,4 @@
-export type DocumentV2TemplateId = "contract-field";
+export type DocumentV2TemplateId = "contract-field" | "temporary-receipt";
 
 export type DocumentV2Template = {
   id: DocumentV2TemplateId;
@@ -16,6 +16,14 @@ export const documentTemplatesV2: Record<DocumentV2TemplateId, DocumentV2Templat
     fileName: "contract-field.pdf",
     path: "/document-templates/contract-field.pdf",
     mappingLocked: true,
+    hideFieldBorders: false
+  },
+  "temporary-receipt": {
+    id: "temporary-receipt",
+    title: "รายละเอียดการชำระเงิน / ใบเสร็จชั่วคราว",
+    fileName: "temporary-receipt.pdf",
+    path: "/document-templates/temporary-receipt.pdf",
+    mappingLocked: false,
     hideFieldBorders: false
   }
 };
