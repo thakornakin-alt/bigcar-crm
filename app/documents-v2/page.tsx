@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, Eye, ExternalLink, FileText, Image as ImageIcon, Loader2, Share2 } from "lucide-react";
+import { Download, Eye, FileText, Image as ImageIcon, Loader2, Share2 } from "lucide-react";
 import type { ReportHistoryItem } from "@/lib/types";
 import { DOC_V2_TEMPLATE_ID } from "@/lib/documents-v2/types";
 import { documentTemplatesV2, getDocumentV2Templates, type DocumentV2TemplateId } from "@/lib/documents-v2/template-config";
@@ -70,6 +70,32 @@ function downloadObjectUrl(url: string, fileName: string) {
   document.body.appendChild(link);
   link.click();
   link.remove();
+}
+
+async function saveBlobToDevice(blob: Blob, fileName: string) {
+  const win = window as Window & {
+    showSaveFilePicker?: (options?: {
+      suggestedName?: string;
+      types?: Array<{ description?: string; accept: Record<string, string[]> }>;
+    }) => Promise<FileSystemFileHandle>;
+  };
+  if (win.showSaveFilePicker) {
+    const handle = await win.showSaveFilePicker({
+      suggestedName: fileName,
+      types: [{ description: "PNG Image", accept: { "image/png": [".png"] } }]
+    });
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return;
+  }
+
+  const url = URL.createObjectURL(blob);
+  try {
+    downloadObjectUrl(url, fileName);
+  } finally {
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
 }
 
 export default function DocumentsV2Page() {
@@ -352,12 +378,14 @@ export default function DocumentsV2Page() {
       pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
       const pdf = await pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
       const page = await pdf.getPage(1);
-      const viewport = page.getViewport({ scale: 2 });
+      const viewport = page.getViewport({ scale: 3 });
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Canvas ไม่พร้อม");
       canvas.width = viewport.width;
       canvas.height = viewport.height;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
       await page.render({ canvasContext: ctx, viewport }).promise;
       const nextPngBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
       if (!nextPngBlob) throw new Error("แปลง PNG ไม่สำเร็จ");
@@ -372,7 +400,7 @@ export default function DocumentsV2Page() {
       setPngUrl(url);
       setPngBlob(nextPngBlob);
       setPngFileName(fileName);
-      downloadObjectUrl(url, fileName);
+      await saveBlobToDevice(nextPngBlob, fileName);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Export PNG ไม่สำเร็จ");
     } finally {
@@ -399,19 +427,11 @@ export default function DocumentsV2Page() {
         });
         return;
       }
-      if (pngUrl) window.open(pngUrl, "_blank", "noopener,noreferrer");
+      await saveBlobToDevice(pngBlob, pngFileName);
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : "แชร์/บันทึกรูปไม่สำเร็จ");
     }
-  }
-
-  function openPng() {
-    if (!pngUrl) {
-      setError("ยังไม่มีไฟล์ PNG กรุณากดเซฟ PNG ก่อน");
-      return;
-    }
-    window.open(pngUrl, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -600,9 +620,6 @@ export default function DocumentsV2Page() {
             </a>
             <button onClick={sharePng} className="inline-flex items-center gap-2 rounded border border-white/20 px-3 py-2 font-semibold text-white">
               <Share2 size={16} /> แชร์/บันทึกรูป
-            </button>
-            <button onClick={openPng} className="inline-flex items-center gap-2 rounded border border-white/20 px-3 py-2 font-semibold text-white">
-              <ExternalLink size={16} /> เปิดรูปเต็ม
             </button>
           </div>
         </div>
