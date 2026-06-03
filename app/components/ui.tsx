@@ -29,7 +29,6 @@ export function PageTitle({
 }) {
   return (
     <>
-      <GlobalNav />
       <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
@@ -236,7 +235,6 @@ export function AppHeader({
 }) {
   return (
     <>
-      <GlobalNav />
       <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
@@ -294,7 +292,6 @@ export function NativeAppHeader({
 }) {
   return (
     <>
-      <GlobalNav />
       <header className="mb-5 overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,0.16),transparent_34%),linear-gradient(135deg,#101720,#06090e)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">

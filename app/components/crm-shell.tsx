@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ReactNode } from "react";
 import { BarChart3, Calculator, Car, FileText, Home, Radio, Shield, UploadCloud, Users, Wrench } from "lucide-react";
-import { GlobalNav } from "@/app/components/ui";
 import { CrmUserProfile, fullName, roleLabels } from "@/lib/crm-core";
 
 const navItems = [
@@ -32,7 +31,6 @@ export function CrmShell({
 }) {
   return (
     <main className="mx-auto min-h-screen w-full max-w-6xl px-4 pb-24 pt-5 sm:px-6">
-      <GlobalNav />
       <div className="lg:grid lg:grid-cols-[230px_1fr] lg:gap-5">
       <aside className="mb-4 hidden rounded-lg border border-line bg-panel p-4 shadow-glow lg:block">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
