@@ -20,7 +20,7 @@ export const documentTemplatesV2: Record<DocumentV2TemplateId, DocumentV2Templat
   },
   "temporary-receipt": {
     id: "temporary-receipt",
-    title: "รายละเอียดการชำระเงิน / ใบเสร็จชั่วคราว",
+    title: "ใบเสร็จชั่วคราว",
     fileName: "temporary-receipt.pdf",
     path: "/document-templates/temporary-receipt.pdf",
     mappingLocked: false,
