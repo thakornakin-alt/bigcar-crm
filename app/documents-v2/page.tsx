@@ -247,6 +247,9 @@ export default function DocumentsV2Page() {
     });
     setReports(filtered);
     setSelectedReportId(filtered[0]?.id || "");
+    setPreviewUrl("");
+    setPngUrl("");
+    setPngBlob(null);
     setReportsLoaded(true);
     if (!filtered.length) {
       setError("ไม่พบรายงานขายในระบบ");
@@ -283,6 +286,14 @@ export default function DocumentsV2Page() {
     loadResolvedData(selectedReport);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedReportId, templateId]);
+
+  useEffect(() => {
+    setPreviewUrl("");
+    if (pngUrl) URL.revokeObjectURL(pngUrl);
+    setPngUrl("");
+    setPngBlob(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templateId, selectedReportId]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -552,6 +563,10 @@ export default function DocumentsV2Page() {
             setDebug(null);
             setError("");
             setIsTemplateReady(false);
+            setPreviewUrl("");
+            if (pngUrl) URL.revokeObjectURL(pngUrl);
+            setPngUrl("");
+            setPngBlob(null);
           }}
           className="w-full rounded bg-black/40 p-2"
         >
@@ -564,13 +579,13 @@ export default function DocumentsV2Page() {
       </div>
 
       {!settingsMode ? (
-        <div className="grid grid-cols-2 gap-2 rounded border border-white/10 p-3">
-          <button onClick={() => generatePdf(true)} disabled={loading || !canRunGenerate} className="rounded bg-emerald-500 px-4 py-2 font-semibold text-black disabled:opacity-50">
-            <Download className="inline" size={16} /> เซฟ PDF
-          </button>
+        <div className="grid grid-cols-1 gap-2 rounded border border-white/10 p-3 sm:grid-cols-2">
           <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">
             <ImageIcon className="inline" size={16} /> เซฟ PNG
           </button>
+          <div className="rounded border border-white/10 px-4 py-2 text-sm text-gray-300">
+            Preview จะเปิดอัตโนมัติเมื่อ template และข้อมูลพร้อม
+          </div>
         </div>
       ) : null}
 
