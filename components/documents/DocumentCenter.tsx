@@ -429,7 +429,7 @@ export function DocumentCenter() {
         subtitle="ดาวน์โหลดเอกสารและเปิดสร้างเอกสารได้ทันที"
         actions={
           <div className="flex flex-wrap gap-2">
-            <TopMenuButton href="/documents-v2" icon={<FileText size={18} />}>สร้างเอกสาร</TopMenuButton>
+            <TopMenuButton href="/documents#document-generator-v2" icon={<FileText size={18} />}>สร้างเอกสาร</TopMenuButton>
             <TopMenuButton href="/documents/templates" icon={<FileText size={18} />}>ตั้งค่า Template</TopMenuButton>
           </div>
         }
@@ -495,8 +495,8 @@ export function DocumentCenter() {
                 เลือก Template แล้วระบบจะโหลดข้อมูลและ Preview ให้อัตโนมัติ เพื่อใช้งานจริงทันที
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <a href="/documents-v2" className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand px-4 font-black text-ink">
-                  เปิดหน้า V2
+                <a href="/documents#document-generator-v2" className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand px-4 font-black text-ink">
+                  ไปส่วนสร้างเอกสาร
                 </a>
                 <a href="/documents/templates" className="inline-flex min-h-11 items-center justify-center rounded-lg border border-line px-4 font-bold text-white">
                   ตั้งค่า Template

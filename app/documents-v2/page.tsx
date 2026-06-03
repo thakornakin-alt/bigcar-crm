@@ -121,7 +121,7 @@ function formatDatePartValue(value: string, fallback: string) {
   return raw;
 }
 
-export default function DocumentsV2Page() {
+export function DocumentGeneratorV2() {
   const templates = getDocumentV2Templates();
   const [fields, setFields] = useState<FieldItem[]>([]);
   const [reports, setReports] = useState<ReportHistoryItem[]>([]);
@@ -583,9 +583,6 @@ export default function DocumentsV2Page() {
           <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">
             <ImageIcon className="inline" size={16} /> เซฟ PNG
           </button>
-          <div className="rounded border border-white/10 px-4 py-2 text-sm text-gray-300">
-            Preview จะเปิดอัตโนมัติเมื่อ template และข้อมูลพร้อม
-          </div>
         </div>
       ) : null}
 
@@ -844,4 +841,8 @@ export default function DocumentsV2Page() {
       ) : null}
     </div>
   );
+}
+
+export default function DocumentsV2Page() {
+  return <DocumentGeneratorV2 />;
 }
