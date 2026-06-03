@@ -29,6 +29,7 @@ const editableFieldOrder: Array<keyof ResolvedDocumentV2Data> = [
   "customerName",
   "customerAddress",
   "idCard",
+  "phone",
   "plateNo",
   "brand",
   "model",
@@ -36,10 +37,13 @@ const editableFieldOrder: Array<keyof ResolvedDocumentV2Data> = [
   "color",
   "engineNo",
   "chassisNo",
+  "bookingNo",
   "sellPrice",
   "deposit",
   "remainingAmount",
-  "saleName"
+  "financeCompany",
+  "saleName",
+  "approverName"
 ];
 
 const mappingOptions: Array<{ key: DocumentV2FieldKey; label: string }> = [
@@ -54,6 +58,7 @@ const mappingOptions: Array<{ key: DocumentV2FieldKey; label: string }> = [
   { key: "customerName", label: "ชื่อลูกค้า" },
   { key: "customerAddress", label: "ที่อยู่ลูกค้า" },
   { key: "idCard", label: "เลขบัตรประชาชน" },
+  { key: "phone", label: "เบอร์โทร" },
   { key: "plateNo", label: "ทะเบียน" },
   { key: "brand", label: "ยี่ห้อรถ" },
   { key: "model", label: "รุ่นรถ" },
@@ -61,10 +66,13 @@ const mappingOptions: Array<{ key: DocumentV2FieldKey; label: string }> = [
   { key: "color", label: "สี" },
   { key: "engineNo", label: "เลขเครื่อง" },
   { key: "chassisNo", label: "เลขตัวถัง" },
+  { key: "bookingNo", label: "เลขที่ใบจอง" },
   { key: "sellPrice", label: "ราคาขาย" },
   { key: "deposit", label: "เงินจอง" },
   { key: "remainingAmount", label: "ยอดคงเหลือ" },
-  { key: "saleName", label: "ชื่อเซลล์" }
+  { key: "financeCompany", label: "ไฟแนนซ์" },
+  { key: "saleName", label: "ชื่อเซลล์" },
+  { key: "approverName", label: "ผู้อนุมัติ" }
 ];
 
 const keyLabel: Record<DocumentV2FieldKey, string> = Object.fromEntries(

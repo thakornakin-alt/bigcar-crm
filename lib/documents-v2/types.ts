@@ -19,6 +19,7 @@ export type DocumentV2Data = {
   customerName: string;
   customerAddress: string;
   idCard: string;
+  phone: string;
   plateNo: string;
   brand: string;
   model: string;
@@ -26,10 +27,13 @@ export type DocumentV2Data = {
   color: string;
   engineNo: string;
   chassisNo: string;
+  bookingNo: string;
   sellPrice: string;
   deposit: string;
   remainingAmount: string;
+  financeCompany: string;
   saleName: string;
+  approverName: string;
 };
 
 function pick(obj: Record<string, any>, ...keys: string[]) {
@@ -136,6 +140,8 @@ export function mapBookingToDocumentV2(report?: ReportHistoryItem | null): Docum
       ]),
     idCard: pick(raw, "idCard", "citizenId", "taxId")
       || extractFromReportText(reportText, [/เลขบัตรประชาชน\s*[:：]\s*([0-9\-]+)/i]),
+    phone: pick(raw, "phone", "tel", "telephone", "mobile", "customerPhone")
+      || extractFromReportText(reportText, [/โทรศัพท์\s*[:：]\s*([0-9\-]+)/i, /เบอร์โทร\s*[:：]\s*([0-9\-]+)/i]),
     plateNo: pick(raw, "plate", "licensePlate", "plateNo")
       || extractFromReportText(reportText, [/ทะเบียนรถ\s*[:：]\s*(.+)/i, /ทะเบียน\s*[:：]\s*(.+)/i]),
     brand: pick(raw, "brand", "carBrand")
@@ -148,10 +154,15 @@ export function mapBookingToDocumentV2(report?: ReportHistoryItem | null): Docum
       || extractFromReportText(reportText, [/เลขเครื่อง(?:ยนต์)?\s*[:：]\s*([^\r\n]+)/i]),
     chassisNo: pick(raw, "chassisNo", "vin", "chassisNumber", "เลขตัวถัง", "เลขตัวรถ", "VIN", "Chassis")
       || extractFromReportText(reportText, [/เลขตัวถัง\s*[:：]\s*([^\r\n]+)/i, /VIN\s*[:：]\s*([^\r\n]+)/i]),
+    bookingNo: pick(raw, "bookingNo", "booking_no", "bookingNumber", "bookingRef")
+      || extractFromReportText(reportText, [/เลขที่ใบจอง\s*[:：]\s*([^\r\n]+)/i, /booking\s*no\.?\s*[:：]\s*([^\r\n]+)/i]),
     sellPrice: normalizeMoney(pick(raw, "salePrice", "finalPrice", "netPayment", "carPrice") || rawFinal),
     deposit: normalizeMoney(String(rawDeposit || "")),
     remainingAmount: remaining > 0 ? remaining.toLocaleString("th-TH") : "",
+    financeCompany: pick(raw, "financeCompany", "finance", "bank", "ไฟแนนซ์"),
     saleName: pick(raw, "saleName", "salesName", "ownerName")
       || extractFromReportText(reportText, [/เซลล์เจ้าของเคส\s*[:：]\s*(.+)/i, /ผู้ขาย\s*[:：]\s*(.+)/i])
+    ,
+    approverName: pick(raw, "approverName", "managerName", "approvedBy")
   };
 }

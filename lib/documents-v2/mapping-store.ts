@@ -14,6 +14,7 @@ export type DocumentV2FieldKey =
   | "customerName"
   | "customerAddress"
   | "idCard"
+  | "phone"
   | "plateNo"
   | "brand"
   | "model"
@@ -21,10 +22,13 @@ export type DocumentV2FieldKey =
   | "color"
   | "engineNo"
   | "chassisNo"
+  | "bookingNo"
   | "sellPrice"
   | "deposit"
   | "remainingAmount"
-  | "saleName";
+  | "financeCompany"
+  | "saleName"
+  | "approverName";
 
 export type DocumentV2MappedValue = DocumentV2FieldKey | `raw:${string}` | "";
 export type DocumentV2FieldMapping = Record<string, DocumentV2MappedValue>;
@@ -51,13 +55,38 @@ const DEFAULT_MAPPING: DocumentV2FieldMapping = {
   Text17: "saleName"
 };
 
-export function getDefaultDocumentV2Mapping(): DocumentV2FieldMapping {
+const TEMPORARY_RECEIPT_DEFAULT_MAPPING: DocumentV2FieldMapping = {
+  Date_Now: "currentDate",
+  DATE_NOW: "currentDate",
+  Name_CUSTOMER: "customerName",
+  CUSTOMER_NAE: "customerName",
+  ID_CARD: "idCard",
+  Tel_Number: "phone",
+  Lincese_no: "plateNo",
+  Model_Name: "model",
+  VIN_NO: "chassisNo",
+  Engine_no: "engineNo",
+  booking_no: "bookingNo",
+  Sale: "saleName",
+  FINANCE: "financeCompany",
+  TOTAL_THAI: "sellPrice",
+  SELL_Price: "sellPrice",
+  TOTAL_PAY: "remainingAmount",
+  Deposit: "deposit",
+  Sale_Name: "saleName",
+  MANAGER_NAME: "approverName"
+};
+
+export function getDefaultDocumentV2Mapping(templateId?: string): DocumentV2FieldMapping {
+  if (templateId === "temporary-receipt") {
+    return { ...TEMPORARY_RECEIPT_DEFAULT_MAPPING };
+  }
   return { ...DEFAULT_MAPPING };
 }
 
 export async function readDocumentV2Mapping(templateId: string): Promise<DocumentV2FieldMapping> {
   const stored = await readJsonStore<MappingByTemplate>(DOCUMENT_V2_MAPPING_STORE, {});
-  return { ...getDefaultDocumentV2Mapping(), ...((stored || {})[templateId] || {}) };
+  return { ...getDefaultDocumentV2Mapping(templateId), ...((stored || {})[templateId] || {}) };
 }
 
 export async function writeDocumentV2Mapping(templateId: string, mapping: DocumentV2FieldMapping): Promise<DocumentV2FieldMapping> {
@@ -66,7 +95,7 @@ export async function writeDocumentV2Mapping(templateId: string, mapping: Docume
   for (const [key, value] of Object.entries(mapping || {})) {
     normalized[String(key)] = (value || "") as DocumentV2MappedValue;
   }
-  const merged = { ...getDefaultDocumentV2Mapping(), ...normalized };
+  const merged = { ...getDefaultDocumentV2Mapping(templateId), ...normalized };
   const next: MappingByTemplate = { ...(stored || {}), [templateId]: merged };
   await writeJsonStore(DOCUMENT_V2_MAPPING_STORE, next);
   return merged;
