@@ -461,7 +461,6 @@ export function DocumentGeneratorV2() {
     try {
       setLoading(true);
       setError("");
-      const popup = window.open("", "_blank", "noopener,noreferrer");
       const blob = await api<Blob>("/api/documents-v2/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -493,11 +492,7 @@ export function DocumentGeneratorV2() {
       setPngUrl(url);
       setPngBlob(nextPngBlob);
       setPngFileName(fileName);
-      if (popup) {
-        popup.location.href = url;
-      } else {
-        downloadObjectUrl(url, fileName);
-      }
+      downloadObjectUrl(url, fileName);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Export PNG ไม่สำเร็จ");
     } finally {
@@ -569,14 +564,6 @@ export function DocumentGeneratorV2() {
           ))}
         </select>
       </div>
-
-      {!settingsMode ? (
-        <div className="grid grid-cols-1 gap-2 rounded border border-white/10 p-3 sm:grid-cols-2">
-          <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">
-            <ImageIcon className="inline" size={16} /> เซฟ PNG
-          </button>
-        </div>
-      ) : null}
 
       {settingsMode ? (
         <>
@@ -696,6 +683,29 @@ export function DocumentGeneratorV2() {
         </>
       ) : null}
 
+      {previewUrl ? (
+        <div className="rounded border border-white/10 p-3">
+          <h2 className="mb-2 font-semibold">Preview PDF</h2>
+          <div
+            className="max-h-[78svh] overflow-auto rounded bg-white"
+            style={{ touchAction: "pan-x pan-y pinch-zoom", WebkitOverflowScrolling: "touch" }}
+          >
+            <iframe src={previewUrl} className="h-[78svh] w-full rounded bg-white" />
+          </div>
+          <a href={previewUrl} download={loadedTemplateFile || selectedTemplate.fileName || "document-v2.pdf"} className="mt-2 inline-flex items-center gap-2 rounded bg-emerald-500 px-3 py-2 font-semibold text-black">
+            <Download size={16} /> Download PDF
+          </a>
+        </div>
+      ) : null}
+
+      {!settingsMode ? (
+        <div className="grid grid-cols-1 gap-2 rounded border border-white/10 p-3 sm:grid-cols-2">
+          <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">
+            <ImageIcon className="inline" size={16} /> เซฟ PNG
+          </button>
+        </div>
+      ) : null}
+
       {templateId === "temporary-receipt" ? (
         <div className="rounded border border-white/10 p-3">
           <div className="mb-3 flex items-center justify-between gap-2">
@@ -804,16 +814,6 @@ export function DocumentGeneratorV2() {
           </details>
         ) : null}
       </div>
-
-      {previewUrl ? (
-        <div className="rounded border border-white/10 p-3">
-          <h2 className="mb-2 font-semibold">Preview PDF</h2>
-          <iframe src={previewUrl} className="h-[70vh] w-full rounded bg-white" />
-          <a href={previewUrl} download={loadedTemplateFile || selectedTemplate.fileName || "document-v2.pdf"} className="mt-2 inline-flex items-center gap-2 rounded bg-emerald-500 px-3 py-2 font-semibold text-black">
-            <Download size={16} /> Download PDF
-          </a>
-        </div>
-      ) : null}
 
       {pngUrl ? (
         <div className="rounded border border-white/10 p-3">
