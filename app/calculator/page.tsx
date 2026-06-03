@@ -213,8 +213,6 @@ export default function CalculatorPage() {
         <div className="grid gap-3 md:grid-cols-2">
           <TextField label="รุ่นรถ" value={carModel} onChange={setCarModel} placeholder="Toyota Revo 2020" />
           <TextField label="ปีรถ" value={actualYear} onChange={setActualYear} placeholder="2020" inputMode="numeric" />
-          <TextField label="สีรถ" value={carColor} onChange={setCarColor} placeholder="ขาว / เทา / ดำ" />
-          <TextField label="เลขไมล์" value={mileage} onChange={setMileage} placeholder="เช่น 68,000 กม." />
           <SelectField label="ประเภทรถ" value={vehicleType} onChange={setVehicleType} options={vehicleTypes} />
           <SelectField label="ช่วงปีรถ" value={yearRange} onChange={setYearRange} options={yearOptions} />
           <NumberField label="ราคารถ" value={carPrice} onChange={setCarPrice} placeholder="684000" />
@@ -224,68 +222,6 @@ export default function CalculatorPage() {
             onChange={setSpecialDownPayment}
             placeholder="เช่น 50000"
           />
-          <TextField label="สถานะรถ" value={vehicleStatus} onChange={setVehicleStatus} placeholder="พร้อมขาย / ติดจองรอคอนเฟิร์ม" />
-          <TextField label="รูปภาพรถ (URL)" value={carImageUrl} onChange={setCarImageUrl} placeholder="https://..." />
-          <SelectField
-            label="ดาวน์ที่ใช้สรุปคำนวนค่างวด"
-            value={selectedDownLabel}
-            onChange={setSelectedDownLabel}
-            options={rows.map((row) => row.label)}
-          />
-          <SelectField
-            label="ระยะผ่อนที่ใช้สรุป"
-            value={selectedTermKey}
-            onChange={(value) => setSelectedTermKey(value as (typeof terms)[number]["key"])}
-            options={terms.map((term) => term.key)}
-            optionLabels={{ months48: "48 งวด", months60: "60 งวด", months72: "72 งวด", months84: "84 งวด" }}
-          />
-        </div>
-        <label className="mt-3 block">
-          <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">หมายเหตุสำคัญ</span>
-          <textarea
-            value={importantNote}
-            onChange={(event) => setImportantNote(event.target.value)}
-            rows={2}
-            placeholder="เช่น ราคาและค่างวดขึ้นอยู่กับไฟแนนซ์และเงื่อนไขวันอนุมัติ"
-            className="w-full rounded-2xl border border-white/10 bg-[#080c12] px-3 py-2 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
-          />
-        </label>
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
-          <ModeButton active={quoteMode === "customer"} onClick={() => setQuoteMode("customer")} label="Customer Mode" />
-          <ModeButton active={quoteMode === "internal"} onClick={() => setQuoteMode("internal")} label="Internal Mode" />
-          <ModeButton active={quoteMode === "installment"} onClick={() => setQuoteMode("installment")} label="Installment Mode" />
-        </div>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-soft">
-          <span className="flex items-center gap-2">
-            <Car size={16} className="text-brand" aria-hidden="true" />
-            {selectedRate
-              ? rateSource === "sheet"
-                ? "ใช้ดอกเบี้ยจาก Google Sheet"
-                : "ใช้ดอกเบี้ยตั้งต้นจาก Excel"
-              : "ไม่พบตารางดอกเบี้ยสำหรับตัวเลือกนี้"}
-          </span>
-          {salesProfile && (
-            <span className="rounded-full border border-brand/30 bg-brand/10 px-3 py-1 text-xs font-bold text-brand">
-              Export: {salesProfile.nickname}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              setLoading(true);
-              loadRates()
-                .catch(() => {
-                  setRates(defaultInterestRates);
-                  setRateSource("default");
-                  setError("โหลดดอกเบี้ยจาก Google Sheet ไม่ได้ จึงใช้ดอกเบี้ยตั้งต้นจาก Excel");
-                })
-                .finally(() => setLoading(false));
-            }}
-            className="flex min-h-10 items-center gap-2 rounded-2xl border border-white/10 px-3 font-semibold text-white"
-          >
-            <RefreshCw size={16} />
-            Refresh
-          </button>
         </div>
       </NativeCard>
 
@@ -355,6 +291,75 @@ export default function CalculatorPage() {
         ) : (
           <div className="px-4 py-8 text-center text-soft">กรอกราคารถและเลือกตารางดอกเบี้ย</div>
         )}
+      </NativeCard>
+
+      <NativeCard className="mb-4">
+        <div className="grid gap-3 md:grid-cols-2">
+          <TextField label="สีรถ" value={carColor} onChange={setCarColor} placeholder="ขาว / เทา / ดำ" />
+          <TextField label="เลขไมล์" value={mileage} onChange={setMileage} placeholder="เช่น 68,000 กม." />
+          <TextField label="สถานะรถ" value={vehicleStatus} onChange={setVehicleStatus} placeholder="พร้อมขาย / ติดจองรอคอนเฟิร์ม" />
+          <TextField label="รูปภาพรถ (URL)" value={carImageUrl} onChange={setCarImageUrl} placeholder="https://..." />
+          <SelectField
+            label="ดาวน์ที่ใช้สรุปคำนวนค่างวด"
+            value={selectedDownLabel}
+            onChange={setSelectedDownLabel}
+            options={rows.map((row) => row.label)}
+          />
+          <SelectField
+            label="ระยะผ่อนที่ใช้สรุป"
+            value={selectedTermKey}
+            onChange={(value) => setSelectedTermKey(value as (typeof terms)[number]["key"])}
+            options={terms.map((term) => term.key)}
+            optionLabels={{ months48: "48 งวด", months60: "60 งวด", months72: "72 งวด", months84: "84 งวด" }}
+          />
+        </div>
+        <label className="mt-3 block">
+          <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">หมายเหตุสำคัญ</span>
+          <textarea
+            value={importantNote}
+            onChange={(event) => setImportantNote(event.target.value)}
+            rows={2}
+            placeholder="เช่น ราคาและค่างวดขึ้นอยู่กับไฟแนนซ์และเงื่อนไขวันอนุมัติ"
+            className="w-full rounded-2xl border border-white/10 bg-[#080c12] px-3 py-2 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
+          />
+        </label>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <ModeButton active={quoteMode === "customer"} onClick={() => setQuoteMode("customer")} label="Customer Mode" />
+          <ModeButton active={quoteMode === "internal"} onClick={() => setQuoteMode("internal")} label="Internal Mode" />
+          <ModeButton active={quoteMode === "installment"} onClick={() => setQuoteMode("installment")} label="Installment Mode" />
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-soft">
+          <span className="flex items-center gap-2">
+            <Car size={16} className="text-brand" aria-hidden="true" />
+            {selectedRate
+              ? rateSource === "sheet"
+                ? "ใช้ดอกเบี้ยจาก Google Sheet"
+                : "ใช้ดอกเบี้ยตั้งต้นจาก Excel"
+              : "ไม่พบตารางดอกเบี้ยสำหรับตัวเลือกนี้"}
+          </span>
+          {salesProfile && (
+            <span className="rounded-full border border-brand/30 bg-brand/10 px-3 py-1 text-xs font-bold text-brand">
+              Export: {salesProfile.nickname}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true);
+              loadRates()
+                .catch(() => {
+                  setRates(defaultInterestRates);
+                  setRateSource("default");
+                  setError("โหลดดอกเบี้ยจาก Google Sheet ไม่ได้ จึงใช้ดอกเบี้ยตั้งต้นจาก Excel");
+                })
+                .finally(() => setLoading(false));
+            }}
+            className="flex min-h-10 items-center gap-2 rounded-2xl border border-white/10 px-3 font-semibold text-white"
+          >
+            <RefreshCw size={16} />
+            Refresh
+          </button>
+        </div>
       </NativeCard>
     </NativeAppShell>
   );
