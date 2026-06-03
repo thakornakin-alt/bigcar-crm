@@ -48,7 +48,7 @@ function setTextIfExists(
   for (const n of names) {
     try {
       const field = form.getTextField(n);
-      const shouldCenter = /^(SELL_Price|fill_34|fill_36|Downpayment|fill_38|fill_39|fill_40|fill_41|fill_42|fill_43|fill_44|fill_45|fill_46|Deposit|TOTAL_PAY|TOTAL_THAI|Underline\d+|Total_thai)$/i.test(n);
+      const shouldCenter = /^(SELL_Price|fill_34|fill_36|Downpayment|fill_38|fill_39|fill_40|fill_41|fill_42|fill_43|fill_44|fill_45|fill_46|Deposit|TOTAL_PAY|Underline\d+)$/i.test(n);
       if (shouldCenter) {
         field.setAlignment(TextAlignment.Center);
       }
@@ -175,7 +175,6 @@ export async function generateDocumentV2WithBytes(
     active[pdfField] = (mappedKey || "") as DocumentV2FieldKey | "";
   }
   const allData = data as Record<string, string>;
-  const totalPayWords = autoThaiTextFromTotalPay(allData.TOTAL_PAY || allData.remainingAmount || allData.totalPay);
   for (const [pdfField, mappedValue] of Object.entries(active)) {
     if (!mappedValue) continue;
     let value = "";
@@ -186,13 +185,7 @@ export async function generateDocumentV2WithBytes(
     } else {
       value = String(allData[mappingToken as DocumentV2FieldKey] || "");
     }
-    if (/^(TOTAL_THAI)$/i.test(pdfField) && totalPayWords) {
-      value = totalPayWords;
-    }
     setTextIfExists(form, [pdfField], value, thaiFont);
-  }
-  if (totalPayWords) {
-    setTextIfExists(form, ["TOTAL_THAI", "Total_thai"], totalPayWords, thaiFont);
   }
   form.updateFieldAppearances(thaiFont);
 
