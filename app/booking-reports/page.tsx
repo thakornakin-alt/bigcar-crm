@@ -188,6 +188,7 @@ export default function BookingReportsPage() {
     idCard: [],
     companyCertificate: []
   });
+  const [selectedAttachmentCategory, setSelectedAttachmentCategory] = useState<BookingAttachmentCategory>("bookingSlip");
   const [lookupStatus, setLookupStatus] = useState("");
   const [driveFolderUrl, setDriveFolderUrl] = useState("");
   const [uploadProgress, setUploadProgress] = useState("");
@@ -921,17 +922,16 @@ export default function BookingReportsPage() {
                 </div>
               </div>
             )}
-            <div className="space-y-3">
-              {attachmentLabels.map((item) => (
-                <AttachmentBox
-                  key={item.key}
-                  item={item}
-                  files={attachmentFiles[item.key]}
-                  onChange={(event) => handleFiles(item.key, event)}
-                  onRemove={(index) => removeFile(item.key, index)}
-                />
-              ))}
-            </div>
+            <DraftAttachmentBox
+              title="ไฟล์แนบ Draft"
+              categoryLabel="เลือกประเภทไฟล์"
+              attachmentLabels={attachmentLabels}
+              selectedCategory={selectedAttachmentCategory}
+              onSelectCategory={setSelectedAttachmentCategory}
+              filesByCategory={attachmentFiles}
+              onChange={handleFiles}
+              onRemove={removeFile}
+            />
           </SectionCard>
         </div>
 
@@ -1148,50 +1148,102 @@ function PaymentWorkflowHint({ mode }: { mode: "cash" | "finance" | "unset" }) {
   );
 }
 
-function AttachmentBox({
-  item,
-  files,
+function DraftAttachmentBox({
+  title,
+  categoryLabel,
+  attachmentLabels,
+  selectedCategory,
+  onSelectCategory,
+  filesByCategory,
   onChange,
   onRemove
 }: {
-  item: { key: BookingAttachmentCategory; label: string; hint: string };
-  files: File[];
-  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
-  onRemove: (index: number) => void;
+  title: string;
+  categoryLabel: string;
+  attachmentLabels: Array<{ key: BookingAttachmentCategory; label: string; hint: string }>;
+  selectedCategory: BookingAttachmentCategory;
+  onSelectCategory: (value: BookingAttachmentCategory) => void;
+  filesByCategory: Record<BookingAttachmentCategory, File[]>;
+  onChange: (category: BookingAttachmentCategory, event: ChangeEvent<HTMLInputElement>) => void;
+  onRemove: (category: BookingAttachmentCategory, index: number) => void;
 }) {
   const canUseCamera = true;
+  const currentFiles = filesByCategory[selectedCategory] || [];
+  const allFiles = attachmentLabels.flatMap((item) =>
+    (filesByCategory[item.key] || []).map((file, index) => ({
+      category: item.key,
+      categoryLabel: item.label,
+      file,
+      index
+    }))
+  );
 
   return (
     <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-semibold text-white">{item.label}</p>
-          <p className="mt-1 text-xs text-soft">{item.hint}</p>
+          <p className="font-semibold text-white">{title}</p>
+          <p className="mt-1 text-xs text-soft">{allFiles.length ? `${allFiles.length} ไฟล์` : "ยังไม่ได้เพิ่มไฟล์"}</p>
         </div>
-        <div className="flex shrink-0 flex-wrap justify-end gap-2">
-          <label className="flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-brand/50 px-3 text-sm font-semibold text-brand">
-            เพิ่มรูป
-            <input type="file" multiple accept="image/*,.pdf" onChange={onChange} className="sr-only" />
-          </label>
-          {canUseCamera && (
-            <label className="flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line px-3 text-sm font-semibold text-white">
-              <Camera size={17} />
-              ถ่าย
-              <input type="file" multiple accept="image/*" capture="environment" onChange={onChange} className="sr-only" />
-            </label>
-          )}
-        </div>
+        <Paperclip size={18} className="shrink-0 text-brand" />
       </div>
-      {files.length > 0 && (
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <label className="block sm:col-span-2">
+          <span className="mb-1.5 block text-xs font-bold text-soft">{categoryLabel}</span>
+          <select
+            value={selectedCategory}
+            onChange={(event) => onSelectCategory(event.target.value as BookingAttachmentCategory)}
+            className="h-12 w-full rounded-lg border border-line bg-[#141821] px-3 text-white outline-none focus:border-brand"
+          >
+            {attachmentLabels.map((item) => (
+              <option key={item.key} value={item.key}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-brand/50 px-3 text-sm font-semibold text-brand">
+          เพิ่มรูป
+          <input type="file" multiple accept="image/*,.pdf" onChange={(event) => onChange(selectedCategory, event)} className="sr-only" />
+        </label>
+        {canUseCamera && (
+          <label className="flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line px-3 text-sm font-semibold text-white">
+            <Camera size={17} />
+            ถ่าย
+            <input type="file" multiple accept="image/*" capture="environment" onChange={(event) => onChange(selectedCategory, event)} className="sr-only" />
+          </label>
+        )}
+      </div>
+
+      {currentFiles.length > 0 && (
         <div className="mt-3 space-y-2">
-          {files.map((file, index) => (
+          {currentFiles.map((file, index) => (
             <div key={`${file.name}-${index}`} className="flex items-center justify-between gap-3 rounded-lg bg-[#141821] px-3 py-2 text-sm">
               <span className="min-w-0 truncate text-[#dce2eb]">{file.name}</span>
-              <button type="button" onClick={() => onRemove(index)} className="shrink-0 text-amber-200">
+              <button type="button" onClick={() => onRemove(selectedCategory, index)} className="shrink-0 text-amber-200">
                 ลบ
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {allFiles.length > currentFiles.length && (
+        <div className="mt-3 space-y-2 border-t border-line pt-3">
+          <p className="text-xs font-semibold text-soft">สรุปไฟล์ในแต่ละหมวด</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {attachmentLabels.map((item) => {
+              const count = (filesByCategory[item.key] || []).length;
+              return (
+                <div key={item.key} className="rounded-lg border border-line bg-[#141821] px-3 py-2 text-sm">
+                  <p className="truncate text-[#dce2eb]">{item.label}</p>
+                  <p className="text-[11px] text-soft">{count} ไฟล์</p>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

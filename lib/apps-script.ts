@@ -47,6 +47,7 @@ type AppsScriptAction =
   | "updateReportStatus"
   | "searchBookingReports"
   | "saveSalesReport"
+  | "resetUserData"
   | "uploadDriveFiles"
   | "createSalesEmailDraft"
   | "createBookingEmailDraft"
@@ -184,6 +185,11 @@ export async function searchBookingReports(query: string) {
 export async function saveSalesReport(input: SalesReportInput) {
   const data = await callAppsScript<{ report: SalesReport }>("saveSalesReport", { report: input });
   return data.report;
+}
+
+export async function resetUserData(input: { keepMonth?: string } = {}) {
+  const data = await callAppsScript<{ result: { keepMonth: string; summaries: { sheet: string; deleted: number }[] } }>("resetUserData", input);
+  return data.result;
 }
 
 export async function uploadDriveFiles(input: DriveUploadInput) {

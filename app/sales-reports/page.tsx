@@ -242,6 +242,7 @@ export default function SalesReportsPage() {
   const [selectedBooking, setSelectedBooking] = useState<BookingReport | null>(null);
   const [salesFiles, setSalesFiles] = useState<Partial<Record<SalesAttachmentCategory, LocalAttachment[]>>>({});
   const salesFilesRef = useRef(salesFiles);
+  const [selectedSalesAttachmentCategory, setSelectedSalesAttachmentCategory] = useState<SalesAttachmentCategory>("vehiclePhotos");
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -904,39 +905,14 @@ export default function SalesReportsPage() {
                     <p className="mt-1 text-xs text-soft">รวมซ้ายหน้า ขวาหน้า ซ้ายหลัง ขวาหลังไว้เมนูเดียว และเพิ่มได้หลายรูป</p>
                   </div>
                 </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <SalesAttachmentBox
-                    category="vehiclePhotos"
-                    helperText="ใส่รูป 4 มุมหลัก และเพิ่มรูปอื่นของรถได้ในเมนูนี้"
-                    files={salesFiles.vehiclePhotos || []}
-                    onAdd={addSalesFiles}
-                    onRemove={removeSalesFile}
-                  />
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
-                <div className="mb-3">
-                  <p className="font-bold text-white">สลิปและเอกสารขาย</p>
-                  <p className="mt-1 text-xs text-soft">รวมเมนูให้สั้นขึ้น เพิ่มได้หลายรูปต่อหมวด</p>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <SalesAttachmentBox
-                    category="paymentSlips"
-                    helperText="ใส่รูปเงินจองและสลิปตัดยอดได้หลายรูป"
-                    files={salesFiles.paymentSlips || []}
-                    onAdd={addSalesFiles}
-                    onRemove={removeSalesFile}
-                  />
-                  <SalesAttachmentBox
-                    category="salesDocuments"
-                    helperText="รวมลอกลาย ใบรายละเอียดการชำระเงิน/ใบเสร็จชั่วคราว และใบ KYC"
-                    files={salesFiles.salesDocuments || []}
-                    onAdd={addSalesFiles}
-                    onRemove={removeSalesFile}
-                  />
-                </div>
+                <CombinedSalesAttachmentBox
+                  attachmentLabels={salesAttachmentLabels}
+                  filesByCategory={salesFiles}
+                  selectedCategory={selectedSalesAttachmentCategory}
+                  onSelectCategory={setSelectedSalesAttachmentCategory}
+                  onAdd={addSalesFiles}
+                  onRemove={removeSalesFile}
+                />
               </div>
 
               <button type="submit" disabled={saving || uploading} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink disabled:opacity-70">
@@ -1061,49 +1037,70 @@ function BookingAttachmentSummary({ attachments }: { attachments: BookingAttachm
   );
 }
 
-function SalesAttachmentBox({
-  category,
-  helperText,
-  files,
+function CombinedSalesAttachmentBox({
+  attachmentLabels,
+  filesByCategory,
+  selectedCategory,
+  onSelectCategory,
   onAdd,
   onRemove
 }: {
-  category: SalesAttachmentCategory;
-  helperText?: string;
-  files: LocalAttachment[];
+  attachmentLabels: Record<SalesAttachmentCategory, string>;
+  filesByCategory: Partial<Record<SalesAttachmentCategory, LocalAttachment[]>>;
+  selectedCategory: SalesAttachmentCategory;
+  onSelectCategory: (value: SalesAttachmentCategory) => void;
   onAdd: (category: SalesAttachmentCategory, event: ChangeEvent<HTMLInputElement>) => void | Promise<void>;
   onRemove: (category: SalesAttachmentCategory, id: string) => void;
 }) {
-  const addId = `${category}-add`;
-  const cameraId = `${category}-camera`;
+  const addId = `${selectedCategory}-add`;
+  const cameraId = `${selectedCategory}-camera`;
+  const selectedFiles = filesByCategory[selectedCategory] || [];
+  const allFiles = (Object.keys(filesByCategory) as SalesAttachmentCategory[]).flatMap((category) =>
+    (filesByCategory[category] || []).map((file) => ({ category, file }))
+  );
 
   return (
     <div className="rounded-lg border border-line bg-panel p-3">
       <div className="mb-3 flex items-start justify-between gap-2">
         <div>
-          <p className="text-sm font-bold text-white">{salesAttachmentLabels[category]}</p>
-          <p className="mt-1 text-xs text-soft">{files.length ? `${files.length} ไฟล์` : helperText || "ยังไม่ได้เพิ่มรูป"}</p>
+          <p className="text-sm font-bold text-white">ไฟล์แนบ Draft รายงานขาย</p>
+          <p className="mt-1 text-xs text-soft">{allFiles.length ? `${allFiles.length} ไฟล์` : "ยังไม่ได้เพิ่มรูป"}</p>
         </div>
         <ImagePlus size={18} className="shrink-0 text-brand" />
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block sm:col-span-2">
+          <span className="mb-1.5 block text-xs font-bold text-soft">เลือกประเภทไฟล์</span>
+          <select
+            value={selectedCategory}
+            onChange={(event) => onSelectCategory(event.target.value as SalesAttachmentCategory)}
+            className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none focus:border-brand"
+          >
+            {(Object.keys(attachmentLabels) as SalesAttachmentCategory[]).map((category) => (
+              <option key={category} value={category}>
+                {attachmentLabels[category]}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <label htmlFor={addId} className="flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-semibold text-white">
           <ImagePlus size={16} className="text-brand" />
           เพิ่มรูป
         </label>
-        <input id={addId} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={(event) => onAdd(category, event)} />
+        <input id={addId} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={(event) => onAdd(selectedCategory, event)} />
 
         <label htmlFor={cameraId} className="flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-semibold text-white">
           <Camera size={16} className="text-brand" />
           ถ่าย
         </label>
-        <input id={cameraId} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(event) => onAdd(category, event)} />
+        <input id={cameraId} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(event) => onAdd(selectedCategory, event)} />
       </div>
 
-      {files.length > 0 && (
+      {selectedFiles.length > 0 && (
         <div className="mt-3 grid gap-2">
-          {files.map((file) => (
+          {selectedFiles.map((file) => (
             <div key={file.id} className="flex items-center gap-2 rounded-lg border border-line bg-[#0b0d11] p-2">
               {file.type.startsWith("image/") ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -1130,7 +1127,7 @@ function SalesAttachmentBox({
                       Drive
                     </a>
                   )}
-                  <button type="button" onClick={() => onRemove(category, file.id)} className="inline-flex items-center gap-1 text-xs font-semibold text-red-200">
+                  <button type="button" onClick={() => onRemove(selectedCategory, file.id)} className="inline-flex items-center gap-1 text-xs font-semibold text-red-200">
                     <X size={14} />
                     ลบ
                   </button>
@@ -1138,6 +1135,23 @@ function SalesAttachmentBox({
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {allFiles.length > selectedFiles.length && (
+        <div className="mt-3 space-y-2 border-t border-line pt-3">
+          <p className="text-xs font-semibold text-soft">สรุปไฟล์ในแต่ละหมวด</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {(Object.keys(attachmentLabels) as SalesAttachmentCategory[]).map((category) => {
+              const count = (filesByCategory[category] || []).length;
+              return (
+                <div key={category} className="rounded-lg border border-line bg-[#141821] px-3 py-2 text-sm">
+                  <p className="truncate text-[#dce2eb]">{attachmentLabels[category]}</p>
+                  <p className="text-[11px] text-soft">{count} ไฟล์</p>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
