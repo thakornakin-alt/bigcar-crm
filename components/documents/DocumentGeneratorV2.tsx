@@ -184,7 +184,7 @@ export function DocumentGeneratorV2() {
       return acc;
     }, 0);
   }, [mapping, rawReportData, sampleData]);
-  const canRunGenerate = isTemplateReady && reportsLoaded && Boolean(selectedReport) && !resolvingData && saveState !== "saving" && saveState !== "dirty";
+  const canRunGenerate = isTemplateReady && reportsLoaded && Boolean(selectedReport) && !resolvingData;
 
   function resetEditableData(next?: ResolvedDocumentV2Data | null) {
     setEditableData(next || resolvedData || mapBookingToDocumentV2(selectedReport));
@@ -396,10 +396,6 @@ export function DocumentGeneratorV2() {
       setError("กรุณาโหลดรายงานขายก่อน");
       return;
     }
-    if (saveState === "saving" || saveState === "dirty") {
-      setError("กำลังบันทึก Mapping กรุณารอสักครู่แล้วลองใหม่");
-      return;
-    }
     try {
       setLoading(true);
       setError("");
@@ -460,10 +456,6 @@ export function DocumentGeneratorV2() {
     }
     if (!reportsLoaded) {
       setError("กรุณาโหลดรายงานขายก่อน");
-      return;
-    }
-    if (saveState === "saving" || saveState === "dirty") {
-      setError("กำลังบันทึก Mapping กรุณารอสักครู่แล้วลองใหม่");
       return;
     }
     try {
@@ -787,7 +779,6 @@ export function DocumentGeneratorV2() {
       </div>
 
       <div className="rounded border border-white/10 p-3">
-        <h2 className="mb-2 flex items-center gap-2 font-semibold"><FileText size={16} /> Fields</h2>
         <p className="mb-2 text-xs text-gray-300">โหลดไฟล์จริง: {loadedTemplateFile || "-"}</p>
         {isDev && debug ? (
           <pre className="mb-2 max-h-40 overflow-auto text-xs text-emerald-200">
