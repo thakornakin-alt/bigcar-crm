@@ -17,6 +17,31 @@ type FieldsDebug = {
   fieldNames: string[];
 };
 
+const editableFieldOrder: Array<keyof ResolvedDocumentV2Data> = [
+  "contractDate",
+  "contractDateDay",
+  "contractDateMonth",
+  "contractDateYear",
+  "currentDate",
+  "currentDateDay",
+  "currentDateMonth",
+  "currentDateYear",
+  "customerName",
+  "customerAddress",
+  "idCard",
+  "plateNo",
+  "brand",
+  "model",
+  "year",
+  "color",
+  "engineNo",
+  "chassisNo",
+  "sellPrice",
+  "deposit",
+  "remainingAmount",
+  "saleName"
+];
+
 const mappingOptions: Array<{ key: DocumentV2FieldKey; label: string }> = [
   { key: "contractDate", label: "วันที่สัญญา" },
   { key: "contractDateDay", label: "วันที่สัญญา (วัน)" },
@@ -101,6 +126,8 @@ export default function DocumentsV2Page() {
   const [lastSavedAt, setLastSavedAt] = useState("");
   const [reportsLoaded, setReportsLoaded] = useState(false);
   const [resolvedData, setResolvedData] = useState<ResolvedDocumentV2Data | null>(null);
+  const [editableData, setEditableData] = useState<ResolvedDocumentV2Data | null>(null);
+  const [editableTouched, setEditableTouched] = useState(false);
   const [resolveDebug, setResolveDebug] = useState<DocumentV2ResolveDebug | null>(null);
   const [resolvingData, setResolvingData] = useState(false);
   const isHydratingMappingRef = useRef(false);
@@ -113,7 +140,7 @@ export default function DocumentsV2Page() {
     () => reports.find((r) => r.id === selectedReportId) || null,
     [reports, selectedReportId]
   );
-  const sampleData = useMemo(() => resolvedData || mapBookingToDocumentV2(selectedReport), [resolvedData, selectedReport]);
+  const sampleData = useMemo(() => editableData || resolvedData || mapBookingToDocumentV2(selectedReport), [editableData, resolvedData, selectedReport]);
   const rawReportData = useMemo(
     () => ({
       ...Object.fromEntries(Object.entries((selectedReport || {}) as Record<string, unknown>).map(([k, v]) => [k, v == null ? "" : String(v)])),
@@ -137,6 +164,11 @@ export default function DocumentsV2Page() {
     }, 0);
   }, [mapping, rawReportData, sampleData]);
   const canRunGenerate = isTemplateReady && reportsLoaded && Boolean(selectedReport) && !resolvingData && saveState !== "saving" && saveState !== "dirty";
+
+  function resetEditableData(next?: ResolvedDocumentV2Data | null) {
+    setEditableData(next || resolvedData || mapBookingToDocumentV2(selectedReport));
+    setEditableTouched(false);
+  }
 
   async function loadFields() {
     try {
@@ -212,9 +244,11 @@ export default function DocumentsV2Page() {
         body: JSON.stringify({ report, templateId })
       });
       setResolvedData(res.data || null);
+      if (!editableTouched) setEditableData(res.data || null);
       setResolveDebug(res.debug || null);
     } catch (e) {
       setResolvedData(mapBookingToDocumentV2(report) as ResolvedDocumentV2Data);
+      if (!editableTouched) setEditableData(mapBookingToDocumentV2(report) as ResolvedDocumentV2Data);
       setResolveDebug(null);
       setError(e instanceof Error ? e.message : "โหลดข้อมูลที่จะใช้จริงไม่สำเร็จ");
     } finally {
@@ -226,6 +260,12 @@ export default function DocumentsV2Page() {
     loadResolvedData(selectedReport);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedReportId, templateId]);
+
+  useEffect(() => {
+    if (!editableTouched) {
+      setEditableData(resolvedData || mapBookingToDocumentV2(selectedReport));
+    }
+  }, [resolvedData, selectedReport, editableTouched]);
 
   async function loadMapping() {
     try {
@@ -296,7 +336,7 @@ export default function DocumentsV2Page() {
       const blob = await api<Blob>("/api/documents-v2/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report: selectedReport, templateId })
+        body: JSON.stringify({ report: selectedReport, templateId, data: editableData || sampleData })
       });
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(URL.createObjectURL(blob));
@@ -318,7 +358,7 @@ export default function DocumentsV2Page() {
       const blob = await api<Blob>("/api/documents-v2/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report: selectedReport, templateId, fieldProbeName: probeField, fieldProbeValue: probeValue })
+        body: JSON.stringify({ report: selectedReport, templateId, data: editableData || sampleData, fieldProbeName: probeField, fieldProbeValue: probeValue })
       });
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(URL.createObjectURL(blob));
@@ -353,7 +393,7 @@ export default function DocumentsV2Page() {
       const blob = await api<Blob>("/api/documents-v2/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report: selectedReport, templateId })
+        body: JSON.stringify({ report: selectedReport, templateId, data: editableData || sampleData })
       });
       const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as any;
       pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
@@ -391,6 +431,14 @@ export default function DocumentsV2Page() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function updateEditableField(key: keyof ResolvedDocumentV2Data, value: string) {
+    setEditableTouched(true);
+    setEditableData((prev) => ({
+      ...(prev || sampleData || {}),
+      [key]: value
+    } as ResolvedDocumentV2Data));
   }
 
   async function sharePng() {
@@ -564,6 +612,39 @@ export default function DocumentsV2Page() {
           </div>
         )}
       </div>
+
+      {templateId === "temporary-receipt" ? (
+        <div className="rounded border border-white/10 p-3">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="font-semibold">แก้ข้อมูลก่อน Preview</h2>
+            <button
+              type="button"
+              onClick={() => resetEditableData()}
+              className="rounded border border-white/20 px-3 py-1 text-sm"
+            >
+              รีเซ็ตข้อมูล
+            </button>
+          </div>
+          <p className="mb-3 text-xs text-gray-300">แตะช่องด้านล่างเพื่อแก้ค่าก่อนสร้าง Preview / PNG ได้เลย</p>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {editableFieldOrder.map((key) => (
+              <label key={key} className="space-y-1">
+                <span className="block text-xs text-gray-300">{keyLabel[key as DocumentV2FieldKey] || key}</span>
+                {(() => {
+                  const editableSource = (editableData || sampleData || {}) as Record<string, string>;
+                  return (
+                <input
+                  value={String(editableSource[String(key)] || "")}
+                  onChange={(e) => updateEditableField(key, e.target.value)}
+                  className="w-full rounded bg-black/40 p-2 text-sm"
+                />
+                  );
+                })()}
+              </label>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="rounded border border-white/10 p-3">
         <label className="mb-2 block text-sm">เลือกรายงานขาย</label>
