@@ -349,7 +349,7 @@ export default function DocumentsV2Page() {
         body: JSON.stringify({ report: selectedReport, templateId })
       });
       const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as any;
-      pdfjs.GlobalWorkerOptions.workerSrc = "";
+      pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
       const pdf = await pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
       const page = await pdf.getPage(1);
       const viewport = page.getViewport({ scale: 2 });
