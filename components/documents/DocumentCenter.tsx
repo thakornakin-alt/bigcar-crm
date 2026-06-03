@@ -1,20 +1,10 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
-import { Download, Eye, FileImage, FileText, Loader2, Save, Search, Upload } from "lucide-react";
+import { Download, Eye, FileText, Loader2, Search } from "lucide-react";
 import { FilterChip, PageContainer, PageTitle, SearchField, SectionCard, TopMenuButton } from "@/app/components/ui";
 import type { DocumentTemplateConfig, DocumentTemplateId } from "@/lib/documents/document-types";
 import { documentFileToOcrPayloads, mergeOcrRecords } from "@/lib/ocr/client-document-ocr";
-
-type DocumentHistoryItem = {
-  id: string;
-  templateTitle: string;
-  createdAt: string;
-  customerName: string;
-  plate: string;
-  vehicleLabel: string;
-  createdBy: string;
-};
 
 type ReportRecord = Record<string, unknown> & {
   id?: string;
@@ -44,7 +34,7 @@ type VehicleRecord = Record<string, unknown> & {
 };
 
 type DocumentData = Record<string, string>;
-type ActiveTab = "download" | "create" | "ocr" | "drafts";
+type ActiveTab = "download" | "create";
 
 const draftKey = "bigcar-document-drafts-v1";
 const autoTemplateIds: DocumentTemplateId[] = ["contract", "temporary-receipt"];
@@ -261,7 +251,6 @@ function loadDrafts(): Array<{ id: string; name: string; templateId: DocumentTem
 export function DocumentCenter() {
   const [tab, setTab] = useState<ActiveTab>("create");
   const [templates, setTemplates] = useState<DocumentTemplateConfig[]>([]);
-  const [history, setHistory] = useState<DocumentHistoryItem[]>([]);
   const [reports, setReports] = useState<ReportRecord[]>([]);
   const [vehicles, setVehicles] = useState<VehicleRecord[]>([]);
   const [templateId, setTemplateId] = useState<DocumentTemplateId>("temporary-receipt");
@@ -269,7 +258,6 @@ export function DocumentCenter() {
   const [reportQuery, setReportQuery] = useState("");
   const [data, setData] = useState<DocumentData>({ ...emptyDocumentData });
   const [previewUrl, setPreviewUrl] = useState("");
-  const [drafts, setDrafts] = useState<Array<{ id: string; name: string; templateId: DocumentTemplateId; data: DocumentData; updatedAt: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState("");
@@ -278,13 +266,11 @@ export function DocumentCenter() {
   useEffect(() => {
     Promise.all([
       api<{ templates: DocumentTemplateConfig[] }>("/api/documents/templates").then((res) => setTemplates(res.templates || [])),
-      api<{ history: DocumentHistoryItem[] }>("/api/documents/history").then((res) => setHistory(res.history || [])).catch(() => undefined),
       api<{ reports: ReportRecord[] }>("/api/reports/history?type=all").then((res) => setReports(res.reports || [])).catch(() => undefined),
       api<{ vehicles: VehicleRecord[] }>("/api/stock/list?limit=1000").then((res) => setVehicles(res.vehicles || [])).catch(() => undefined)
     ])
       .catch((err) => setError(err instanceof Error ? err.message : "โหลดเอกสารไม่สำเร็จ"))
       .finally(() => {
-        setDrafts(loadDrafts());
         setLoading(false);
       });
   }, []);
@@ -399,17 +385,7 @@ export function DocumentCenter() {
   }
 
   function saveDraft() {
-    const item = {
-      id: `draft-${Date.now()}`,
-      name: `${selectedTemplate?.title || "เอกสาร"} · ${data.customerName || data.plate || "ยังไม่ระบุ"}`,
-      templateId,
-      data,
-      updatedAt: new Date().toISOString()
-    };
-    const next = [item, ...drafts].slice(0, 20);
-    window.localStorage.setItem(draftKey, JSON.stringify(next));
-    setDrafts(next);
-    setMessage("บันทึก Draft แล้ว");
+    setMessage("โหมด Draft ถูกย้ายไปหน้า Setting แล้ว");
   }
 
   async function handleOcrFile(event: ChangeEvent<HTMLInputElement>) {
@@ -450,32 +426,14 @@ export function DocumentCenter() {
     <PageContainer wide>
       <PageTitle
         title="Document Center"
-        subtitle="ดาวน์โหลดเอกสารเปล่า สร้างเอกสารอัตโนมัติ OCR และ Draft ในหน้าเดียว"
+        subtitle="ดาวน์โหลดเอกสารและเปิดสร้างเอกสารได้ทันที"
         actions={
           <div className="flex flex-wrap gap-2">
-            <TopMenuButton href="/documents-v2" icon={<FileText size={18} />}>Document V2</TopMenuButton>
+            <TopMenuButton href="/documents-v2" icon={<FileText size={18} />}>สร้างเอกสาร</TopMenuButton>
             <TopMenuButton href="/documents/templates" icon={<FileText size={18} />}>ตั้งค่า Template</TopMenuButton>
           </div>
         }
       />
-
-      <div className="mb-4 rounded-lg border border-brand/40 bg-brand/10 p-4">
-        <p className="text-sm font-black uppercase tracking-[0.16em] text-brand">New test flow</p>
-        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-xl font-black text-white">DocumentGeneratorV2</h2>
-            <p className="mt-1 text-sm leading-6 text-soft">
-              ใช้ AcroForm PDF จริงเท่านั้น แยกจากระบบเอกสารเดิม สำหรับทดสอบ temporary-receipt ก่อน
-            </p>
-          </div>
-          <a
-            href="/documents-v2"
-            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand px-4 font-black text-ink"
-          >
-            เปิดหน้า V2
-          </a>
-        </div>
-      </div>
 
       {(message || error) && (
         <div className={`mb-4 rounded-lg border px-4 py-3 text-sm font-bold ${error ? "border-red-400/40 bg-red-950/30 text-red-100" : "border-brand/40 bg-brand/10 text-brand"}`}>
@@ -486,9 +444,7 @@ export function DocumentCenter() {
       <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
         {[
           ["download", "ดาวน์โหลดเอกสาร"],
-          ["create", "สร้างเอกสาร"],
-          ["ocr", "OCR Scanner"],
-          ["drafts", "ประวัติ / Draft"]
+          ["create", "สร้างเอกสาร"]
         ].map(([id, label]) => (
           <FilterChip key={id} active={tab === id} onClick={() => setTab(id as ActiveTab)}>
             {label}
@@ -531,123 +487,33 @@ export function DocumentCenter() {
       ) : null}
 
       {!loading && tab === "create" ? (
-        <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-          <section className="space-y-4">
-            <SectionCard title="เลือกเอกสาร / รายงานจอง" icon={<FileText size={18} />}>
-              <select value={templateId} onChange={(event) => setTemplateId(event.target.value as DocumentTemplateId)} className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none focus:border-brand">
-                {autoTemplates.map((template) => <option key={template.id} value={template.id}>{template.title}</option>)}
-              </select>
-              <SearchField value={reportQuery} onChange={(event) => setReportQuery(event.target.value)} placeholder="ค้นรายงานจอง / ทะเบียน / ลูกค้า" />
-              <div className="grid gap-2">
-                {filteredReports.map((report) => (
-                  <button key={report.id || `${report.plate}-${report.createdAt}`} type="button" onClick={() => selectReport(report)} className="rounded-lg border border-line bg-[#0b0d11] p-3 text-left transition hover:border-brand">
-                    <p className="font-black text-white">{report.customerName || "-"} · {report.plate || "-"}</p>
-                    <p className="mt-1 text-sm text-soft">{[report.brand, report.model, report.year].filter(Boolean).join(" ")} · {report.saleName || "-"}</p>
-                  </button>
-                ))}
-                {!filteredReports.length ? <p className="rounded-lg border border-dashed border-line p-4 text-center text-sm text-soft">ไม่พบรายงานจอง กรอกข้อมูลเองได้ด้านขวา</p> : null}
+        <SectionCard title="สร้างเอกสาร" icon={<FileText size={18} />}>
+          <div className="grid gap-4 md:grid-cols-[1.1fr_0.9fr]">
+            <div className="rounded-lg border border-line bg-[#0b0d11] p-4">
+              <p className="text-sm font-black text-white">เปิด DocumentGeneratorV2</p>
+              <p className="mt-2 text-sm leading-6 text-soft">
+                เลือก Template แล้วระบบจะโหลดข้อมูลและ Preview ให้อัตโนมัติ เพื่อใช้งานจริงทันที
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <a href="/documents-v2" className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand px-4 font-black text-ink">
+                  เปิดหน้า V2
+                </a>
+                <a href="/documents/templates" className="inline-flex min-h-11 items-center justify-center rounded-lg border border-line px-4 font-bold text-white">
+                  ตั้งค่า Template
+                </a>
               </div>
-            </SectionCard>
-          </section>
-
-          <section className="space-y-4">
-            <SectionCard title="ข้อมูลก่อน Export" icon={<FileText size={18} />}>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {editableFields.map((field) => (
-                  <label key={field.key} className={["address", "pdiNote"].includes(field.key) ? "sm:col-span-2" : ""}>
-                    <span className="mb-1.5 block text-sm font-bold text-[#dce2eb]">{field.label}{field.optional ? " (optional)" : ""}</span>
-                    <input value={data[field.key] || ""} onChange={(event) => update(field.key, event.target.value)} className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none focus:border-brand" />
-                  </label>
-                ))}
-              </div>
-              <div className="rounded-lg border border-brand/30 bg-green-950/20 p-3">
-                <p className="text-sm font-black text-brand">ข้อมูลที่จะเติมลงเอกสาร</p>
-                <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
-                  {[
-                    ["ลูกค้า", data.customerName],
-                    ["เลขบัตร", data.idCard],
-                    ["ทะเบียน", data.plate],
-                    ["รถ", [data.carBrand, data.carModel, data.year].filter(Boolean).join(" ")],
-                    ["ราคา", data.salePrice || data.price],
-                    ["เงินจอง", data.bookingPrice],
-                    ["ผู้ขาย", data.sellerName || data.saleName],
-                    ["วันที่จอง", data.bookingDate]
-                  ].map(([label, value]) => (
-                    <div key={label} className="flex min-w-0 justify-between gap-3 rounded-md bg-black/20 px-3 py-2">
-                      <span className="shrink-0 text-soft">{label}</span>
-                      <span className="min-w-0 truncate font-bold text-white">{value || "ยังไม่ระบุ"}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-4">
-                <button type="button" onClick={() => generatePdf(false)} disabled={working} className="min-h-11 rounded-lg border border-brand/40 bg-brand/10 px-3 font-black text-brand disabled:opacity-60">Preview PDF</button>
-                <button type="button" onClick={() => generatePdf(true)} disabled={working} className="min-h-11 rounded-lg bg-brand px-3 font-black text-ink disabled:opacity-60">Export PDF</button>
-                <button type="button" onClick={() => exportImage("png")} className="min-h-11 rounded-lg border border-line px-3 font-bold text-white">PNG</button>
-                <button type="button" onClick={saveDraft} className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line px-3 font-bold text-white"><Save size={16} /> Draft</button>
-              </div>
-            </SectionCard>
-            <SectionCard title="Preview" icon={<Eye size={18} />}>
-              {previewUrl ? (
-                <div className="space-y-3">
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <a href={previewUrl} target="_blank" rel="noreferrer" className="flex min-h-11 items-center justify-center rounded-lg bg-brand px-3 font-black text-ink">
-                      เปิด Preview เต็มหน้า
-                    </a>
-                    <a href={previewUrl} download={`document-preview-${Date.now()}.pdf`} className="flex min-h-11 items-center justify-center rounded-lg border border-line px-3 font-bold text-white">
-                      ดาวน์โหลด PDF
-                    </a>
-                  </div>
-                  <object data={previewUrl} type="application/pdf" className="h-[70vh] w-full rounded-lg border border-line bg-white">
-                    <iframe title="Document preview" src={previewUrl} className="h-[70vh] w-full rounded-lg border border-line bg-white" />
-                  </object>
-                  <p className="text-xs leading-5 text-soft">ถ้ามือถือไม่แสดง Preview ในกรอบ ให้กด “เปิด Preview เต็มหน้า” ด้านบน</p>
-                </div>
-              ) : (
-                <div className="rounded-lg border border-dashed border-line p-8 text-center text-soft">
-                  กรอกหรือเลือกรายงานจองด้านบน แล้วกด Preview PDF เพื่อดูเอกสารก่อน Export
-                </div>
-              )}
-            </SectionCard>
-          </section>
-        </div>
-      ) : null}
-
-      {!loading && tab === "ocr" ? (
-        <SectionCard title="OCR Scanner" icon={<Upload size={18} />}>
-          <p className="rounded-lg border border-line bg-[#0b0d11] p-3 text-sm leading-6 text-soft">
-            OCR รองรับรูปภาพและ PDF หลายหน้า โดยใช้ PDF worker ที่อยู่ในระบบ ไม่พึ่ง CDN กรุณาตรวจและแก้ไขข้อมูลก่อน Export ทุกครั้ง
-          </p>
-          <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-brand/50 bg-brand/10 p-4 text-center text-brand">
-            <Upload size={26} />
-            <span className="mt-2 font-black">อัปโหลด / ถ่ายรูปเอกสาร</span>
-            <span className="mt-1 text-xs text-soft">รองรับรูปภาพและ PDF สูงสุด 12 หน้าแรก</span>
-            <input type="file" accept="image/*,application/pdf" capture="environment" onChange={handleOcrFile} className="hidden" />
-          </label>
-          {working ? <p className="text-sm text-soft"><Loader2 className="mr-2 inline animate-spin text-brand" />กำลัง OCR...</p> : null}
+            </div>
+            <div className="rounded-lg border border-brand/30 bg-green-950/20 p-4">
+              <p className="text-sm font-black text-brand">สิ่งที่ทำต่อใน V2</p>
+              <ul className="mt-3 space-y-2 text-sm text-soft">
+                <li>• โหลดข้อมูลอัตโนมัติ</li>
+                <li>• Preview PDF / PNG</li>
+                <li>• ปรับค่าก่อนเซฟ</li>
+                <li>• Export ได้ทันที</li>
+              </ul>
+            </div>
+          </div>
         </SectionCard>
-      ) : null}
-
-      {!loading && tab === "drafts" ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <SectionCard title="Draft" icon={<Save size={18} />}>
-            {drafts.length ? drafts.map((draft) => (
-              <button key={draft.id} type="button" onClick={() => { setTemplateId(draft.templateId); setData(draft.data); setTab("create"); }} className="w-full rounded-lg border border-line bg-[#0b0d11] p-3 text-left transition hover:border-brand">
-                <p className="font-black text-white">{draft.name}</p>
-                <p className="mt-1 text-xs text-soft">{new Date(draft.updatedAt).toLocaleString("th-TH")}</p>
-              </button>
-            )) : <p className="rounded-lg border border-dashed border-line p-6 text-center text-soft">ยังไม่มี Draft</p>}
-          </SectionCard>
-          <SectionCard title="ประวัติเอกสารล่าสุด" icon={<FileImage size={18} />}>
-            {history.length ? history.slice(0, 10).map((item) => (
-              <div key={item.id} className="rounded-lg border border-line bg-[#0b0d11] p-3">
-                <p className="font-black text-white">{item.templateTitle}</p>
-                <p className="mt-1 text-sm text-soft">{item.customerName || "-"} · {item.plate || "-"} · {item.vehicleLabel || "-"}</p>
-                <p className="mt-1 text-xs text-soft">สร้างโดย {item.createdBy || "-"} · {new Date(item.createdAt).toLocaleString("th-TH")}</p>
-              </div>
-            )) : <p className="rounded-lg border border-dashed border-line p-6 text-center text-soft">ยังไม่มีประวัติ</p>}
-          </SectionCard>
-        </div>
       ) : null}
     </PageContainer>
   );

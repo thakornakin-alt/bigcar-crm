@@ -219,9 +219,9 @@ export default function DocumentTemplatesPage() {
   return (
     <PageContainer wide>
       <PageTitle
-        title="ตั้งค่า Template PDF"
-        subtitle="ปรับตำแหน่ง x/y และขนาดตัวอักษรสำหรับฟอร์มบริษัท"
-        actions={<TopMenuButton href="/documents/create" icon={<FileSliders size={18} />}>สร้างเอกสาร</TopMenuButton>}
+        title="เอกสาร"
+        subtitle="จัดการ template และเปิดสร้างเอกสารได้ทันที"
+        actions={<TopMenuButton href="/documents-v2" icon={<FileSliders size={18} />}>สร้างเอกสาร</TopMenuButton>}
       />
 
       {(message || error) && (

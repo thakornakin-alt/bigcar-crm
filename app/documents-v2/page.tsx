@@ -148,6 +148,7 @@ export default function DocumentsV2Page() {
   const [editableTouched, setEditableTouched] = useState(false);
   const [resolveDebug, setResolveDebug] = useState<DocumentV2ResolveDebug | null>(null);
   const [resolvingData, setResolvingData] = useState(false);
+  const [settingsMode, setSettingsMode] = useState(false);
   const isHydratingMappingRef = useRef(false);
 
   const selectedTemplate = documentTemplatesV2[templateId];
@@ -284,10 +285,42 @@ export default function DocumentsV2Page() {
   }, [selectedReportId, templateId]);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      setSettingsMode(new URLSearchParams(window.location.search).get("mode") === "settings");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (templates.length && !documentTemplatesV2[templateId]) {
+      setTemplateId(templates[0].id);
+    }
+  }, [templates, templateId]);
+
+  useEffect(() => {
+    if (!fields.length && templates.length) {
+      loadFields();
+    }
+    if (!reportsLoaded) {
+      loadReports();
+    }
+    if (!Object.keys(mapping).length) {
+      loadMapping();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templateId]);
+
+  useEffect(() => {
     if (!editableTouched) {
       setEditableData(resolvedData || mapBookingToDocumentV2(selectedReport));
     }
   }, [resolvedData, selectedReport, editableTouched]);
+
+  useEffect(() => {
+    if (canRunGenerate && !previewUrl) {
+      preview().catch(() => undefined);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canRunGenerate, previewUrl, templateId, selectedReportId]);
 
   async function loadMapping() {
     try {
@@ -336,6 +369,10 @@ export default function DocumentsV2Page() {
   }, [isMappingLocked, mapping, templateId]);
 
   async function preview() {
+    return generatePdf(false);
+  }
+
+  async function generatePdf(download = false) {
     if (!isTemplateReady) {
       setError("ไม่พบ AcroForm fields ในไฟล์นี้");
       return;
@@ -361,7 +398,17 @@ export default function DocumentsV2Page() {
         body: JSON.stringify({ report: selectedReport, templateId, data: editableData || sampleData })
       });
       if (previewUrl) URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(URL.createObjectURL(blob));
+      const url = URL.createObjectURL(blob);
+      setPreviewUrl(url);
+      if (download) {
+        const fileBase = [
+          loadedTemplateFile.replace(/\.pdf$/i, ""),
+          safeFilePart(sampleData.customerName),
+          safeFilePart(sampleData.plateNo)
+        ].filter(Boolean).join("-");
+        const fileName = `${fileBase || "document-v2"}.pdf`;
+        downloadObjectUrl(url, fileName);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Preview ไม่สำเร็จ");
     } finally {
@@ -496,11 +543,6 @@ export default function DocumentsV2Page() {
       {error ? <div className="rounded border border-red-500/40 bg-red-900/30 p-3 text-red-100">{error}</div> : null}
 
       <div className="rounded border border-white/10 p-3">
-        <label className="mb-2 block text-sm">แหล่งข้อมูล</label>
-        <div className="rounded bg-black/40 p-2 text-sm">รายงานขาย (ล็อกถาวร)</div>
-      </div>
-
-      <div className="rounded border border-white/10 p-3">
         <label className="mb-2 block text-sm">Template</label>
         <select
           value={templateId}
@@ -521,119 +563,134 @@ export default function DocumentsV2Page() {
         </select>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <button onClick={loadFields} className="rounded bg-emerald-500 px-4 py-2 font-semibold text-black">โหลดรายชื่อ Fields</button>
-        <button onClick={loadReports} className="rounded border border-white/20 px-4 py-2">โหลดรายงานขาย</button>
-        <button onClick={loadMapping} className="rounded border border-white/20 px-4 py-2">โหลด Mapping</button>
-        <button
-          onClick={saveMapping}
-          disabled={saveState === "saving" || isMappingLocked}
-          className={`rounded border px-4 py-2 ${saveState === "saving" ? "border-emerald-400/40 bg-emerald-500/10" : "border-white/20"}`}
-        >
-          {isMappingLocked ? "Mapping ล็อกแล้ว" : saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "บันทึก Mapping"}
-        </button>
-        <button onClick={preview} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">{loading ? <Loader2 className="inline animate-spin" size={16} /> : <Eye className="inline" size={16} />} Preview PDF</button>
-        <button onClick={previewProbe} disabled={loading} className="rounded border border-yellow-300/40 px-4 py-2 text-yellow-200">ทดสอบ Field</button>
-        <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50"><ImageIcon className="inline" size={16} /> เซฟ PNG</button>
-      </div>
-      <div className="text-xs text-gray-300 space-y-1">
-        <div>
-          สถานะ Mapping: {isMappingLocked ? "ล็อกสำหรับ PDF สัญญาซื้อขายรถยนต์" : saveState === "dirty" ? "มีการแก้ไข (รอบันทึกอัตโนมัติ)" : saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "ยังไม่เริ่ม"} {lastSavedAt && !isMappingLocked ? `· ล่าสุด ${lastSavedAt}` : ""}
+      {!settingsMode ? (
+        <div className="grid grid-cols-2 gap-2 rounded border border-white/10 p-3">
+          <button onClick={() => generatePdf(true)} disabled={loading || !canRunGenerate} className="rounded bg-emerald-500 px-4 py-2 font-semibold text-black disabled:opacity-50">
+            <Download className="inline" size={16} /> เซฟ PDF
+          </button>
+          <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">
+            <ImageIcon className="inline" size={16} /> เซฟ PNG
+          </button>
         </div>
-        <div>
-          ความพร้อมข้อมูล: แมพแล้ว {mappedFieldCount} ช่อง · มีข้อมูลจริง {mappedNonEmptyCount} ช่อง
-        </div>
-        {!canRunGenerate ? (
-          <div className="text-amber-300">
-            ยัง Preview/Export ไม่ได้: {!isTemplateReady ? "ยังไม่พร้อม template" : !reportsLoaded ? "ยังไม่โหลดรายงานขาย" : !selectedReport ? "ยังไม่เลือกรายงานขาย" : resolvingData ? "กำลังดึงข้อมูลจริงจากทะเบียน" : saveState === "saving" || saveState === "dirty" ? "กำลังบันทึก mapping" : "รอข้อมูล"}
+      ) : null}
+
+      {settingsMode ? (
+        <>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={loadFields} className="rounded bg-emerald-500 px-4 py-2 font-semibold text-black">โหลดรายชื่อ Fields</button>
+            <button onClick={loadReports} className="rounded border border-white/20 px-4 py-2">โหลดรายงานขาย</button>
+            <button onClick={loadMapping} className="rounded border border-white/20 px-4 py-2">โหลด Mapping</button>
+            <button
+              onClick={saveMapping}
+              disabled={saveState === "saving" || isMappingLocked}
+              className={`rounded border px-4 py-2 ${saveState === "saving" ? "border-emerald-400/40 bg-emerald-500/10" : "border-white/20"}`}
+            >
+              {isMappingLocked ? "Mapping ล็อกแล้ว" : saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "บันทึก Mapping"}
+            </button>
+            <button onClick={preview} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">{loading ? <Loader2 className="inline animate-spin" size={16} /> : <Eye className="inline" size={16} />} Preview PDF</button>
+            <button onClick={previewProbe} disabled={loading} className="rounded border border-yellow-300/40 px-4 py-2 text-yellow-200">ทดสอบ Field</button>
+            <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50"><ImageIcon className="inline" size={16} /> เซฟ PNG</button>
           </div>
-        ) : null}
-      </div>
-
-      <div className="rounded border border-emerald-400/20 bg-emerald-500/5 p-3">
-        <h2 className="mb-2 font-semibold">ข้อมูลที่จะใช้จริง</h2>
-        {resolvingData ? (
-          <p className="text-sm text-emerald-200">กำลังดึงข้อมูลจากรายงานขายและสต็อกตามทะเบียน...</p>
-        ) : (
-          <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
-            <div className="rounded bg-black/30 p-2">ทะเบียน: {sampleData.plateNo || "ไม่มีข้อมูล"}</div>
-            <div className="rounded bg-black/30 p-2">เลขเครื่อง: {sampleData.engineNo || "ไม่มีข้อมูล"}</div>
-            <div className="rounded bg-black/30 p-2">เลขตัวถัง: {sampleData.chassisNo || "ไม่มีข้อมูล"}</div>
-            <div className="rounded bg-black/30 p-2">ที่อยู่: {sampleData.customerAddress || "ไม่มีข้อมูล"}</div>
-          </div>
-        )}
-        {resolveDebug ? (
-          <p className="mt-2 text-xs text-gray-400">
-            Stock lookup: {resolveDebug.stockFound ? "พบรถ" : "ไม่พบรถ"} · engine={resolveDebug.resolvedEngineNo || "-"} · chassis={resolveDebug.resolvedChassisNo || "-"}
-          </p>
-        ) : null}
-      </div>
-
-      <div className="rounded border border-white/10 p-3">
-        <h2 className="mb-2 font-semibold">Field Probe</h2>
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-          <input
-            value={probeField}
-            onChange={(e) => setProbeField(e.target.value)}
-            placeholder="เช่น Text1"
-            className="rounded bg-black/40 p-2 text-sm"
-          />
-          <input
-            value={probeValue}
-            onChange={(e) => setProbeValue(e.target.value)}
-            placeholder="ค่าทดสอบ"
-            className="rounded bg-black/40 p-2 text-sm"
-          />
-        </div>
-      </div>
-
-      <div className="rounded border border-white/10 p-3">
-        <h2 className="mb-2 font-semibold">Field Mapping</h2>
-        {isMappingLocked ? (
-          <p className="mb-3 rounded border border-emerald-400/20 bg-emerald-500/10 p-2 text-sm text-emerald-100">
-            PDF นี้ล็อก Mapping แล้ว เพื่อไม่ให้ตำแหน่ง/ช่องที่ตั้งไว้ขยับโดยไม่ตั้งใจ
-          </p>
-        ) : null}
-        {!fields.length ? (
-          <p className="text-sm text-gray-400">กดโหลดรายชื่อ Fields ก่อน</p>
-        ) : (
-          <div className="space-y-2">
-            {fields.map((f) => (
-              <div key={f.name} className="grid grid-cols-2 gap-2">
-                <div className="rounded bg-black/30 p-2 text-sm">{f.name}</div>
-                <div className="space-y-1">
-                  <select
-                    value={mapping[f.name] || ""}
-                    disabled={isMappingLocked}
-                    onChange={(e) => setMapping((prev) => ({ ...prev, [f.name]: e.target.value as DocumentV2MappedValue }))}
-                    className="w-full rounded bg-black/40 p-2 text-sm disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    <option value="">-- ไม่แมพ --</option>
-                    {mappingOptions.map((opt) => (
-                      <option key={opt.key} value={opt.key}>
-                        {opt.label}
-                      </option>
-                    ))}
-                    {reportRawKeys.length ? <option value="" disabled>──────── รายงานขาย (raw) ────────</option> : null}
-                    {reportRawKeys.map((rawKey) => (
-                      <option key={`raw-${rawKey}`} value={`raw:${rawKey}`}>
-                        raw: {rawKey}
-                      </option>
-                    ))}
-                  </select>
-                  {mapping[f.name] ? (
-                    <div className="text-xs text-emerald-300">
-                      {String(mapping[f.name]).startsWith("raw:")
-                        ? `ตัวอย่าง (raw): ${String(mapping[f.name]).slice(4)} = ${String(rawReportData[String(mapping[f.name]).slice(4)] || "ไม่มีข้อมูล")}`
-                        : `ตัวอย่าง: ${keyLabel[mapping[f.name] as DocumentV2FieldKey]} = ${String((sampleData as Record<string, unknown>)[mapping[f.name] as DocumentV2FieldKey] || "ไม่มีข้อมูล")}`}
-                    </div>
-                  ) : null}
-                </div>
+          <div className="text-xs text-gray-300 space-y-1">
+            <div>
+              สถานะ Mapping: {isMappingLocked ? "ล็อกสำหรับ PDF สัญญาซื้อขายรถยนต์" : saveState === "dirty" ? "มีการแก้ไข (รอบันทึกอัตโนมัติ)" : saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "ยังไม่เริ่ม"} {lastSavedAt && !isMappingLocked ? `· ล่าสุด ${lastSavedAt}` : ""}
+            </div>
+            <div>
+              ความพร้อมข้อมูล: แมพแล้ว {mappedFieldCount} ช่อง · มีข้อมูลจริง {mappedNonEmptyCount} ช่อง
+            </div>
+            {!canRunGenerate ? (
+              <div className="text-amber-300">
+                ยัง Preview/Export ไม่ได้: {!isTemplateReady ? "ยังไม่พร้อม template" : !reportsLoaded ? "ยังไม่โหลดรายงานขาย" : !selectedReport ? "ยังไม่เลือกรายงานขาย" : resolvingData ? "กำลังดึงข้อมูลจริงจากทะเบียน" : saveState === "saving" || saveState === "dirty" ? "กำลังบันทึก mapping" : "รอข้อมูล"}
               </div>
-            ))}
+            ) : null}
           </div>
-        )}
-      </div>
+
+          <div className="rounded border border-emerald-400/20 bg-emerald-500/5 p-3">
+            <h2 className="mb-2 font-semibold">ข้อมูลที่จะใช้จริง</h2>
+            {resolvingData ? (
+              <p className="text-sm text-emerald-200">กำลังดึงข้อมูลจากรายงานขายและสต็อกตามทะเบียน...</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
+                <div className="rounded bg-black/30 p-2">ทะเบียน: {sampleData.plateNo || "ไม่มีข้อมูล"}</div>
+                <div className="rounded bg-black/30 p-2">เลขเครื่อง: {sampleData.engineNo || "ไม่มีข้อมูล"}</div>
+                <div className="rounded bg-black/30 p-2">เลขตัวถัง: {sampleData.chassisNo || "ไม่มีข้อมูล"}</div>
+                <div className="rounded bg-black/30 p-2">ที่อยู่: {sampleData.customerAddress || "ไม่มีข้อมูล"}</div>
+              </div>
+            )}
+            {resolveDebug ? (
+              <p className="mt-2 text-xs text-gray-400">
+                Stock lookup: {resolveDebug.stockFound ? "พบรถ" : "ไม่พบรถ"} · engine={resolveDebug.resolvedEngineNo || "-"} · chassis={resolveDebug.resolvedChassisNo || "-"}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="rounded border border-white/10 p-3">
+            <h2 className="mb-2 font-semibold">Field Probe</h2>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              <input
+                value={probeField}
+                onChange={(e) => setProbeField(e.target.value)}
+                placeholder="เช่น Text1"
+                className="rounded bg-black/40 p-2 text-sm"
+              />
+              <input
+                value={probeValue}
+                onChange={(e) => setProbeValue(e.target.value)}
+                placeholder="ค่าทดสอบ"
+                className="rounded bg-black/40 p-2 text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="rounded border border-white/10 p-3">
+            <h2 className="mb-2 font-semibold">Field Mapping</h2>
+            {isMappingLocked ? (
+              <p className="mb-3 rounded border border-emerald-400/20 bg-emerald-500/10 p-2 text-sm text-emerald-100">
+                PDF นี้ล็อก Mapping แล้ว เพื่อไม่ให้ตำแหน่ง/ช่องที่ตั้งไว้ขยับโดยไม่ตั้งใจ
+              </p>
+            ) : null}
+            {!fields.length ? (
+              <p className="text-sm text-gray-400">กดโหลดรายชื่อ Fields ก่อน</p>
+            ) : (
+              <div className="space-y-2">
+                {fields.map((f) => (
+                  <div key={f.name} className="grid grid-cols-2 gap-2">
+                    <div className="rounded bg-black/30 p-2 text-sm">{f.name}</div>
+                    <div className="space-y-1">
+                      <select
+                        value={mapping[f.name] || ""}
+                        disabled={isMappingLocked}
+                        onChange={(e) => setMapping((prev) => ({ ...prev, [f.name]: e.target.value as DocumentV2MappedValue }))}
+                        className="w-full rounded bg-black/40 p-2 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        <option value="">-- ไม่แมพ --</option>
+                        {mappingOptions.map((opt) => (
+                          <option key={opt.key} value={opt.key}>
+                            {opt.label}
+                          </option>
+                        ))}
+                        {reportRawKeys.length ? <option value="" disabled>──────── รายงานขาย (raw) ────────</option> : null}
+                        {reportRawKeys.map((rawKey) => (
+                          <option key={`raw-${rawKey}`} value={`raw:${rawKey}`}>
+                            raw: {rawKey}
+                          </option>
+                        ))}
+                      </select>
+                      {mapping[f.name] ? (
+                        <div className="text-xs text-emerald-300">
+                          {String(mapping[f.name]).startsWith("raw:")
+                            ? `ตัวอย่าง (raw): ${String(mapping[f.name]).slice(4)} = ${String(rawReportData[String(mapping[f.name]).slice(4)] || "ไม่มีข้อมูล")}`
+                            : `ตัวอย่าง: ${keyLabel[mapping[f.name] as DocumentV2FieldKey]} = ${String((sampleData as Record<string, unknown>)[mapping[f.name] as DocumentV2FieldKey] || "ไม่มีข้อมูล")}`}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      ) : null}
 
       {templateId === "temporary-receipt" ? (
         <div className="rounded border border-white/10 p-3">
