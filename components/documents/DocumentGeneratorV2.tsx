@@ -565,6 +565,18 @@ export function DocumentGeneratorV2() {
         </select>
       </div>
 
+      <div className="rounded border border-white/10 p-3">
+        <label className="mb-2 block text-sm">เลือกรายงานขาย</label>
+        <select value={selectedReportId} onChange={(e) => setSelectedReportId(e.target.value)} className="w-full rounded bg-black/40 p-2">
+          <option value="">-- เลือก --</option>
+          {reports.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.customerName || "ไม่ระบุ"} · {r.plate || "ไม่ระบุ"} · {r.saleName || "ไม่ระบุ"}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {settingsMode ? (
         <>
           <div className="flex flex-wrap gap-2">
@@ -779,14 +791,6 @@ export function DocumentGeneratorV2() {
           </div>
         </div>
       ) : null}
-
-      <div className="rounded border border-white/10 p-3">
-        <label className="mb-2 block text-sm">เลือกรายงานขาย</label>
-        <select value={selectedReportId} onChange={(e) => setSelectedReportId(e.target.value)} className="w-full rounded bg-black/40 p-2">
-          <option value="">-- เลือก --</option>
-          {reports.map((r) => <option key={r.id} value={r.id}>{r.id} · {r.customerName} · {r.plate} · {r.type}</option>)}
-        </select>
-      </div>
 
       <div className="rounded border border-white/10 p-3">
         <p className="mb-2 text-xs text-gray-300">โหลดไฟล์จริง: {loadedTemplateFile || "-"}</p>
