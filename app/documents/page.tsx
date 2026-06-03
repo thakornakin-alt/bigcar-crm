@@ -1,13 +1,39 @@
+"use client";
+
+import { useState } from "react";
+import { FileText, Download } from "lucide-react";
 import { DocumentCenter } from "@/components/documents/DocumentCenter";
-import { DocumentGeneratorV2 } from "@/app/documents-v2/page";
+import { DocumentGeneratorV2 } from "@/components/documents/DocumentGeneratorV2";
 
 export default function DocumentsPage() {
+  const [view, setView] = useState<"download" | "generate">("download");
+
   return (
     <div className="space-y-6">
-      <DocumentCenter />
-      <section id="document-generator-v2">
-        <DocumentGeneratorV2 />
-      </section>
+      <div className="mx-auto grid w-full max-w-3xl grid-cols-2 gap-3 rounded-2xl border border-line bg-[#0b0d11] p-3">
+        <button
+          type="button"
+          onClick={() => setView("download")}
+          className={`inline-flex min-h-14 items-center justify-center gap-2 rounded-xl px-4 text-sm font-black transition ${
+            view === "download" ? "bg-brand text-ink" : "border border-line text-white"
+          }`}
+        >
+          <Download size={18} />
+          ดาวน์โหลดเอกสาร
+        </button>
+        <button
+          type="button"
+          onClick={() => setView("generate")}
+          className={`inline-flex min-h-14 items-center justify-center gap-2 rounded-xl px-4 text-sm font-black transition ${
+            view === "generate" ? "bg-brand text-ink" : "border border-line text-white"
+          }`}
+        >
+          <FileText size={18} />
+          สร้างเอกสาร
+        </button>
+      </div>
+
+      {view === "download" ? <DocumentCenter /> : <DocumentGeneratorV2 />}
     </div>
   );
 }

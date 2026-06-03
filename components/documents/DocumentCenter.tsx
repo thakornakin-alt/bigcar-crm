@@ -1,8 +1,8 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
-import { Download, Eye, FileText, Loader2, Search } from "lucide-react";
-import { PageContainer, PageTitle, SearchField, SectionCard, TopMenuButton } from "@/app/components/ui";
+import { Download, Eye, Loader2, Search } from "lucide-react";
+import { PageContainer, PageTitle, SearchField, SectionCard } from "@/app/components/ui";
 import type { DocumentTemplateConfig, DocumentTemplateId } from "@/lib/documents/document-types";
 import { documentFileToOcrPayloads, mergeOcrRecords } from "@/lib/ocr/client-document-ocr";
 
@@ -412,11 +412,6 @@ export function DocumentCenter() {
       <PageTitle
         title="Document Center"
         subtitle="เอกสาร"
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <TopMenuButton href="/documents#document-generator-v2" icon={<FileText size={18} />}>สร้างเอกสาร</TopMenuButton>
-          </div>
-        }
       />
 
       {(message || error) && (
