@@ -2,7 +2,7 @@
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { Download, Eye, FileText, Loader2, Search } from "lucide-react";
-import { FilterChip, PageContainer, PageTitle, SearchField, SectionCard, TopMenuButton } from "@/app/components/ui";
+import { PageContainer, PageTitle, SearchField, SectionCard, TopMenuButton } from "@/app/components/ui";
 import type { DocumentTemplateConfig, DocumentTemplateId } from "@/lib/documents/document-types";
 import { documentFileToOcrPayloads, mergeOcrRecords } from "@/lib/ocr/client-document-ocr";
 
@@ -34,7 +34,6 @@ type VehicleRecord = Record<string, unknown> & {
 };
 
 type DocumentData = Record<string, string>;
-type ActiveTab = "download" | "create";
 
 const draftKey = "bigcar-document-drafts-v1";
 const autoTemplateIds: DocumentTemplateId[] = ["contract", "temporary-receipt"];
@@ -240,16 +239,7 @@ function mapOcrResultToDocument(result: Record<string, unknown>): DocumentData {
   };
 }
 
-function loadDrafts(): Array<{ id: string; name: string; templateId: DocumentTemplateId; data: DocumentData; updatedAt: string }> {
-  try {
-    return JSON.parse(window.localStorage.getItem(draftKey) || "[]");
-  } catch {
-    return [];
-  }
-}
-
 export function DocumentCenter() {
-  const [tab, setTab] = useState<ActiveTab>("create");
   const [templates, setTemplates] = useState<DocumentTemplateConfig[]>([]);
   const [reports, setReports] = useState<ReportRecord[]>([]);
   const [vehicles, setVehicles] = useState<VehicleRecord[]>([]);
@@ -291,10 +281,6 @@ export function DocumentCenter() {
     const term = query.trim().toLowerCase();
     return templates.filter((template) => !term || [template.title, template.description, template.fileName].join(" ").toLowerCase().includes(term));
   }, [query, templates]);
-  const filteredReports = useMemo(() => {
-    const term = reportQuery.trim().toLowerCase().replace(/\s+/g, "");
-    return reports.filter((report) => !term || [report.customerName, report.plate, report.model, report.phone].join("").toLowerCase().replace(/\s+/g, "").includes(term)).slice(0, 10);
-  }, [reportQuery, reports]);
 
   function update(key: string, value: string) {
     setData((current) => ({ ...current, [key]: value }));
@@ -408,7 +394,6 @@ export function DocumentCenter() {
       }
       const merged = mergeOcrRecords(results);
       setData((current) => ({ ...current, ...mapOcrResultToDocument(merged) }));
-      setTab("create");
       setMessage(
         ocrPayload.sourceType === "pdf"
           ? `อ่าน OCR PDF แล้ว ${ocrPayload.processedPages}/${ocrPayload.pageCount} หน้า กรุณาตรวจข้อมูลก่อน Export`
@@ -426,11 +411,10 @@ export function DocumentCenter() {
     <PageContainer wide>
       <PageTitle
         title="Document Center"
-        subtitle="ดาวน์โหลดเอกสารและเปิดสร้างเอกสารได้ทันที"
+        subtitle="เอกสาร"
         actions={
           <div className="flex flex-wrap gap-2">
             <TopMenuButton href="/documents#document-generator-v2" icon={<FileText size={18} />}>สร้างเอกสาร</TopMenuButton>
-            <TopMenuButton href="/documents/templates" icon={<FileText size={18} />}>ตั้งค่า Template</TopMenuButton>
           </div>
         }
       />
@@ -441,26 +425,15 @@ export function DocumentCenter() {
         </div>
       )}
 
-      <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
-        {[
-          ["download", "ดาวน์โหลดเอกสาร"],
-          ["create", "สร้างเอกสาร"]
-        ].map(([id, label]) => (
-          <FilterChip key={id} active={tab === id} onClick={() => setTab(id as ActiveTab)}>
-            {label}
-          </FilterChip>
-        ))}
-      </div>
-
       {loading ? (
         <SectionCard>
           <div className="py-10 text-center text-soft"><Loader2 className="mx-auto mb-2 animate-spin text-brand" />กำลังโหลด Document Center</div>
         </SectionCard>
       ) : null}
 
-      {!loading && tab === "download" ? (
+      {!loading ? (
         <section className="space-y-4">
-          <SectionCard title="ดาวน์โหลดเอกสารเปล่า" icon={<Download size={18} />}>
+          <SectionCard icon={<Download size={18} />}>
             <SearchField icon={<Search size={18} />} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ค้นชื่อเอกสาร / หมวดหมู่ / PDF" />
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {filteredTemplates.map((template) => {
@@ -484,36 +457,6 @@ export function DocumentCenter() {
             </div>
           </SectionCard>
         </section>
-      ) : null}
-
-      {!loading && tab === "create" ? (
-        <SectionCard title="สร้างเอกสาร" icon={<FileText size={18} />}>
-          <div className="grid gap-4 md:grid-cols-[1.1fr_0.9fr]">
-            <div className="rounded-lg border border-line bg-[#0b0d11] p-4">
-              <p className="text-sm font-black text-white">เปิด DocumentGeneratorV2</p>
-              <p className="mt-2 text-sm leading-6 text-soft">
-                เลือก Template แล้วระบบจะโหลดข้อมูลและ Preview ให้อัตโนมัติ เพื่อใช้งานจริงทันที
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <a href="/documents#document-generator-v2" className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand px-4 font-black text-ink">
-                  ไปส่วนสร้างเอกสาร
-                </a>
-                <a href="/documents/templates" className="inline-flex min-h-11 items-center justify-center rounded-lg border border-line px-4 font-bold text-white">
-                  ตั้งค่า Template
-                </a>
-              </div>
-            </div>
-            <div className="rounded-lg border border-brand/30 bg-green-950/20 p-4">
-              <p className="text-sm font-black text-brand">สิ่งที่ทำต่อใน V2</p>
-              <ul className="mt-3 space-y-2 text-sm text-soft">
-                <li>• โหลดข้อมูลอัตโนมัติ</li>
-                <li>• Preview PDF / PNG</li>
-                <li>• ปรับค่าก่อนเซฟ</li>
-                <li>• Export ได้ทันที</li>
-              </ul>
-            </div>
-          </div>
-        </SectionCard>
       ) : null}
     </PageContainer>
   );
