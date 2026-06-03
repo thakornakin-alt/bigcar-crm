@@ -19,7 +19,13 @@ type FieldsDebug = {
 
 const mappingOptions: Array<{ key: DocumentV2FieldKey; label: string }> = [
   { key: "contractDate", label: "วันที่สัญญา" },
+  { key: "contractDateDay", label: "วันที่สัญญา (วัน)" },
+  { key: "contractDateMonth", label: "วันที่สัญญา (เดือน)" },
+  { key: "contractDateYear", label: "วันที่สัญญา (ปี)" },
   { key: "currentDate", label: "วันที่ปัจจุบัน" },
+  { key: "currentDateDay", label: "วันที่ปัจจุบัน (วัน)" },
+  { key: "currentDateMonth", label: "วันที่ปัจจุบัน (เดือน)" },
+  { key: "currentDateYear", label: "วันที่ปัจจุบัน (ปี)" },
   { key: "customerName", label: "ชื่อลูกค้า" },
   { key: "customerAddress", label: "ที่อยู่ลูกค้า" },
   { key: "idCard", label: "เลขบัตรประชาชน" },

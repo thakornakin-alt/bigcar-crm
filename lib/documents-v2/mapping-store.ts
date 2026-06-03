@@ -4,7 +4,13 @@ export const DOCUMENT_V2_MAPPING_STORE = "documents-v2-field-mapping.json";
 
 export type DocumentV2FieldKey =
   | "contractDate"
+  | "contractDateDay"
+  | "contractDateMonth"
+  | "contractDateYear"
   | "currentDate"
+  | "currentDateDay"
+  | "currentDateMonth"
+  | "currentDateYear"
   | "customerName"
   | "customerAddress"
   | "idCard"
@@ -27,6 +33,9 @@ type MappingByTemplate = Record<string, DocumentV2FieldMapping>;
 const DEFAULT_MAPPING: DocumentV2FieldMapping = {
   Text1: "customerName",
   Text3: "contractDate",
+  Text3Day: "contractDateDay",
+  Text3Month: "contractDateMonth",
+  Text3Year: "contractDateYear",
   Text4: "customerAddress",
   Text6: "idCard",
   Text7: "plateNo",

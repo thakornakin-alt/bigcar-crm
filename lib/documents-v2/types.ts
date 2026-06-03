@@ -9,7 +9,13 @@ export type DocumentV2FieldDebug = {
 
 export type DocumentV2Data = {
   contractDate: string;
+  contractDateDay: string;
+  contractDateMonth: string;
+  contractDateYear: string;
   currentDate: string;
+  currentDateDay: string;
+  currentDateMonth: string;
+  currentDateYear: string;
   customerName: string;
   customerAddress: string;
   idCard: string;
@@ -61,9 +67,37 @@ function normalizeMoney(rawValue: string) {
   return num.toLocaleString("th-TH");
 }
 
+function normalizeDateParts(value?: string | null) {
+  const raw = String(value || "").trim();
+  if (!raw) return { date: "", day: "", month: "", year: "" };
+  const ymd = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (ymd) {
+    const [, year, month, day] = ymd;
+    return { date: `${day}/${month}/${year}`, day, month, year };
+  }
+  const dmy = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/) || raw.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (dmy) {
+    const [, day, month, year] = dmy;
+    return { date: `${day}/${month}/${year}`, day, month, year };
+  }
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return { date: raw, day: "", month: "", year: "" };
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = String(date.getFullYear());
+  return {
+    date: `${day}/${month}/${year}`,
+    day,
+    month,
+    year
+  };
+}
+
 export function mapBookingToDocumentV2(report?: ReportHistoryItem | null): DocumentV2Data {
   const raw = (report || {}) as Record<string, any>;
   const reportText = String(raw.reportText || "");
+  const contractDateParts = normalizeDateParts(pick(raw, "contractDate", "deliveryDate", "bookingDate", "createdAt", "updatedAt"));
+  const currentDateParts = normalizeDateParts(new Date().toISOString());
 
   const rawFinal = pick(raw, "finalPrice", "netPayment", "salePrice", "carPrice", "final_price", "ราคาตั้งขาย", "ราคาขาย")
     || extractFromReportText(reportText, [
@@ -85,8 +119,14 @@ export function mapBookingToDocumentV2(report?: ReportHistoryItem | null): Docum
   const now = new Date();
   const currentDate = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
   return {
-    contractDate: pick(raw, "contractDate", "deliveryDate", "bookingDate", "createdAt", "updatedAt").slice(0, 10),
+    contractDate: contractDateParts.date || pick(raw, "contractDate", "deliveryDate", "bookingDate", "createdAt", "updatedAt").slice(0, 10),
+    contractDateDay: contractDateParts.day,
+    contractDateMonth: contractDateParts.month,
+    contractDateYear: contractDateParts.year,
     currentDate,
+    currentDateDay: currentDateParts.day,
+    currentDateMonth: currentDateParts.month,
+    currentDateYear: currentDateParts.year,
     customerName: pick(raw, "customerName", "name", "buyerName")
       || extractFromReportText(reportText, [/ชื่อลูกค้า\s*[:：]\s*(.+)/i, /ชื่อ-นามสกุล\s*[:：]\s*(.+)/i]),
     customerAddress: pick(raw, "address", "customerAddress", "shippingAddress", "ที่อยู่", "ที่อยู่จัดส่งเอกสาร")
