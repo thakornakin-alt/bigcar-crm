@@ -9,7 +9,7 @@ export default function DocumentsPage() {
   const [view, setView] = useState<"download" | "generate">("download");
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="mx-auto grid w-full max-w-3xl grid-cols-2 gap-3 rounded-2xl border border-line bg-[#0b0d11] p-3">
         <button
           type="button"
@@ -33,7 +33,12 @@ export default function DocumentsPage() {
         </button>
       </div>
 
-      {view === "download" ? <DocumentCenter /> : <DocumentGeneratorV2 />}
+      <div className={view === "download" ? "block" : "hidden"}>
+        <DocumentCenter />
+      </div>
+      <div className={view === "generate" ? "block" : "hidden"}>
+        <DocumentGeneratorV2 />
+      </div>
     </div>
   );
 }
