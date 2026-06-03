@@ -48,7 +48,7 @@ function setTextIfExists(
   for (const n of names) {
     try {
       const field = form.getTextField(n);
-      const shouldCenter = /^(SELL_Price|fill_34|fill_36|Downpayment|fill_38|fill_39|fill_40|fill_41|fill_42|fill_43|fill_44|fill_45|fill_46|Deposit|TOTAL_PAY|Underline\d+)$/i.test(n);
+      const shouldCenter = /^(SELL_Price|fill_34|fill_36|Downpayment|fill_38|fill_39|fill_40|fill_41|fill_42|fill_43|fill_44|fill_45|fill_46|Deposit|TOTAL_PAY|Underline\d+|customer_name|sale_name|manager_name|date_day|date_month|date_year)$/i.test(n);
       if (shouldCenter) {
         field.setAlignment(TextAlignment.Center);
       }
@@ -175,6 +175,7 @@ export async function generateDocumentV2WithBytes(
     active[pdfField] = (mappedKey || "") as DocumentV2FieldKey | "";
   }
   const allData = data as Record<string, string>;
+  const fixedManagerName = "รองสฤษดิ์ ศรีสมาน";
   for (const [pdfField, mappedValue] of Object.entries(active)) {
     if (!mappedValue) continue;
     let value = "";
@@ -185,8 +186,12 @@ export async function generateDocumentV2WithBytes(
     } else {
       value = String(allData[mappingToken as DocumentV2FieldKey] || "");
     }
+    if (/^(manager_name|MANAGER_NAME|approverName)$/i.test(pdfField)) {
+      value = fixedManagerName;
+    }
     setTextIfExists(form, [pdfField], value, thaiFont);
   }
+  setTextIfExists(form, ["manager_name", "MANAGER_NAME", "approverName"], fixedManagerName, thaiFont);
   form.updateFieldAppearances(thaiFont);
 
   form.flatten();
