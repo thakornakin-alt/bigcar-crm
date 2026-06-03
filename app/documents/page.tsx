@@ -11,7 +11,7 @@ export default function DocumentsPage() {
   return (
     <div className="space-y-5">
       <div className="mx-auto w-full max-w-3xl px-1 pt-1">
-        <p className="text-xs font-black uppercase tracking-[0.22em] text-brand">Document Center</p>
+        <p className="text-xs font-black uppercase tracking-[0.22em] text-brand">BIG CAR CRM</p>
         <h1 className="mt-2 text-3xl font-black text-white">งานเอกสาร</h1>
         <p className="mt-2 text-sm leading-6 text-soft">สลับดูเอกสารเปล่าหรือสร้างเอกสารได้จากหน้านี้</p>
       </div>
