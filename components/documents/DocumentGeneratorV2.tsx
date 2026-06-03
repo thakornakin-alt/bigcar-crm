@@ -492,6 +492,20 @@ export function DocumentGeneratorV2() {
       setPngUrl(url);
       setPngBlob(nextPngBlob);
       setPngFileName(fileName);
+      const file = new File([nextPngBlob], fileName, { type: "image/png" });
+      const nav = navigator as Navigator & {
+        canShare?: (data: { files?: File[] }) => boolean;
+        share?: (data: { files?: File[]; title?: string; text?: string }) => Promise<void>;
+      };
+      const shareData = {
+        title: "เอกสารจาก BIG CAR CRM",
+        text: "PNG จาก DocumentGeneratorV2",
+        files: [file]
+      };
+      if (nav.share && (!nav.canShare || nav.canShare(shareData))) {
+        await nav.share(shareData);
+        return;
+      }
       downloadObjectUrl(url, fileName);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Export PNG ไม่สำเร็จ");
