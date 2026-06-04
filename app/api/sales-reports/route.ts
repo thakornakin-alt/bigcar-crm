@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { saveSalesReport } from "@/lib/apps-script";
+import { syncBookingDeliveryFromReportHistory } from "@/lib/booking-delivery";
 import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
 import type { SalesReportInput } from "@/lib/types";
 
@@ -64,6 +65,7 @@ export async function POST(request: Request) {
     }
 
     const saved = await saveSalesReport(report);
+    await syncBookingDeliveryFromReportHistory().catch(() => null);
     return NextResponse.json({ report: saved }, { status: 201 });
   } catch (error) {
     return NextResponse.json(

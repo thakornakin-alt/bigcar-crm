@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 const exportStores = [
   "calendar-events.json",
   "sales-leads.json",
+  "booking-delivery.json",
   "vehicle-prep.json",
   "sales-profiles.json"
 ];

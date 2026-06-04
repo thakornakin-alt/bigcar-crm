@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 const restoreStores = new Set([
   "calendar-events.json",
   "sales-leads.json",
+  "booking-delivery.json",
   "vehicle-prep.json",
   "sales-profiles.json"
 ]);

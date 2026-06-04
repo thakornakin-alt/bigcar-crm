@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { listCalendarEvents } from "@/lib/calendar-events";
 import { listReportHistory } from "@/lib/apps-script";
+import { upsertBookingDeliveryFromReportHistory } from "@/lib/booking-delivery";
 import { listSalesLeads } from "@/lib/leads";
 import { canReadAllCustomers, getRequestSalesUser } from "@/lib/request-user";
 import { listVehiclePrepRecords } from "@/lib/vehicle-prep";
@@ -63,6 +64,7 @@ export async function GET() {
       listVehiclePrepRecords(),
       listCalendarEvents({ from: today, to: today })
     ]);
+    const bookingDeliveryRecords = await upsertBookingDeliveryFromReportHistory(reports).catch(() => []);
 
     const leads =
       currentUser && !canReadAllCustomers(currentUser)
@@ -88,6 +90,8 @@ export async function GET() {
         financeWaiting: financeWaiting.length,
         waitingDelivery: readyDelivery.length,
         delivered: delivered.length,
+        bookingDeliveries: bookingDeliveryRecords.length,
+        bookingDeliveriesPending: bookingDeliveryRecords.filter((record) => record.status === "ติดจองรอคอนเฟิร์ม").length,
         todayEvents: todayEvents.length
       }
     });

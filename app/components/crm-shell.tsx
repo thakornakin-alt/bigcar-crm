@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ReactNode } from "react";
-import { BarChart3, Calculator, Car, FileText, Home, Radio, Shield, UploadCloud, Users, Wrench } from "lucide-react";
+import { BarChart3, Calculator, Car, ClipboardCheck, FileText, Home, Radio, Shield, UploadCloud, Users, Wrench } from "lucide-react";
 import { CrmUserProfile, fullName, roleLabels } from "@/lib/crm-core";
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
   { href: "/realtime-booking", label: "แย่งคิวรถ", icon: Radio },
   { href: "/booking-reports", label: "รายงานจอง", icon: FileText },
   { href: "/sales-reports", label: "รายงานขาย", icon: FileText },
+  { href: "/booking-delivery", label: "ติดจองส่งมอบ", icon: ClipboardCheck },
   { href: "/vehicle-prep", label: "รอส่งมอบ", icon: Wrench },
   { href: "/leads", label: "ลูกค้ามุ่งหวัง", icon: Users },
   { href: "/finance-approval", label: "รอผลไฟแนนซ์", icon: UploadCloud },

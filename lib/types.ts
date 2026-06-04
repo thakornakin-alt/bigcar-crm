@@ -383,6 +383,51 @@ export type ReportHistoryItem = {
   reportText: string;
 };
 
+export type BookingDeliveryStatus =
+  | "ติดจองรอคอนเฟิร์ม"
+  | "พร้อมส่งมอบ"
+  | "ส่งมอบแล้ว"
+  | "ยกเลิก";
+
+export type BookingDeliveryRecord = {
+  id: string;
+  bookingId: string;
+  bookingReportId: string;
+  salesReportId: string;
+  plate: string;
+  customerName: string;
+  brand: string;
+  model: string;
+  year: string;
+  color: string;
+  engineNo: string;
+  chassisNo: string;
+  saleName: string;
+  teamName: string;
+  teamId: string;
+  source: string;
+  ownership: string;
+  project: string;
+  campaign: string;
+  bookingPrice: string;
+  salePrice: string;
+  finalPrice: string;
+  centralDiscount: string;
+  bookingDeduction: string;
+  downPayment: string;
+  netPayment: string;
+  paymentType: string;
+  deliveryDate: string;
+  deliveryLocation: string;
+  status: BookingDeliveryStatus;
+  statusSource: "auto" | "manual";
+  summary: string;
+  alertSummary: string;
+  cancelReason: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ApprovalStaff = {
   nickname: string;
   fullName: string;

@@ -20,6 +20,8 @@ type DashboardMetrics = {
   financeWaiting: number;
   waitingDelivery: number;
   delivered: number;
+  bookingDeliveries: number;
+  bookingDeliveriesPending: number;
   todayEvents: number;
 };
 
@@ -30,6 +32,8 @@ const blankMetrics: DashboardMetrics = {
   financeWaiting: 0,
   waitingDelivery: 0,
   delivered: 0,
+  bookingDeliveries: 0,
+  bookingDeliveriesPending: 0,
   todayEvents: 0
 };
 
@@ -63,6 +67,7 @@ export default function DashboardPage() {
       <section className="mb-4 grid auto-rows-[116px] grid-cols-2 gap-3">
         <BentoCard href="/leads" label="ลูกค้ามุ่งหวัง" value={dashboard.leads} hint={`ใหม่วันนี้ ${dashboard.newLeadsToday}`} icon={<User size={18} />} featured />
         <BentoCard href="/booking-reports" label="ยอดจอง" value={dashboard.bookings} icon={<FileText size={18} />} />
+        <BentoCard href="/booking-delivery" label="Booking Delivery" value={dashboard.bookingDeliveries} hint={`ติดจอง ${dashboard.bookingDeliveriesPending}`} icon={<ClipboardCheck size={18} />} />
         <BentoCard href="/finance-approval" label="รอผลไฟแนนซ์" value={dashboard.financeWaiting} icon={<ClipboardCheck size={18} />} />
         <BentoCard href="/vehicle-prep" label="รอส่งมอบ" value={dashboard.waitingDelivery} icon={<CalendarDays size={18} />} />
         <BentoCard href="/case-closure" label="ส่งมอบแล้ว" value={dashboard.delivered} icon={<Check size={18} />} />
@@ -140,6 +145,8 @@ function formatDashboardMetrics(metrics: DashboardMetrics) {
     financeWaiting: metrics.financeWaiting.toLocaleString("th-TH"),
     waitingDelivery: metrics.waitingDelivery.toLocaleString("th-TH"),
     delivered: metrics.delivered.toLocaleString("th-TH"),
+    bookingDeliveries: metrics.bookingDeliveries.toLocaleString("th-TH"),
+    bookingDeliveriesPending: metrics.bookingDeliveriesPending.toLocaleString("th-TH"),
     todayEvents: metrics.todayEvents ? `${metrics.todayEvents.toLocaleString("th-TH")} งาน` : "เปิดปฏิทิน"
   };
 }
