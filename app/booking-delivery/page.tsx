@@ -24,6 +24,15 @@ import {
 import type { BookingDeliveryRecord, BookingDeliveryStatus } from "@/lib/types";
 
 type StatusFilter = "all" | BookingDeliveryStatus;
+type SalesSummaryRow = {
+  key: string;
+  label: string;
+  total: number;
+  pending: number;
+  ready: number;
+  delivered: number;
+  cancelled: number;
+};
 
 const statusMeta: Record<BookingDeliveryStatus, { label: string; tone: "brand" | "muted" | "warning" }> = {
   "ติดจองรอคอนเฟิร์ม": { label: "ติดจองรอคอนเฟิร์ม", tone: "warning" },
@@ -162,6 +171,31 @@ export default function BookingDeliveryPage() {
     );
   }, [records]);
 
+  const salesSummary = useMemo<SalesSummaryRow[]>(() => {
+    const groups = new Map<string, SalesSummaryRow>();
+    for (const record of records) {
+      const key = text(record.saleName || record.teamName || "ไม่ระบุ");
+      const label = key || "ไม่ระบุ";
+      const current =
+        groups.get(key) || {
+          key,
+          label,
+          total: 0,
+          pending: 0,
+          ready: 0,
+          delivered: 0,
+          cancelled: 0
+        };
+      current.total += 1;
+      if (record.status === "ติดจองรอคอนเฟิร์ม") current.pending += 1;
+      if (record.status === "พร้อมส่งมอบ") current.ready += 1;
+      if (record.status === "ส่งมอบแล้ว") current.delivered += 1;
+      if (record.status === "ยกเลิก") current.cancelled += 1;
+      groups.set(key, current);
+    }
+    return Array.from(groups.values()).sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "th"));
+  }, [records]);
+
   const visibleRecords = useMemo(() => {
     return records
       .filter((record) => (filter === "all" ? true : record.status === filter))
@@ -233,6 +267,34 @@ export default function BookingDeliveryPage() {
         <StatCard label="ส่งมอบแล้ว" value={`${counts.delivered.toLocaleString("th-TH")} คัน`} icon={<CheckCircle2 size={18} />} tone="muted" />
       </section>
 
+      <SectionCard title="Mini Sales Summary" icon={<ClipboardCheck size={18} />} className="mb-4">
+        {salesSummary.length ? (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {salesSummary.map((row) => (
+              <div key={row.key || row.label} className="rounded-[22px] border border-white/10 bg-[#0b0d11] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-white">{row.label}</p>
+                    <p className="mt-1 text-xs text-soft">รวม {row.total.toLocaleString("th-TH")} คัน</p>
+                  </div>
+                  <NativeBadge tone={row.pending ? "warning" : "muted"}>{row.pending ? "ติดจอง" : "ปกติ"}</NativeBadge>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-bold text-soft">
+                  <MiniStat label="ติดจอง" value={row.pending} />
+                  <MiniStat label="พร้อมส่งมอบ" value={row.ready} />
+                  <MiniStat label="ส่งมอบแล้ว" value={row.delivered} />
+                  <MiniStat label="ยกเลิก" value={row.cancelled} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-[22px] border border-white/10 bg-[#0b0d11] px-4 py-8 text-center text-soft">
+            ยังไม่มีข้อมูล Booking Delivery
+          </div>
+        )}
+      </SectionCard>
+
       <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
         <SectionCard title="ค้นหาและกรอง" icon={<Search size={18} />}>
           <SearchField
@@ -303,7 +365,11 @@ export default function BookingDeliveryPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="รายละเอียดงาน" icon={<AlertCircle size={18} />}>
+        <SectionCard
+          title="รายละเอียดงาน"
+          icon={<AlertCircle size={18} />}
+          className="max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-30 max-lg:max-h-[82vh] max-lg:overflow-y-auto max-lg:rounded-t-[28px] lg:sticky lg:top-4"
+        >
           {selectedRecord ? (
             <div className="space-y-4">
               <div className="rounded-[22px] border border-white/10 bg-[#0b0d11] p-4">
@@ -456,6 +522,15 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     <div className="rounded-2xl border border-white/10 bg-[#11151d] px-4 py-3">
       <p className="text-[11px] font-black uppercase tracking-[0.14em] text-brand">{label}</p>
       <p className="mt-1 text-sm font-bold text-white">{value}</p>
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#11151d] px-3 py-2">
+      <p className="text-[11px] text-soft">{label}</p>
+      <p className="mt-1 text-base font-black text-white">{value.toLocaleString("th-TH")}</p>
     </div>
   );
 }

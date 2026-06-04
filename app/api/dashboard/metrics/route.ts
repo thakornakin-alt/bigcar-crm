@@ -55,15 +55,25 @@ function isFinanceBooking(report: ReportHistoryItem) {
 
 export async function GET() {
   try {
-    const currentUser = getRequestSalesUser();
+    let currentUser = null;
+    try {
+      currentUser = getRequestSalesUser();
+    } catch {
+      currentUser = null;
+    }
     const today = bangkokDateKey();
     const legacyToday = legacyThaiDate();
-    const [allLeads, reports, prepRecords, todayEvents] = await Promise.all([
+    const [allLeadsResult, reportsResult, prepRecordsResult, todayEventsResult] = await Promise.allSettled([
       listSalesLeads(),
       listReportHistory("", "all"),
       listVehiclePrepRecords(),
       listCalendarEvents({ from: today, to: today })
     ]);
+
+    const allLeads = allLeadsResult.status === "fulfilled" ? allLeadsResult.value : [];
+    const reports = reportsResult.status === "fulfilled" ? reportsResult.value : [];
+    const prepRecords = prepRecordsResult.status === "fulfilled" ? prepRecordsResult.value : [];
+    const todayEvents = todayEventsResult.status === "fulfilled" ? todayEventsResult.value : [];
     const bookingDeliveryRecords = await upsertBookingDeliveryFromReportHistory(reports).catch(() => []);
 
     const leads =
@@ -79,7 +89,13 @@ export async function GET() {
       report.status !== "finance_approved" &&
       !salesPlateKeys.has(normalizePlate(report.plate))
     );
-    const readyDelivery = buildCalendarVehicleOptions(activeReports, prepRecords);
+    const readyDelivery = (() => {
+      try {
+        return buildCalendarVehicleOptions(activeReports, prepRecords);
+      } catch {
+        return [];
+      }
+    })();
     const delivered = sales.filter((report) => report.status === "closed" || report.status === "delivered");
 
     return NextResponse.json({
@@ -96,9 +112,19 @@ export async function GET() {
       }
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "โหลด Dashboard ไม่สำเร็จ" },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      metrics: {
+        leads: 0,
+        newLeadsToday: 0,
+        bookings: 0,
+        financeWaiting: 0,
+        waitingDelivery: 0,
+        delivered: 0,
+        bookingDeliveries: 0,
+        bookingDeliveriesPending: 0,
+        todayEvents: 0
+      },
+      warning: error instanceof Error ? error.message : "โหลด Dashboard ไม่สำเร็จ"
+    });
   }
 }
