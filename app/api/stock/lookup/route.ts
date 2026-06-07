@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listStockVehicles, lookupStockByPlate } from "@/lib/apps-script";
+import { listStockVehicles, lookupStockByPlateDetailed } from "@/lib/apps-script";
 import { mergeStockExtraFields } from "@/lib/stock-extra-fields";
 import type { StockVehicle } from "@/lib/types";
 
@@ -44,7 +44,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ vehicle: null });
     }
 
-    const vehicle = await lookupStockByPlate(plate);
+    const lookup = await lookupStockByPlateDetailed(plate);
+    const vehicle = lookup.vehicle;
     const [mergedVehicle] = await mergeStockExtraFields(vehicle ? [vehicle] : []);
     const normalized = normalizeLookupVehicle(mergedVehicle || vehicle);
 
@@ -56,7 +57,14 @@ export async function GET(request: Request) {
       const exactRaw = exactListed as (StockVehicle & Record<string, unknown>) | null;
       return NextResponse.json({
         vehicle: normalized,
+        warning: lookup.warning || undefined,
         debug: {
+          appsScriptUrlConfigured: lookup.debug.appsScriptUrlConfigured,
+          endpointUsed: lookup.debug.endpointUsed,
+          fetchStatus: lookup.debug.fetchStatus,
+          fetchStatusText: lookup.debug.fetchStatusText,
+          errorMessage: lookup.debug.errorMessage,
+          fallbackUsed: lookup.debug.fallbackUsed,
           lookupKeys: vehicle ? Object.keys(vehicle as StockVehicle & Record<string, unknown>) : [],
           lookupEngineNo: vehicle ? pickValue(vehicle as StockVehicle & Record<string, unknown>, ["engineNo", "engineNumber", "engine", "Engine", "EngineNo", "Engine No", "Engine No.", "EngineNumber", "Engine Number", "เลขเครื่อง", "เลขเครื่องยนต์", "MotorNo", "Motor No"]) : "",
           lookupVin: vehicle ? pickValue(vehicle as StockVehicle & Record<string, unknown>, ["vin", "เลขตัวถัง", "เลขตัวรถ", "VIN", "Chassis"]) : "",
@@ -69,10 +77,32 @@ export async function GET(request: Request) {
       });
     }
 
-    return NextResponse.json({ vehicle: normalized });
+    return NextResponse.json({
+      vehicle: normalized,
+      warning: lookup.warning || undefined,
+      debug: {
+        appsScriptUrlConfigured: lookup.debug.appsScriptUrlConfigured,
+        endpointUsed: lookup.debug.endpointUsed,
+        fetchStatus: lookup.debug.fetchStatus,
+        fetchStatusText: lookup.debug.fetchStatusText,
+        errorMessage: lookup.debug.errorMessage,
+        fallbackUsed: lookup.debug.fallbackUsed
+      }
+    });
   } catch (error) {
     return NextResponse.json(
-      { vehicle: null, warning: error instanceof Error ? error.message : "Unable to lookup stock" },
+      {
+        vehicle: null,
+        warning: error instanceof Error ? error.message : "Unable to lookup stock",
+        debug: {
+          appsScriptUrlConfigured: Boolean(process.env.GOOGLE_APPS_SCRIPT_URL),
+          endpointUsed: process.env.GOOGLE_APPS_SCRIPT_URL || "",
+          fetchStatus: null,
+          fetchStatusText: "",
+          errorMessage: error instanceof Error ? error.message : "Unable to lookup stock",
+          fallbackUsed: false
+        }
+      },
       { status: 200 }
     );
   }

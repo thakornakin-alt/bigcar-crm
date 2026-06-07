@@ -11,7 +11,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const log = ingestVehiclePrices({
+    const log = await ingestVehiclePrices({
       subject: String(body.subject || "Pricing and Status Update"),
       sender: String(body.sender || "pricing@example.com"),
       recipient: String(body.recipient || "retail-team@example.com"),

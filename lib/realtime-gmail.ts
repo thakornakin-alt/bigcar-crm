@@ -225,7 +225,7 @@ export async function syncRealtimeBookingFromGmail(input: { query?: string; maxR
       attachments.push({ filename, rowCount: rows.length, rows });
 
       if (rows.length) {
-        const log = ingestVehiclePrices({
+        const log = await ingestVehiclePrices({
           subject,
           sender,
           recipient,

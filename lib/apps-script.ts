@@ -82,6 +82,57 @@ function getAppsScriptUrl() {
   return url;
 }
 
+function normalizePlateLookup(value: string) {
+  return String(value || "").replace(/\s+/g, "").toUpperCase();
+}
+
+async function callAppsScriptDetailed<T>(action: AppsScriptAction, payload: Record<string, unknown> = {}) {
+  const endpoint = getAppsScriptUrl();
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8"
+      },
+      body: JSON.stringify({ action, ...payload }),
+      cache: "no-store"
+    });
+    const text = await response.text();
+    let data: AppsScriptResponse<T> | null = null;
+    try {
+      data = JSON.parse(text) as AppsScriptResponse<T>;
+    } catch {
+      return {
+        ok: false as const,
+        endpointUsed: endpoint,
+        appsScriptUrlConfigured: true,
+        fetchStatus: response.status,
+        fetchStatusText: response.statusText,
+        errorMessage: "Apps Script returned an invalid JSON response",
+        responseText: text
+      };
+    }
+    return {
+      ok: response.ok && !!data && data.ok === true,
+      endpointUsed: endpoint,
+      appsScriptUrlConfigured: true,
+      fetchStatus: response.status,
+      fetchStatusText: response.statusText,
+      data,
+      responseText: text
+    } as const;
+  } catch (error) {
+    return {
+      ok: false as const,
+      endpointUsed: endpoint,
+      appsScriptUrlConfigured: true,
+      fetchStatus: null as number | null,
+      fetchStatusText: "",
+      errorMessage: error instanceof Error ? error.message : "Apps Script fetch failed"
+    };
+  }
+}
+
 async function callAppsScript<T>(action: AppsScriptAction, payload: Record<string, unknown> = {}) {
   const response = await fetch(getAppsScriptUrl(), {
     method: "POST",
@@ -144,7 +195,91 @@ export async function saveBookingReport(input: BookingReportInput) {
 
 export async function lookupStockByPlate(plate: string) {
   const data = await callAppsScript<{ vehicle: StockVehicle | null }>("lookupStockByPlate", { plate });
-  return data.vehicle;
+  if (data.vehicle) return data.vehicle;
+
+  const normalizedPlate = normalizePlateLookup(plate);
+  if (!normalizedPlate) return null;
+
+  const listed = await listStockVehicles({ query: plate, limit: 1000 }).catch(() => ({ vehicles: [] as StockVehicle[], total: 0 }));
+  const exact = (listed.vehicles || []).find((vehicle) => normalizePlateLookup(vehicle.plate) === normalizedPlate) || null;
+  return exact;
+}
+
+export async function lookupStockByPlateDetailed(plate: string) {
+  const endpointUsed = process.env.GOOGLE_APPS_SCRIPT_URL || "";
+  const appsScriptUrlConfigured = Boolean(endpointUsed);
+
+  if (!appsScriptUrlConfigured) {
+    return {
+      vehicle: null as StockVehicle | null,
+      warning: "Missing environment variable: GOOGLE_APPS_SCRIPT_URL",
+      debug: {
+        appsScriptUrlConfigured: false,
+        endpointUsed,
+        fetchStatus: null as number | null,
+        fetchStatusText: "",
+        errorMessage: "Missing environment variable: GOOGLE_APPS_SCRIPT_URL",
+        fallbackUsed: false
+      }
+    };
+  }
+
+  const primary = await callAppsScriptDetailed<{ vehicle: StockVehicle | null }>("lookupStockByPlate", { plate });
+  if (primary.ok && primary.data && "vehicle" in primary.data && primary.data.vehicle) {
+    return {
+      vehicle: primary.data.vehicle,
+      debug: {
+        appsScriptUrlConfigured,
+        endpointUsed: primary.endpointUsed,
+        fetchStatus: primary.fetchStatus,
+        fetchStatusText: primary.fetchStatusText,
+        errorMessage: "",
+        fallbackUsed: false
+      }
+    };
+  }
+
+  const primaryError =
+    !primary.ok
+      ? primary.errorMessage || "Apps Script request failed"
+      : "No vehicle returned from Apps Script";
+
+  const normalizedPlate = normalizePlateLookup(plate);
+  let fallbackUsed = false;
+  let fallbackError = "";
+  try {
+    const listed = await listStockVehicles({ query: plate, limit: 1000 });
+    fallbackUsed = true;
+    const exact = (listed.vehicles || []).find((vehicle) => normalizePlateLookup(vehicle.plate) === normalizedPlate) || null;
+    if (exact) {
+      return {
+        vehicle: exact,
+        debug: {
+          appsScriptUrlConfigured,
+          endpointUsed: primary.endpointUsed,
+          fetchStatus: primary.fetchStatus,
+          fetchStatusText: primary.fetchStatusText,
+          errorMessage: "",
+          fallbackUsed: true
+        }
+      };
+    }
+  } catch (error) {
+    fallbackError = error instanceof Error ? error.message : "Apps Script fallback lookup failed";
+  }
+
+  return {
+    vehicle: null as StockVehicle | null,
+    warning: fallbackError || primaryError,
+    debug: {
+      appsScriptUrlConfigured,
+      endpointUsed: primary.endpointUsed,
+      fetchStatus: primary.fetchStatus,
+      fetchStatusText: primary.fetchStatusText,
+      errorMessage: fallbackError || primaryError,
+      fallbackUsed
+    }
+  };
 }
 
 export async function listStockVehicles(input: { query?: string; limit?: number } = {}) {

@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, mode: "gmail-sync", result });
     }
 
-    const log = ingestVehiclePrices({
+    const log = await ingestVehiclePrices({
       subject: String(body.subject || ""),
       sender: String(body.sender || ""),
       recipient: String(body.recipient || ""),

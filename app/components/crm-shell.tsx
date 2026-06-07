@@ -7,7 +7,7 @@ const navItems = [
   { href: "/crm", label: "CRM", icon: Home },
   { href: "/stock-export", label: "สต็อก", icon: Car },
   { href: "/calculator", label: "ค่างวด", icon: Calculator },
-  { href: "/realtime-booking", label: "แย่งคิวรถ", icon: Radio },
+  { href: "/realtime-booking", label: "Realtime Booking", icon: Radio },
   { href: "/booking-reports", label: "รายงานจอง", icon: FileText },
   { href: "/sales-reports", label: "รายงานขาย", icon: FileText },
   { href: "/booking-delivery", label: "ติดจองส่งมอบ", icon: ClipboardCheck },
