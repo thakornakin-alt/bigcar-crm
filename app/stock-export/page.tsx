@@ -2640,7 +2640,7 @@ function renderStockTableCanvas(
   ctx.textAlign = "right";
   ctx.fillStyle = "#0f172a";
   ctx.font = "800 26px Arial, Tahoma, sans-serif";
-  ctx.fillText(`หน้า ${page}/${totalPages}`, width - margin - 16, 62);
+  ctx.fillText(`หน้า ${page}/${totalPages}`, width - margin - 28, 62);
   drawStockExportContact(ctx, contact, width - margin - 18, 78);
 
   let x = margin;
@@ -2920,10 +2920,10 @@ function drawWrappedBadgeCellText(ctx: CanvasRenderingContext2D, text: string, x
 
 function drawLocationBadgeCellText(ctx: CanvasRenderingContext2D, text: string, x: number, centerY: number, maxWidth: number) {
   const value = String(text || "-").trim() || "-";
-  const measured = Math.max(62, Math.min(ctx.measureText(value).width + 20, maxWidth));
+  const measured = Math.max(84, Math.min(ctx.measureText(value).width + 30, maxWidth));
   const left = x - measured / 2;
   ctx.save();
-  drawRoundedRect(ctx, left, centerY - 16, measured, 32, 16);
+  drawRoundedRect(ctx, left, centerY - 17, measured, 34, 17);
   ctx.fillStyle = "#eef7f2";
   ctx.fill();
   ctx.strokeStyle = "#cfe3d7";
