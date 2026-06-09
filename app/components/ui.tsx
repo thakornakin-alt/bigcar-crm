@@ -128,7 +128,7 @@ const globalNavItems = [
   { href: "/realtime-booking", label: "Realtime Booking", icon: Radio },
   { href: "/booking-reports", label: "รายงานจอง", icon: FileText },
   { href: "/sales-reports", label: "รายงานขาย", icon: FileText },
-  { href: "/booking-delivery", label: "ติดจองส่งมอบ", icon: ClipboardCheck },
+  { href: "/booking-delivery", label: "ยอดจองทั้งหมด", icon: ClipboardCheck },
   { href: "/vehicle-prep", label: "รอส่งมอบ", icon: Wrench },
   { href: "/leads", label: "ลูกค้ามุ่งหวัง", icon: Users },
   { href: "/finance-approval", label: "รอผลไฟแนนซ์", icon: UploadCloud },

@@ -86,10 +86,46 @@ function normalizePlateLookup(value: string) {
   return String(value || "").replace(/\s+/g, "").toUpperCase();
 }
 
+function appsScriptConnectionErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  const code = (error as { code?: string } | null)?.code || "";
+  if (
+    message.toLowerCase().includes("fetch failed") ||
+    message.toLowerCase().includes("timeout") ||
+    message.toLowerCase().includes("abort") ||
+    message.toLowerCase().includes("eacces") ||
+    message.toLowerCase().includes("econnrefused") ||
+    message.toLowerCase().includes("enotfound") ||
+    code === "EACCES" ||
+    code === "ECONNREFUSED" ||
+    code === "ENOTFOUND" ||
+    code === "ETIMEDOUT" ||
+    code === "ABORT_ERR"
+  ) {
+    return "ไม่สามารถเชื่อมต่อ Google Apps Script ได้ กรุณาตรวจ Network/Firewall/Internet/Runtime";
+  }
+  return message || "Apps Script fetch failed";
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal
+    });
+  } catch (error) {
+    throw new Error(appsScriptConnectionErrorMessage(error));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function callAppsScriptDetailed<T>(action: AppsScriptAction, payload: Record<string, unknown> = {}) {
   const endpoint = getAppsScriptUrl();
   try {
-    const response = await fetch(endpoint, {
+    const response = await fetchWithTimeout(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "text/plain;charset=utf-8"
@@ -134,7 +170,7 @@ async function callAppsScriptDetailed<T>(action: AppsScriptAction, payload: Reco
 }
 
 async function callAppsScript<T>(action: AppsScriptAction, payload: Record<string, unknown> = {}) {
-  const response = await fetch(getAppsScriptUrl(), {
+  const response = await fetchWithTimeout(getAppsScriptUrl(), {
     method: "POST",
     headers: {
       "Content-Type": "text/plain;charset=utf-8"

@@ -67,7 +67,7 @@ export default function DashboardPage() {
       <section className="mb-4 grid auto-rows-[116px] grid-cols-2 gap-3">
         <BentoCard href="/leads" label="ลูกค้ามุ่งหวัง" value={dashboard.leads} hint={`ใหม่วันนี้ ${dashboard.newLeadsToday}`} icon={<User size={18} />} featured />
         <BentoCard href="/booking-reports" label="ยอดจอง" value={dashboard.bookings} icon={<FileText size={18} />} />
-        <BentoCard href="/booking-delivery" label="Booking Delivery" value={dashboard.bookingDeliveries} hint={`ติดจอง ${dashboard.bookingDeliveriesPending}`} icon={<ClipboardCheck size={18} />} />
+        <BentoCard href="/booking-delivery" label="Booking Delivery" value={dashboard.bookingDeliveries} hint={`ยอดจองทั้งหมด ${dashboard.bookingDeliveries}`} icon={<ClipboardCheck size={18} />} />
         <BentoCard href="/finance-approval" label="รอผลไฟแนนซ์" value={dashboard.financeWaiting} icon={<ClipboardCheck size={18} />} />
         <BentoCard href="/vehicle-prep" label="รอส่งมอบ" value={dashboard.waitingDelivery} icon={<CalendarDays size={18} />} />
         <BentoCard href="/case-closure" label="ส่งมอบแล้ว" value={dashboard.delivered} icon={<Check size={18} />} />

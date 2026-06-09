@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { simulateRealtimeBookingV2Price } from "@/lib/realtime-booking-v2";
+import { ensureRealtimeBookingV2Store, simulateRealtimeBookingV2Price } from "@/lib/realtime-booking-v2";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    await ensureRealtimeBookingV2Store();
     const result = await simulateRealtimeBookingV2Price({
       plate: String(body.plate || ""),
       rtPrice: Number(body.rtPrice || 0),

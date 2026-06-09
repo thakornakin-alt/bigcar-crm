@@ -33,9 +33,11 @@ export async function POST(request: Request) {
     const result = await createBookingEmailDraft(payload);
     return NextResponse.json({ result }, { status: 201 });
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to create Gmail draft";
+    const status = message.includes("ไม่สามารถเชื่อมต่อ Google Apps Script ได้") ? 503 : 500;
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unable to create Gmail draft" },
-      { status: 500 }
+      { error: message },
+      { status }
     );
   }
 }

@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readRealtimeBookingV2LineGroupId, writeRealtimeBookingV2LineGroupId } from "@/lib/realtime-booking-v2-settings";
 import { formatRealtimeBookingV2LineText } from "@/lib/realtime-booking-v2-format";
+import { SYSTEM_VERSION, WATCH_MODE_VERSION } from "@/lib/system-version";
 
 type QueueItem = {
   id: string;
@@ -12,7 +13,7 @@ type QueueItem = {
   paymentType: "cash" | "finance";
   discount: number;
   remark?: string;
-  status: "WAITING" | "MATCHED" | "BOOKED" | "CANCELLED";
+  status: "WAITING" | "MATCHED" | "BOOKED" | "DONE" | "CANCELLED";
   createdAt: string;
   matchedAt?: string;
   bookedAt?: string;
@@ -177,6 +178,14 @@ function time(value?: string) {
   }).format(new Date(value));
 }
 
+function formatCountdown(ms: number) {
+  const safeMs = Math.max(ms, 0);
+  const totalSeconds = Math.ceil(safeMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 function normalizePlate(value: string) {
   return String(value || "").replace(/\s+/g, "").toUpperCase();
 }
@@ -210,14 +219,16 @@ function formatLastSync(value?: string | null) {
 function statusLabel(status: QueueItem["status"], lineStatus?: QueueItem["lineStatus"], bookingConfirmedAt?: string) {
   if (status === "WAITING") return "🟡 รอราคา";
   if (status === "MATCHED") return "🟢 พร้อมส่งจอง";
-  if (status === "BOOKED" && lineStatus === "sent" && !bookingConfirmedAt) return "🔵 ส่งจองแล้ว";
+  if (status === "BOOKED" && lineStatus === "sent") return "🔵 ส่งจองแล้ว";
+  if (status === "DONE") return "✅ เสร็จสิ้น";
   return "⚪ ยกเลิกแล้ว";
 }
 
 function statusTone(status: QueueItem["status"], lineStatus?: QueueItem["lineStatus"], bookingConfirmedAt?: string) {
   if (status === "WAITING") return "text-amber-200";
   if (status === "MATCHED") return "text-emerald-200";
-  if (status === "BOOKED" && lineStatus === "sent" && !bookingConfirmedAt) return "text-sky-200";
+  if (status === "BOOKED" && lineStatus === "sent") return "text-sky-200";
+  if (status === "DONE") return "text-emerald-300";
   return "text-white/70";
 }
 
@@ -248,10 +259,21 @@ export default function RealtimeBookingV2Page() {
   const [remark, setRemark] = useState("");
   const [selectedLineGroupId, setSelectedLineGroupId] = useState("");
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [watchStartedAt, setWatchStartedAt] = useState<string | null>(null);
+  const [watchEndsAt, setWatchEndsAt] = useState<string | null>(null);
+  const [watchNowAt, setWatchNowAt] = useState<number>(Date.now());
+  const [isWatching, setIsWatching] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const autoSendPendingRef = useRef<Set<string>>(new Set());
+  const watchSyncLockRef = useRef(false);
+  const lastManualSyncAtRef = useRef(0);
+  const watchSessionRef = useRef(0);
+  const watchBaselineSentIdsRef = useRef<Set<string>>(new Set());
+  const watchIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const watchClockRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isDev = process.env.NODE_ENV !== "production";
   const debugStoreKey = "bigcar-realtime-booking-v2-debug";
   const detailsStoreKey = "bigcar-realtime-booking-v2-details";
@@ -261,6 +283,151 @@ export default function RealtimeBookingV2Page() {
     setDashboard(data);
     return data;
   }
+
+  const stopWatch = useCallback((reason?: string) => {
+    watchSessionRef.current += 1;
+    if (watchIntervalRef.current) {
+      clearInterval(watchIntervalRef.current);
+      watchIntervalRef.current = null;
+    }
+    if (watchClockRef.current) {
+      clearInterval(watchClockRef.current);
+      watchClockRef.current = null;
+    }
+    setIsWatching(false);
+    setWatchStartedAt(null);
+    setWatchEndsAt(null);
+    setWatchNowAt(Date.now());
+    if (reason) {
+      setMessage(reason);
+    }
+  }, []);
+
+  const evaluateWatchCompletion = useCallback(
+    (data: Dashboard) => {
+      const queue = data.queue || [];
+      const hasNewSent = queue.some(
+        (item) =>
+          item.status === "BOOKED" &&
+          item.lineStatus === "sent" &&
+          !watchBaselineSentIdsRef.current.has(item.id)
+      );
+      if (hasNewSent) {
+        stopWatch("เจอราคาแล้ว ส่ง LINE สำเร็จ");
+        return true;
+      }
+      return false;
+    },
+    [stopWatch]
+  );
+
+  const performSync = useCallback(
+    async (source: "manual" | "watch", sessionId?: number) => {
+      if (source === "manual") {
+        const elapsed = Date.now() - lastManualSyncAtRef.current;
+        if (elapsed < 5000) {
+          throw new Error(`กรุณารออีก ${Math.ceil((5000 - elapsed) / 1000)} วินาที`);
+        }
+      }
+
+      if (watchSyncLockRef.current) {
+        if (source === "manual") {
+          throw new Error("กำลัง Sync อยู่");
+        }
+        return null;
+      }
+
+      watchSyncLockRef.current = true;
+      if (source === "manual") {
+        lastManualSyncAtRef.current = Date.now();
+      }
+      setIsSyncing(true);
+      setError("");
+      setMessage("");
+
+      try {
+        const endpoint = source === "watch" ? "/api/realtime-booking-v2/auto-sync" : "/api/realtime-booking-v2/gmail-sync";
+        const result = await api<{
+          checked: number;
+          processed?: unknown[];
+          skipped?: Array<{ reason?: string }>;
+          skippedSenderCount?: number;
+          skippedDelayCount?: number;
+          attachmentsFound?: number;
+          parsedRows?: number;
+          ingestedPrices?: number;
+          matchedCount?: number;
+          query?: string;
+          waitingQueueCount?: number;
+          syncSkippedReason?: string;
+          syncRunning?: boolean;
+          sentLineCount?: number;
+        }>(endpoint, {
+          method: "POST",
+          body: JSON.stringify({})
+        });
+
+        const syncLabel = source === "watch" ? "Auto Sync" : "Sync Gmail";
+        setMessage(
+          `${syncLabel}: query=${result.query || "n/a"} · checked=${result.checked} · processed=${result.processed?.length || 0} · skipped=${result.skipped?.length || 0} · skippedSenderCount=${result.skippedSenderCount || 0} · skippedDelayCount=${result.skippedDelayCount || 0} · attachmentsFound=${result.attachmentsFound || 0} · parsedRows=${result.parsedRows || 0} · ingestedPrices=${result.ingestedPrices || 0} · matchedCount=${result.matchedCount || 0} · waitingQueueCount=${result.waitingQueueCount || 0} · syncRunning=${result.syncRunning ? "true" : "false"}`
+        );
+        setLastSyncAt(new Date().toISOString());
+        const data = await load();
+        if (source === "watch" && sessionId === watchSessionRef.current) {
+          if (result.syncSkippedReason === "NO_WAITING") {
+            setMessage("ไม่มีคิวรอราคา");
+            stopWatch("ไม่มีคิวรอราคา");
+            return result;
+          }
+          if (evaluateWatchCompletion(data)) {
+            return result;
+          }
+        }
+        return result;
+      } finally {
+        watchSyncLockRef.current = false;
+        setIsSyncing(false);
+      }
+    },
+    [evaluateWatchCompletion]
+  );
+
+  const startWatch = useCallback(async () => {
+    const waitingCount = (dashboard?.queue || []).filter((item) => item.status === "WAITING").length;
+    if (!waitingCount) {
+      setError("ยังไม่มีคิว WAITING");
+      return;
+    }
+
+    const now = Date.now();
+    const sessionId = watchSessionRef.current + 1;
+    watchSessionRef.current = sessionId;
+    watchBaselineSentIdsRef.current = new Set(
+      (dashboard?.queue || []).filter((item) => item.status === "BOOKED" && item.lineStatus === "sent").map((item) => item.id)
+    );
+
+    if (watchIntervalRef.current) {
+      clearInterval(watchIntervalRef.current);
+      watchIntervalRef.current = null;
+    }
+    if (watchClockRef.current) {
+      clearInterval(watchClockRef.current);
+      watchClockRef.current = null;
+    }
+
+    setIsWatching(true);
+    setWatchStartedAt(new Date(now).toISOString());
+    setWatchEndsAt(new Date(now + 15 * 60 * 1000).toISOString());
+    setWatchNowAt(now);
+    setMessage("กำลังเฝ้าราคา… เหลือ 15:00");
+    setError("");
+
+    try {
+      await performSync("watch", sessionId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sync Gmail ไม่สำเร็จ");
+    }
+  }, [dashboard, performSync]);
 
   useEffect(() => {
     void load().catch((err) => setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ"));
@@ -326,7 +493,7 @@ export default function RealtimeBookingV2Page() {
     () =>
       (dashboard?.queue || []).filter((item) => {
         if (item.status === "CANCELLED") return false;
-        if (item.status === "BOOKED" && item.bookingConfirmedAt) return false;
+        if (item.status === "DONE") return false;
         return true;
       }),
     [dashboard]
@@ -336,7 +503,7 @@ export default function RealtimeBookingV2Page() {
     () => ({
       waiting: visibleQueue.filter((item) => item.status === "WAITING").length,
       readyToSend: visibleQueue.filter((item) => item.status === "MATCHED").length,
-      sent: visibleQueue.filter((item) => item.status === "BOOKED" && item.lineStatus === "sent" && !item.bookingConfirmedAt).length
+      sent: visibleQueue.filter((item) => item.status === "BOOKED" && item.lineStatus === "sent").length
     }),
     [visibleQueue]
   );
@@ -375,6 +542,11 @@ export default function RealtimeBookingV2Page() {
       (item.lineStatus === "not_sent" || item.lineStatus === "failed" || !item.lineStatus) &&
       Boolean(selectedLineTargetId),
     [selectedLineTargetId]
+  );
+
+  const canFinish = useCallback(
+    (item: QueueItem) => item.status === "MATCHED" || (item.status === "BOOKED" && item.lineStatus === "sent"),
+    []
   );
 
   const canAutoSendLine = useCallback(
@@ -490,36 +662,75 @@ export default function RealtimeBookingV2Page() {
   }
 
   async function onSyncGmail() {
-    setBusy(true);
-    setError("");
-    setMessage("");
     try {
-      const result = await api<{
-        checked: number;
-        processed?: unknown[];
-        skipped?: Array<{ reason?: string }>;
-        skippedSenderCount?: number;
-        skippedDelayCount?: number;
-        attachmentsFound?: number;
-        parsedRows?: number;
-        ingestedPrices?: number;
-        matchedCount?: number;
-        query?: string;
-      }>("/api/realtime-booking-v2/gmail-sync", {
-        method: "POST",
-        body: JSON.stringify({})
-      });
-      setMessage(
-        `Sync Gmail: query=${result.query || "n/a"} · checked=${result.checked} · processed=${result.processed?.length || 0} · skipped=${result.skipped?.length || 0} · skippedSenderCount=${result.skippedSenderCount || 0} · skippedDelayCount=${result.skippedDelayCount || 0} · attachmentsFound=${result.attachmentsFound || 0} · parsedRows=${result.parsedRows || 0} · ingestedPrices=${result.ingestedPrices || 0} · matchedCount=${result.matchedCount || 0}`
-      );
-      setLastSyncAt(new Date().toISOString());
-      await load();
+      await performSync("manual");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync Gmail ไม่สำเร็จ");
-    } finally {
-      setBusy(false);
     }
   }
+
+  async function onStartWatch() {
+    const shouldReset = isWatching;
+    if (shouldReset) {
+      stopWatch("รีเซ็ตเวลาเฝ้าราคาแล้ว");
+    }
+    await startWatch();
+  }
+
+  function onStopWatch() {
+    stopWatch("หยุดเฝ้าราคาแล้ว");
+  }
+
+  useEffect(() => {
+    if (!isWatching || !watchEndsAt) return;
+
+    watchClockRef.current = setInterval(() => {
+      const now = Date.now();
+      setWatchNowAt(now);
+      if (now >= new Date(watchEndsAt).getTime()) {
+        stopWatch("ครบเวลาเฝ้าราคา ยังไม่พบราคา");
+      }
+    }, 1000);
+
+    return () => {
+      if (watchClockRef.current) {
+        clearInterval(watchClockRef.current);
+        watchClockRef.current = null;
+      }
+    };
+  }, [isWatching, watchEndsAt, stopWatch]);
+
+  useEffect(() => {
+    if (!isWatching) return;
+
+    watchIntervalRef.current = setInterval(() => {
+      void performSync("watch", watchSessionRef.current).catch((err) => {
+        setError(err instanceof Error ? err.message : "Sync Gmail ไม่สำเร็จ");
+      });
+    }, 15000);
+
+    return () => {
+      if (watchIntervalRef.current) {
+        clearInterval(watchIntervalRef.current);
+        watchIntervalRef.current = null;
+      }
+    };
+  }, [isWatching, performSync]);
+
+  useEffect(() => {
+    return () => {
+      if (watchIntervalRef.current) {
+        clearInterval(watchIntervalRef.current);
+        watchIntervalRef.current = null;
+      }
+      if (watchClockRef.current) {
+        clearInterval(watchClockRef.current);
+        watchClockRef.current = null;
+      }
+      watchSyncLockRef.current = false;
+      watchSessionRef.current += 1;
+    };
+  }, []);
 
   async function onSimulatePrice() {
     setBusy(true);
@@ -594,11 +805,11 @@ export default function RealtimeBookingV2Page() {
     setError("");
     setMessage("");
     try {
-      await api("/api/realtime-booking-v2/confirm", {
+      const result = await api<{ ok: boolean; warning?: string }>("/api/realtime-booking-v2/confirm", {
         method: "POST",
         body: JSON.stringify({ id: item.id })
       });
-      setMessage("ส่งจองสำเร็จแล้ว");
+      setMessage(result.warning ? `ส่งจองสำเร็จแล้ว (${result.warning})` : "ส่งจองสำเร็จแล้ว");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "ยืนยันส่งจองไม่สำเร็จ");
@@ -626,9 +837,30 @@ export default function RealtimeBookingV2Page() {
     }
   }
 
+  async function onFinishQueue(item: QueueItem) {
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      await api("/api/realtime-booking-v2/done", {
+        method: "POST",
+        body: JSON.stringify({ id: item.id })
+      });
+      setMessage("เสร็จสิ้นแล้ว");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ทำรายการเสร็จสิ้นไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <Shell>
       <Header title="Realtime Booking" subtitle="สร้างคิว · รับราคา · ส่งจอง" />
+      <div className="mb-3 text-[11px] font-black uppercase tracking-[0.22em] text-soft">
+        {SYSTEM_VERSION}
+      </div>
       <div className="space-y-4 px-4 pb-24">
         <section className="sticky top-3 z-20 rounded-[28px] border border-white/10 bg-[rgba(9,12,17,0.92)] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.34)] backdrop-blur-md">
           <div className="flex items-start justify-between gap-3">
@@ -636,11 +868,34 @@ export default function RealtimeBookingV2Page() {
               <h2 className="text-lg font-black text-white">Realtime Booking</h2>
               <p className="mt-1 text-sm text-soft">สร้างคิว · รับราคา · ส่งจอง</p>
             </div>
-            <Button type="button" disabled={busy} onClick={onSyncGmail} className="w-full min-w-28 sm:w-auto">
-              Sync Gmail
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button type="button" disabled={busy} onClick={onSyncGmail} className="w-full min-w-28 sm:w-auto">
+                Sync Manual
+              </Button>
+              {!isWatching ? (
+                <Button type="button" variant="secondary" disabled={busy} onClick={onStartWatch} className="w-full min-w-28 sm:w-auto">
+                  เฝ้าราคา 15 นาที
+                </Button>
+              ) : (
+                <Button type="button" variant="danger" disabled={busy} onClick={onStopWatch} className="w-full min-w-28 sm:w-auto">
+                  หยุดเฝ้า
+                </Button>
+              )}
+            </div>
           </div>
           <p className="mt-3 text-sm text-soft">{formatLastSync(lastSyncAt)}</p>
+          <div className="mt-2 text-[11px] font-black uppercase tracking-[0.2em] text-brand">
+            {WATCH_MODE_VERSION}
+          </div>
+          {isWatching && watchEndsAt ? (
+            <div className="mt-2 rounded-2xl border border-brand/30 bg-brand/10 px-3 py-2 text-sm font-black text-brand">
+              กำลังเฝ้าราคา… เหลือ {formatCountdown(new Date(watchEndsAt).getTime() - watchNowAt)}
+            </div>
+          ) : (
+            <div className="mt-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium text-soft">
+              กำลัง Sync อยู่หรือกดเฝ้าราคาเพื่อเริ่มเฝ้าราคาอัตโนมัติทุก 5 วินาที
+            </div>
+          )}
           <div className="mt-4 grid grid-cols-3 gap-2">
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-center">
               <div className="text-[11px] font-black uppercase tracking-[0.18em] text-amber-200">🟡 รอราคา</div>
@@ -786,7 +1041,7 @@ export default function RealtimeBookingV2Page() {
           ) : (
             <div className="space-y-4">
               {visibleQueue.map((item) => {
-                const isSendDoneCard = item.status === "BOOKED" && item.lineStatus === "sent" && !item.bookingConfirmedAt;
+                const isSendDoneCard = item.status === "BOOKED" && item.lineStatus === "sent";
                 const showPreview = item.status === "MATCHED" || isSendDoneCard;
                 const showDetails = detailsOpen[item.id] ?? false;
                 const priceRow = priceByPlate.get(normalizePlate(item.plate));
@@ -892,9 +1147,14 @@ export default function RealtimeBookingV2Page() {
                           ส่ง LINE อีกครั้ง
                         </Button>
                       )}
-                      {item.status === "BOOKED" && item.lineStatus === "sent" && !item.bookingConfirmedAt && (
+                      {item.status === "BOOKED" && item.lineStatus === "sent" && (
                         <Button type="button" onClick={() => onConfirmBooked(item)} disabled={busy} className="w-full sm:w-auto">
                           ส่งจองสำเร็จ
+                        </Button>
+                      )}
+                      {canFinish(item) && (
+                        <Button type="button" variant="secondary" onClick={() => onFinishQueue(item)} disabled={busy} className="w-full sm:w-auto">
+                          เสร็จสิ้น
                         </Button>
                       )}
                       {(item.status === "MATCHED" || item.status === "WAITING") && (

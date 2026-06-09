@@ -1,13 +1,27 @@
 import { listReportHistory, lookupStockByPlate } from "@/lib/apps-script";
+import { buildBookingDeliveryAlertSummary } from "@/lib/booking-delivery-alert";
 import { mergeStockExtraFields } from "@/lib/stock-extra-fields";
-import { readJsonStore, writeJsonStore } from "@/lib/json-store";
-import type { BookingDeliveryRecord, BookingDeliveryStatus, ReportHistoryItem } from "@/lib/types";
+import { getLastJsonStoreTiming, readJsonStore, writeJsonStore } from "@/lib/json-store";
+import type { BookingDeliveryRecord, BookingDeliveryStatus, BookingReport, ReportHistoryItem } from "@/lib/types";
 
 type BookingDeliveryStore = {
   records: BookingDeliveryRecord[];
 };
 
+type BookingDeliveryTiming = {
+  provider: string;
+  readMs: number;
+  normalizeMs: number;
+  count: number;
+};
+
 const storeFile = "booking-delivery.json";
+let lastBookingDeliveryTiming: BookingDeliveryTiming = {
+  provider: String(process.env.BIG_CAR_STORE_PROVIDER || "json").trim().toLowerCase(),
+  readMs: 0,
+  normalizeMs: 0,
+  count: 0
+};
 
 function blankStore(): BookingDeliveryStore {
   return { records: [] };
@@ -17,8 +31,88 @@ function text(value: unknown) {
   return String(value ?? "").trim();
 }
 
+function boolValue(value: unknown) {
+  if (typeof value === "boolean") return value;
+  const normalized = text(value).toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "y";
+}
+
+function stringArrayValue(value: unknown) {
+  return Array.isArray(value) ? value.map((item) => text(item)).filter(Boolean) : [];
+}
+
 function normalizePlate(value: unknown) {
   return String(value || "").replace(/\s+/g, "").toUpperCase();
+}
+
+function normalizeWorkflowStatus(status: unknown, workflowStatus: unknown = ""): BookingDeliveryStatus | "" {
+  const workflow = text(workflowStatus);
+  if (workflow === "ยอดจอง" || workflow === "รอผลไฟแนนซ์" || workflow === "รอส่งมอบ" || workflow === "ยอดส่งมอบ" || workflow === "ยกเลิก") {
+    return workflow;
+  }
+  const legacy = text(status);
+  if (legacy === "รอผลไฟแนนซ์" || legacy === "รอส่งมอบ" || legacy === "ยอดส่งมอบ" || legacy === "ยกเลิก") return legacy;
+  return "";
+}
+
+function normalizeLifecycleStatus(status: unknown) {
+  return text(status) === "ยกเลิก" ? "ยกเลิก" : "ยอดจอง";
+}
+
+function getDisplayStatus(record?: Partial<BookingDeliveryRecord> | null) {
+  if (!record) return "";
+  if (text(record.status) === "ยกเลิก") return "ยกเลิก";
+  return normalizeWorkflowStatus(record.status, record.workflowStatus) || "ยอดจอง";
+}
+
+export function getLastBookingDeliveryTiming() {
+  return { ...lastBookingDeliveryTiming };
+}
+
+export async function upsertBookingDeliveryRecordByPlate(input: BookingDeliveryRecord) {
+  const store = await readStore();
+  const normalizedPlate = normalizePlate(input.plate);
+  if (!normalizedPlate) throw new Error("ไม่พบทะเบียนสำหรับบันทึก Booking Delivery");
+
+  const index = store.records.findIndex(
+    (record) =>
+      normalizePlate(record.plate) === normalizedPlate ||
+      record.id === input.id ||
+      record.bookingId === input.bookingId
+  );
+
+  const existing = index >= 0 ? store.records[index] : null;
+  const next: BookingDeliveryRecord = {
+    ...existing,
+    ...input,
+    garageOutDate: text(input.garageOutDate || existing?.garageOutDate),
+    garageReturnDate: text(input.garageReturnDate || existing?.garageReturnDate),
+    spaFullSystemDone: typeof input.spaFullSystemDone === "boolean" ? input.spaFullSystemDone : boolValue(existing?.spaFullSystemDone),
+    oilChangeDone: typeof input.oilChangeDone === "boolean" ? input.oilChangeDone : boolValue(existing?.oilChangeDone),
+    decalRemovalDone: typeof input.decalRemovalDone === "boolean" ? input.decalRemovalDone : boolValue(existing?.decalRemovalDone),
+    insuranceDone: typeof input.insuranceDone === "boolean" ? input.insuranceDone : boolValue(existing?.insuranceDone),
+    id: existing?.id || input.id,
+    bookingId: existing?.bookingId || input.bookingId,
+    bookingReportId: existing?.bookingReportId || input.bookingReportId,
+    salesReportId: existing?.salesReportId || input.salesReportId,
+    statusSource: input.statusSource || existing?.statusSource || "auto",
+    workflowStatus: normalizeWorkflowStatus(input.status || existing?.status, (input as BookingDeliveryRecord).workflowStatus || existing?.workflowStatus),
+    financeCaseSubmitted: typeof input.financeCaseSubmitted === "boolean" ? input.financeCaseSubmitted : boolValue(existing?.financeCaseSubmitted),
+    financeCaseSubmittedAt: text(input.financeCaseSubmittedAt || existing?.financeCaseSubmittedAt),
+    financeCaseNote: text(input.financeCaseNote || existing?.financeCaseNote),
+    financeAttachmentIds: Array.isArray(input.financeAttachmentIds) ? input.financeAttachmentIds.map((item) => text(item)).filter(Boolean) : stringArrayValue(existing?.financeAttachmentIds),
+    createdAt: existing?.createdAt || input.createdAt || new Date().toISOString(),
+    updatedAt: input.updatedAt || new Date().toISOString()
+  };
+
+  if (index >= 0) {
+    store.records[index] = next;
+  } else {
+    store.records.unshift(next);
+  }
+
+  await writeStore(store);
+  return next;
 }
 
 function moneyText(value: unknown) {
@@ -51,11 +145,20 @@ function normalizeTeamId(value: string) {
 }
 
 function deriveStatus(report: ReportHistoryItem | null, sales: ReportHistoryItem | null, current?: BookingDeliveryRecord): BookingDeliveryStatus {
-  if (current?.statusSource === "manual") return current.status;
+  if (current?.statusSource === "manual" && text(current.status) === "ยกเลิก") return "ยกเลิก";
   if (report?.status === "send_cancelled" || report?.status === "deleted") return "ยกเลิก";
-  if (sales?.status === "closed" || sales?.status === "delivered") return "ส่งมอบแล้ว";
-  if (sales) return "พร้อมส่งมอบ";
-  return "ติดจองรอคอนเฟิร์ม";
+  return normalizeLifecycleStatus(current?.status);
+}
+
+function deriveWorkflowStatus(report: ReportHistoryItem | null, sales: ReportHistoryItem | null, current?: BookingDeliveryRecord): BookingDeliveryStatus | "" {
+  if (text(current?.status) === "ยกเลิก") return "ยกเลิก";
+  const payment = extractLineValue(String(report?.reportText || sales?.reportText || ""), ["การชำระเงิน"]);
+  const source = `${payment} ${report?.reportText || sales?.reportText || ""}`.toLowerCase();
+  if (sales?.status === "closed" || sales?.status === "delivered") return "ยอดส่งมอบ";
+  if (source.includes("finance") || source.includes("ไฟแนนซ์")) return "รอผลไฟแนนซ์";
+  if (source.includes("cash") || source.includes("สด")) return "รอส่งมอบ";
+  if (sales) return "รอส่งมอบ";
+  return normalizeWorkflowStatus(current?.status, current?.workflowStatus);
 }
 
 function deriveSummary(
@@ -78,23 +181,58 @@ function deriveSummary(
 }
 
 function deriveAlertSummary(
-  status: BookingDeliveryStatus,
+  status: BookingDeliveryStatus | "",
   report?: ReportHistoryItem | null,
   sales?: ReportHistoryItem | null,
   current?: BookingDeliveryRecord | null
 ) {
   if (status === "ยกเลิก") return "รายการถูกยกเลิก";
-  if (status === "ส่งมอบแล้ว") return "ส่งมอบครบแล้ว";
-  if (status === "พร้อมส่งมอบ") return "พร้อมส่งมอบ";
-  const payment = extractLineValue(String(report?.reportText || current?.alertSummary || ""), ["การชำระเงิน"]);
-  if (payment.toLowerCase().includes("finance") || payment.includes("ไฟแนนซ์")) return "ติดจองรอคอนเฟิร์มไฟแนนซ์";
+  if (status === "ยอดส่งมอบ") return "ยอดส่งมอบครบแล้ว";
+  if (status === "รอผลไฟแนนซ์") {
+    const finance = text(current?.financeCaseNote || "");
+    return finance ? `รอผลไฟแนนซ์ · ${finance}` : "รอผลไฟแนนซ์";
+  }
+  if (current) return buildBookingDeliveryAlertSummary({ ...current, status: status || "ยอดจอง" });
+  const payment = extractLineValue(String(report?.reportText || ""), ["การชำระเงิน"]);
+  if (payment.toLowerCase().includes("finance") || payment.includes("ไฟแนนซ์")) return "รอผลไฟแนนซ์";
   if (sales) return "มีรายงานขายแล้ว";
-  return "ติดจองรอคอนเฟิร์ม";
+  return "ยอดจอง";
 }
 
 async function readStore(): Promise<BookingDeliveryStore> {
+  const start = Date.now();
   const parsed = await readJsonStore<Partial<BookingDeliveryStore>>(storeFile, blankStore());
-  return { records: Array.isArray(parsed.records) ? parsed.records : [] };
+  const readTiming = getLastJsonStoreTiming();
+  const normalizeStart = Date.now();
+  const records = Array.isArray(parsed.records) ? parsed.records : [];
+  const normalized = {
+    records: records.map((record) => ({
+      ...record,
+      status: normalizeLifecycleStatus(record.status),
+      workflowStatus: normalizeWorkflowStatus(record.status, (record as BookingDeliveryRecord).workflowStatus),
+      garageOutDate: text((record as BookingDeliveryRecord).garageOutDate || ""),
+      garageReturnDate: text((record as BookingDeliveryRecord).garageReturnDate || ""),
+      spaFullSystemDone: boolValue((record as BookingDeliveryRecord).spaFullSystemDone),
+      oilChangeDone: boolValue((record as BookingDeliveryRecord).oilChangeDone),
+      decalRemovalDone: boolValue((record as BookingDeliveryRecord).decalRemovalDone),
+      insuranceDone: boolValue((record as BookingDeliveryRecord).insuranceDone),
+      financeCaseSubmitted: boolValue((record as BookingDeliveryRecord).financeCaseSubmitted),
+      financeCaseSubmittedAt: text((record as BookingDeliveryRecord).financeCaseSubmittedAt || ""),
+      financeCaseNote: text((record as BookingDeliveryRecord).financeCaseNote || ""),
+      financeAttachmentIds: stringArrayValue((record as BookingDeliveryRecord).financeAttachmentIds)
+    })) as BookingDeliveryRecord[]
+  };
+  console.info("[booking-delivery-timing] normalize records", {
+    ms: Date.now() - normalizeStart,
+    count: normalized.records.length
+  });
+  lastBookingDeliveryTiming = {
+    provider: readTiming.provider,
+    readMs: readTiming.readMs,
+    normalizeMs: Date.now() - normalizeStart,
+    count: normalized.records.length
+  };
+  return normalized;
 }
 
 async function writeStore(store: BookingDeliveryStore) {
@@ -150,6 +288,86 @@ export async function syncBookingDeliveryFromReportHistory() {
   return upsertBookingDeliveryFromReportHistory(reports);
 }
 
+export async function upsertBookingDeliveryFromBookingReport(report: BookingReport) {
+  const existingStore = await readStore();
+  const normalizedPlate = normalizePlate(report.plate);
+  const normalizedCustomer = text(report.customerName).toLowerCase();
+  const duplicate = existingStore.records.find((record) => {
+    if (record.status === "ยกเลิก") return false;
+    return normalizePlate(record.plate) === normalizedPlate && text(record.customerName).toLowerCase() === normalizedCustomer;
+  });
+  if (duplicate) {
+    throw new Error("ลูกค้าและทะเบียนนี้มีรายการจองอยู่แล้ว");
+  }
+
+  const reportHistoryItem: ReportHistoryItem = {
+    id: report.id,
+    type: "booking",
+    createdAt: report.createdAt || new Date().toISOString(),
+    updatedAt: report.updatedAt || report.createdAt || new Date().toISOString(),
+    status: report.status === "send_cancelled" ? "send_cancelled" : "draft",
+    customerName: report.customerName,
+    address: report.address,
+    phone: report.phone,
+    idCard: report.idCard,
+    plate: report.plate,
+    brand: report.brand,
+    model: report.model,
+    year: report.year,
+    color: report.color,
+    saleName: report.saleName,
+    teamName: report.teamName,
+    emailSubject: report.emailSubject,
+    emailTo: report.emailTo,
+    emailCc: report.emailCc,
+    emailStatus: "saved",
+    lineStatus: "saved",
+    ocrStatus: "saved",
+    emailDraftId: "",
+    driveFolderUrl: "",
+    attachments: report.attachments || [],
+    reportText: report.reportText
+  };
+
+  const existing = existingStore.records.find((record) => record.bookingReportId === report.id || normalizePlate(record.plate) === normalizedPlate) || null;
+  const next = buildRecordFromReports(
+    reportHistoryItem,
+    null,
+    existing || undefined,
+    existing?.bookingId || nextBookingId([...(existing ? [existing] : [])], report.createdAt || new Date().toISOString())
+  );
+  if (!existing) {
+    const payment = text(report.paymentType || "");
+    if (payment.toLowerCase().includes("finance") || payment.includes("ไฟแนนซ์")) {
+      next.workflowStatus = "รอผลไฟแนนซ์";
+    } else if (payment.toLowerCase().includes("cash") || payment.includes("สด")) {
+      next.workflowStatus = "รอส่งมอบ";
+    } else {
+      next.workflowStatus = "";
+    }
+    next.status = "ยอดจอง";
+    next.alertSummary = buildBookingDeliveryAlertSummary({ ...next, status: getDisplayStatus(next) || "ยอดจอง" });
+  }
+  const stockSnapshot = await resolveStockSnapshot(next.plate);
+  if (stockSnapshot) {
+    next.engineNo = next.engineNo || stockSnapshot.engineNo;
+    next.chassisNo = next.chassisNo || stockSnapshot.chassisNo;
+    next.deliveryLocation = next.deliveryLocation || stockSnapshot.deliveryLocation;
+    next.source = next.source || stockSnapshot.source;
+    next.ownership = next.ownership || stockSnapshot.ownership;
+    next.project = next.project || stockSnapshot.project;
+    next.campaign = next.campaign || stockSnapshot.campaign;
+    next.salePrice = next.salePrice || stockSnapshot.salePrice;
+    next.model = next.model || stockSnapshot.model;
+    next.brand = next.brand || stockSnapshot.brand;
+    next.year = next.year || stockSnapshot.year;
+    next.color = next.color || stockSnapshot.color;
+    next.summary = deriveSummary(getDisplayStatus(next) || "ยอดจอง", reportHistoryItem, null);
+    next.alertSummary = deriveAlertSummary(getDisplayStatus(next), reportHistoryItem, null, next);
+  }
+  return upsertBookingDeliveryRecordByPlate(next);
+}
+
 function buildRecordFromReports(
   booking: ReportHistoryItem,
   sales: ReportHistoryItem | null,
@@ -160,8 +378,9 @@ function buildRecordFromReports(
   const resolvedBookingId = current?.bookingId || bookingId || nextBookingId([...(current ? [current] : [])], booking.createdAt || now);
   const paymentText = extractLineValue(String(booking.reportText || sales?.reportText || ""), ["การชำระเงิน"]);
   const status = deriveStatus(booking, sales, current);
-  const summary = deriveSummary(status, booking, sales, current);
-  const alertSummary = deriveAlertSummary(status, booking, sales, current);
+  const workflowStatus = deriveWorkflowStatus(booking, sales, current);
+  const summary = deriveSummary(workflowStatus || status, booking, sales, current);
+  const alertSummary = deriveAlertSummary(workflowStatus || status, booking, sales, current);
   const teamId = normalizeTeamId(text(booking.teamName || sales?.teamName || booking.saleName || sales?.saleName));
   return {
     id: current?.id || booking.id,
@@ -210,6 +429,17 @@ function buildRecordFromReports(
     paymentType: text(extractLineValue(String(booking.reportText || sales?.reportText || ""), ["การชำระเงิน"]) || paymentText),
     deliveryDate: text(extractLineValue(String(sales?.reportText || ""), ["วันรับรถ"]) || current?.deliveryDate),
     deliveryLocation: text(extractLineValue(String(sales?.reportText || ""), ["สาขา"]) || current?.deliveryLocation),
+    garageOutDate: text(current?.garageOutDate || ""),
+    garageReturnDate: text(current?.garageReturnDate || ""),
+    spaFullSystemDone: boolValue(current?.spaFullSystemDone),
+    oilChangeDone: boolValue(current?.oilChangeDone),
+    decalRemovalDone: boolValue(current?.decalRemovalDone),
+    insuranceDone: boolValue(current?.insuranceDone),
+    workflowStatus,
+    financeCaseSubmitted: boolValue(current?.financeCaseSubmitted),
+    financeCaseSubmittedAt: text(current?.financeCaseSubmittedAt || ""),
+    financeCaseNote: text(current?.financeCaseNote || ""),
+    financeAttachmentIds: stringArrayValue(current?.financeAttachmentIds),
     status,
     statusSource: current?.statusSource || "auto",
     summary,
@@ -270,8 +500,8 @@ export async function upsertBookingDeliveryFromReportHistory(reports: ReportHist
       next.brand = next.brand || stockSnapshot.brand;
       next.year = next.year || stockSnapshot.year;
       next.color = next.color || stockSnapshot.color;
-      next.summary = deriveSummary(next.status, booking, salesReport);
-      next.alertSummary = deriveAlertSummary(next.status, booking, salesReport);
+      next.summary = deriveSummary(getDisplayStatus(next) || "ยอดจอง", booking, salesReport);
+      next.alertSummary = deriveAlertSummary(getDisplayStatus(next), booking, salesReport, next);
     }
     const index = workingRecords.findIndex((record) => record.id === next.id || record.bookingId === next.bookingId);
     if (index >= 0) workingRecords[index] = next;
@@ -286,8 +516,19 @@ export async function upsertBookingDeliveryFromReportHistory(reports: ReportHist
 export async function updateBookingDeliveryRecord(input: {
   id: string;
   status?: BookingDeliveryStatus;
+  workflowStatus?: BookingDeliveryStatus | "";
   deliveryDate?: string;
   deliveryLocation?: string;
+  garageOutDate?: string;
+  garageReturnDate?: string;
+  spaFullSystemDone?: boolean;
+  oilChangeDone?: boolean;
+  decalRemovalDone?: boolean;
+  insuranceDone?: boolean;
+  financeCaseSubmitted?: boolean;
+  financeCaseSubmittedAt?: string;
+  financeCaseNote?: string;
+  financeAttachmentIds?: string[];
   alertSummary?: string;
   cancelReason?: string;
 }) {
@@ -297,17 +538,34 @@ export async function updateBookingDeliveryRecord(input: {
   if (index < 0) throw new Error("ไม่พบ Booking Delivery");
 
   const current = store.records[index];
+  const nextWorkflowStatus = normalizeWorkflowStatus(current.status, input.workflowStatus ?? current.workflowStatus);
+  const nextStatus = input.status === "ยกเลิก" ? "ยกเลิก" : normalizeLifecycleStatus(current.status);
   const next: BookingDeliveryRecord = {
     ...current,
-    status: input.status || current.status,
+    status: nextStatus,
     statusSource: "manual",
+    workflowStatus: nextStatus === "ยกเลิก" ? "ยกเลิก" : nextWorkflowStatus,
     deliveryDate: text(input.deliveryDate ?? current.deliveryDate),
     deliveryLocation: text(input.deliveryLocation ?? current.deliveryLocation),
-    alertSummary: text(input.alertSummary ?? current.alertSummary),
+    garageOutDate: text(input.garageOutDate ?? current.garageOutDate),
+    garageReturnDate: text(input.garageReturnDate ?? current.garageReturnDate),
+    spaFullSystemDone: typeof input.spaFullSystemDone === "boolean" ? input.spaFullSystemDone : boolValue(current.spaFullSystemDone),
+    oilChangeDone: typeof input.oilChangeDone === "boolean" ? input.oilChangeDone : boolValue(current.oilChangeDone),
+    decalRemovalDone: typeof input.decalRemovalDone === "boolean" ? input.decalRemovalDone : boolValue(current.decalRemovalDone),
+    insuranceDone: typeof input.insuranceDone === "boolean" ? input.insuranceDone : boolValue(current.insuranceDone),
+    financeCaseSubmitted: typeof input.financeCaseSubmitted === "boolean" ? input.financeCaseSubmitted : boolValue(current.financeCaseSubmitted),
+    financeCaseSubmittedAt: text(input.financeCaseSubmittedAt ?? current.financeCaseSubmittedAt),
+    financeCaseNote: text(input.financeCaseNote ?? current.financeCaseNote),
+    financeAttachmentIds: Array.isArray(input.financeAttachmentIds)
+      ? input.financeAttachmentIds.map((item) => text(item)).filter(Boolean)
+      : stringArrayValue(current.financeAttachmentIds),
+    alertSummary: text(input.alertSummary ?? ""),
     cancelReason: text(input.cancelReason ?? current.cancelReason),
     updatedAt: new Date().toISOString(),
-    summary: deriveSummary(input.status || current.status, null, null, current)
+    summary: deriveSummary(nextStatus === "ยกเลิก" ? "ยกเลิก" : nextWorkflowStatus || "ยอดจอง", null, null, current)
   };
+
+  next.alertSummary = text(input.alertSummary ?? deriveAlertSummary(nextStatus === "ยกเลิก" ? "ยกเลิก" : next.workflowStatus || "ยอดจอง", null, null, next));
 
   if (input.status === "ยกเลิก" && !next.cancelReason) {
     next.cancelReason = "ผู้ใช้ยกเลิกรายการ";
@@ -319,7 +577,7 @@ export async function updateBookingDeliveryRecord(input: {
 }
 
 export async function cancelBookingDelivery(id: string, reason = "ผู้ใช้ยกเลิกรายการ") {
-  return updateBookingDeliveryRecord({ id, status: "ยกเลิก", cancelReason: reason, alertSummary: "ยกเลิกรายการ" });
+  return updateBookingDeliveryRecord({ id, status: "ยกเลิก", workflowStatus: "ยกเลิก", cancelReason: reason, alertSummary: "ยกเลิกรายการ" });
 }
 
 export async function countBookingDeliveryRecords() {

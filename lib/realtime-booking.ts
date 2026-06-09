@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 
 import { lookupStockByPlate } from "@/lib/apps-script";
+import { dataDirectory } from "@/lib/json-store";
 import { pushLineText } from "@/lib/line";
 
 export type RealtimePaymentType = "cash" | "finance";
@@ -126,9 +127,7 @@ const STORE_KEY = "__BIG_CAR_REALTIME_BOOKING_STORE__";
 const STORE_FILE_NAME = "realtime-booking.json";
 
 function getDataDir() {
-  return process.env.BIG_CAR_DATA_DIR
-    ? path.resolve(process.env.BIG_CAR_DATA_DIR)
-    : path.join(process.cwd(), ".data");
+  return dataDirectory();
 }
 
 function getStorePath() {

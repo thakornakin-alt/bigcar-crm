@@ -1,12 +1,11 @@
-import { mkdirSync, readFileSync, writeFileSync } from "fs";
-import path from "path";
 import * as XLSX from "xlsx";
 
 import { lookupStockByPlateDetailed } from "@/lib/apps-script";
+import { readJsonStore, writeJsonStore } from "@/lib/json-store";
 import { pushLineText } from "@/lib/line";
 import { formatRealtimeBookingV2LineText } from "@/lib/realtime-booking-v2-format";
 
-export type RealtimeBookingV2QueueStatus = "WAITING" | "MATCHED" | "BOOKED" | "CANCELLED";
+export type RealtimeBookingV2QueueStatus = "WAITING" | "MATCHED" | "BOOKED" | "DONE" | "CANCELLED";
 
 export type RealtimeBookingV2QueueItem = {
   id: string;
@@ -85,21 +84,39 @@ export type RealtimeBookingV2Dashboard = {
   ttlMinutes: number;
 };
 
+export type RealtimeBookingV2SyncHistory = {
+  id: string;
+  mode: "manual" | "auto";
+  startedAt: string;
+  finishedAt?: string;
+  durationMs?: number;
+  checked: number;
+  processed: number;
+  parsedRows: number;
+  matchedCount: number;
+  sentLineCount: number;
+  error?: string;
+  skippedReason?: string;
+  waitingQueueCount: number;
+  syncRunning: boolean;
+};
+
+export type RealtimeBookingV2SyncLock = {
+  syncRunning: boolean;
+  startedAt: string;
+  expiresAt: string;
+  owner: string;
+  mode: "manual" | "auto";
+};
+
 const STORE_FILE_NAME = "realtime-booking-v2.json";
 const STORE_KEY = "__BIG_CAR_REALTIME_BOOKING_V2_STORE__";
+const SYNC_HISTORY_STORE_FILE_NAME = "realtime-booking-v2-sync-history.json";
+const SYNC_LOCK_STORE_FILE_NAME = "realtime-booking-v2-sync-lock.json";
+let storeLoadPromise: Promise<RealtimeBookingV2Store> | null = null;
+let syncHistoryLoadPromise: Promise<RealtimeBookingV2SyncHistory[]> | null = null;
 const plateAliases = ["ทะเบียน", "ทะเบียนรถ", "plate", "licenseplate", "regno", "เลขทะเบียน"];
 const priceAliases = ["ราคาrt", "ราคาเสนอขายrt", "ราคามาตรฐาน", "rtprice", "price", "ราคาขาย", "ราคา"];
-
-function dataDir() {
-  return process.env.BIG_CAR_DATA_DIR
-    ? path.resolve(process.env.BIG_CAR_DATA_DIR)
-    : path.join(process.cwd(), ".data");
-}
-
-function storePath() {
-  return path.join(dataDir(), STORE_FILE_NAME);
-}
-
 function normalizePlate(value: string) {
   return String(value || "").replace(/\s+/g, "").toUpperCase();
 }
@@ -153,10 +170,21 @@ function headerValue(message: { payload?: { headers?: Array<{ name: string; valu
 
 function collectParts(parts: Array<any> = [], out: Array<any> = []) {
   for (const part of parts) {
-    if (part.filename && (part.body?.attachmentId || part.body?.data)) out.push(part);
+    if (part.body?.attachmentId || part.body?.data) out.push(part);
     if (part.parts?.length) collectParts(part.parts, out);
   }
   return out;
+}
+
+function isExcelAttachment(part: any) {
+  const filename = String(part?.filename || "").toLowerCase();
+  const mimeType = String(part?.mimeType || "").toLowerCase();
+  return (
+    /\.(xlsx|xls|xlsm|csv)$/.test(filename) ||
+    mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    mimeType === "application/vnd.ms-excel" ||
+    mimeType === "text/csv"
+  );
 }
 
 function isRealtimeBookingSubjectAllowed(subject: string) {
@@ -296,6 +324,18 @@ function createDefaultStore(): RealtimeBookingV2Store {
   };
 }
 
+function storeFileKey() {
+  return STORE_FILE_NAME;
+}
+
+function syncHistoryStoreFileKey() {
+  return SYNC_HISTORY_STORE_FILE_NAME;
+}
+
+function syncLockStoreFileKey() {
+  return SYNC_LOCK_STORE_FILE_NAME;
+}
+
 function normalizeStore(store: Partial<RealtimeBookingV2Store> | null | undefined): RealtimeBookingV2Store {
   const fallback = createDefaultStore();
   if (!store) return fallback;
@@ -318,36 +358,115 @@ function normalizeStore(store: Partial<RealtimeBookingV2Store> | null | undefine
   };
 }
 
-function readStore(): RealtimeBookingV2Store {
-  try {
-    const raw = readFileSync(storePath(), "utf8");
-    const parsed = JSON.parse(raw) as Partial<RealtimeBookingV2Store>;
-    const normalized = normalizeStore(parsed);
-    if (JSON.stringify(parsed) !== JSON.stringify(normalized)) {
-      writeStore(normalized);
-    }
-    return normalized;
-  } catch {
-    return createDefaultStore();
-  }
+async function readStore(): Promise<RealtimeBookingV2Store> {
+  return normalizeStore(await readJsonStore<Partial<RealtimeBookingV2Store> | null>(storeFileKey(), null));
 }
 
-function writeStore(store: RealtimeBookingV2Store) {
-  mkdirSync(dataDir(), { recursive: true });
-  writeFileSync(storePath(), JSON.stringify(store, null, 2), "utf8");
+async function loadStore() {
+  const loaded = await readStore();
+  const globalStore = globalThis as typeof globalThis & { [STORE_KEY]?: RealtimeBookingV2Store };
+  globalStore[STORE_KEY] = loaded;
+  return loaded;
+}
+
+export async function ensureRealtimeBookingV2Store() {
+  const globalStore = globalThis as typeof globalThis & { [STORE_KEY]?: RealtimeBookingV2Store };
+  if (globalStore[STORE_KEY]) {
+    return globalStore[STORE_KEY];
+  }
+
+  if (!storeLoadPromise) {
+    storeLoadPromise = loadStore().finally(() => {
+      storeLoadPromise = null;
+    });
+  }
+
+  return storeLoadPromise;
+}
+
+async function writeStore(store: RealtimeBookingV2Store) {
+  await writeJsonStore(storeFileKey(), store);
   (globalThis as typeof globalThis & { [STORE_KEY]?: RealtimeBookingV2Store })[STORE_KEY] = store;
   return store;
+}
+
+async function readSyncHistory(): Promise<RealtimeBookingV2SyncHistory[]> {
+  if (!syncHistoryLoadPromise) {
+    syncHistoryLoadPromise = readJsonStore<RealtimeBookingV2SyncHistory[] | null>(syncHistoryStoreFileKey(), null)
+      .then((history) => (Array.isArray(history) ? history : []))
+      .finally(() => {
+        syncHistoryLoadPromise = null;
+      });
+  }
+
+  return syncHistoryLoadPromise;
+}
+
+async function saveSyncHistory(history: RealtimeBookingV2SyncHistory[]) {
+  await writeJsonStore(syncHistoryStoreFileKey(), history);
+  return history;
+}
+
+async function readSyncLock(): Promise<RealtimeBookingV2SyncLock | null> {
+  return readJsonStore<RealtimeBookingV2SyncLock | null>(syncLockStoreFileKey(), null);
+}
+
+async function writeSyncLock(lock: RealtimeBookingV2SyncLock | null) {
+  if (lock === null) {
+    await writeJsonStore(syncLockStoreFileKey(), null);
+    return null;
+  }
+  await writeJsonStore(syncLockStoreFileKey(), lock);
+  return lock;
+}
+
+function newSyncLockOwner(mode: "manual" | "auto") {
+  return `${mode}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+const SYNC_LOCK_TTL_MINUTES = 10;
+
+async function acquireSyncLock(mode: "manual" | "auto") {
+  const now = Date.now();
+  const startedAt = new Date(now).toISOString();
+  const existing = await readSyncLock();
+  if (existing?.syncRunning) {
+    const expiresAtMs = Date.parse(existing.expiresAt || "");
+    if (Number.isFinite(expiresAtMs) && expiresAtMs > now) {
+      return { acquired: false, lock: existing };
+    }
+  }
+
+  const lock: RealtimeBookingV2SyncLock = {
+    syncRunning: true,
+    startedAt,
+    expiresAt: new Date(now + SYNC_LOCK_TTL_MINUTES * 60 * 1000).toISOString(),
+    owner: newSyncLockOwner(mode),
+    mode
+  };
+  await writeSyncLock(lock);
+
+  const confirmed = await readSyncLock();
+  const acquired = Boolean(confirmed && confirmed.owner === lock.owner && confirmed.syncRunning);
+  return { acquired, lock: acquired ? confirmed : confirmed };
+}
+
+async function releaseSyncLock(owner?: string) {
+  const existing = await readSyncLock();
+  if (!existing) return;
+  if (owner && existing.owner !== owner) return;
+  await writeSyncLock(null);
 }
 
 function getStore() {
   const globalStore = globalThis as typeof globalThis & { [STORE_KEY]?: RealtimeBookingV2Store };
   if (!globalStore[STORE_KEY]) {
-    globalStore[STORE_KEY] = readStore();
+    globalStore[STORE_KEY] = createDefaultStore();
   }
   return globalStore[STORE_KEY];
 }
 
-function saveStore(store: RealtimeBookingV2Store) {
+async function saveStore(store: RealtimeBookingV2Store) {
   store.lastUpdatedAt = new Date().toISOString();
   return writeStore(store);
 }
@@ -359,6 +478,11 @@ function latestPriceForPlate(normalizedPlate: string) {
   return [...samePlate].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))[0] || null;
 }
 
+function findWaitingDuplicate(normalizedPlate: string) {
+  const store = getStore();
+  return store.queue.find((item) => item.status === "WAITING" && item.normalizedPlate === normalizedPlate) || null;
+}
+
 async function ingestV2Prices(input: {
   subject: string;
   sender: string;
@@ -367,6 +491,7 @@ async function ingestV2Prices(input: {
   rows: Array<{ plate: string; rtPrice: number; sheetName?: string; sourceType?: "RT" }>;
 }) {
   const start = Date.now();
+  await ensureRealtimeBookingV2Store();
   const store = getStore();
   const receivedAt = input.receivedAt || new Date().toISOString();
   const parsedAt = new Date().toISOString();
@@ -415,7 +540,7 @@ async function ingestV2Prices(input: {
   };
 
   store.mailLogs.unshift(log);
-  saveStore(store);
+  await saveStore(store);
   return log;
 }
 
@@ -452,6 +577,7 @@ async function matchQueueItem(item: RealtimeBookingV2QueueItem) {
 }
 
 async function tryMatchAllWaiting() {
+  await ensureRealtimeBookingV2Store();
   const store = getStore();
   let matchedCount = 0;
   for (const item of store.queue) {
@@ -460,11 +586,23 @@ async function tryMatchAllWaiting() {
       if (result.finalMatchResult) matchedCount += 1;
     }
   }
-  saveStore(store);
+  await saveStore(store);
   return matchedCount;
 }
 
-export async function syncRealtimeBookingV2FromGmail(input: { query?: string; maxResults?: number } = {}) {
+export async function syncRealtimeBookingV2FromGmail(
+  input: { query?: string; maxResults?: number } = {},
+  options: { skipLock?: boolean } = {}
+) {
+  await ensureRealtimeBookingV2Store();
+  const lock = options.skipLock ? null : await (async () => {
+    const lockAttempt = await acquireSyncLock("manual");
+    if (!lockAttempt.acquired) {
+      throw new Error("กำลัง Sync อยู่");
+    }
+    return lockAttempt.lock;
+  })();
+  try {
   const token = await getAccessToken();
   const query = input.query || "newer_than:14d has:attachment";
   const maxResults = Math.min(Math.max(input.maxResults || 20, 1), 20);
@@ -475,6 +613,10 @@ export async function syncRealtimeBookingV2FromGmail(input: { query?: string; ma
   let skippedDelayCount = 0;
   let skippedSenderCount = 0;
   let attachmentsFound = 0;
+  let attachmentPartsFound = 0;
+  let attachmentFilenameMissing = 0;
+  let attachmentMimeMatched = 0;
+  let attachmentFilenameNotMatched = 0;
   let parsedRows = 0;
   let ingestedPrices = 0;
   let matchedCount = 0;
@@ -510,8 +652,26 @@ export async function syncRealtimeBookingV2FromGmail(input: { query?: string; ma
     let sawAttachment = false;
 
     for (const part of collectParts(message.payload?.parts || [])) {
+      attachmentPartsFound += 1;
       const filename = String(part.filename || "");
-      if (!/\.(xlsx|xls|csv)$/i.test(filename)) continue;
+      const mimeType = String(part.mimeType || "").toLowerCase();
+      const filenameMatches = /\.(xlsx|xls|xlsm|csv)$/i.test(filename);
+      const mimeMatches =
+        mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+        mimeType === "application/vnd.ms-excel" ||
+        mimeType === "text/csv";
+
+      if (!filename) {
+        attachmentFilenameMissing += 1;
+      } else if (!filenameMatches) {
+        attachmentFilenameNotMatched += 1;
+      }
+
+      if (mimeMatches) {
+        attachmentMimeMatched += 1;
+      }
+
+      if (!filenameMatches && !mimeMatches) continue;
       sawAttachment = true;
       attachmentsFound += 1;
 
@@ -546,13 +706,130 @@ export async function syncRealtimeBookingV2FromGmail(input: { query?: string; ma
     skippedSenderCount,
     skippedDelayCount,
     attachmentsFound,
+    attachmentPartsFound,
+    attachmentFilenameMissing,
+    attachmentMimeMatched,
+    attachmentFilenameNotMatched,
     parsedRows,
     ingestedPrices,
     matchedCount
   };
+  } finally {
+    if (!options.skipLock) {
+      await releaseSyncLock(lock?.owner);
+    }
+  }
 }
 
-export function getRealtimeBookingV2Dashboard(): RealtimeBookingV2Dashboard {
+export async function autoSyncRealtimeBookingV2FromGmail(input: { query?: string; maxResults?: number } = {}) {
+  await ensureRealtimeBookingV2Store();
+  const store = getStore();
+  const waitingQueueCount = store.queue.filter((item) => item.status === "WAITING").length;
+  const startedAt = new Date().toISOString();
+
+  const baseHistory: RealtimeBookingV2SyncHistory = {
+    id: `RBSYNC-${Date.now()}`,
+    mode: "auto",
+    startedAt,
+    checked: 0,
+    processed: 0,
+    parsedRows: 0,
+    matchedCount: 0,
+    sentLineCount: 0,
+    waitingQueueCount,
+    syncRunning: true
+  };
+
+  if (!waitingQueueCount) {
+    const skipped = {
+      ...baseHistory,
+      finishedAt: new Date().toISOString(),
+      durationMs: 0,
+      syncRunning: false,
+      skippedReason: "NO_WAITING"
+    };
+    const history = await readSyncHistory();
+    history.unshift(skipped);
+    await saveSyncHistory(history.slice(0, 100));
+    return {
+      ok: true,
+      skipped: true,
+      waitingQueueCount,
+      syncSkippedReason: "NO_WAITING",
+      syncRunning: false,
+      history: skipped
+    };
+  }
+
+  const lockAttempt = await acquireSyncLock("auto");
+  if (!lockAttempt.acquired) {
+    const skipped = {
+      ...baseHistory,
+      finishedAt: new Date().toISOString(),
+      durationMs: 0,
+      syncRunning: true,
+      skippedReason: "SYNC_RUNNING"
+    };
+    const history = await readSyncHistory();
+    history.unshift(skipped);
+    await saveSyncHistory(history.slice(0, 100));
+    return {
+      ok: true,
+      skipped: true,
+      waitingQueueCount,
+      syncSkippedReason: "SYNC_RUNNING",
+      syncRunning: true,
+      history: skipped
+    };
+  }
+  const lock = lockAttempt.lock;
+  try {
+    const result = await syncRealtimeBookingV2FromGmail(input, { skipLock: true });
+    const sentLineCount = 0;
+    const finishedAt = new Date().toISOString();
+    const history: RealtimeBookingV2SyncHistory = {
+      ...baseHistory,
+      finishedAt,
+      durationMs: Date.now() - new Date(startedAt).getTime(),
+      checked: result.checked,
+      processed: result.processed.length,
+      parsedRows: result.parsedRows,
+      matchedCount: result.matchedCount,
+      sentLineCount,
+      syncRunning: false
+    };
+    const historyList = await readSyncHistory();
+    historyList.unshift(history);
+    await saveSyncHistory(historyList.slice(0, 100));
+
+    return {
+      ...result,
+      waitingQueueCount,
+      syncSkippedReason: "",
+      syncRunning: false,
+      sentLineCount,
+      history
+    };
+  } catch (error) {
+    const finishedAt = new Date().toISOString();
+    const history: RealtimeBookingV2SyncHistory = {
+      ...baseHistory,
+      finishedAt,
+      durationMs: Date.now() - new Date(startedAt).getTime(),
+      error: error instanceof Error ? error.message : "Unable to sync Gmail pricing mail",
+      syncRunning: false
+    };
+    const historyList = await readSyncHistory();
+    historyList.unshift(history);
+    await saveSyncHistory(historyList.slice(0, 100));
+    throw error;
+  } finally {
+    await releaseSyncLock(lock?.owner);
+  }
+}
+
+export async function getRealtimeBookingV2Dashboard(): Promise<RealtimeBookingV2Dashboard> {
+  await ensureRealtimeBookingV2Store();
   const store = getStore();
   return {
     queue: [...store.queue].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
@@ -565,18 +842,25 @@ export function getRealtimeBookingV2Dashboard(): RealtimeBookingV2Dashboard {
   };
 }
 
-export function createRealtimeBookingV2Queue(input: { plate: string; customerName: string; paymentType?: "cash" | "finance"; saleName?: string; remark?: string; discount?: number }) {
+export async function createRealtimeBookingV2Queue(input: { plate: string; customerName: string; paymentType?: "cash" | "finance"; saleName?: string; remark?: string; discount?: number }) {
+  await ensureRealtimeBookingV2Store();
   const plate = String(input.plate || "").trim();
   const customerName = String(input.customerName || "").trim();
   if (!plate) throw new Error("กรุณากรอกทะเบียนรถ");
   if (!customerName) throw new Error("กรุณากรอกชื่อลูกค้า");
+
+  const normalizedPlate = normalizePlate(plate);
+  const duplicate = findWaitingDuplicate(normalizedPlate);
+  if (duplicate) {
+    throw new Error("ทะเบียนนี้มีคิวรอราคาอยู่แล้ว");
+  }
 
   const store = getStore();
   store.sequence += 1;
   const item: RealtimeBookingV2QueueItem = {
     id: `RB2-${Date.now()}-${store.sequence}`,
     plate,
-    normalizedPlate: normalizePlate(plate),
+    normalizedPlate,
     customerName,
     saleName: String(input.saleName || "บิ๊ก").trim() || "บิ๊ก",
     paymentType: input.paymentType === "cash" ? "cash" : "finance",
@@ -588,12 +872,13 @@ export function createRealtimeBookingV2Queue(input: { plate: string; customerNam
   };
 
   store.queue.unshift(item);
-  saveStore(store);
+  await saveStore(store);
   void matchQueueItem(item).then(() => saveStore(store));
   return item;
 }
 
 export async function simulateRealtimeBookingV2Price(input: { plate?: string; rtPrice: number; ignoreTtl?: boolean }) {
+  await ensureRealtimeBookingV2Store();
   const store = getStore();
   const waitingPlate = [...store.queue].find((item) => item.status === "WAITING")?.plate || String(input.plate || "").trim();
   const normalizedPlate = normalizePlate(waitingPlate);
@@ -629,7 +914,7 @@ export async function simulateRealtimeBookingV2Price(input: { plate?: string; rt
       process.env.REALTIME_BOOKING_V2_IGNORE_TTL_IN_DEV = previousIgnoreTtl;
     }
   }
-  saveStore(store);
+  await saveStore(store);
 
   const matchedItem = store.queue.find((item) => item.normalizedPlate === normalizedPlate && item.status === "MATCHED") || null;
   return {
@@ -639,7 +924,22 @@ export async function simulateRealtimeBookingV2Price(input: { plate?: string; rt
   };
 }
 
-export function updateRealtimeBookingV2Item(id: string, input: Partial<Pick<RealtimeBookingV2QueueItem, "paymentType" | "saleName" | "remark" | "discount">>) {
+export async function markRealtimeBookingV2Done(id: string) {
+  await ensureRealtimeBookingV2Store();
+  const store = getStore();
+  const item = store.queue.find((queueItem) => queueItem.id === id);
+  if (!item) throw new Error("ไม่พบรายการนี้");
+  if (!(item.status === "MATCHED" || (item.status === "BOOKED" && item.lineStatus === "sent"))) {
+    throw new Error("ต้องเป็นรายการ MATCHED หรือ SENT ก่อน");
+  }
+  item.status = "DONE";
+  item.bookingConfirmedAt = item.bookingConfirmedAt || new Date().toISOString();
+  await saveStore(store);
+  return item;
+}
+
+export async function updateRealtimeBookingV2Item(id: string, input: Partial<Pick<RealtimeBookingV2QueueItem, "paymentType" | "saleName" | "remark" | "discount">>) {
+  await ensureRealtimeBookingV2Store();
   const store = getStore();
   const item = store.queue.find((queueItem) => queueItem.id === id);
   if (!item) throw new Error("ไม่พบรายการนี้");
@@ -656,7 +956,7 @@ export function updateRealtimeBookingV2Item(id: string, input: Partial<Pick<Real
     item.discount = Number.isFinite(input.discount) && input.discount > 0 ? Math.round(input.discount) : 0;
   }
   item.bookingText = formatRealtimeBookingV2LineText(item);
-  saveStore(store);
+  await saveStore(store);
   return item;
 }
 
@@ -665,6 +965,7 @@ export async function sendRealtimeBookingV2Line(
   targetId: string,
   input: Partial<Pick<RealtimeBookingV2QueueItem, "paymentType" | "saleName" | "remark" | "discount">> & { autoSend?: boolean } = {}
 ) {
+  await ensureRealtimeBookingV2Store();
   const store = getStore();
   const item = store.queue.find((queueItem) => queueItem.id === id);
   if (!item) throw new Error("ไม่พบรายการนี้");
@@ -682,10 +983,10 @@ export async function sendRealtimeBookingV2Line(
     item.autoSendAttemptedAt = new Date().toISOString();
     item.autoSendStatus = "pending";
     item.autoSendError = "";
-    saveStore(store);
+    await saveStore(store);
   }
 
-  updateRealtimeBookingV2Item(id, input);
+  await updateRealtimeBookingV2Item(id, input);
   item.bookingText = formatRealtimeBookingV2LineText(item);
 
   try {
@@ -698,7 +999,7 @@ export async function sendRealtimeBookingV2Line(
     if (input.autoSend) {
       item.autoSendStatus = "sent";
     }
-    saveStore(store);
+    await saveStore(store);
     return item;
   } catch (error) {
     item.lineStatus = "failed";
@@ -707,12 +1008,13 @@ export async function sendRealtimeBookingV2Line(
       item.autoSendStatus = "failed";
       item.autoSendError = item.lineError;
     }
-    saveStore(store);
+    await saveStore(store);
     throw error;
   }
 }
 
-export function confirmRealtimeBookingV2Booking(id: string) {
+export async function confirmRealtimeBookingV2Booking(id: string) {
+  await ensureRealtimeBookingV2Store();
   const store = getStore();
   const item = store.queue.find((queueItem) => queueItem.id === id);
   if (!item) throw new Error("ไม่พบรายการนี้");
@@ -720,11 +1022,12 @@ export function confirmRealtimeBookingV2Booking(id: string) {
     throw new Error("ต้องเป็นรายการที่ส่ง LINE สำเร็จก่อน");
   }
   item.bookingConfirmedAt = new Date().toISOString();
-  saveStore(store);
+  await saveStore(store);
   return item;
 }
 
-export function cancelRealtimeBookingV2Queue(id: string, reason?: string) {
+export async function cancelRealtimeBookingV2Queue(id: string, reason?: string) {
+  await ensureRealtimeBookingV2Store();
   const store = getStore();
   const item = store.queue.find((queueItem) => queueItem.id === id);
   if (!item) throw new Error("ไม่พบรายการนี้");
@@ -735,7 +1038,7 @@ export function cancelRealtimeBookingV2Queue(id: string, reason?: string) {
   item.status = "CANCELLED";
   item.cancelledAt = new Date().toISOString();
   item.cancelReason = String(reason || "ยกเลิกโดยผู้ใช้").trim();
-  saveStore(store);
+  await saveStore(store);
   return item;
 }
 

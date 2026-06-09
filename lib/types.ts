@@ -384,9 +384,10 @@ export type ReportHistoryItem = {
 };
 
 export type BookingDeliveryStatus =
-  | "ติดจองรอคอนเฟิร์ม"
-  | "พร้อมส่งมอบ"
-  | "ส่งมอบแล้ว"
+  | "ยอดจอง"
+  | "รอผลไฟแนนซ์"
+  | "รอส่งมอบ"
+  | "ยอดส่งมอบ"
   | "ยกเลิก";
 
 export type BookingDeliveryRecord = {
@@ -419,6 +420,17 @@ export type BookingDeliveryRecord = {
   paymentType: string;
   deliveryDate: string;
   deliveryLocation: string;
+  garageOutDate: string;
+  garageReturnDate: string;
+  spaFullSystemDone: boolean;
+  oilChangeDone: boolean;
+  decalRemovalDone: boolean;
+  insuranceDone: boolean;
+  workflowStatus: BookingDeliveryStatus | "";
+  financeCaseSubmitted: boolean;
+  financeCaseSubmittedAt: string;
+  financeCaseNote: string;
+  financeAttachmentIds: string[];
   status: BookingDeliveryStatus;
   statusSource: "auto" | "manual";
   summary: string;

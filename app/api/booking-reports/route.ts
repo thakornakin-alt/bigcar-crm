@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { renderBookingReport } from "@/lib/booking-report";
 import { saveBookingReport } from "@/lib/apps-script";
-import { syncBookingDeliveryFromReportHistory } from "@/lib/booking-delivery";
+import { upsertBookingDeliveryFromBookingReport } from "@/lib/booking-delivery";
 import type { BookingReportInput, BuyerType } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     }
 
     const report = await saveBookingReport(input);
-    await syncBookingDeliveryFromReportHistory().catch(() => null);
+    await upsertBookingDeliveryFromBookingReport(report).catch(() => null);
     return NextResponse.json({ report }, { status: 201 });
   } catch (error) {
     return NextResponse.json(

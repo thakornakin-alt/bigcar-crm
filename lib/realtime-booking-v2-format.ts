@@ -12,6 +12,15 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat("th-TH", { maximumFractionDigits: 0 }).format(Math.max(Math.round(value), 0));
 }
 
+export function formatThaiPlate(value: string) {
+  const normalized = String(value || "").replace(/\s+/g, "");
+  const match = normalized.match(/^([0-9ก-๙a-zA-Z]{1,3})([0-9]{4})$/);
+  if (match) {
+    return `${match[1]} ${match[2]}`;
+  }
+  return value;
+}
+
 export function formatRealtimeBookingV2LineText(item: Pick<
   RealtimeBookingV2QueueItem,
   "customerName" | "plate" | "paymentType" | "saleName" | "remark" | "discount" | "rtPrice"
@@ -24,7 +33,7 @@ export function formatRealtimeBookingV2LineText(item: Pick<
   const lines = [
     "ช่องทางขาย : Retail ทีมบางนา",
     `ชื่อ-นามสกุล : ${item.customerName}`,
-    `ทะเบียนรถ : ${item.plate}`,
+    `ทะเบียนรถ : ${formatThaiPlate(item.plate)}`,
     `ราคามาตรฐาน : ${formatCurrency(standardPrice)}`,
     `ราคาตั้งขาย : ${formatCurrency(sellingPrice)}`
   ];

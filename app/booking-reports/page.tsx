@@ -162,6 +162,7 @@ async function compressBookingImage(file: File): Promise<File> {
 function fillIfEmpty(current: BookingReportInput, vehicle: StockVehicle): BookingReportInput {
   return {
     ...current,
+    plate: current.plate || vehicle.plate,
     brand: current.brand || vehicle.brand,
     model: current.model || vehicle.model,
     year: current.year || normalizeCarYear(vehicle.year),
@@ -296,12 +297,20 @@ export default function BookingReportsPage() {
 
         if (data.vehicle) {
           setForm((current) => fillIfEmpty(current, data.vehicle as StockVehicle));
-          setLookupStatus("พบข้อมูลสต๊อกและเติมช่องที่ว่างแล้ว");
+          setLookupStatus(
+            data.warning
+              ? `พบข้อมูลสต๊อก แต่มีคำเตือน: ${data.warning}`
+              : `พบข้อมูลสต๊อกทะเบียน ${plate} และเติมช่องที่ว่างแล้ว`
+          );
         } else {
-          setLookupStatus(data.warning ? "ยังค้นสต๊อกไม่ได้ แต่กรอกต่อได้" : "ไม่พบทะเบียนนี้ในสต๊อกล่าสุด");
+          setLookupStatus(
+            data.warning
+              ? `ค้นสต๊อกไม่สำเร็จ: ${data.warning}`
+              : `ไม่พบทะเบียน ${plate} ในสต๊อกล่าสุด`
+          );
         }
       } catch {
-        setLookupStatus("ค้นสต๊อกไม่สำเร็จ แต่ฟอร์มยังใช้งานได้");
+        setLookupStatus(`ค้นสต๊อกไม่สำเร็จสำหรับทะเบียน ${plate} แต่ฟอร์มยังใช้งานได้`);
       }
     }, 550);
 
@@ -826,6 +835,16 @@ export default function BookingReportsPage() {
           <SectionCard title="ข้อมูลรถ" icon={<Search size={18} />}>
             <Field label="ทะเบียนรถ" value={form.plate} onChange={(value) => update("plate", value)} required />
             {lookupStatus && <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs text-soft">{lookupStatus}</p>}
+            {form.plate.trim().length >= 3 && (
+              <a
+                href={`/stock-export?query=${encodeURIComponent(form.plate.trim())}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-brand/40 bg-brand/10 px-3 text-xs font-bold text-brand underline-offset-2 hover:underline"
+              >
+                เปิดค้นหาสต๊อกจากทะเบียน {form.plate.trim()}
+              </a>
+            )}
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="ยี่ห้อรถยนต์" value={form.brand} onChange={(value) => update("brand", value)} />
               <Field label="รุ่น" value={form.model} onChange={(value) => update("model", value)} />

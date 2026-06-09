@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { listCalendarEvents } from "@/lib/calendar-events";
 import { listReportHistory } from "@/lib/apps-script";
-import { upsertBookingDeliveryFromReportHistory } from "@/lib/booking-delivery";
+import { listBookingDeliveryRecords, syncBookingDeliveryFromReportHistory } from "@/lib/booking-delivery";
 import { listSalesLeads } from "@/lib/leads";
 import { canReadAllCustomers, getRequestSalesUser } from "@/lib/request-user";
 import { listVehiclePrepRecords } from "@/lib/vehicle-prep";
@@ -53,8 +53,10 @@ function isFinanceBooking(report: ReportHistoryItem) {
   return source.includes("ไฟแนนซ์") || source.includes("finance");
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const url = new URL(request.url);
+    const shouldSyncBookingDelivery = ["1", "true"].includes(String(url.searchParams.get("sync") || "").toLowerCase());
     let currentUser = null;
     try {
       currentUser = getRequestSalesUser();
@@ -74,7 +76,9 @@ export async function GET() {
     const reports = reportsResult.status === "fulfilled" ? reportsResult.value : [];
     const prepRecords = prepRecordsResult.status === "fulfilled" ? prepRecordsResult.value : [];
     const todayEvents = todayEventsResult.status === "fulfilled" ? todayEventsResult.value : [];
-    const bookingDeliveryRecords = await upsertBookingDeliveryFromReportHistory(reports).catch(() => []);
+    const bookingDeliveryRecords = shouldSyncBookingDelivery
+      ? await syncBookingDeliveryFromReportHistory().catch(() => listBookingDeliveryRecords())
+      : await listBookingDeliveryRecords();
 
     const leads =
       currentUser && !canReadAllCustomers(currentUser)
@@ -106,8 +110,10 @@ export async function GET() {
         financeWaiting: financeWaiting.length,
         waitingDelivery: readyDelivery.length,
         delivered: delivered.length,
-        bookingDeliveries: bookingDeliveryRecords.length,
-        bookingDeliveriesPending: bookingDeliveryRecords.filter((record) => record.status === "ติดจองรอคอนเฟิร์ม").length,
+        bookingDeliveries: bookingDeliveryRecords.filter((record) => record.status !== "ยกเลิก").length,
+        bookingDeliveriesPending: bookingDeliveryRecords.filter(
+          (record) => record.status !== "ยกเลิก" && record.workflowStatus !== "ยอดส่งมอบ"
+        ).length,
         todayEvents: todayEvents.length
       }
     });

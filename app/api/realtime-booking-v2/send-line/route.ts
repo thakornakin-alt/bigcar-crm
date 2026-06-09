@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { sendRealtimeBookingV2Line } from "@/lib/realtime-booking-v2";
+import { ensureRealtimeBookingV2Store, sendRealtimeBookingV2Line } from "@/lib/realtime-booking-v2";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    await ensureRealtimeBookingV2Store();
     const item = await sendRealtimeBookingV2Line(String(body.id || ""), String(body.targetId || ""), {
       paymentType: body.paymentType === "cash" ? "cash" : "finance",
       saleName: String(body.saleName || "บิ๊ก"),
