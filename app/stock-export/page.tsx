@@ -697,25 +697,25 @@ function stockExportColumns(mode: ExportMode, selectedColumns: ExtraColumnKey[],
   const columns: StockExportColumn[] =
     mode === "internal"
       ? [
-          { key: "location", label: "Location", width: 152 },
-          { key: "plate", label: "ทะเบียน", width: 176 },
-          { key: "registrationYear", label: "ปีจด", width: 82 },
-          { key: "model", label: "รุ่นรถยนต์", width: 370 },
-          { key: "gear", label: "เกียร์", width: 70 },
-          { key: "color", label: "สี", width: 142 },
-          { key: "mileage", label: "เลขไมล์", width: 120 },
-          { key: "price", label: "ราคาเสนอขายRT", width: 200 },
+          { key: "location", label: "Location", width: 184 },
+          { key: "plate", label: "ทะเบียน", width: 182 },
+          { key: "registrationYear", label: "ปีจด", width: 90 },
+          { key: "model", label: "รุ่นรถยนต์", width: 360 },
+          { key: "gear", label: "เกียร์", width: 74 },
+          { key: "color", label: "สี", width: 150 },
+          { key: "mileage", label: "เลขไมล์", width: 128 },
+          { key: "price", label: "ราคาเสนอขายRT", width: 260 },
           { key: "pdi", label: "หมายเหตุ PDI", width: 550 }
         ]
       : [
-          { key: "location", label: "Location", width: 188 },
-          { key: "plate", label: "ทะเบียน", width: 188 },
-          { key: "registrationYear", label: "ปีจด", width: 120 },
-          { key: "model", label: "รุ่นรถยนต์", width: 620 },
-          { key: "gear", label: "เกียร์", width: 95 },
-          { key: "color", label: "สี", width: 214 },
-          { key: "mileage", label: "เลขไมล์", width: 170 },
-          { key: "price", label: "ราคาเสนอขายRT", width: 236 }
+          { key: "location", label: "Location", width: 228 },
+          { key: "plate", label: "ทะเบียน", width: 194 },
+          { key: "registrationYear", label: "ปีจด", width: 126 },
+          { key: "model", label: "รุ่นรถยนต์", width: 610 },
+          { key: "gear", label: "เกียร์", width: 102 },
+          { key: "color", label: "สี", width: 224 },
+          { key: "mileage", label: "เลขไมล์", width: 182 },
+          { key: "price", label: "ราคาเสนอขายRT", width: 312 }
         ];
 
   stockExportExtraColumns(mode, selectedColumns).forEach((key) => {
@@ -2588,6 +2588,7 @@ function renderStockTableCanvas(
   bookingReservedPlateSet: Set<string> = new Set()
 ) {
   const margin = 44;
+  const rightSafePadding = 160;
   const headerHeight = 126;
   const tableTop = 166;
   const rowHeight = mode === "internal" ? (vehicles.length <= 3 ? 100 : vehicles.length <= 8 ? 92 : 84) : vehicles.length <= 3 ? 76 : vehicles.length <= 8 ? 66 : 58;
@@ -2596,7 +2597,7 @@ function renderStockTableCanvas(
   const headerRowHeight = 56;
   const columns = stockExportColumns(mode, extraColumns, hasRegistrationYear);
   const tableWidth = columns.reduce((total, column) => total + column.width, 0);
-  const width = Math.max(1800, tableWidth + margin * 2);
+  const width = Math.max(1800, tableWidth + margin * 2 + rightSafePadding);
   const height = tableTop + headerRowHeight + rows.length * rowHeight + footerHeight;
   const ratio = window.devicePixelRatio || 1;
   canvas.width = width * ratio;
@@ -2640,8 +2641,8 @@ function renderStockTableCanvas(
   ctx.textAlign = "right";
   ctx.fillStyle = "#0f172a";
   ctx.font = "800 26px Arial, Tahoma, sans-serif";
-  ctx.fillText(`หน้า ${page}/${totalPages}`, width - margin - 28, 62);
-  drawStockExportContact(ctx, contact, width - margin - 18, 78);
+  ctx.fillText(`หน้า ${page}/${totalPages}`, width - margin - 80, 62);
+  drawStockExportContact(ctx, contact, width - margin - 2, 78);
 
   let x = margin;
   ctx.font = "800 23px Arial, Tahoma, sans-serif";
@@ -2714,15 +2715,22 @@ function renderStockTableCanvas(
       } else if (column.extraKey === "vin" || column.extraKey === "engineNo") {
         drawWrappedCellText(ctx, values[column.key], textX, rowCenterY + 4, column.width - 28, 23, 2);
       } else if (column.key === "location") {
+        const locationText = formatStockExportLocationDisplay(vehicle.parkingLocation);
+        const badgeWidth = Math.min(
+          Math.max(96, Math.ceil(ctx.measureText(locationText).width + 38)),
+          column.width - 20
+        );
+        const badgeFontSize = badgeWidth >= column.width - 20 ? 15 : 17;
         drawLocationBadgeCellText(
           ctx,
-          formatStockExportLocationDisplay(vehicle.parkingLocation),
+          locationText,
           x + column.width / 2,
           rowY + Math.floor(rowHeight / 2),
-          column.width - 24
+          badgeWidth,
+          badgeFontSize
         );
       } else if (column.key === "color") {
-        drawWrappedBadgeCellText(ctx, values[column.key], x + column.width / 2, rowY + Math.floor(rowHeight / 2), column.width - 24, 1);
+        drawWrappedBadgeCellText(ctx, values[column.key], x + column.width / 2, rowY + Math.floor(rowHeight / 2), column.width - 18, 1);
       } else {
         const cellPadding = column.key === "plate" ? 30 : 20;
         if (column.key === "plate" || column.key === "mileage" || column.key === "price") {
@@ -2881,8 +2889,8 @@ function drawWrappedBadgeCellText(ctx: CanvasRenderingContext2D, text: string, x
   const value = text || "-";
   ctx.save();
   const align = ctx.textAlign;
-  const minWidth = Math.min(54, maxWidth);
-  const measured = Math.max(minWidth, Math.min(ctx.measureText(value).width + 20, maxWidth));
+  const minWidth = Math.min(60, maxWidth);
+  const measured = Math.max(minWidth, Math.min(ctx.measureText(value).width + 24, maxWidth));
   const left = align === "center" ? x - measured / 2 : align === "right" ? x - measured : x;
   const lineHeight = 18;
   const blockHeight = maxLines > 1 ? Math.min(52, 16 + maxLines * lineHeight) : 30;
@@ -2918,12 +2926,12 @@ function drawWrappedBadgeCellText(ctx: CanvasRenderingContext2D, text: string, x
   ctx.restore();
 }
 
-function drawLocationBadgeCellText(ctx: CanvasRenderingContext2D, text: string, x: number, centerY: number, maxWidth: number) {
+function drawLocationBadgeCellText(ctx: CanvasRenderingContext2D, text: string, x: number, centerY: number, maxWidth: number, fontSize = 17) {
   const value = String(text || "-").trim() || "-";
-  const measured = Math.max(84, Math.min(ctx.measureText(value).width + 30, maxWidth));
+  const measured = Math.max(96, Math.min(ctx.measureText(value).width + 38, maxWidth));
   const left = x - measured / 2;
   ctx.save();
-  drawRoundedRect(ctx, left, centerY - 17, measured, 34, 17);
+  drawRoundedRect(ctx, left, centerY - 18, measured, 36, 18);
   ctx.fillStyle = "#eef7f2";
   ctx.fill();
   ctx.strokeStyle = "#cfe3d7";
@@ -2931,8 +2939,8 @@ function drawLocationBadgeCellText(ctx: CanvasRenderingContext2D, text: string, 
   ctx.fillStyle = "#14532d";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = "700 18px Arial, Tahoma, sans-serif";
-  ctx.fillText(value, x, centerY + 1);
+  ctx.font = `700 ${fontSize}px Arial, Tahoma, sans-serif`;
+  ctx.fillText(value, x, centerY + 0.5);
   ctx.restore();
 }
 
