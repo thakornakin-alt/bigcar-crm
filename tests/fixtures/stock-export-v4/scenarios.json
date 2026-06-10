@@ -1,0 +1,66 @@
+[
+  {
+    "name": "van",
+    "group": "VAN",
+    "count": 2,
+    "reserveIndices": [0],
+    "longName": false,
+    "authUser": true
+  },
+  {
+    "name": "vip-car",
+    "group": "VIP CAR",
+    "count": 7,
+    "reserveIndices": [2],
+    "longName": false,
+    "authUser": true
+  },
+  {
+    "name": "sedan-m",
+    "group": "SEDAN-M",
+    "count": 8,
+    "reserveIndices": [3],
+    "longName": false,
+    "authUser": true
+  },
+  {
+    "name": "pickup-large",
+    "group": "PICK-UP D-CAB",
+    "count": 21,
+    "reserveIndices": [0, 10],
+    "longName": true,
+    "authUser": true
+  },
+  {
+    "name": "reservation",
+    "group": "VIP CAR",
+    "count": 3,
+    "reserveIndices": [1],
+    "longName": false,
+    "authUser": true
+  },
+  {
+    "name": "two-cars",
+    "group": "VAN",
+    "count": 2,
+    "reserveIndices": [],
+    "longName": false,
+    "authUser": true
+  },
+  {
+    "name": "long-vehicle-name",
+    "group": "PICK-UP D-CAB",
+    "count": 4,
+    "reserveIndices": [],
+    "longName": true,
+    "authUser": true
+  },
+  {
+    "name": "missing-contact",
+    "group": "VAN",
+    "count": 3,
+    "reserveIndices": [],
+    "longName": false,
+    "authUser": false
+  }
+]

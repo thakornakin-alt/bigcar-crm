@@ -27,6 +27,9 @@ type StockListResponse = {
 const maxTableItems = 20;
 const stockStatuses = ["รอขาย", "เตรียมส่งลาน", "จอง_Sale", "จอง_Internal", "จอง_รถทดแทน", "ขายแล้ว"];
 const ENABLE_NEW_STOCK_UI = process.env.NEXT_PUBLIC_ENABLE_NEW_STOCK_UI !== "false";
+const USE_STOCK_EXPORT_RENDERER_V2 = true;
+const USE_STOCK_EXPORT_RENDERER_V3 = process.env.NEXT_PUBLIC_STOCK_EXPORT_RENDERER_V3 === "true";
+const USE_STOCK_EXPORT_RENDERER_V4 = process.env.NEXT_PUBLIC_STOCK_EXPORT_RENDERER_V4 === "true";
 
 type ExportMode = "customer" | "internal";
 type ExportFormat = "png" | "jpeg" | "pdf";
@@ -43,6 +46,8 @@ type PdfImage = {
   width: number;
   height: number;
 };
+
+type StockExportRendererVersion = "v2" | "v3" | "v4";
 
 type StockExportFileBundle = {
   files: File[];
@@ -708,14 +713,14 @@ function stockExportColumns(mode: ExportMode, selectedColumns: ExtraColumnKey[],
           { key: "pdi", label: "หมายเหตุ PDI", width: 550 }
         ]
       : [
-          { key: "location", label: "Location", width: 228 },
-          { key: "plate", label: "ทะเบียน", width: 194 },
-          { key: "registrationYear", label: "ปีจด", width: 126 },
-          { key: "model", label: "รุ่นรถยนต์", width: 610 },
-          { key: "gear", label: "เกียร์", width: 102 },
-          { key: "color", label: "สี", width: 224 },
-          { key: "mileage", label: "เลขไมล์", width: 182 },
-          { key: "price", label: "ราคาเสนอขายRT", width: 312 }
+          { key: "location", label: "Location", width: 220 },
+          { key: "plate", label: "ทะเบียน", width: 210 },
+          { key: "registrationYear", label: "ปีจด", width: 124 },
+          { key: "model", label: "รุ่นรถยนต์", width: 592 },
+          { key: "gear", label: "เกียร์", width: 98 },
+          { key: "color", label: "สี", width: 216 },
+          { key: "mileage", label: "เลขไมล์", width: 180 },
+          { key: "price", label: "ราคาเสนอขายRT", width: 338 }
         ];
 
   stockExportExtraColumns(mode, selectedColumns).forEach((key) => {
@@ -750,6 +755,12 @@ function senderName(user: { firstName: string; lastName: string; nickname: strin
   if (!user) return "BIG CAR CRM";
   const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
   return [user.nickname || fullName, user.phone].filter(Boolean).join(" · ") || "BIG CAR CRM";
+}
+
+function stockExportDisplayName(user: { firstName: string; lastName: string; nickname: string } | null) {
+  if (!user) return "BIG CAR";
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+  return (user.nickname || fullName || "BIG CAR").trim();
 }
 
 async function stockExportContactProfile(user: {
@@ -819,6 +830,18 @@ export default function StockExportPage() {
     if (url.searchParams.get("debugYear") === "1") setShowYearDebug(true);
   }, []);
 
+  const stockExportRendererV3Enabled = useMemo(() => {
+    if (typeof window === "undefined") return USE_STOCK_EXPORT_RENDERER_V3;
+    const params = new URLSearchParams(window.location.search);
+    return params.get("renderer") === "v3" || USE_STOCK_EXPORT_RENDERER_V3;
+  }, []);
+
+  const stockExportRendererV4Enabled = useMemo(() => {
+    if (typeof window === "undefined") return USE_STOCK_EXPORT_RENDERER_V4;
+    const params = new URLSearchParams(window.location.search);
+    return params.get("renderer") === "v4" || USE_STOCK_EXPORT_RENDERER_V4;
+  }, []);
+
   const importedStatusCount = useMemo(() => vehicles.filter((vehicle) => stockStatus(vehicle)).length, [vehicles]);
   const importedVehicleGroupCount = useMemo(() => vehicles.filter((vehicle) => stockVehicleGroup(vehicle)).length, [vehicles]);
   const importedPdiNoteCount = useMemo(() => vehicles.filter((vehicle) => hasPdiRemark(stockPdiRemark(vehicle))).length, [vehicles]);
@@ -856,6 +879,26 @@ export default function StockExportPage() {
 
     return Array.from(byPlate.values());
   }, [query, vehicles]);
+
+  const bookingHistoryReservedPlateSet = useMemo(() => {
+    const set = new Set<string>();
+    bookingReports.forEach((report) => {
+      if (report.type !== "booking") return;
+      if (String(report.status || "").toLowerCase() === "deleted") return;
+      const normalized = normalizePlateForMatch(report.plate);
+      if (normalized) set.add(normalized);
+    });
+    return set;
+  }, [bookingReports]);
+
+  const linePendingReservedPlateSet = useMemo(() => {
+    const set = new Set<string>();
+    lineReservedPlateKeys.forEach((plateKey) => {
+      const normalized = normalizePlateForMatch(plateKey);
+      if (normalized) set.add(normalized);
+    });
+    return set;
+  }, [lineReservedPlateKeys]);
 
   const statusMatchedVehicles = useMemo(() => {
     return plateMatchedVehicles.filter((vehicle) => {
@@ -993,20 +1036,72 @@ export default function StockExportPage() {
     [vehicles]
   );
 
-  const bookingReservedPlateSet = useMemo(() => {
-    const set = new Set<string>();
-    bookingReports.forEach((report) => {
-      if (report.type !== "booking") return;
-      if (String(report.status || "").toLowerCase() === "deleted") return;
-      const normalized = normalizePlateForMatch(report.plate);
-      if (normalized) set.add(normalized);
-    });
-    lineReservedPlateKeys.forEach((plateKey) => {
-      const normalized = normalizePlateForMatch(plateKey);
-      if (normalized) set.add(normalized);
-    });
-    return set;
-  }, [bookingReports, lineReservedPlateKeys]);
+  const renderStockExportCanvas = useMemo(() => {
+    return (
+      canvas: HTMLCanvasElement,
+      pageVehicles: StockVehicle[],
+      pageNumber: number,
+      totalPageNumber: number,
+      groupName: string,
+      groupVehicleCount: number,
+      totalVehicleCount: number,
+      contact: StockExportContact | null,
+      selectedExtraColumns: ExtraColumnKey[],
+      registrationYearEnabled: boolean,
+      reservedPlateSet: Set<string>
+    ) => {
+      if (stockExportRendererV4Enabled) {
+        renderStockTableCanvasV4(
+          canvas,
+          pageVehicles,
+          exportMode,
+          pageNumber,
+          totalPageNumber,
+          groupName,
+          groupVehicleCount,
+          totalVehicleCount,
+          contact,
+          selectedExtraColumns,
+          registrationYearEnabled,
+          reservedPlateSet
+        );
+        return;
+      }
+
+      if (stockExportRendererV3Enabled) {
+        renderStockTableCanvasV3(
+          canvas,
+          pageVehicles,
+          exportMode,
+          pageNumber,
+          totalPageNumber,
+          groupName,
+          groupVehicleCount,
+          totalVehicleCount,
+          contact,
+          selectedExtraColumns,
+          registrationYearEnabled,
+          reservedPlateSet
+        );
+        return;
+      }
+
+      renderStockTableCanvasV2(
+        canvas,
+        pageVehicles,
+        exportMode,
+        pageNumber,
+        totalPageNumber,
+        groupName,
+        groupVehicleCount,
+        totalVehicleCount,
+        contact,
+        selectedExtraColumns,
+        registrationYearEnabled,
+        reservedPlateSet
+      );
+    };
+  }, [exportMode, stockExportRendererV3Enabled, stockExportRendererV4Enabled]);
 
   const stockPlateSet = useMemo(() => {
     const set = new Set<string>();
@@ -1025,7 +1120,7 @@ export default function StockExportPage() {
     const unique = Array.from(new Set(lines));
     return unique.map((raw) => {
       const normalized = normalizePlateForMatch(raw);
-      const booked = normalized ? bookingReservedPlateSet.has(normalized) : false;
+      const booked = normalized ? linePendingReservedPlateSet.has(normalized) : false;
       const inStock = normalized ? stockPlateSet.has(normalized) : false;
       const status: BookingMatchStatus = booked
         ? "ติดจองรอคอนเฟิร์ม"
@@ -1034,7 +1129,7 @@ export default function StockExportPage() {
           : "ไม่พบข้อมูลจอง";
       return { raw, normalized, inStock, booked, status };
     });
-  }, [bookingInputText, bookingReservedPlateSet, stockPlateSet]);
+  }, [bookingInputText, linePendingReservedPlateSet, stockPlateSet]);
 
   useEffect(() => {
     loadStock();
@@ -1117,6 +1212,7 @@ export default function StockExportPage() {
     try {
       const data = await api<{ activePlates: string[] }>("/api/line/reservations");
       setLineReservedPlateKeys(Array.isArray(data.activePlates) ? data.activePlates : []);
+      console.debug("[stock-export-badge-source] source=LINE_RESERVATION");
     } catch {
       setLineReservedPlateKeys([]);
     }
@@ -1185,7 +1281,8 @@ export default function StockExportPage() {
     setMessage(`กำลังสร้างไฟล์ ${format.toUpperCase()} ${exportPageCount.toLocaleString("th-TH")} หน้า...`);
 
     try {
-      const { files } = await createStockExportFiles(format);
+      const bundle = await createStockExportFiles(format);
+      const { files, pageCount } = bundle;
 
       const shareData = {
         title: "ตารางสต็อก BIG CAR",
@@ -1211,7 +1308,7 @@ export default function StockExportPage() {
         await new Promise((resolve) => window.setTimeout(resolve, 180));
       }
 
-      setMessage(`Export ${format.toUpperCase()} แล้ว ${files.length.toLocaleString("th-TH")} ไฟล์ จาก ${exportPageCount.toLocaleString("th-TH")} หน้า`);
+      setMessage(`Export ${format.toUpperCase()} แล้ว ${files.length.toLocaleString("th-TH")} ไฟล์ จาก ${pageCount.toLocaleString("th-TH")} หน้า`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Export ไม่สำเร็จ");
     } finally {
@@ -1286,9 +1383,53 @@ export default function StockExportPage() {
     const contact = await stockExportContactProfile(salesProfile);
     await ensureStockExportFontsReady();
 
+    if (stockExportRendererV4Enabled) {
+      const v4Columns = resolveV4Columns(extraColumns);
+      const v4Pages = paginateV4ExportGroups(exportGroups, v4Columns, exportMode, hasRegistrationYear, linePendingReservedPlateSet);
+
+      for (const bundle of v4Pages) {
+        renderStockTableCanvasV4(
+          canvas,
+          bundle.vehicles,
+          exportMode,
+          bundle.pageIndex,
+          bundle.totalPages,
+          bundle.groupName,
+          bundle.groupVehicleCount,
+          exportVehicles.length,
+          contact,
+          extraColumns,
+          hasRegistrationYear,
+          linePendingReservedPlateSet,
+          bundle.layout,
+          bundle.rowHeights
+        );
+
+        if (format === "pdf") {
+          const jpegBlob = await canvasToBlob(canvas, "image/jpeg", 0.92);
+          pdfImages.push({ bytes: new Uint8Array(await jpegBlob.arrayBuffer()), width: canvas.width, height: canvas.height });
+        } else {
+          const blob = await canvasToBlob(canvas, mimeType, format === "jpeg" ? 0.92 : undefined);
+          files.push(new File([blob], fileName(bundle.groupName, extension, bundle.pageIndex, bundle.totalPages), { type: mimeType }));
+        }
+      }
+
+      if (format === "pdf") {
+        const blob = buildPdfFromJpegs(pdfImages);
+        files.push(new File([blob], pdfFileName(v4Pages.length), { type: "application/pdf" }));
+      }
+
+      return {
+        files,
+        pageCount: v4Pages.length,
+        groupCount: new Set(v4Pages.map((page) => page.groupName)).size,
+        vehicleCount: exportVehicles.length
+      };
+    }
+
     for (const group of exportGroups) {
       for (let index = 0; index < group.pages.length; index += 1) {
-        renderStockTableCanvas(canvas, group.pages[index], exportMode, index + 1, group.pages.length, group.name, group.vehicles.length, exportVehicles.length, contact, extraColumns, hasRegistrationYear, bookingReservedPlateSet);
+        renderStockExportCanvas(canvas, group.pages[index], index + 1, group.pages.length, group.name, group.vehicles.length, exportVehicles.length, contact, extraColumns, hasRegistrationYear, linePendingReservedPlateSet);
         if (format === "pdf") {
           const jpegBlob = await canvasToBlob(canvas, "image/jpeg", 0.92);
           pdfImages.push({ bytes: new Uint8Array(await jpegBlob.arrayBuffer()), width: canvas.width, height: canvas.height });
@@ -1324,7 +1465,30 @@ export default function StockExportPage() {
       const firstGroup = exportGroups[0];
       const contact = await stockExportContactProfile(salesProfile);
       await ensureStockExportFontsReady();
-      renderStockTableCanvas(canvas, firstGroup.pages[0] || firstGroup.vehicles, exportMode, 1, Math.max(firstGroup.pages.length, 1), firstGroup.name, firstGroup.vehicles.length, exportVehicles.length, contact, extraColumns, hasRegistrationYear, bookingReservedPlateSet);
+      if (stockExportRendererV4Enabled) {
+        const v4Columns = resolveV4Columns(extraColumns);
+        const v4Pages = paginateV4ExportGroups(exportGroups, v4Columns, exportMode, hasRegistrationYear, linePendingReservedPlateSet);
+        const firstPage = v4Pages[0];
+        if (!firstPage) throw new Error("ยังไม่มีหน้าสำหรับ Copy");
+        renderStockTableCanvasV4(
+          canvas,
+          firstPage.vehicles,
+          exportMode,
+          firstPage.pageIndex,
+          firstPage.totalPages,
+          firstPage.groupName,
+          firstPage.groupVehicleCount,
+          exportVehicles.length,
+          contact,
+          extraColumns,
+          hasRegistrationYear,
+          linePendingReservedPlateSet,
+          firstPage.layout,
+          firstPage.rowHeights
+        );
+      } else {
+        renderStockExportCanvas(canvas, firstGroup.pages[0] || firstGroup.vehicles, 1, Math.max(firstGroup.pages.length, 1), firstGroup.name, firstGroup.vehicles.length, exportVehicles.length, contact, extraColumns, hasRegistrationYear, linePendingReservedPlateSet);
+      }
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
       if (!blob || !navigator.clipboard || typeof ClipboardItem === "undefined") throw new Error("เครื่องนี้ยังไม่รองรับ Copy Image");
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
@@ -1699,7 +1863,7 @@ export default function StockExportPage() {
             groupCount={exportGroups.length}
             extraColumns={extraColumns}
             hasRegistrationYear={hasRegistrationYear}
-            bookingReservedPlateSet={bookingReservedPlateSet}
+            bookingReservedPlateSet={linePendingReservedPlateSet}
           />
           <div className="grid gap-2 rounded-lg border border-line bg-[#0b0d11] p-3 sm:grid-cols-[1fr_auto]">
             <label>
@@ -1798,7 +1962,7 @@ export default function StockExportPage() {
                   visibleVehicles.map((vehicle) => {
                     const pdiRemark = stockPdiRemark(vehicle);
                     const hasRemark = hasPdiRemark(pdiRemark);
-                    const isBookingReserved = bookingReservedPlateSet.has(normalizePlateForMatch(vehicle.plate));
+                    const isBookingReserved = linePendingReservedPlateSet.has(normalizePlateForMatch(vehicle.plate));
                     return (
                       <div
                         key={`${vehicle.plate}-${vehicle.vin || vehicle.model}`}
@@ -1807,15 +1971,13 @@ export default function StockExportPage() {
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <p className="font-bold text-white">{vehicle.plate || "-"}</p>
-                            <div className="mt-1">
-                              <span
-                                className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                                  isBookingReserved ? "bg-amber-300/20 text-amber-200" : "bg-green-300/20 text-green-200"
-                                }`}
-                              >
-                                {isBookingReserved ? "ติดจองรอคอนเฟิร์ม" : "พร้อมขาย"}
-                              </span>
-                            </div>
+                            {isBookingReserved ? (
+                              <div className="mt-1">
+                                <span className="inline-flex rounded-full bg-amber-300/20 px-2 py-0.5 text-[11px] font-bold text-amber-200">
+                                  ติดจองรอคอนเฟิร์ม
+                                </span>
+                              </div>
+                            ) : null}
                             <p className="mt-1 line-clamp-2 text-sm text-soft">{vehicleTitle(vehicle)}</p>
                           </div>
                           <span className="rounded-full bg-[#0b0d11] px-2 py-1 text-xs font-bold text-soft">
@@ -1823,7 +1985,7 @@ export default function StockExportPage() {
                           </span>
                         </div>
                         <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-soft">
-                          <span>สถานะ: <b className="text-white">{isBookingReserved ? "ติดจองรอคอนเฟิร์ม" : vehicle.status || "พร้อมขาย"}</b></span>
+                          <span>สถานะ: <b className="text-white">{vehicle.status || "พร้อมขาย"}</b></span>
                           <span>กลุ่ม: <b className="text-white">{vehicle.vehicleGroup || "-"}</b></span>
                           <span>Location: <b className="text-white">{vehicle.parkingLocation || "-"}</b></span>
                           <span>ปีจด: <b className="text-white">{stockRegistrationYear(vehicle) || "-"}</b></span>
@@ -2589,6 +2751,11 @@ function renderStockTableCanvas(
 ) {
   const margin = 44;
   const rightSafePadding = 160;
+  // Optical correction for Thai text rendering in canvas so the PNG looks centered to the eye.
+  const LOCATION_OPTICAL_OFFSET_X = 5;
+  const LOCATION_OPTICAL_OFFSET_Y = 0;
+  const PRICE_HEADER_OPTICAL_OFFSET_X = -2;
+  const PRICE_HEADER_OPTICAL_OFFSET_Y = 0;
   const headerHeight = 126;
   const tableTop = 166;
   const rowHeight = mode === "internal" ? (vehicles.length <= 3 ? 100 : vehicles.length <= 8 ? 92 : 84) : vehicles.length <= 3 ? 76 : vehicles.length <= 8 ? 66 : 58;
@@ -2611,12 +2778,12 @@ function renderStockTableCanvas(
   ctx.fillStyle = "#f4f7f5";
   ctx.fillRect(0, 0, width, height);
   ctx.fillStyle = "#ffffff";
-  ctx.fillRect(margin, 26, width - margin * 2, headerHeight);
+  ctx.fillRect(margin, 26, tableWidth, headerHeight);
   ctx.fillStyle = "#10b981";
   ctx.fillRect(margin, 26, 8, headerHeight);
   ctx.strokeStyle = "#d9e1df";
   ctx.lineWidth = 1.2;
-  ctx.strokeRect(margin, 26, width - margin * 2, headerHeight);
+  ctx.strokeRect(margin, 26, tableWidth, headerHeight);
 
   const hasContactBadge = Boolean(contact?.lineQrImage || contact?.avatarImage);
   const rightPanelWidth = hasContactBadge ? 300 : 180;
@@ -2641,20 +2808,43 @@ function renderStockTableCanvas(
   ctx.textAlign = "right";
   ctx.fillStyle = "#0f172a";
   ctx.font = "800 26px Arial, Tahoma, sans-serif";
-  ctx.fillText(`หน้า ${page}/${totalPages}`, width - margin - 80, 62);
-  drawStockExportContact(ctx, contact, width - margin - 2, 78);
+  const pageNumberX = Math.max(margin + 520, width - margin - (hasContactBadge ? 292 : 80));
+  ctx.fillText(`หน้า ${page}/${totalPages}`, pageNumberX, 58);
+  drawStockExportContact(ctx, contact, width - margin - 2, 56);
 
   let x = margin;
   ctx.font = "800 23px Arial, Tahoma, sans-serif";
   columns.forEach((column) => {
+    const columnCenterX = x + column.width / 2;
     ctx.fillStyle = column.key === "price" ? "#0f766e" : column.key === "pdi" ? "#7c4a03" : "#13221c";
     ctx.fillRect(x, tableTop, column.width, headerRowHeight);
     ctx.strokeStyle = "#2d3a35";
     ctx.lineWidth = 1;
     ctx.strokeRect(x, tableTop, column.width, headerRowHeight);
     ctx.fillStyle = "#ffffff";
-    ctx.textAlign = column.key === "price" ? "right" : "center";
-    ctx.fillText(column.label, column.key === "price" ? x + column.width - 18 : x + column.width / 2, tableTop + 36);
+    if (column.key === "price") {
+      ctx.textAlign = "center";
+      ctx.font = "700 20px Arial, Tahoma, sans-serif";
+      drawCenteredCellText(
+        ctx,
+        column.label,
+        x,
+        tableTop,
+        column.width,
+        headerRowHeight,
+        {
+          opticalOffsetX: PRICE_HEADER_OPTICAL_OFFSET_X,
+          opticalOffsetY: PRICE_HEADER_OPTICAL_OFFSET_Y,
+          font: "700 20px Arial, Tahoma, sans-serif",
+          color: "#ffffff",
+          maxWidth: column.width - 10
+        }
+      );
+    } else {
+      ctx.textAlign = "center";
+      ctx.font = "800 23px Arial, Tahoma, sans-serif";
+      ctx.fillText(column.label, x + column.width / 2, tableTop + 36);
+    }
     x += column.width;
   });
 
@@ -2716,40 +2906,42 @@ function renderStockTableCanvas(
         drawWrappedCellText(ctx, values[column.key], textX, rowCenterY + 4, column.width - 28, 23, 2);
       } else if (column.key === "location") {
         const locationText = formatStockExportLocationDisplay(vehicle.parkingLocation);
-        const badgeWidth = Math.min(
-          Math.max(96, Math.ceil(ctx.measureText(locationText).width + 38)),
-          column.width - 20
-        );
-        const badgeFontSize = badgeWidth >= column.width - 20 ? 15 : 17;
-        drawLocationBadgeCellText(
+        drawCenteredCellText(
           ctx,
           locationText,
-          x + column.width / 2,
-          rowY + Math.floor(rowHeight / 2),
-          badgeWidth,
-          badgeFontSize
+          x,
+          rowY,
+          column.width,
+          rowHeight,
+          {
+            opticalOffsetX: LOCATION_OPTICAL_OFFSET_X,
+            opticalOffsetY: LOCATION_OPTICAL_OFFSET_Y,
+            font: mode === "internal" ? "600 19px Arial, Tahoma, sans-serif" : "600 20px Arial, Tahoma, sans-serif",
+            color: "#14532d",
+            maxWidth: column.width - 18
+          }
         );
       } else if (column.key === "color") {
         drawWrappedBadgeCellText(ctx, values[column.key], x + column.width / 2, rowY + Math.floor(rowHeight / 2), column.width - 18, 1);
-      } else {
-        const cellPadding = column.key === "plate" ? 30 : 20;
-        if (column.key === "plate" || column.key === "mileage" || column.key === "price") {
-          const previousAlign = ctx.textAlign;
-          ctx.textAlign = "center";
-          drawClippedText(ctx, values[column.key], x + column.width / 2, rowCenterY + 6, column.width - cellPadding);
-          ctx.textAlign = previousAlign;
         } else {
-          drawClippedText(ctx, values[column.key], textX, rowCenterY + 6, column.width - cellPadding);
+          const cellPadding = column.key === "plate" ? 30 : 20;
+          if (column.key === "plate" || column.key === "mileage" || column.key === "price") {
+            const previousAlign = ctx.textAlign;
+            ctx.textAlign = "center";
+            drawClippedText(ctx, values[column.key], x + column.width / 2, rowCenterY + 6, column.width - (column.key === "plate" ? 18 : cellPadding));
+            ctx.textAlign = previousAlign;
+          } else {
+            drawClippedText(ctx, values[column.key], textX, rowCenterY + 6, column.width - cellPadding);
+          }
+          if (column.key === "plate" && isReserved) {
+            ctx.save();
+            ctx.fillStyle = "#b45309";
+            ctx.font = "700 14px Arial, Tahoma, sans-serif";
+            ctx.textAlign = "center";
+            drawClippedText(ctx, "ติดจองรอคอนเฟิร์ม", x + column.width / 2, rowY + rowHeight - 8, column.width - 22, 18, 14);
+            ctx.restore();
+          }
         }
-        if (column.key === "plate" && isReserved) {
-          ctx.save();
-          ctx.fillStyle = "#b45309";
-          ctx.font = "700 14px Arial, Tahoma, sans-serif";
-          ctx.textAlign = "left";
-          drawClippedText(ctx, "ติดจองรอคอนเฟิร์ม", x + 12, rowY + rowHeight - 10, column.width - 20, 18, 14);
-          ctx.restore();
-        }
-      }
       x += column.width;
     });
   });
@@ -2796,8 +2988,8 @@ function groupVehiclesForExport(vehicles: StockVehicle[]): StockExportGroup[] {
 function drawStockExportContact(ctx: CanvasRenderingContext2D, contact: StockExportContact | null, right: number, top: number) {
   if (!contact) return;
   const image = contact.lineQrImage || contact.avatarImage;
-  const blockWidth = image ? 286 : 250;
-  const blockHeight = image ? 76 : 54;
+  const blockWidth = image ? 228 : 202;
+  const blockHeight = image ? 60 : 44;
   const blockLeft = right - blockWidth;
 
   ctx.save();
@@ -2810,8 +3002,8 @@ function drawStockExportContact(ctx: CanvasRenderingContext2D, contact: StockExp
 
   let textStartX = blockLeft + 12;
   if (image) {
-    const size = contact.lineQrImage ? 58 : 50;
-    const imageLeft = blockLeft + 10;
+    const size = contact.lineQrImage ? 42 : 36;
+    const imageLeft = blockLeft + 8;
     const imageTop = top + Math.floor((blockHeight - size) / 2);
     if (contact.lineQrImage) {
       ctx.drawImage(image, imageLeft, imageTop, size, size);
@@ -2823,18 +3015,18 @@ function drawStockExportContact(ctx: CanvasRenderingContext2D, contact: StockExp
       ctx.drawImage(image, imageLeft, imageTop, size, size);
       ctx.restore();
     }
-    textStartX = imageLeft + size + 10;
+    textStartX = imageLeft + size + 6;
   }
 
-  const textMaxWidth = blockLeft + blockWidth - textStartX - 10;
+  const textMaxWidth = blockLeft + blockWidth - textStartX - 6;
   ctx.textAlign = "left";
   ctx.fillStyle = "#111827";
-  ctx.font = "800 14px Arial, Tahoma, sans-serif";
-  drawClippedText(ctx, contact.name || "BIG CAR CRM", textStartX, top + 23, textMaxWidth, 26, 18);
+  ctx.font = "800 12px Arial, Tahoma, sans-serif";
+  drawClippedText(ctx, contact.name || "BIG CAR CRM", textStartX, top + 18, textMaxWidth, 20, 14);
   ctx.fillStyle = "#475569";
-  ctx.font = "700 12px Arial, Tahoma, sans-serif";
-  drawClippedText(ctx, contact.phone ? `โทร ${contact.phone}` : "-", textStartX, top + 41, textMaxWidth, 22, 16);
-  drawClippedText(ctx, contact.lineId ? `LINE ${contact.lineId}` : "-", textStartX, top + 57, textMaxWidth, 22, 16);
+  ctx.font = "700 10px Arial, Tahoma, sans-serif";
+  drawClippedText(ctx, contact.phone ? `โทร ${contact.phone}` : "-", textStartX, top + 31, textMaxWidth, 18, 12);
+  drawClippedText(ctx, contact.lineId ? `LINE ${contact.lineId}` : "-", textStartX, top + 44, textMaxWidth, 18, 12);
   ctx.restore();
 }
 
@@ -2885,6 +3077,47 @@ function drawClippedText(
   ctx.restore();
 }
 
+function drawCenteredCellText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cellLeft: number,
+  cellTop: number,
+  cellWidth: number,
+  cellHeight: number,
+  options: {
+    opticalOffsetX?: number;
+    opticalOffsetY?: number;
+    font?: string;
+    color?: string;
+    maxWidth?: number;
+  } = {}
+) {
+  const value = String(text || "-").trim() || "-";
+  const x = cellLeft + cellWidth / 2 + (options.opticalOffsetX || 0);
+  const y = cellTop + cellHeight / 2 + (options.opticalOffsetY || 0);
+  const previousAlign = ctx.textAlign;
+  const previousBaseline = ctx.textBaseline;
+  const previousFill = ctx.fillStyle;
+  const previousFont = ctx.font;
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  if (options.font) ctx.font = options.font;
+  if (options.color) ctx.fillStyle = options.color;
+  const maxWidth = options.maxWidth || cellWidth;
+  const safeWidth = Math.max(8, maxWidth - 4);
+  let fitValue = value;
+  while (fitValue.length > 0 && ctx.measureText(fitValue).width > safeWidth) {
+    fitValue = fitValue.slice(0, -1);
+  }
+  ctx.fillText(fitValue.length < value.length ? `${fitValue}…` : value, x, y);
+  ctx.restore();
+  ctx.textAlign = previousAlign;
+  ctx.textBaseline = previousBaseline;
+  ctx.fillStyle = previousFill;
+  ctx.font = previousFont;
+}
+
 function drawWrappedBadgeCellText(ctx: CanvasRenderingContext2D, text: string, x: number, centerY: number, maxWidth: number, maxLines: number) {
   const value = text || "-";
   ctx.save();
@@ -2928,10 +3161,20 @@ function drawWrappedBadgeCellText(ctx: CanvasRenderingContext2D, text: string, x
 
 function drawLocationBadgeCellText(ctx: CanvasRenderingContext2D, text: string, x: number, centerY: number, maxWidth: number, fontSize = 17) {
   const value = String(text || "-").trim() || "-";
-  const measured = Math.max(96, Math.min(ctx.measureText(value).width + 38, maxWidth));
-  const left = x - measured / 2;
+  const measuredTextWidth = ctx.measureText(value).width;
+  const measured = Math.max(92, Math.min(measuredTextWidth + 30, maxWidth));
+  const badgeRect = {
+    left: x - measured / 2,
+    top: centerY - 17,
+    width: measured,
+    height: 34
+  };
+  const badgeCenterX = badgeRect.left + badgeRect.width / 2;
+  const opticalShift = measuredTextWidth > 0 ? Math.min(2, Math.max(-2, Math.round((value.length - measuredTextWidth / 18) * 0.25))) : 0;
+  const textCenterX = badgeCenterX + opticalShift;
+  const isDevGuideVisible = typeof window !== "undefined" && ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
   ctx.save();
-  drawRoundedRect(ctx, left, centerY - 18, measured, 36, 18);
+  drawRoundedRect(ctx, badgeRect.left, badgeRect.top, badgeRect.width, badgeRect.height, 17);
   ctx.fillStyle = "#eef7f2";
   ctx.fill();
   ctx.strokeStyle = "#cfe3d7";
@@ -2940,7 +3183,18 @@ function drawLocationBadgeCellText(ctx: CanvasRenderingContext2D, text: string, 
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = `700 ${fontSize}px Arial, Tahoma, sans-serif`;
-  ctx.fillText(value, x, centerY + 0.5);
+  ctx.fillText(value, textCenterX, badgeRect.top + badgeRect.height / 2);
+  if (isDevGuideVisible) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(239, 68, 68, 0.65)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(badgeCenterX, badgeRect.top - 2);
+    ctx.lineTo(badgeCenterX, badgeRect.top + badgeRect.height + 2);
+    ctx.stroke();
+    ctx.restore();
+  }
   ctx.restore();
 }
 
@@ -3015,4 +3269,1749 @@ function formatLocationForExport(location: string) {
     return suffix ? `อู่/${suffix}` : "อู่";
   }
   return mapping[value] || value;
+}
+
+type StockExportCanvasColumn = {
+  key: string;
+  label: string;
+  width: number;
+  align: "left" | "center" | "right";
+  extraKey?: ExtraColumnKey;
+};
+
+function drawCenteredText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cellLeft: number,
+  cellTop: number,
+  cellWidth: number,
+  cellHeight: number,
+  options: { font: string; color: string; opticalOffsetX?: number; opticalOffsetY?: number; maxWidth?: number }
+) {
+  const value = String(text || "-").trim() || "-";
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = options.font;
+  ctx.fillStyle = options.color;
+  const x = cellLeft + cellWidth / 2 + (options.opticalOffsetX || 0);
+  const y = cellTop + cellHeight / 2 + (options.opticalOffsetY || 0);
+  const maxWidth = options.maxWidth ?? cellWidth - 16;
+  let fit = value;
+  while (fit.length > 0 && ctx.measureText(fit).width > maxWidth) {
+    fit = fit.slice(0, -1);
+  }
+  ctx.fillText(fit.length < value.length ? `${fit}…` : value, x, y);
+  ctx.restore();
+}
+
+function drawLeftText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cellLeft: number,
+  cellTop: number,
+  cellWidth: number,
+  cellHeight: number,
+  options: { font: string; color: string; padding?: number; maxWidth?: number }
+) {
+  const value = String(text || "-").trim() || "-";
+  const padding = options.padding ?? 16;
+  ctx.save();
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.font = options.font;
+  ctx.fillStyle = options.color;
+  const x = cellLeft + padding;
+  const y = cellTop + cellHeight / 2;
+  const maxWidth = options.maxWidth ?? cellWidth - padding * 2;
+  let fit = value;
+  while (fit.length > 0 && ctx.measureText(fit).width > maxWidth) {
+    fit = fit.slice(0, -1);
+  }
+  ctx.fillText(fit.length < value.length ? `${fit}…` : value, x, y);
+  ctx.restore();
+}
+
+function drawRightText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cellLeft: number,
+  cellTop: number,
+  cellWidth: number,
+  cellHeight: number,
+  options: { font: string; color: string; padding?: number; maxWidth?: number }
+) {
+  const value = String(text || "-").trim() || "-";
+  const padding = options.padding ?? 16;
+  ctx.save();
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  ctx.font = options.font;
+  ctx.fillStyle = options.color;
+  const x = cellLeft + cellWidth - padding;
+  const y = cellTop + cellHeight / 2;
+  const maxWidth = options.maxWidth ?? cellWidth - padding * 2;
+  let fit = value;
+  while (fit.length > 0 && ctx.measureText(fit).width > maxWidth) {
+    fit = fit.slice(0, -1);
+  }
+  ctx.fillText(fit.length < value.length ? `${fit}…` : value, x, y);
+  ctx.restore();
+}
+
+function drawV3CenteredText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cellLeft: number,
+  cellTop: number,
+  cellWidth: number,
+  cellHeight: number,
+  options: { font: string; color: string; opticalOffsetX?: number; opticalOffsetY?: number; maxWidth?: number }
+) {
+  const value = String(text || "-").trim() || "-";
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = options.font;
+  ctx.fillStyle = options.color;
+  const x = cellLeft + cellWidth / 2 + (options.opticalOffsetX || 0);
+  const y = cellTop + cellHeight / 2 + (options.opticalOffsetY || 0);
+  const maxWidth = options.maxWidth ?? cellWidth - 18;
+  let fit = value;
+  while (fit.length > 0 && ctx.measureText(fit).width > maxWidth) {
+    fit = fit.slice(0, -1);
+  }
+  ctx.fillText(fit.length < value.length ? `${fit}…` : value, x, y);
+  ctx.restore();
+}
+
+function drawV3LeftText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cellLeft: number,
+  cellTop: number,
+  cellWidth: number,
+  cellHeight: number,
+  options: { font: string; color: string; padding?: number; maxWidth?: number }
+) {
+  const value = String(text || "-").trim() || "-";
+  const padding = options.padding ?? 16;
+  ctx.save();
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.font = options.font;
+  ctx.fillStyle = options.color;
+  const x = cellLeft + padding;
+  const y = cellTop + cellHeight / 2;
+  const maxWidth = options.maxWidth ?? cellWidth - padding * 2;
+  let fit = value;
+  while (fit.length > 0 && ctx.measureText(fit).width > maxWidth) {
+    fit = fit.slice(0, -1);
+  }
+  ctx.fillText(fit.length < value.length ? `${fit}…` : value, x, y);
+  ctx.restore();
+}
+
+function drawV3RightText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cellLeft: number,
+  cellTop: number,
+  cellWidth: number,
+  cellHeight: number,
+  options: { font: string; color: string; padding?: number; maxWidth?: number }
+) {
+  const value = String(text || "-").trim() || "-";
+  const padding = options.padding ?? 16;
+  ctx.save();
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  ctx.font = options.font;
+  ctx.fillStyle = options.color;
+  const x = cellLeft + cellWidth - padding;
+  const y = cellTop + cellHeight / 2;
+  const maxWidth = options.maxWidth ?? cellWidth - padding * 2;
+  let fit = value;
+  while (fit.length > 0 && ctx.measureText(fit).width > maxWidth) {
+    fit = fit.slice(0, -1);
+  }
+  ctx.fillText(fit.length < value.length ? `${fit}…` : value, x, y);
+  ctx.restore();
+}
+
+function drawV3HeaderCell(
+  ctx: CanvasRenderingContext2D,
+  label: string,
+  cellLeft: number,
+  cellTop: number,
+  cellWidth: number,
+  cellHeight: number,
+  tone: "default" | "accent" = "default"
+) {
+  ctx.save();
+  ctx.fillStyle = tone === "accent" ? "#0f766e" : "#13221c";
+  ctx.fillRect(cellLeft, cellTop, cellWidth, cellHeight);
+  ctx.strokeStyle = "#24312c";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(cellLeft, cellTop, cellWidth, cellHeight);
+  drawV3CenteredText(ctx, label, cellLeft, cellTop, cellWidth, cellHeight, {
+    font: "700 18px Arial, Tahoma, sans-serif",
+    color: "#ffffff",
+    maxWidth: cellWidth - 12
+  });
+  ctx.restore();
+}
+
+function drawV3BodyCell(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cellLeft: number,
+  cellTop: number,
+  cellWidth: number,
+  cellHeight: number,
+  align: "left" | "center" | "right",
+  options: { font: string; color: string; background?: string; padding?: number; maxWidth?: number }
+) {
+  ctx.save();
+  ctx.fillStyle = options.background || "#ffffff";
+  ctx.fillRect(cellLeft, cellTop, cellWidth, cellHeight);
+  ctx.strokeStyle = "#dbe5e1";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(cellLeft, cellTop, cellWidth, cellHeight);
+  if (align === "center") {
+    drawV3CenteredText(ctx, text, cellLeft, cellTop, cellWidth, cellHeight, {
+      font: options.font,
+      color: options.color,
+      maxWidth: options.maxWidth ?? cellWidth - 16
+    });
+  } else if (align === "right") {
+    drawV3RightText(ctx, text, cellLeft, cellTop, cellWidth, cellHeight, {
+      font: options.font,
+      color: options.color,
+      padding: options.padding ?? 14,
+      maxWidth: options.maxWidth ?? cellWidth - 16
+    });
+  } else {
+    drawV3LeftText(ctx, text, cellLeft, cellTop, cellWidth, cellHeight, {
+      font: options.font,
+      color: options.color,
+      padding: options.padding ?? 14,
+      maxWidth: options.maxWidth ?? cellWidth - 16
+    });
+  }
+  ctx.restore();
+}
+
+function drawV3ContactFooter(ctx: CanvasRenderingContext2D, contact: StockExportContact | null, left: number, top: number, width: number) {
+  if (!contact) return;
+  const image = contact.lineQrImage || contact.avatarImage;
+  const blockHeight = image ? 54 : 42;
+  const blockWidth = image ? Math.min(width, 220) : Math.min(width, 180);
+  const blockLeft = left;
+
+  ctx.save();
+  ctx.fillStyle = "#ffffff";
+  drawRoundedRect(ctx, blockLeft, top, blockWidth, blockHeight, 11);
+  ctx.fill();
+  ctx.strokeStyle = "#d7dfdb";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  let textStartX = blockLeft + 10;
+  if (image) {
+    const size = 30;
+    const imageLeft = blockLeft + 8;
+    const imageTop = top + Math.floor((blockHeight - size) / 2);
+    ctx.drawImage(image, imageLeft, imageTop, size, size);
+    textStartX = imageLeft + size + 6;
+  }
+
+  const textWidth = blockLeft + blockWidth - textStartX - 8;
+  drawV3LeftText(ctx, contact.name || "BIG CAR CRM", textStartX, top + 14, textWidth, 14, {
+    font: "800 11px Arial, Tahoma, sans-serif",
+    color: "#111827",
+    padding: 0,
+    maxWidth: textWidth
+  });
+  drawV3LeftText(ctx, contact.phone ? `โทร ${contact.phone}` : "-", textStartX, top + 27, textWidth, 13, {
+    font: "700 9px Arial, Tahoma, sans-serif",
+    color: "#475569",
+    padding: 0,
+    maxWidth: textWidth
+  });
+  drawV3LeftText(ctx, contact.lineId ? `LINE ${contact.lineId}` : "-", textStartX, top + 39, textWidth, 13, {
+    font: "700 9px Arial, Tahoma, sans-serif",
+    color: "#475569",
+    padding: 0,
+    maxWidth: textWidth
+  });
+  ctx.restore();
+}
+
+function drawV3Header(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  margin: number,
+  headerTop: number,
+  headerHeight: number,
+  groupName: string,
+  groupTotal: number,
+  page: number,
+  totalPages: number,
+  mode: ExportMode
+) {
+  ctx.save();
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(margin, headerTop, width - margin * 2, headerHeight);
+  ctx.strokeStyle = "#dbe5e1";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(margin, headerTop, width - margin * 2, headerHeight);
+  ctx.fillStyle = "#10b981";
+  ctx.fillRect(margin, headerTop, 6, headerHeight);
+  drawV3LeftText(ctx, groupName || "Stock", margin + 20, headerTop + 28, Math.max(360, width - margin * 2 - 260), 30, {
+    font: "900 42px Arial, Tahoma, sans-serif",
+    color: "#111827",
+    padding: 0,
+    maxWidth: Math.max(360, width - margin * 2 - 260)
+  });
+  drawV3LeftText(
+    ctx,
+    `${groupTotal.toLocaleString("th-TH")} คัน | อัปเดต ${new Date().toLocaleDateString("th-TH")} | ${mode === "customer" ? "สำหรับลูกค้า" : "สำหรับภายใน"}`,
+    margin + 20,
+    headerTop + 60,
+    Math.max(360, width - margin * 2 - 260),
+    22,
+    {
+      font: "600 20px Arial, Tahoma, sans-serif",
+      color: "#64748b",
+      padding: 0,
+      maxWidth: Math.max(360, width - margin * 2 - 260)
+    }
+  );
+  drawV3RightText(ctx, `หน้า ${page}/${totalPages}`, margin, headerTop + 30, width - margin * 2, 24, {
+    font: "800 22px Arial, Tahoma, sans-serif",
+    color: "#0f172a",
+    padding: 0,
+    maxWidth: 180
+  });
+  ctx.restore();
+}
+
+function drawV3Footer(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  margin: number,
+  footerHeight: number,
+  exportTotal: number,
+  contact: StockExportContact | null
+) {
+  const footerTop = height - footerHeight;
+  ctx.save();
+  ctx.strokeStyle = "#dbe5e1";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(margin, footerTop + 2);
+  ctx.lineTo(width - margin, footerTop + 2);
+  ctx.stroke();
+
+  drawV3LeftText(ctx, `จำนวนรถทั้งหมด ${exportTotal.toLocaleString("th-TH")} คัน`, margin, footerTop + footerHeight - 16, 260, 16, {
+    font: "600 14px Arial, Tahoma, sans-serif",
+    color: "#6b7280",
+    padding: 0,
+    maxWidth: 260
+  });
+  drawV3ContactFooter(ctx, contact, width - margin - 240, footerTop + 10, 240);
+  drawV3RightText(ctx, "renderer: v3", width - margin - 80, footerTop + footerHeight - 12, 80, 14, {
+    font: "600 9px Arial, Tahoma, sans-serif",
+    color: "#94a3b8",
+    padding: 0,
+    maxWidth: 72
+  });
+  ctx.restore();
+}
+
+function drawHeaderCell(
+  ctx: CanvasRenderingContext2D,
+  label: string,
+  cellLeft: number,
+  cellTop: number,
+  cellWidth: number,
+  cellHeight: number,
+  tone: "default" | "accent" = "default"
+) {
+  ctx.save();
+  ctx.fillStyle = tone === "accent" ? "#1f8a7a" : "#13221c";
+  ctx.fillRect(cellLeft, cellTop, cellWidth, cellHeight);
+  ctx.strokeStyle = "#2a3733";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(cellLeft, cellTop, cellWidth, cellHeight);
+  drawCenteredText(ctx, label, cellLeft, cellTop, cellWidth, cellHeight, {
+    font: "700 20px Arial, Tahoma, sans-serif",
+    color: "#ffffff",
+    maxWidth: cellWidth - 12
+  });
+  ctx.restore();
+}
+
+function drawBodyCell(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cellLeft: number,
+  cellTop: number,
+  cellWidth: number,
+  cellHeight: number,
+  align: "left" | "center" | "right",
+  options: { font: string; color: string; background?: string; padding?: number; maxWidth?: number }
+) {
+  ctx.save();
+  ctx.fillStyle = options.background || "#ffffff";
+  ctx.fillRect(cellLeft, cellTop, cellWidth, cellHeight);
+  ctx.strokeStyle = "#dce3e1";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(cellLeft, cellTop, cellWidth, cellHeight);
+  if (align === "center") drawCenteredText(ctx, text, cellLeft, cellTop, cellWidth, cellHeight, { font: options.font, color: options.color, maxWidth: options.maxWidth ?? cellWidth - 16 });
+  else if (align === "right") drawRightText(ctx, text, cellLeft, cellTop, cellWidth, cellHeight, { font: options.font, color: options.color, padding: options.padding ?? 16, maxWidth: options.maxWidth ?? cellWidth - 16 });
+  else drawLeftText(ctx, text, cellLeft, cellTop, cellWidth, cellHeight, { font: options.font, color: options.color, padding: options.padding ?? 16, maxWidth: options.maxWidth ?? cellWidth - 16 });
+  ctx.restore();
+}
+
+function drawContactBlock(ctx: CanvasRenderingContext2D, contact: StockExportContact | null, left: number, top: number, width: number) {
+  if (!contact) return;
+  const image = contact.lineQrImage || contact.avatarImage;
+  const blockHeight = image ? 64 : 48;
+  ctx.save();
+  ctx.fillStyle = "#ffffff";
+  drawRoundedRect(ctx, left, top, width, blockHeight, 12);
+  ctx.fill();
+  ctx.strokeStyle = "#d9e1df";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  const padding = 10;
+  let textLeft = left + padding;
+  if (image) {
+    const size = 40;
+    const imageLeft = left + 8;
+    const imageTop = top + Math.floor((blockHeight - size) / 2);
+    if (contact.lineQrImage) ctx.drawImage(image, imageLeft, imageTop, size, size);
+    else {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(imageLeft + size / 2, imageTop + size / 2, size / 2, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(image, imageLeft, imageTop, size, size);
+      ctx.restore();
+    }
+    textLeft = imageLeft + size + 8;
+  }
+  const textWidth = left + width - textLeft - padding;
+  drawLeftText(ctx, contact.name || "BIG CAR CRM", textLeft, top + 18, textWidth, 16, { font: "800 12px Arial, Tahoma, sans-serif", color: "#111827", padding: 0, maxWidth: textWidth });
+  drawLeftText(ctx, contact.phone ? `โทร ${contact.phone}` : "-", textLeft, top + 34, textWidth, 16, { font: "700 10px Arial, Tahoma, sans-serif", color: "#475569", padding: 0, maxWidth: textWidth });
+  drawLeftText(ctx, contact.lineId ? `LINE ${contact.lineId}` : "-", textLeft, top + 48, textWidth, 16, { font: "700 10px Arial, Tahoma, sans-serif", color: "#475569", padding: 0, maxWidth: textWidth });
+  ctx.restore();
+}
+
+function extraColumnAlignment(key: ExtraColumnKey): "left" | "center" | "right" {
+  if (key === "vin" || key === "engineNo" || key === "customerName" || key === "sellerName") return "left";
+  return "center";
+}
+
+function stockExportColumnsV2(mode: ExportMode, selectedColumns: ExtraColumnKey[], hasRegistrationYear: boolean): StockExportCanvasColumn[] {
+  const base: StockExportCanvasColumn[] =
+    mode === "internal"
+      ? [
+          { key: "location", label: "Location", width: 180, align: "center" },
+          { key: "plate", label: "ทะเบียน", width: 170, align: "center" },
+          { key: "registrationYear", label: "ปีจด", width: 90, align: "center" },
+          { key: "model", label: "รุ่นรถยนต์", width: 520, align: "left" },
+          { key: "gear", label: "เกียร์", width: 88, align: "center" },
+          { key: "color", label: "สี", width: 140, align: "center" },
+          { key: "mileage", label: "เลขไมล์", width: 140, align: "center" },
+          { key: "price", label: "ราคาเสนอขายRT", width: 250, align: "center" },
+          { key: "pdi", label: "หมายเหตุ PDI", width: 400, align: "left" }
+        ]
+      : [
+          { key: "location", label: "Location", width: 170, align: "center" },
+          { key: "plate", label: "ทะเบียน", width: 155, align: "center" },
+          { key: "registrationYear", label: "ปีจด", width: 90, align: "center" },
+          { key: "model", label: "รุ่นรถยนต์", width: 590, align: "left" },
+          { key: "gear", label: "เกียร์", width: 88, align: "center" },
+          { key: "color", label: "สี", width: 140, align: "center" },
+          { key: "mileage", label: "เลขไมล์", width: 145, align: "center" },
+          { key: "price", label: "ราคาเสนอขายRT", width: 250, align: "center" }
+        ];
+  stockExportExtraColumns(mode, selectedColumns).forEach((key) => {
+    base.push({ key: `extra:${key}`, label: extraColumnLabel(key), width: extraColumnExportWidth(key), align: extraColumnAlignment(key), extraKey: key });
+  });
+  return base;
+}
+
+function stockExportColumnsV3(mode: ExportMode, selectedColumns: ExtraColumnKey[], hasRegistrationYear: boolean): StockExportCanvasColumn[] {
+  const base: StockExportCanvasColumn[] =
+    mode === "internal"
+      ? [
+          { key: "location", label: "Location", width: 170, align: "center" },
+          { key: "plate", label: "ทะเบียน", width: 160, align: "center" },
+          { key: "registrationYear", label: "ปีจด", width: 86, align: "center" },
+          { key: "model", label: "รุ่นรถยนต์", width: 586, align: "left" },
+          { key: "gear", label: "เกียร์", width: 84, align: "center" },
+          { key: "color", label: "สี", width: 120, align: "center" },
+          { key: "mileage", label: "เลขไมล์", width: 132, align: "center" },
+          { key: "price", label: "ราคาเสนอขายRT", width: 216, align: "center" },
+          { key: "pdi", label: "หมายเหตุ PDI", width: 330, align: "left" }
+        ]
+      : [
+          { key: "location", label: "Location", width: 160, align: "center" },
+          { key: "plate", label: "ทะเบียน", width: 150, align: "center" },
+          { key: "registrationYear", label: "ปีจด", width: 86, align: "center" },
+          { key: "model", label: "รุ่นรถยนต์", width: 648, align: "left" },
+          { key: "gear", label: "เกียร์", width: 84, align: "center" },
+          { key: "color", label: "สี", width: 120, align: "center" },
+          { key: "mileage", label: "เลขไมล์", width: 132, align: "center" },
+          { key: "price", label: "ราคาเสนอขายRT", width: 216, align: "center" }
+        ];
+
+  stockExportExtraColumns(mode, selectedColumns).forEach((key) => {
+    base.push({ key: `extra:${key}`, label: extraColumnLabel(key), width: extraColumnExportWidth(key), align: extraColumnAlignment(key), extraKey: key });
+  });
+
+  return base;
+}
+
+function renderStockTableCanvasV3(
+  canvas: HTMLCanvasElement,
+  vehicles: StockVehicle[],
+  mode: ExportMode,
+  page: number,
+  totalPages: number,
+  groupName: string,
+  groupTotal: number,
+  exportTotal: number,
+  contact: StockExportContact | null = null,
+  extraColumns: ExtraColumnKey[] = [],
+  hasRegistrationYear = false,
+  bookingReservedPlateSet: Set<string> = new Set()
+) {
+  const margin = 40;
+  const headerTop = 22;
+  const headerHeight = 96;
+  const tableTop = 136;
+  const headerRowHeight = 44;
+  const rowHeight = mode === "internal" ? (vehicles.length <= 4 ? 76 : vehicles.length <= 10 ? 70 : 66) : vehicles.length <= 4 ? 64 : vehicles.length <= 10 ? 60 : 56;
+  const footerHeight = 78;
+  const rows = vehicles;
+  const columns = stockExportColumnsV3(mode, extraColumns, hasRegistrationYear);
+  const tableWidth = columns.reduce((sum, column) => sum + column.width, 0);
+  const width = Math.max(1820, tableWidth + margin * 2);
+  const height = tableTop + headerRowHeight + rows.length * rowHeight + footerHeight;
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = width * ratio;
+  canvas.height = height * ratio;
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas not available");
+  ctx.scale(ratio, ratio);
+
+  ctx.fillStyle = "#f6f8f7";
+  ctx.fillRect(0, 0, width, height);
+  drawV3Header(ctx, width, margin, headerTop, headerHeight, groupName, groupTotal, page, totalPages, mode);
+
+  let left = margin;
+  columns.forEach((column) => {
+    drawV3HeaderCell(ctx, column.label, left, tableTop, column.width, headerRowHeight, column.key === "price" ? "accent" : "default");
+    left += column.width;
+  });
+
+  rows.forEach((vehicle, rowIndex) => {
+    const isReserved = bookingReservedPlateSet.has(normalizePlateForMatch(vehicle.plate));
+    const rowTop = tableTop + headerRowHeight + rowIndex * rowHeight;
+    const values: Record<string, string> = {
+      location: formatLocationForExport(shortLocation(vehicle.parkingLocation)),
+      plate: displayPlate(vehicle.plate),
+      registrationYear: stockRegistrationYear(vehicle) || "-",
+      model: vehicleTitle(vehicle),
+      gear: vehicle.gear || "-",
+      color: vehicle.color || "-",
+      mileage: formatMileage(vehicle.mileage).replace(" กม.", ""),
+      price: formatPrice(vehicle.salePrice).replace(" บาท", ""),
+      pdi: mode === "internal" ? pdiRemarkText(stockPdiRemark(vehicle)) : ""
+    };
+
+    left = margin;
+    columns.forEach((column) => {
+      if (column.extraKey) values[column.key] = defaultColumnValue(vehicle, column.extraKey);
+      const bg = column.key === "price" ? "#ebf9f4" : rowIndex % 2 ? "#fafbfb" : "#ffffff";
+      if (column.key === "plate") {
+        ctx.save();
+        ctx.fillStyle = isReserved ? "#fff7ed" : bg;
+        ctx.fillRect(left, rowTop, column.width, rowHeight);
+        ctx.strokeStyle = "#dbe5e1";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(left, rowTop, column.width, rowHeight);
+        drawV3CenteredText(ctx, values[column.key], left, rowTop + 6, column.width, Math.max(20, rowHeight - (isReserved ? 24 : 10)), {
+          font: "700 18px Arial, Tahoma, sans-serif",
+          color: "#111827",
+          maxWidth: column.width - 16
+        });
+        if (isReserved) {
+          drawV3CenteredText(ctx, "ติดจองรอคอนเฟิร์ม", left, rowTop + rowHeight - 22, column.width, 16, {
+            font: "700 11px Arial, Tahoma, sans-serif",
+            color: "#b45309",
+            maxWidth: column.width - 10
+          });
+        }
+        ctx.restore();
+      } else if (column.key === "location") {
+        drawV3BodyCell(ctx, values[column.key], left, rowTop, column.width, rowHeight, "center", {
+          font: "600 17px Arial, Tahoma, sans-serif",
+          color: "#14532d",
+          background: bg,
+          maxWidth: column.width - 16
+        });
+      } else if (column.key === "model") {
+        ctx.save();
+        ctx.fillStyle = bg;
+        ctx.fillRect(left, rowTop, column.width, rowHeight);
+        ctx.strokeStyle = "#dbe5e1";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(left, rowTop, column.width, rowHeight);
+        drawV3LeftText(ctx, values[column.key], left, rowTop, column.width, rowHeight, {
+          font: "700 18px Arial, Tahoma, sans-serif",
+          color: "#111827",
+          padding: 14,
+          maxWidth: column.width - 24
+        });
+        ctx.restore();
+      } else {
+        drawV3BodyCell(ctx, values[column.key], left, rowTop, column.width, rowHeight, column.align, {
+          font:
+            column.key === "price"
+              ? "900 22px Arial, Tahoma, sans-serif"
+              : column.key === "registrationYear"
+                ? "700 18px Arial, Tahoma, sans-serif"
+                : "600 17px Arial, Tahoma, sans-serif",
+          color: "#111827",
+          background: bg,
+          padding: column.align === "left" ? 14 : 12,
+          maxWidth: column.width - 16
+        });
+      }
+      left += column.width;
+    });
+  });
+
+  drawV3Footer(ctx, width, height, margin, footerHeight, exportTotal, contact);
+}
+
+function renderStockTableCanvasV2(
+  canvas: HTMLCanvasElement,
+  vehicles: StockVehicle[],
+  mode: ExportMode,
+  page: number,
+  totalPages: number,
+  groupName: string,
+  groupTotal: number,
+  exportTotal: number,
+  contact: StockExportContact | null = null,
+  extraColumns: ExtraColumnKey[] = [],
+  hasRegistrationYear = false,
+  bookingReservedPlateSet: Set<string> = new Set()
+) {
+  const locationOpticalOffsetX = -4;
+  const priceHeaderOpticalOffsetX = -6;
+  const margin = 42;
+  const headerTop = 24;
+  const headerHeight = 110;
+  const tableTop = 152;
+  const rowHeight = mode === "internal" ? 72 : 60;
+  const footerHeight = 22;
+  const headerRowHeight = 48;
+  const rows = vehicles.slice(0, maxTableItems);
+  const columns = stockExportColumnsV2(mode, extraColumns, hasRegistrationYear);
+  const tableWidth = columns.reduce((sum, column) => sum + column.width, 0);
+  const width = Math.max(1820, tableWidth + margin * 2);
+  const height = tableTop + headerRowHeight + rows.length * rowHeight + footerHeight;
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = width * ratio;
+  canvas.height = height * ratio;
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas not available");
+  ctx.scale(ratio, ratio);
+
+  ctx.fillStyle = "#f5f6f7";
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(margin, headerTop, tableWidth, headerHeight);
+  ctx.strokeStyle = "#e2e8e3";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(margin, headerTop, tableWidth, headerHeight);
+  ctx.fillStyle = "#10b981";
+  ctx.fillRect(margin, headerTop, 6, headerHeight);
+  drawLeftText(ctx, groupName || "Stock", margin + 22, headerTop + 26, Math.max(360, width - margin * 2 - 250), 30, { font: "900 44px Arial, Tahoma, sans-serif", color: "#111827", padding: 0, maxWidth: Math.max(360, width - margin * 2 - 250) });
+  drawLeftText(ctx, `${groupTotal.toLocaleString("th-TH")} คัน | อัปเดต ${new Date().toLocaleDateString("th-TH")} | ${mode === "customer" ? "สำหรับลูกค้า" : "สำหรับภายใน"}`, margin + 22, headerTop + 60, Math.max(360, width - margin * 2 - 250), 24, { font: "600 21px Arial, Tahoma, sans-serif", color: "#64748b", padding: 0, maxWidth: Math.max(360, width - margin * 2 - 250) });
+
+  let left = margin;
+  columns.forEach((column) => {
+    if (column.key === "price") {
+      ctx.save();
+      ctx.fillStyle = "#1f8a7a";
+      ctx.fillRect(left, tableTop, column.width, headerRowHeight);
+      ctx.strokeStyle = "#2a3733";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(left, tableTop, column.width, headerRowHeight);
+      drawCenteredText(ctx, column.label, left, tableTop, column.width, headerRowHeight, {
+        font: "700 20px Arial, Tahoma, sans-serif",
+        color: "#ffffff",
+        maxWidth: column.width - 20,
+        opticalOffsetX: priceHeaderOpticalOffsetX
+      });
+      ctx.restore();
+    } else {
+      drawHeaderCell(ctx, column.label, left, tableTop, column.width, headerRowHeight, "default");
+    }
+    left += column.width;
+  });
+
+  rows.forEach((vehicle, rowIndex) => {
+    const isReserved = bookingReservedPlateSet.has(normalizePlateForMatch(vehicle.plate));
+    const rowTop = tableTop + headerRowHeight + rowIndex * rowHeight;
+    const values: Record<string, string> = {
+      location: formatLocationForExport(shortLocation(vehicle.parkingLocation)),
+      plate: displayPlate(vehicle.plate),
+      registrationYear: stockRegistrationYear(vehicle) || "-",
+      model: vehicleTitle(vehicle),
+      gear: vehicle.gear || "-",
+      color: vehicle.color || "-",
+      mileage: formatMileage(vehicle.mileage).replace(" กม.", ""),
+      price: formatPrice(vehicle.salePrice).replace(" บาท", ""),
+      pdi: mode === "internal" ? pdiRemarkText(stockPdiRemark(vehicle)) : ""
+    };
+
+    left = margin;
+    columns.forEach((column) => {
+      if (column.extraKey) values[column.key] = defaultColumnValue(vehicle, column.extraKey);
+      const bg = column.key === "price" ? "#e8fbf2" : rowIndex % 2 ? "#fafbfc" : "#ffffff";
+      if (column.key === "location") {
+        ctx.save();
+        ctx.fillStyle = bg;
+        ctx.fillRect(left, rowTop, column.width, rowHeight);
+        ctx.strokeStyle = "#dce3e1";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(left, rowTop, column.width, rowHeight);
+        drawCenteredText(ctx, values[column.key], left, rowTop, column.width, rowHeight, {
+          font: "600 18px Arial, Tahoma, sans-serif",
+          color: "#14532d",
+          maxWidth: column.width - 16,
+          opticalOffsetX: locationOpticalOffsetX
+        });
+        ctx.restore();
+      } else {
+        drawBodyCell(ctx, values[column.key], left, rowTop, column.width, rowHeight, column.align, {
+          font:
+            column.key === "price"
+              ? "900 23px Arial, Tahoma, sans-serif"
+              : column.key === "model"
+                ? "700 19px Arial, Tahoma, sans-serif"
+                : column.key === "plate"
+                  ? "700 19px Arial, Tahoma, sans-serif"
+                  : "600 18px Arial, Tahoma, sans-serif",
+          color: "#111827",
+          background: column.key === "plate" && isReserved ? "#fff7ed" : bg,
+          padding: column.align === "left" ? 14 : 12,
+          maxWidth: column.width - 14
+        });
+      }
+      if (column.key === "plate" && isReserved) {
+        drawCenteredText(ctx, "ติดจองรอคอนเฟิร์ม", left, rowTop + rowHeight - 22, column.width, 18, {
+          font: "700 12px Arial, Tahoma, sans-serif",
+          color: "#b45309",
+          maxWidth: column.width - 12
+        });
+      }
+      left += column.width;
+    });
+  });
+
+}
+
+type V4ColumnAlign = "left" | "center" | "right";
+
+type V4ColumnKey = "plate" | "year" | "model" | "gear" | "color" | "mileage" | "location" | "price" | `extra:${string}`;
+
+type V4ColumnSpec = {
+  key: V4ColumnKey;
+  label: string;
+  align: V4ColumnAlign;
+  weight: number;
+  minWidth: number;
+  wrap: boolean;
+};
+
+type V4ResolvedColumn = V4ColumnSpec & {
+  width: number;
+  extraKey?: ExtraColumnKey;
+};
+
+type V4Layout = {
+  marginX: number;
+  headerTop: number;
+  headerHeight: number;
+  tableTop: number;
+  tableHeaderHeight: number;
+  footerTop: number;
+  footerHeight: number;
+  bottomMargin: number;
+  bodyTop: number;
+  bodyMaxHeight: number;
+  pageWidth: number;
+  pageHeight: number;
+  columns: V4ResolvedColumn[];
+};
+
+type V4PageBundle = {
+  groupName: string;
+  pageIndex: number;
+  totalPages: number;
+  groupVehicleCount: number;
+  exportTotal: number;
+  vehicles: StockVehicle[];
+  rowHeights: number[];
+  canvasHeight: number;
+  layout: V4Layout;
+};
+
+const V4_COLUMNS: V4ColumnSpec[] = [
+  { key: "plate", label: "ทะเบียน", align: "center", weight: 1.05, minWidth: 128, wrap: true },
+  { key: "year", label: "ปีจด", align: "center", weight: 0.56, minWidth: 82, wrap: false },
+  { key: "model", label: "รุ่นรถยนต์", align: "left", weight: 4.1, minWidth: 470, wrap: true },
+  { key: "gear", label: "เกียร์", align: "center", weight: 0.5, minWidth: 78, wrap: false },
+  { key: "color", label: "สี", align: "center", weight: 0.58, minWidth: 92, wrap: true },
+  { key: "mileage", label: "เลขไมล์", align: "center", weight: 0.82, minWidth: 116, wrap: false },
+  { key: "location", label: "Location", align: "center", weight: 1.06, minWidth: 136, wrap: true },
+  { key: "price", label: "ราคาเสนอขายRT", align: "center", weight: 0.96, minWidth: 144, wrap: false }
+];
+
+function stockExportDisplayNameV4(user: { firstName: string; lastName: string; nickname: string } | null) {
+  return stockExportDisplayName(user);
+}
+
+function isV4DebugLayoutEnabled() {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(window.location.search);
+  const enabled = params.get("debugLayout") === "v4";
+  const localHost = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+  return enabled && localHost;
+}
+
+function parseFontSize(font: string) {
+  const match = String(font || "").match(/(\d+(?:\.\d+)?)px/);
+  return match ? Number(match[1]) : 16;
+}
+
+function textLineHeight(font: string, multiplier = 1.28) {
+  return Math.max(16, Math.round(parseFontSize(font) * multiplier));
+}
+
+function measureTextBlock(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  options: { font: string; lineHeight?: number; breakLongWords?: boolean } 
+) {
+  const font = options.font;
+  const lineHeight = options.lineHeight || textLineHeight(font, 1.24);
+  const breakLongWords = options.breakLongWords !== false;
+  const previousFont = ctx.font;
+  ctx.font = font;
+
+  const source = String(text ?? "").trim() || "-";
+  const paragraphs = source.split(/\r?\n/);
+  const lines: string[] = [];
+
+  const splitLongToken = (token: string) => {
+    if (ctx.measureText(token).width <= maxWidth) return [token];
+    if (!breakLongWords) return [token];
+    const segments: string[] = [];
+    let current = "";
+    for (const ch of Array.from(token)) {
+      const next = current ? `${current}${ch}` : ch;
+      if (!current || ctx.measureText(next).width <= maxWidth) {
+        current = next;
+      } else {
+        segments.push(current);
+        current = ch;
+      }
+    }
+    if (current) segments.push(current);
+    return segments.length ? segments : [token];
+  };
+
+  const pushWrappedParagraph = (paragraph: string) => {
+    const trimmed = paragraph.trim();
+    if (!trimmed) {
+      lines.push("");
+      return;
+    }
+
+    const words = trimmed.split(/\s+/).filter(Boolean);
+    if (!words.length) {
+      lines.push(trimmed);
+      return;
+    }
+
+    let current = "";
+    const flushCurrent = () => {
+      if (current) lines.push(current);
+      current = "";
+    };
+
+    words.forEach((word) => {
+      if (!current) {
+        const wordSegments = splitLongToken(word);
+        if (wordSegments.length > 1) {
+          wordSegments.forEach((segment, index) => {
+            if (index < wordSegments.length - 1) lines.push(segment);
+            else current = segment;
+          });
+          return;
+        }
+        current = word;
+        return;
+      }
+
+      const next = `${current} ${word}`;
+      if (ctx.measureText(next).width <= maxWidth) {
+        current = next;
+        return;
+      }
+
+      flushCurrent();
+      const wordSegments = splitLongToken(word);
+      if (wordSegments.length > 1) {
+        wordSegments.forEach((segment, index) => {
+          if (index < wordSegments.length - 1) lines.push(segment);
+          else current = segment;
+        });
+      } else {
+        current = word;
+      }
+    });
+
+    if (current) lines.push(current);
+  };
+
+  paragraphs.forEach(pushWrappedParagraph);
+  if (!lines.length) lines.push("-");
+
+  const width = lines.reduce((max, line) => Math.max(max, ctx.measureText(line).width), 0);
+  ctx.font = previousFont;
+
+  return {
+    lines,
+    lineHeight,
+    width,
+    height: Math.max(lineHeight, lines.length * lineHeight)
+  };
+}
+
+function drawV4TextBlock(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cellLeft: number,
+  cellTop: number,
+  cellWidth: number,
+  cellHeight: number,
+  options: {
+    font: string;
+    color: string;
+    align: V4ColumnAlign;
+    paddingX?: number;
+    paddingY?: number;
+    opticalOffsetX?: number;
+    opticalOffsetY?: number;
+    lineHeight?: number;
+    breakLongWords?: boolean;
+  }
+) {
+  const paddingX = options.paddingX ?? 12;
+  const paddingY = options.paddingY ?? 10;
+  const block = measureTextBlock(ctx, text, Math.max(24, cellWidth - paddingX * 2), {
+    font: options.font,
+    lineHeight: options.lineHeight,
+    breakLongWords: options.breakLongWords
+  });
+  const safeLeft = cellLeft + paddingX;
+  const safeRight = cellLeft + cellWidth - paddingX;
+  const startY = cellTop + Math.max(paddingY, Math.floor((cellHeight - block.height) / 2));
+  const previousAlign = ctx.textAlign;
+  const previousBaseline = ctx.textBaseline;
+  const previousFont = ctx.font;
+  const previousFill = ctx.fillStyle;
+  ctx.save();
+  ctx.font = options.font;
+  ctx.fillStyle = options.color;
+  ctx.textBaseline = "top";
+  ctx.textAlign = options.align;
+
+  block.lines.forEach((line, index) => {
+    const y = startY + index * block.lineHeight + (options.opticalOffsetY || 0);
+    const x =
+      options.align === "center"
+        ? cellLeft + cellWidth / 2 + (options.opticalOffsetX || 0)
+        : options.align === "right"
+          ? safeRight + (options.opticalOffsetX || 0)
+          : safeLeft + (options.opticalOffsetX || 0);
+    ctx.fillText(line, x, y);
+  });
+
+  ctx.restore();
+  ctx.textAlign = previousAlign;
+  ctx.textBaseline = previousBaseline;
+  ctx.font = previousFont;
+  ctx.fillStyle = previousFill;
+
+  return block;
+}
+
+function drawV4CenteredText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cellLeft: number,
+  cellTop: number,
+  cellWidth: number,
+  cellHeight: number,
+  options: { font: string; color: string; opticalOffsetX?: number; opticalOffsetY?: number; paddingX?: number; lineHeight?: number; breakLongWords?: boolean }
+) {
+  return drawV4TextBlock(ctx, text, cellLeft, cellTop, cellWidth, cellHeight, {
+    font: options.font,
+    color: options.color,
+    align: "center",
+    opticalOffsetX: options.opticalOffsetX,
+    opticalOffsetY: options.opticalOffsetY,
+    paddingX: options.paddingX,
+    lineHeight: options.lineHeight,
+    breakLongWords: options.breakLongWords
+  });
+}
+
+function drawV4LeftText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cellLeft: number,
+  cellTop: number,
+  cellWidth: number,
+  cellHeight: number,
+  options: { font: string; color: string; opticalOffsetX?: number; opticalOffsetY?: number; paddingX?: number; lineHeight?: number; breakLongWords?: boolean }
+) {
+  return drawV4TextBlock(ctx, text, cellLeft, cellTop, cellWidth, cellHeight, {
+    font: options.font,
+    color: options.color,
+    align: "left",
+    opticalOffsetX: options.opticalOffsetX,
+    opticalOffsetY: options.opticalOffsetY,
+    paddingX: options.paddingX,
+    lineHeight: options.lineHeight,
+    breakLongWords: options.breakLongWords
+  });
+}
+
+function drawV4RightText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cellLeft: number,
+  cellTop: number,
+  cellWidth: number,
+  cellHeight: number,
+  options: { font: string; color: string; opticalOffsetX?: number; opticalOffsetY?: number; paddingX?: number; lineHeight?: number; breakLongWords?: boolean }
+) {
+  return drawV4TextBlock(ctx, text, cellLeft, cellTop, cellWidth, cellHeight, {
+    font: options.font,
+    color: options.color,
+    align: "right",
+    opticalOffsetX: options.opticalOffsetX,
+    opticalOffsetY: options.opticalOffsetY,
+    paddingX: options.paddingX,
+    lineHeight: options.lineHeight,
+    breakLongWords: options.breakLongWords
+  });
+}
+
+function drawV4HeaderCell(ctx: CanvasRenderingContext2D, label: string, cellLeft: number, cellTop: number, cellWidth: number, cellHeight: number, tone: "default" | "accent" = "default") {
+  ctx.save();
+  ctx.fillStyle = tone === "accent" ? "#157a67" : "#0f1720";
+  ctx.fillRect(cellLeft, cellTop, cellWidth, cellHeight);
+  ctx.strokeStyle = "rgba(255,255,255,0.10)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(cellLeft, cellTop, cellWidth, cellHeight);
+  drawV4CenteredText(ctx, label, cellLeft, cellTop, cellWidth, cellHeight, {
+    font: "700 18px Arial, Tahoma, sans-serif",
+    color: "#ffffff",
+    paddingX: 10,
+    breakLongWords: false
+  });
+  ctx.restore();
+}
+
+function drawV4BodyCell(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cellLeft: number,
+  cellTop: number,
+  cellWidth: number,
+  cellHeight: number,
+  align: V4ColumnAlign,
+  options: {
+    font: string;
+    color: string;
+    background?: string;
+    paddingX?: number;
+    paddingY?: number;
+    opticalOffsetX?: number;
+    opticalOffsetY?: number;
+    lineHeight?: number;
+    breakLongWords?: boolean;
+  }
+) {
+  ctx.save();
+  ctx.fillStyle = options.background || "#ffffff";
+  ctx.fillRect(cellLeft, cellTop, cellWidth, cellHeight);
+  ctx.strokeStyle = "#dce3e1";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(cellLeft, cellTop, cellWidth, cellHeight);
+  if (align === "center") {
+    drawV4CenteredText(ctx, text, cellLeft, cellTop, cellWidth, cellHeight, {
+      font: options.font,
+      color: options.color,
+      opticalOffsetX: options.opticalOffsetX,
+      opticalOffsetY: options.opticalOffsetY,
+      paddingX: options.paddingX,
+      lineHeight: options.lineHeight,
+      breakLongWords: options.breakLongWords
+    });
+  } else if (align === "right") {
+    drawV4RightText(ctx, text, cellLeft, cellTop, cellWidth, cellHeight, {
+      font: options.font,
+      color: options.color,
+      opticalOffsetX: options.opticalOffsetX,
+      opticalOffsetY: options.opticalOffsetY,
+      paddingX: options.paddingX,
+      lineHeight: options.lineHeight,
+      breakLongWords: options.breakLongWords
+    });
+  } else {
+    drawV4LeftText(ctx, text, cellLeft, cellTop, cellWidth, cellHeight, {
+      font: options.font,
+      color: options.color,
+      opticalOffsetX: options.opticalOffsetX,
+      opticalOffsetY: options.opticalOffsetY,
+      paddingX: options.paddingX,
+      lineHeight: options.lineHeight,
+      breakLongWords: options.breakLongWords
+    });
+  }
+  ctx.restore();
+}
+
+function drawV4ReservationBadge(ctx: CanvasRenderingContext2D, text: string, cellLeft: number, cellTop: number, cellWidth: number, fontSize = 13) {
+  const value = String(text || "").trim();
+  if (!value) return 0;
+  ctx.save();
+  ctx.font = `700 ${fontSize}px Arial, Tahoma, sans-serif`;
+  const textWidth = ctx.measureText(value).width;
+  const badgeWidth = Math.max(92, Math.min(cellWidth - 10, textWidth + 28));
+  const badgeHeight = 24;
+  const left = cellLeft + Math.round((cellWidth - badgeWidth) / 2);
+  drawRoundedRect(ctx, left, cellTop, badgeWidth, badgeHeight, 11);
+  ctx.fillStyle = "#f4fbf8";
+  ctx.fill();
+  ctx.strokeStyle = "#cde7d9";
+  ctx.stroke();
+  ctx.fillStyle = "#166534";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(value, left + badgeWidth / 2, cellTop + badgeHeight / 2);
+  ctx.restore();
+  return badgeHeight;
+}
+
+function drawV4CalendarIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, color: string) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x, y, size, size);
+  ctx.fillRect(x + 2, y - 1, 3, 4);
+  ctx.fillRect(x + size - 5, y - 1, 3, 4);
+  ctx.beginPath();
+  ctx.moveTo(x, y + 6);
+  ctx.lineTo(x + size, y + 6);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawV4CarIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, color: string) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x + 3, y + size - 6);
+  ctx.lineTo(x + 5, y + 6);
+  ctx.lineTo(x + size - 5, y + 6);
+  ctx.lineTo(x + size - 3, y + size - 6);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x + 5, y + size - 2, 2, 0, Math.PI * 2);
+  ctx.arc(x + size - 5, y + size - 2, 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawV4Header(ctx: CanvasRenderingContext2D, layout: V4Layout, groupName: string, groupCount: number, totalVehicleCount: number, page: number, totalPages: number, displayName: string) {
+  void groupCount;
+  const { marginX, headerTop, headerHeight, pageWidth } = layout;
+  const headerLeft = marginX;
+  const headerRight = pageWidth - marginX;
+  const headerBottom = headerTop + headerHeight;
+  ctx.save();
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, pageWidth, headerBottom);
+  ctx.strokeStyle = "#e7ece9";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(headerLeft, headerTop, pageWidth - marginX * 2, headerHeight);
+  ctx.fillStyle = "#17b26a";
+  ctx.fillRect(headerLeft, headerTop, 6, headerHeight);
+
+  drawV4LeftText(ctx, `${displayName} RDD`, headerLeft + 22, headerTop + 18, Math.min(460, pageWidth * 0.38), 36, {
+    font: "900 42px Arial, Tahoma, sans-serif",
+    color: "#0b1220",
+    paddingX: 0,
+    breakLongWords: false
+  });
+  drawV4LeftText(ctx, "รถหมดสัญญาเช่า ไมล์แท้ 100%", headerLeft + 22, headerTop + 62, Math.min(520, pageWidth * 0.44), 24, {
+    font: "600 21px Arial, Tahoma, sans-serif",
+    color: "#6b7280",
+    paddingX: 0,
+    breakLongWords: false
+  });
+
+  const centerWidth = Math.min(520, Math.max(300, pageWidth * 0.28));
+  drawV4CenteredText(ctx, groupName || "Stock", Math.round(pageWidth / 2 - centerWidth / 2), headerTop + 16, centerWidth, 36, {
+    font: "900 38px Arial, Tahoma, sans-serif",
+    color: "#0b1220",
+    paddingX: 0,
+    breakLongWords: false
+  });
+  ctx.fillStyle = "#2f855a";
+  const accentWidth = Math.min(118, centerWidth * 0.34);
+  ctx.fillRect(Math.round(pageWidth / 2 - accentWidth / 2), headerTop + 62, accentWidth, 4);
+
+  const metaLeft = Math.max(headerLeft + 520, headerRight - 292);
+  const metaX = Math.min(metaLeft, headerRight - 220);
+  drawV4CalendarIcon(ctx, metaX, headerTop + 18, 18, "#111827");
+  drawV4LeftText(ctx, `วันที่ ${new Date().toLocaleDateString("th-TH")}`, metaX + 28, headerTop + 15, 180, 24, {
+    font: "500 18px Arial, Tahoma, sans-serif",
+    color: "#111827",
+    paddingX: 0,
+    breakLongWords: false
+  });
+  drawV4CarIcon(ctx, metaX, headerTop + 57, 18, "#111827");
+  drawV4LeftText(ctx, `จำนวน ${totalVehicleCount.toLocaleString("th-TH")} คัน`, metaX + 28, headerTop + 53, 180, 24, {
+    font: "500 18px Arial, Tahoma, sans-serif",
+    color: "#111827",
+    paddingX: 0,
+    breakLongWords: false
+  });
+  drawV4RightText(ctx, `หน้า ${page}/${totalPages}`, headerRight - 120, headerTop + 14, 120, 20, {
+    font: "700 18px Arial, Tahoma, sans-serif",
+    color: "#0f1720",
+    paddingX: 0,
+    breakLongWords: false
+  });
+  ctx.restore();
+}
+
+function drawV4ContactFooter(ctx: CanvasRenderingContext2D, contact: StockExportContact | null, left: number, top: number, width: number) {
+  if (!contact) return;
+  const hasContact = Boolean(contact.name || contact.phone || contact.lineId || contact.lineQrImage || contact.avatarImage);
+  if (!hasContact) return;
+
+  const displayName = contact.name || "BIG CAR";
+  const textParts = [displayName ? `${displayName} RDD` : "", contact.phone ? `โทร ${contact.phone}` : "", contact.lineId ? `LINE ${contact.lineId}` : ""].filter(Boolean);
+  const qr = contact.lineQrImage || contact.avatarImage;
+  const qrSize = qr ? 46 : 0;
+  const padX = 10;
+  const gap = 12;
+  const available = width - (qrSize ? qrSize + gap : 0);
+  const leftWidth = Math.max(120, available);
+
+  ctx.save();
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(left, top, width, 58);
+  ctx.strokeStyle = "#dce3e1";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(left, top, width, 58);
+
+  drawV4LeftText(ctx, textParts[0] || `${displayName} RDD`, left + padX, top + 11, leftWidth - padX, 16, {
+    font: "800 18px Arial, Tahoma, sans-serif",
+    color: "#0b1220",
+    paddingX: 0,
+    breakLongWords: false
+  });
+
+  let infoX = left + padX + 168;
+  if (textParts.length > 1) {
+    textParts.slice(1).forEach((part) => {
+      drawV4LeftText(ctx, part, infoX, top + 11, 142, 14, {
+        font: "500 12px Arial, Tahoma, sans-serif",
+        color: "#475569",
+        paddingX: 0,
+        breakLongWords: false
+      });
+      infoX += 144;
+      if (infoX < left + leftWidth - 20) {
+        ctx.strokeStyle = "#cbd5d1";
+        ctx.beginPath();
+        ctx.moveTo(infoX - 8, top + 14);
+        ctx.lineTo(infoX - 8, top + 44);
+        ctx.stroke();
+      }
+    });
+  }
+
+  if (qr) {
+    const qrLeft = left + width - qrSize - 8;
+    const qrTop = top + Math.round((58 - qrSize) / 2);
+    ctx.drawImage(qr, qrLeft, qrTop, qrSize, qrSize);
+  }
+
+  ctx.restore();
+}
+
+function drawV4Footer(ctx: CanvasRenderingContext2D, layout: V4Layout, contact: StockExportContact | null) {
+  const { marginX, footerTop, footerHeight, pageWidth } = layout;
+  ctx.save();
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, footerTop, pageWidth, footerHeight);
+  ctx.strokeStyle = "#dce3e1";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(marginX, footerTop, pageWidth - marginX * 2, footerHeight);
+  ctx.fillStyle = "#17b26a";
+  ctx.fillRect(marginX, footerTop, pageWidth - marginX * 2, 2);
+  drawV4ContactFooter(ctx, contact, marginX + 18, footerTop + 8, pageWidth - marginX * 2 - 36);
+  drawV4RightText(ctx, "renderer: v4", pageWidth - marginX - 90, footerTop + footerHeight - 10, 90, 10, {
+    font: "500 9px Arial, Tahoma, sans-serif",
+    color: "#94a3b8",
+    paddingX: 0,
+    breakLongWords: false
+  });
+  ctx.restore();
+}
+
+function v4ExtraColumnMeta(key: ExtraColumnKey) {
+  return {
+    key,
+    label: extraColumnLabel(key),
+    align: extraColumnAlignment(key),
+    minWidth: Math.max(92, Math.min(180, extraColumnExportWidth(key))),
+    weight: key === "vin" || key === "engineNo" || key === "customerName" || key === "sellerName" ? 1.2 : 0.8,
+    wrap: key === "vin" || key === "engineNo" || key === "customerName" || key === "sellerName"
+  };
+}
+
+function resolveV4Columns(selectedColumns: ExtraColumnKey[]) {
+  const base: V4ColumnSpec[] = [...V4_COLUMNS];
+  selectedColumns.forEach((key) => {
+    const extra = v4ExtraColumnMeta(key);
+    base.push({
+      key: `extra:${key}`,
+      label: extra.label,
+      align: extra.align,
+      minWidth: extra.minWidth,
+      weight: extra.weight,
+      wrap: extra.wrap
+    });
+  });
+
+  const contentMinWidth = base.reduce((sum, column) => sum + column.minWidth, 0);
+  const targetContentWidth = Math.max(1560, contentMinWidth + 196);
+  const extraStretch = Math.max(0, targetContentWidth - contentMinWidth);
+  const weightTotal = base.reduce((sum, column) => sum + column.weight, 0) || 1;
+
+  const resolved = base.map((column) => ({
+    ...column,
+    width: column.minWidth + Math.round((extraStretch * column.weight) / weightTotal)
+  }));
+  const diff = targetContentWidth - resolved.reduce((sum, column) => sum + column.width, 0);
+  if (resolved.length) resolved[resolved.length - 1].width += diff;
+  return resolved;
+}
+
+function resolveV4Layout(mode: ExportMode, selectedColumns: ExtraColumnKey[], hasRegistrationYear: boolean) {
+  void mode;
+  void hasRegistrationYear;
+  const marginX = 48;
+  const headerTop = 28;
+  const headerHeight = 108;
+  const tableTop = 152;
+  const tableHeaderHeight = 44;
+  const footerHeight = 76;
+  const bottomMargin = 24;
+  const columns = resolveV4Columns(selectedColumns);
+  const contentWidth = columns.reduce((sum, column) => sum + column.width, 0);
+  const pageWidth = contentWidth + marginX * 2;
+  const bodyTop = tableTop + tableHeaderHeight;
+  const bodyMaxHeight = 920;
+  return {
+    marginX,
+    headerTop,
+    headerHeight,
+    tableTop,
+    tableHeaderHeight,
+    footerTop: 0,
+    footerHeight,
+    bottomMargin,
+    bodyTop,
+    bodyMaxHeight,
+    pageWidth,
+    pageHeight: 0,
+    columns
+  };
+}
+
+function createV4MeasurementContext() {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("V4 measurement context ไม่พร้อม");
+  return ctx;
+}
+
+function v4ValueForColumn(vehicle: StockVehicle, column: V4ResolvedColumn) {
+  if (column.extraKey) return defaultColumnValue(vehicle, column.extraKey);
+  switch (column.key) {
+    case "plate":
+      return displayPlate(vehicle.plate);
+    case "year":
+      return stockRegistrationYear(vehicle) || "-";
+    case "model":
+      return vehicleTitle(vehicle);
+    case "gear":
+      return vehicle.gear || "-";
+    case "color":
+      return vehicle.color || "-";
+    case "mileage":
+      return formatMileage(vehicle.mileage).replace(" กม.", "") || "-";
+    case "location":
+      return formatStockExportLocationDisplay(shortLocation(vehicle.parkingLocation));
+    case "price":
+      return formatPrice(vehicle.salePrice).replace(" บาท", "") || "-";
+    default:
+      return "-";
+  }
+}
+
+function measureV4RowMetrics(ctx: CanvasRenderingContext2D, vehicle: StockVehicle, columns: V4ResolvedColumn[], isReserved: boolean) {
+  const paddingY = 12;
+  const textHeights = columns.map((column) => {
+    const value = v4ValueForColumn(vehicle, column);
+    const font =
+      column.key === "price"
+        ? "900 22px Arial, Tahoma, sans-serif"
+        : column.key === "model"
+          ? "700 18px Arial, Tahoma, sans-serif"
+          : column.key === "plate"
+            ? "700 18px Arial, Tahoma, sans-serif"
+            : column.key === "year"
+              ? "700 17px Arial, Tahoma, sans-serif"
+              : "600 16px Arial, Tahoma, sans-serif";
+    const block = measureTextBlock(ctx, value, Math.max(24, column.width - 20), {
+      font,
+      lineHeight: textLineHeight(font, column.key === "model" ? 1.22 : 1.18),
+      breakLongWords: column.wrap
+    });
+    return {
+      key: column.key,
+      text: value,
+      height: block.height + paddingY * 2
+    };
+  });
+
+  const plateExtra = isReserved ? 30 : 0;
+  const tallest = textHeights.reduce((best, current) => (current.height > best.height ? current : best), textHeights[0] || { key: "model" as V4ColumnKey, text: "-", height: 52 });
+  return {
+    rowHeight: Math.max(52, tallest.height + plateExtra),
+    tallestColumnKey: tallest.key,
+    tallestText: tallest.text,
+    tallestHeight: tallest.height
+  };
+}
+
+function paginateV4ExportGroups(
+  groups: StockExportGroup[],
+  columns: V4ResolvedColumn[],
+  mode: ExportMode,
+  hasRegistrationYear: boolean,
+  reservedPlateSet: Set<string>
+) {
+  const ctx = createV4MeasurementContext();
+  const exportTotal = groups.reduce((sum, item) => sum + item.vehicles.length, 0);
+  const layoutTemplate = resolveV4Layout(
+    mode,
+    columns
+      .filter((column) => Boolean(column.extraKey))
+      .map((column) => column.extraKey as ExtraColumnKey),
+    hasRegistrationYear
+  );
+  const pages: Array<{
+    groupName: string;
+    groupVehicleCount: number;
+    exportTotal: number;
+    vehicles: StockVehicle[];
+    rowHeights: number[];
+  }> = [];
+
+  groups.forEach((group) => {
+    const pagesForGroup: Array<{ vehicles: StockVehicle[]; rowHeights: number[] }> = [];
+    let currentVehicles: StockVehicle[] = [];
+    let currentHeights: number[] = [];
+    let currentBodyHeight = 0;
+
+    group.vehicles.forEach((vehicle) => {
+      const isReserved = reservedPlateSet.has(normalizePlateForMatch(vehicle.plate));
+      const rowMetrics = measureV4RowMetrics(ctx, vehicle, columns, isReserved);
+      if (rowMetrics.rowHeight > layoutTemplate.bodyMaxHeight) {
+        throw new Error(
+          `V4 layout fail: page body overflow group=${group.name} plate=${vehicle.plate} column=${rowMetrics.tallestColumnKey} text=${rowMetrics.tallestText}`
+        );
+      }
+      if (currentVehicles.length && currentBodyHeight + rowMetrics.rowHeight > layoutTemplate.bodyMaxHeight) {
+        pagesForGroup.push({ vehicles: currentVehicles, rowHeights: currentHeights });
+        currentVehicles = [];
+        currentHeights = [];
+        currentBodyHeight = 0;
+      }
+      currentVehicles.push(vehicle);
+      currentHeights.push(rowMetrics.rowHeight);
+      currentBodyHeight += rowMetrics.rowHeight;
+    });
+
+    if (currentVehicles.length || !pagesForGroup.length) {
+      pagesForGroup.push({ vehicles: currentVehicles, rowHeights: currentHeights });
+    }
+
+    pagesForGroup.forEach((page) => {
+      pages.push({
+        groupName: group.name,
+        groupVehicleCount: group.vehicles.length,
+        exportTotal,
+        vehicles: page.vehicles,
+        rowHeights: page.rowHeights
+      });
+    });
+  });
+
+  const groupedCounts = new Map<string, number>();
+  pages.forEach((page) => {
+    groupedCounts.set(page.groupName, (groupedCounts.get(page.groupName) || 0) + 1);
+  });
+
+  const runningCounts = new Map<string, number>();
+  return pages.map((page) => {
+    const pageIndex = (runningCounts.get(page.groupName) || 0) + 1;
+    runningCounts.set(page.groupName, pageIndex);
+    const totalPages = groupedCounts.get(page.groupName) || 1;
+    const layout = layoutTemplate;
+    const bodyHeight = page.rowHeights.reduce((sum, value) => sum + value, 0);
+    const footerTop = layout.tableTop + layout.tableHeaderHeight + bodyHeight + 18;
+    const canvasHeight = footerTop + layout.footerHeight + layout.bottomMargin;
+    return {
+      ...page,
+      pageIndex,
+      totalPages,
+      exportTotal: page.exportTotal,
+      canvasHeight,
+      layout: {
+        ...layout,
+        footerTop,
+        pageHeight: canvasHeight
+      }
+    };
+  });
+}
+
+function drawV4DebugOverlay(ctx: CanvasRenderingContext2D, layout: V4Layout, rowRects: Array<{ top: number; height: number; left: number; width: number }>) {
+  if (!isV4DebugLayoutEnabled()) return;
+  ctx.save();
+  ctx.strokeStyle = "rgba(59, 130, 246, 0.35)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeRect(layout.marginX, layout.headerTop, layout.pageWidth - layout.marginX * 2, layout.headerHeight);
+  ctx.strokeRect(layout.marginX, layout.tableTop, layout.pageWidth - layout.marginX * 2, layout.tableHeaderHeight + rowRects.reduce((sum, item) => sum + item.height, 0));
+  ctx.strokeRect(layout.marginX, layout.footerTop, layout.pageWidth - layout.marginX * 2, layout.footerHeight);
+  layout.columns.reduce((left, column) => {
+    ctx.beginPath();
+    ctx.moveTo(left, layout.tableTop);
+    ctx.lineTo(left, layout.footerTop + layout.footerHeight);
+    ctx.stroke();
+    return left + column.width;
+  }, layout.marginX);
+  ctx.beginPath();
+  ctx.moveTo(layout.marginX + layout.columns.reduce((sum, column) => sum + column.width, 0), layout.tableTop);
+  ctx.lineTo(layout.marginX + layout.columns.reduce((sum, column) => sum + column.width, 0), layout.footerTop + layout.footerHeight);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawV4Table(
+  ctx: CanvasRenderingContext2D,
+  layout: V4Layout,
+  vehicles: StockVehicle[],
+  rowHeights: number[],
+  bookingReservedPlateSet: Set<string>
+) {
+  const rowRects: Array<{ top: number; height: number; left: number; width: number }> = [];
+
+  let left = layout.marginX;
+  layout.columns.forEach((column) => {
+    drawV4HeaderCell(ctx, column.label, left, layout.tableTop, column.width, layout.tableHeaderHeight, column.key === "price" ? "accent" : "default");
+    left += column.width;
+  });
+
+  let rowTop = layout.bodyTop;
+  vehicles.forEach((vehicle, rowIndex) => {
+    const rowHeight = rowHeights[rowIndex];
+    const isReserved = bookingReservedPlateSet.has(normalizePlateForMatch(vehicle.plate));
+    const bg = rowIndex % 2 === 0 ? "#ffffff" : "#fdfefe";
+    rowRects.push({ top: rowTop, height: rowHeight, left: layout.marginX, width: layout.pageWidth - layout.marginX * 2 });
+
+    left = layout.marginX;
+    layout.columns.forEach((column) => {
+      const value = v4ValueForColumn(vehicle, column);
+      const background = column.key === "price" ? "#eefaf3" : bg;
+      if (column.key === "plate") {
+        ctx.save();
+        ctx.fillStyle = background;
+        ctx.fillRect(left, rowTop, column.width, rowHeight);
+        ctx.strokeStyle = "#dce3e1";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(left, rowTop, column.width, rowHeight);
+        const badgeReserve = isReserved ? 26 : 0;
+        const plateHeight = Math.max(22, rowHeight - badgeReserve - (isReserved ? 8 : 0));
+        drawV4CenteredText(ctx, value, left, rowTop + 4, column.width, plateHeight, {
+          font: "700 18px Arial, Tahoma, sans-serif",
+          color: "#111827",
+          paddingX: 10,
+          breakLongWords: false
+        });
+        if (isReserved) {
+          drawV4ReservationBadge(ctx, "📅 BOOKING", left, rowTop + rowHeight - 26, column.width, 11);
+        }
+        ctx.restore();
+      } else if (column.key === "model") {
+        drawV4BodyCell(ctx, value, left, rowTop, column.width, rowHeight, "left", {
+          font: "700 18px Arial, Tahoma, sans-serif",
+          color: "#111827",
+          background,
+          paddingX: 16,
+          paddingY: 12,
+          breakLongWords: true
+        });
+      } else if (column.key === "location") {
+        drawV4BodyCell(ctx, value, left, rowTop, column.width, rowHeight, "center", {
+          font: "600 16px Arial, Tahoma, sans-serif",
+          color: "#14532d",
+          background,
+          paddingX: 10,
+          paddingY: 10,
+          breakLongWords: true
+        });
+      } else if (column.key === "price") {
+        drawV4BodyCell(ctx, value, left, rowTop, column.width, rowHeight, "center", {
+          font: "900 21px Arial, Tahoma, sans-serif",
+          color: "#111827",
+          background,
+          paddingX: 10,
+          paddingY: 10,
+          breakLongWords: false
+        });
+      } else {
+        drawV4BodyCell(ctx, value, left, rowTop, column.width, rowHeight, column.align, {
+          font: column.key === "year" ? "700 17px Arial, Tahoma, sans-serif" : "600 16px Arial, Tahoma, sans-serif",
+          color: "#111827",
+          background,
+          paddingX: 10,
+          paddingY: 10,
+          breakLongWords: column.wrap
+        });
+      }
+      left += column.width;
+    });
+    rowTop += rowHeight;
+  });
+
+  return rowRects;
+}
+
+function renderStockTableCanvasV4(
+  canvas: HTMLCanvasElement,
+  vehicles: StockVehicle[],
+  mode: ExportMode,
+  page: number,
+  totalPages: number,
+  groupName: string,
+  groupTotal: number,
+  exportTotal: number,
+  contact: StockExportContact | null = null,
+  extraColumns: ExtraColumnKey[] = [],
+  hasRegistrationYear = false,
+  bookingReservedPlateSet: Set<string> = new Set(),
+  layoutOverride?: V4Layout,
+  rowHeightsOverride?: number[]
+) {
+  const layout = layoutOverride || resolveV4Layout(mode, extraColumns, hasRegistrationYear);
+  const rows = vehicles.slice(0, maxTableItems);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas not available");
+  const measurementCtx = createV4MeasurementContext();
+  const rowHeights =
+    rowHeightsOverride ||
+    rows.map((vehicle) =>
+      measureV4RowMetrics(measurementCtx, vehicle, layout.columns, bookingReservedPlateSet.has(normalizePlateForMatch(vehicle.plate))).rowHeight
+    );
+  const bodyHeight = rowHeights.reduce((sum, value) => sum + value, 0);
+  const footerTop = layout.footerTop || layout.tableTop + layout.tableHeaderHeight + bodyHeight + 18;
+  const canvasHeight = layout.pageHeight || footerTop + layout.footerHeight + layout.bottomMargin;
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = layout.pageWidth * ratio;
+  canvas.height = canvasHeight * ratio;
+  canvas.style.width = `${layout.pageWidth}px`;
+  canvas.style.height = `${canvasHeight}px`;
+  ctx.scale(ratio, ratio);
+
+  const resolvedLayout: V4Layout = {
+    ...layout,
+    footerTop,
+    pageHeight: canvasHeight
+  };
+
+  ctx.fillStyle = "#f7f8f7";
+  ctx.fillRect(0, 0, layout.pageWidth, canvasHeight);
+
+  drawV4Header(ctx, resolvedLayout, groupName, groupTotal, exportTotal, page, totalPages, stockExportDisplayNameV4(contact ? { firstName: contact.name, lastName: "", nickname: contact.name } : null));
+  const tableRowRects = drawV4Table(ctx, resolvedLayout, rows, rowHeights, bookingReservedPlateSet);
+
+  drawV4Footer(ctx, resolvedLayout, contact);
+  drawV4DebugOverlay(ctx, resolvedLayout, tableRowRects);
+  if (!(resolvedLayout.headerTop + resolvedLayout.headerHeight < resolvedLayout.tableTop)) {
+    throw new Error(`V4 layout fail page ${page}: header overlaps table`);
+  }
+  if (!(resolvedLayout.tableTop + resolvedLayout.tableHeaderHeight + bodyHeight < resolvedLayout.footerTop)) {
+    throw new Error(`V4 layout fail page ${page}: table overlaps footer`);
+  }
+  if (!(resolvedLayout.footerTop + resolvedLayout.footerHeight <= canvasHeight)) {
+    throw new Error(`V4 layout fail page ${page}: footer exceeds canvas`);
+  }
 }

@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:stock-export-v3": "node scripts/stock-export-v3-playwright.mjs",
+    "test:stock-export-v3:baseline": "node scripts/stock-export-v3-playwright.mjs --write-baseline",
+    "test:stock-export-v4": "node scripts/stock-export-v4-playwright.mjs",
+    "test:stock-export-v4:baseline": "node scripts/stock-export-v4-playwright.mjs --write-baseline",
+    "verify:stock-export-v4": "npm run build && node scripts/stock-export-v4-verify.mjs"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
