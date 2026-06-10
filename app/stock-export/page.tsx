@@ -4453,6 +4453,53 @@ function drawV4CalendarIcon(ctx: CanvasRenderingContext2D, x: number, y: number,
   ctx.restore();
 }
 
+function drawV4FitCenteredTitle(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cellLeft: number,
+  cellTop: number,
+  cellWidth: number,
+  maxHeight: number
+) {
+  const value = String(text || "").trim() || "Stock";
+  const minFontSize = 26;
+  const maxFontSize = 38;
+  const maxWidth = Math.max(260, cellWidth);
+  let chosenFontSize = maxFontSize;
+  let chosenBlock = measureTextBlock(ctx, value, maxWidth, {
+    font: `900 ${chosenFontSize}px Arial, Tahoma, sans-serif`,
+    lineHeight: Math.round(chosenFontSize * 1.08),
+    breakLongWords: false
+  });
+
+  for (let fontSize = maxFontSize; fontSize >= minFontSize; fontSize -= 1) {
+    const block = measureTextBlock(ctx, value, maxWidth, {
+      font: `900 ${fontSize}px Arial, Tahoma, sans-serif`,
+      lineHeight: Math.round(fontSize * 1.08),
+      breakLongWords: false
+    });
+    if (block.height <= maxHeight && block.lines.length <= 2) {
+      chosenFontSize = fontSize;
+      chosenBlock = block;
+      break;
+    }
+    if (fontSize === minFontSize) {
+      chosenFontSize = fontSize;
+      chosenBlock = block;
+    }
+  }
+
+  const boxHeight = Math.min(maxHeight, Math.max(chosenBlock.height, Math.round(chosenFontSize * 1.15)));
+  drawV4CenteredText(ctx, value, cellLeft, cellTop, cellWidth, boxHeight, {
+    font: `900 ${chosenFontSize}px Arial, Tahoma, sans-serif`,
+    color: "#0b1220",
+    paddingX: 0,
+    lineHeight: Math.round(chosenFontSize * 1.08),
+    breakLongWords: false
+  });
+  return { height: boxHeight, fontSize: chosenFontSize, lines: chosenBlock.lines.length };
+}
+
 function drawV4CarIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, color: string) {
   ctx.save();
   ctx.strokeStyle = color;
@@ -4492,23 +4539,15 @@ function drawV4Header(ctx: CanvasRenderingContext2D, layout: V4Layout, groupName
     paddingX: 0,
     breakLongWords: false
   });
-  drawV4LeftText(ctx, "รถหมดสัญญาเช่า ไมล์แท้ 100%", headerLeft + 22, headerTop + 62, Math.min(520, pageWidth * 0.44), 24, {
-    font: "600 21px Arial, Tahoma, sans-serif",
-    color: "#6b7280",
-    paddingX: 0,
-    breakLongWords: false
-  });
 
   const centerWidth = Math.min(520, Math.max(300, pageWidth * 0.28));
-  drawV4CenteredText(ctx, groupName || "Stock", Math.round(pageWidth / 2 - centerWidth / 2), headerTop + 16, centerWidth, 36, {
-    font: "900 38px Arial, Tahoma, sans-serif",
-    color: "#0b1220",
-    paddingX: 0,
-    breakLongWords: false
-  });
+  const titleX = Math.round(pageWidth / 2 - centerWidth / 2);
+  const titleTop = headerTop + 14;
+  const titleMetrics = drawV4FitCenteredTitle(ctx, groupName || "Stock", titleX, titleTop, centerWidth, 44);
   ctx.fillStyle = "#2f855a";
-  const accentWidth = Math.min(118, centerWidth * 0.34);
-  ctx.fillRect(Math.round(pageWidth / 2 - accentWidth / 2), headerTop + 62, accentWidth, 4);
+  const accentWidth = Math.min(118, Math.max(88, centerWidth * 0.34));
+  ctx.fillRect(Math.round(pageWidth / 2 - accentWidth / 2), titleTop + titleMetrics.height + 4, accentWidth, 4);
+  const subtitleTop = Math.max(headerTop + 62, titleTop + titleMetrics.height + 10);
 
   const metaLeft = Math.max(headerLeft + 520, headerRight - 292);
   const metaX = Math.min(metaLeft, headerRight - 220);
@@ -4523,6 +4562,12 @@ function drawV4Header(ctx: CanvasRenderingContext2D, layout: V4Layout, groupName
   drawV4LeftText(ctx, `จำนวน ${totalVehicleCount.toLocaleString("th-TH")} คัน`, metaX + 28, headerTop + 53, 180, 24, {
     font: "500 18px Arial, Tahoma, sans-serif",
     color: "#111827",
+    paddingX: 0,
+    breakLongWords: false
+  });
+  drawV4LeftText(ctx, "รถหมดสัญญาเช่า ไมล์แท้ 100%", headerLeft + 22, subtitleTop, Math.min(520, pageWidth * 0.44), 24, {
+    font: "600 21px Arial, Tahoma, sans-serif",
+    color: "#6b7280",
     paddingX: 0,
     breakLongWords: false
   });
@@ -4930,7 +4975,7 @@ function drawV4Table(
           breakLongWords: true
         });
       } else if (column.key === "price") {
-        drawV4BodyCell(ctx, value, left, rowTop, column.width, rowHeight, "center", {
+        drawV4BodyCell(ctx, value, left, rowTop, column.width, rowHeight, "right", {
           font: "900 21px Arial, Tahoma, sans-serif",
           color: "#111827",
           background,
