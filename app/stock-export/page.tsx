@@ -4350,6 +4350,7 @@ function drawV4HeaderCell(ctx: CanvasRenderingContext2D, label: string, cellLeft
     font: "700 18px Arial, Tahoma, sans-serif",
     color: "#ffffff",
     paddingX: 10,
+    opticalOffsetX: label === "ราคาเสนอขายRT" ? -4 : 0,
     breakLongWords: false
   });
   ctx.restore();
@@ -4920,11 +4921,11 @@ function drawV4Table(
           breakLongWords: true
         });
       } else if (column.key === "location") {
-        drawV4BodyCell(ctx, value, left, rowTop, column.width, rowHeight, "center", {
+        drawV4BodyCell(ctx, value, left, rowTop, column.width, rowHeight, "left", {
           font: "600 16px Arial, Tahoma, sans-serif",
           color: "#14532d",
           background,
-          paddingX: 10,
+          paddingX: 14,
           paddingY: 10,
           breakLongWords: true
         });
