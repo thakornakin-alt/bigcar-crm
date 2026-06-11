@@ -56,6 +56,17 @@ type StockExportFileBundle = {
   vehicleCount: number;
 };
 
+function resolveStockExportRendererVersion(): StockExportRendererVersion {
+  if (typeof window !== "undefined") {
+    const params = new URLSearchParams(window.location.search);
+    const renderer = params.get("renderer");
+    if (renderer === "v4" || renderer === "v3" || renderer === "v2") return renderer;
+  }
+
+  if (USE_STOCK_EXPORT_RENDERER_V3) return "v3";
+  return "v4";
+}
+
 type StockExportContact = {
   name: string;
   phone: string;
@@ -830,17 +841,9 @@ export default function StockExportPage() {
     if (url.searchParams.get("debugYear") === "1") setShowYearDebug(true);
   }, []);
 
-  const stockExportRendererV3Enabled = useMemo(() => {
-    if (typeof window === "undefined") return USE_STOCK_EXPORT_RENDERER_V3;
-    const params = new URLSearchParams(window.location.search);
-    return params.get("renderer") === "v3" || USE_STOCK_EXPORT_RENDERER_V3;
-  }, []);
-
-  const stockExportRendererV4Enabled = useMemo(() => {
-    if (typeof window === "undefined") return USE_STOCK_EXPORT_RENDERER_V4;
-    const params = new URLSearchParams(window.location.search);
-    return params.get("renderer") === "v4" || USE_STOCK_EXPORT_RENDERER_V4;
-  }, []);
+  const stockExportRendererVersion = useMemo(resolveStockExportRendererVersion, []);
+  const stockExportRendererV3Enabled = stockExportRendererVersion === "v3";
+  const stockExportRendererV4Enabled = stockExportRendererVersion === "v4";
 
   const importedStatusCount = useMemo(() => vehicles.filter((vehicle) => stockStatus(vehicle)).length, [vehicles]);
   const importedVehicleGroupCount = useMemo(() => vehicles.filter((vehicle) => stockVehicleGroup(vehicle)).length, [vehicles]);
