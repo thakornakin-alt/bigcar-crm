@@ -65,16 +65,30 @@ export async function POST(request: Request) {
 
   void Promise.all(groupsToSave.map((group) => saveLineGroup(group))).catch(() => undefined);
 
+  const reservationResults = [];
   for (const event of events) {
     const messageText = String(event.message?.text || "").trim();
     if (!messageText) continue;
     const sourceGroupId = event.source?.groupId || event.source?.roomId || "";
-    void applyLineReservationCommand({
-      text: messageText,
-      sourceGroupId,
-      receivedAt: new Date().toISOString()
-    }).catch(() => undefined);
+    try {
+      const result = await applyLineReservationCommand({
+        text: messageText,
+        sourceGroupId,
+        receivedAt: new Date().toISOString()
+      });
+      if (Array.isArray(result)) {
+        reservationResults.push(...result);
+      } else if (result) {
+        reservationResults.push(result);
+      }
+    } catch (error) {
+      console.error("[line-reservation] failed to save reservation", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        sourceGroupId
+      });
+      webhookError = error instanceof Error ? error.message : "Unable to save LINE reservation";
+    }
   }
 
-  return NextResponse.json({ ok: true, queued: groupsToSave.length });
+  return NextResponse.json({ ok: true, queued: groupsToSave.length, reservations: reservationResults.length });
 }
