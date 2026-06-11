@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { importStock, listStockVehicles } from "@/lib/apps-script";
 import { readJsonStore, writeJsonStore } from "@/lib/json-store";
 import { saveStockExtraFields } from "@/lib/stock-extra-fields";
+import { sanitizeStockText, sanitizeStockVehicleTextFields } from "@/lib/stock-text-sanitizer";
 import type { StockVehicle } from "@/lib/types";
 
 export type StockStagingStatus = "Pending" | "Confirmed" | "Rejected" | "Duplicate" | "Ignored" | "Excluded";
@@ -111,7 +112,7 @@ function normalize(value: string) {
 }
 
 function text(value: unknown) {
-  return String(value ?? "").trim();
+  return sanitizeStockText(value);
 }
 
 function money(value: unknown) {
@@ -231,7 +232,7 @@ export function parseStockWorkbook(bytes: Buffer) {
       const mappedRows = rawRows
         .map((row) => {
           const rowNumber = typeof row.__rowNum__ === "number" ? row.__rowNum__ : 0;
-          return {
+          return sanitizeStockVehicleTextFields({
             plate: text(row[mapping.plate]),
             brand: text(row[mapping.brand]),
             model: text(row[mapping.model]),
@@ -265,7 +266,7 @@ export function parseStockWorkbook(bytes: Buffer) {
             pdiNote: text(row[mapping.pdiNote]),
             vehicleGroup: text(row[mapping.vehicleGroup]),
             extraFields: {}
-          };
+          });
         })
         .filter((row) => row.plate);
 
