@@ -3,6 +3,7 @@ import { importStock } from "@/lib/apps-script";
 import type { StockVehicle } from "@/lib/types";
 import { saveStockExtraFields } from "@/lib/stock-extra-fields";
 import { sanitizeStockText, sanitizeStockVehicleTextFields } from "@/lib/stock-text-sanitizer";
+import { clearLineReservations } from "@/lib/line-reservations";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +60,7 @@ export async function POST(request: Request) {
       : [];
     const sourceName = String(body.sourceName || "").trim();
     const clearExisting = body.clearExisting === true;
+    const clearReservationsOnComplete = body.clearLineReservationsOnComplete === true;
 
     if (!rows.length) {
       return NextResponse.json({ error: "No stock rows to import" }, { status: 400 });
@@ -66,9 +68,20 @@ export async function POST(request: Request) {
 
     const result = await importStock({ rows, sourceName, clearExisting });
     await saveStockExtraFields(rows, { clearExisting });
+    const lineReservationsClearResult = clearReservationsOnComplete
+      ? await clearLineReservations()
+      : { clearedCount: 0 };
+    if (clearReservationsOnComplete) {
+      console.info("[stock-import] cleared LINE reservations after manual import", {
+        clearedCount: lineReservationsClearResult.clearedCount,
+        sourceName,
+        rows: rows.length
+      });
+    }
     return NextResponse.json({
       result: {
         ...result,
+        lineReservationsCleared: lineReservationsClearResult.clearedCount,
         clientVinRows: rows.filter((row: StockVehicle) => row.vin).length,
         clientEngineNoRows: rows.filter((row: StockVehicle) => row.engineNo).length,
         clientStatusRows: rows.filter((row: StockVehicle) => row.status).length,

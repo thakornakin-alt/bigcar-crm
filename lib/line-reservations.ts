@@ -82,7 +82,12 @@ export async function listLineReservationRecords() {
 }
 
 export async function clearLineReservations() {
+  const store = await readStore();
+  const clearedCount = Object.values(store.byPlate)
+    .map((item, index) => normalizeReservationRecord(item, Object.keys(store.byPlate)[index] || ""))
+    .filter((item) => item.active).length;
   await writeStore({ byPlate: {} });
+  return { clearedCount };
 }
 
 export async function applyLineReservationCommand(input: {

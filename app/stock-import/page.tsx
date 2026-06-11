@@ -37,6 +37,12 @@ type StockStagingItem = {
 
 const chunkSize = 300;
 const defaultHeaderRow = 5;
+const STOCK_STAGING_ENABLED =
+  process.env.NEXT_PUBLIC_STOCK_STAGING_ENABLED === "true" ||
+  process.env.STOCK_STAGING_ENABLED === "true";
+const STOCK_GMAIL_SYNC_ENABLED =
+  process.env.NEXT_PUBLIC_STOCK_GMAIL_SYNC_ENABLED === "true" ||
+  process.env.STOCK_GMAIL_SYNC_ENABLED === "true";
 const hiddenColumnPolicyStorageKey = "bigcar-stock-hidden-column-policy-v1";
 const vinFallbackKey = "__BIGCAR_COL_U";
 const vinFallbackLabel = "คอลัมน์ U (ล็อกอัตโนมัติ)";
@@ -323,13 +329,14 @@ export default function StockImportPage() {
   const parsedStatusCount = useMemo(() => parsedRows.filter((row) => row.status).length, [parsedRows]);
   const parsedVehicleGroupCount = useMemo(() => parsedRows.filter((row) => row.vehicleGroup).length, [parsedRows]);
   const parsedPdiNoteCount = useMemo(() => parsedRows.filter((row) => row.pdiNote).length, [parsedRows]);
+  const stockStagingSectionEnabled = STOCK_STAGING_ENABLED && STOCK_GMAIL_SYNC_ENABLED;
 
   useEffect(() => {
     api<{ status: StockImportStatus }>("/api/stock/status")
       .then((data) => setStatus(data.status))
       .catch(() => undefined);
-    loadStaging();
-  }, []);
+    if (stockStagingSectionEnabled) void loadStaging();
+  }, [stockStagingSectionEnabled]);
 
   async function loadStaging() {
     setStagingLoading(true);
@@ -543,9 +550,15 @@ export default function StockImportPage() {
 
       for (let start = 0; start < parsedRows.length; start += chunkSize) {
         const chunk = parsedRows.slice(start, start + chunkSize);
+        const isFinalChunk = start + chunk.length >= parsedRows.length;
         const data = await api<{ result: StockImportResult }>("/api/stock/import", {
           method: "POST",
-          body: JSON.stringify({ rows: chunk, sourceName: fileName, clearExisting: clearExisting && start === 0 })
+          body: JSON.stringify({
+            rows: chunk,
+            sourceName: fileName,
+            clearExisting: clearExisting && start === 0,
+            clearLineReservationsOnComplete: isFinalChunk
+          })
         });
         imported += data.result.imported;
         updated += data.result.updated;
@@ -621,6 +634,7 @@ export default function StockImportPage() {
         }
       />
 
+      {stockStagingSectionEnabled ? (
       <section className="mb-6 rounded-xl border border-brand/25 bg-[#10151f] p-4 shadow-glow">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -738,6 +752,7 @@ export default function StockImportPage() {
           )}
         </div>
       </section>
+      ) : null}
 
       {(message || error) && (
         <div
