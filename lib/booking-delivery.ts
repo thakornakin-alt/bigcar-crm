@@ -82,7 +82,7 @@ export async function upsertBookingDeliveryRecordByPlate(input: BookingDeliveryR
   );
 
   const existing = index >= 0 ? store.records[index] : null;
-  const next: BookingDeliveryRecord = {
+  const next: BookingDeliveryRecord = applyCommissionDefaults({
     ...existing,
     ...input,
     garageOutDate: text(input.garageOutDate || existing?.garageOutDate),
@@ -103,7 +103,7 @@ export async function upsertBookingDeliveryRecordByPlate(input: BookingDeliveryR
     financeAttachmentIds: Array.isArray(input.financeAttachmentIds) ? input.financeAttachmentIds.map((item) => text(item)).filter(Boolean) : stringArrayValue(existing?.financeAttachmentIds),
     createdAt: existing?.createdAt || input.createdAt || new Date().toISOString(),
     updatedAt: input.updatedAt || new Date().toISOString()
-  };
+  }, existing || input);
 
   if (index >= 0) {
     store.records[index] = next;
@@ -142,6 +142,32 @@ function normalizeTeamId(value: string) {
     .toLowerCase()
     .replace(/\s+/g, "-")
     .replace(/[^a-z0-9ก-๙_-]/g, "");
+}
+
+function normalizeCommissionGrade(value: unknown) {
+  const normalized = text(value).toUpperCase();
+  if (normalized === "G1" || normalized === "G2" || normalized === "G3") return normalized;
+  return "";
+}
+
+function resolveOwnerForCommission(source: Partial<BookingDeliveryRecord> | Record<string, unknown> | null | undefined) {
+  const raw = (source || {}) as Record<string, unknown>;
+  return text(raw.salesOwner || raw.saleName || raw.teamName || "-") || "-";
+}
+
+function applyCommissionDefaults(
+  record: Partial<BookingDeliveryRecord>,
+  source?: Partial<BookingDeliveryRecord> | Record<string, unknown> | null
+) {
+  const sourceRecord = (source || {}) as Record<string, unknown>;
+  return {
+    ...record,
+    ownerForCommission: text(record.ownerForCommission) || resolveOwnerForCommission(source || record),
+    commissionGrade: record.commissionGrade || normalizeCommissionGrade(sourceRecord.commissionGrade),
+    countForCommission: typeof record.countForCommission === "boolean" ? record.countForCommission : true,
+    commissionVersion: text(record.commissionVersion) || "2026",
+    commissionNote: text(record.commissionNote || "")
+  } as BookingDeliveryRecord;
 }
 
 function deriveStatus(report: ReportHistoryItem | null, sales: ReportHistoryItem | null, current?: BookingDeliveryRecord): BookingDeliveryStatus {
@@ -220,6 +246,14 @@ async function readStore(): Promise<BookingDeliveryStore> {
       insuranceStatus: text((record as BookingDeliveryRecord).insuranceStatus || ""),
       deliveryCompletedDate: text((record as BookingDeliveryRecord).deliveryCompletedDate || ""),
       deliveryNote: text((record as BookingDeliveryRecord).deliveryNote || ""),
+      ownerForCommission: text((record as BookingDeliveryRecord).ownerForCommission || ""),
+      commissionGrade: normalizeCommissionGrade((record as BookingDeliveryRecord).commissionGrade || ""),
+      countForCommission:
+        typeof (record as BookingDeliveryRecord).countForCommission === "boolean"
+          ? Boolean((record as BookingDeliveryRecord).countForCommission)
+          : true,
+      commissionVersion: text((record as BookingDeliveryRecord).commissionVersion || "2026"),
+      commissionNote: text((record as BookingDeliveryRecord).commissionNote || ""),
     financeCaseSubmitted: boolValue((record as BookingDeliveryRecord).financeCaseSubmitted),
       financeCaseSubmittedAt: text((record as BookingDeliveryRecord).financeCaseSubmittedAt || ""),
       financeCaseNote: text((record as BookingDeliveryRecord).financeCaseNote || ""),
@@ -283,7 +317,8 @@ async function resolveStockSnapshot(plate: string) {
     model: stockPick(raw, ["model", "รุ่นรถยนต์", "รุ่น"]),
     brand: stockPick(raw, ["brand", "ยี่ห้อ", "ยี่ห้อรถ"]),
     year: stockPick(raw, ["year", "ปีจด", "ปีรถ"]),
-    color: stockPick(raw, ["color", "สี"])
+    color: stockPick(raw, ["color", "สี"]),
+    commissionGrade: normalizeCommissionGrade(stockPick(raw, ["CAR GROUP", "carGroup", "car_group", "grade", "finalGrade"]))
   };
 }
 
@@ -366,6 +401,11 @@ export async function upsertBookingDeliveryFromBookingReport(report: BookingRepo
     next.brand = next.brand || stockSnapshot.brand;
     next.year = next.year || stockSnapshot.year;
     next.color = next.color || stockSnapshot.color;
+    next.commissionGrade = next.commissionGrade || normalizeCommissionGrade(stockSnapshot.commissionGrade);
+    next.ownerForCommission = next.ownerForCommission || resolveOwnerForCommission(next);
+    next.countForCommission = typeof next.countForCommission === "boolean" ? next.countForCommission : true;
+    next.commissionVersion = text(next.commissionVersion || "2026");
+    next.commissionNote = text(next.commissionNote || "");
     next.summary = deriveSummary(getDisplayStatus(next) || "ยอดจอง", reportHistoryItem, null);
     next.alertSummary = deriveAlertSummary(getDisplayStatus(next), reportHistoryItem, null, next);
   }
@@ -402,6 +442,14 @@ function buildRecordFromReports(
     saleName: text(booking.saleName || sales?.saleName),
     teamName: text(booking.teamName || sales?.teamName),
     teamId,
+    ownerForCommission: text((current as BookingDeliveryRecord | undefined)?.ownerForCommission || booking.saleName || sales?.saleName || booking.teamName || sales?.teamName || "-"),
+    commissionGrade: normalizeCommissionGrade((current as BookingDeliveryRecord | undefined)?.commissionGrade || ""),
+    countForCommission:
+      typeof (current as BookingDeliveryRecord | undefined)?.countForCommission === "boolean"
+        ? Boolean((current as BookingDeliveryRecord | undefined)?.countForCommission)
+        : true,
+    commissionVersion: text((current as BookingDeliveryRecord | undefined)?.commissionVersion || "2026"),
+    commissionNote: text((current as BookingDeliveryRecord | undefined)?.commissionNote || ""),
     source: text(
       extractLineValue(String(booking.reportText || sales?.reportText || ""), ["แหล่งที่มา"]) || current?.source
     ),
@@ -508,6 +556,11 @@ export async function upsertBookingDeliveryFromReportHistory(reports: ReportHist
       next.brand = next.brand || stockSnapshot.brand;
       next.year = next.year || stockSnapshot.year;
       next.color = next.color || stockSnapshot.color;
+      next.commissionGrade = next.commissionGrade || normalizeCommissionGrade(stockSnapshot.commissionGrade);
+      next.ownerForCommission = next.ownerForCommission || resolveOwnerForCommission(next);
+      next.countForCommission = typeof next.countForCommission === "boolean" ? next.countForCommission : true;
+      next.commissionVersion = text(next.commissionVersion || "2026");
+      next.commissionNote = text(next.commissionNote || "");
       next.summary = deriveSummary(getDisplayStatus(next) || "ยอดจอง", booking, salesReport);
       next.alertSummary = deriveAlertSummary(getDisplayStatus(next), booking, salesReport, next);
     }
@@ -575,6 +628,12 @@ export async function updateBookingDeliveryRecord(input: {
     financeAttachmentIds: Array.isArray(input.financeAttachmentIds)
       ? input.financeAttachmentIds.map((item) => text(item)).filter(Boolean)
       : stringArrayValue(current.financeAttachmentIds),
+    countForCommission:
+      nextStatus === "ยกเลิก"
+        ? false
+        : typeof (current as BookingDeliveryRecord).countForCommission === "boolean"
+          ? Boolean((current as BookingDeliveryRecord).countForCommission)
+          : true,
     alertSummary: text(input.alertSummary ?? ""),
     cancelReason: text(input.cancelReason ?? current.cancelReason),
     updatedAt: new Date().toISOString(),
@@ -593,7 +652,13 @@ export async function updateBookingDeliveryRecord(input: {
 }
 
 export async function cancelBookingDelivery(id: string, reason = "ผู้ใช้ยกเลิกรายการ") {
-  return updateBookingDeliveryRecord({ id, status: "ยกเลิก", workflowStatus: "ยกเลิก", cancelReason: reason, alertSummary: "ยกเลิกรายการ" });
+  return updateBookingDeliveryRecord({
+    id,
+    status: "ยกเลิก",
+    workflowStatus: "ยกเลิก",
+    cancelReason: reason,
+    alertSummary: "ยกเลิกรายการ"
+  });
 }
 
 export async function countBookingDeliveryRecords() {
