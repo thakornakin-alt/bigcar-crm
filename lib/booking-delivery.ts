@@ -210,13 +210,17 @@ async function readStore(): Promise<BookingDeliveryStore> {
       ...record,
       status: normalizeLifecycleStatus(record.status),
       workflowStatus: normalizeWorkflowStatus(record.status, (record as BookingDeliveryRecord).workflowStatus),
-      garageOutDate: text((record as BookingDeliveryRecord).garageOutDate || ""),
-      garageReturnDate: text((record as BookingDeliveryRecord).garageReturnDate || ""),
-      spaFullSystemDone: boolValue((record as BookingDeliveryRecord).spaFullSystemDone),
-      oilChangeDone: boolValue((record as BookingDeliveryRecord).oilChangeDone),
-      decalRemovalDone: boolValue((record as BookingDeliveryRecord).decalRemovalDone),
-      insuranceDone: boolValue((record as BookingDeliveryRecord).insuranceDone),
-      financeCaseSubmitted: boolValue((record as BookingDeliveryRecord).financeCaseSubmitted),
+    garageOutDate: text((record as BookingDeliveryRecord).garageOutDate || ""),
+    garageReturnDate: text((record as BookingDeliveryRecord).garageReturnDate || ""),
+    spaFullSystemDone: boolValue((record as BookingDeliveryRecord).spaFullSystemDone),
+    oilChangeDone: boolValue((record as BookingDeliveryRecord).oilChangeDone),
+    decalRemovalDone: boolValue((record as BookingDeliveryRecord).decalRemovalDone),
+      vehicleInspectionDone: boolValue((record as BookingDeliveryRecord).vehicleInspectionDone),
+    insuranceDone: boolValue((record as BookingDeliveryRecord).insuranceDone),
+      insuranceStatus: text((record as BookingDeliveryRecord).insuranceStatus || ""),
+      deliveryCompletedDate: text((record as BookingDeliveryRecord).deliveryCompletedDate || ""),
+      deliveryNote: text((record as BookingDeliveryRecord).deliveryNote || ""),
+    financeCaseSubmitted: boolValue((record as BookingDeliveryRecord).financeCaseSubmitted),
       financeCaseSubmittedAt: text((record as BookingDeliveryRecord).financeCaseSubmittedAt || ""),
       financeCaseNote: text((record as BookingDeliveryRecord).financeCaseNote || ""),
       financeAttachmentIds: stringArrayValue((record as BookingDeliveryRecord).financeAttachmentIds)
@@ -428,13 +432,17 @@ function buildRecordFromReports(
     netPayment: moneyText(extractLineValue(String(sales?.reportText || ""), ["จ่ายสุทธิ"]) || current?.netPayment),
     paymentType: text(extractLineValue(String(booking.reportText || sales?.reportText || ""), ["การชำระเงิน"]) || paymentText),
     deliveryDate: text(extractLineValue(String(sales?.reportText || ""), ["วันรับรถ"]) || current?.deliveryDate),
+    deliveryCompletedDate: text(current?.deliveryCompletedDate || ""),
     deliveryLocation: text(extractLineValue(String(sales?.reportText || ""), ["สาขา"]) || current?.deliveryLocation),
     garageOutDate: text(current?.garageOutDate || ""),
     garageReturnDate: text(current?.garageReturnDate || ""),
     spaFullSystemDone: boolValue(current?.spaFullSystemDone),
     oilChangeDone: boolValue(current?.oilChangeDone),
     decalRemovalDone: boolValue(current?.decalRemovalDone),
+    vehicleInspectionDone: boolValue((current as BookingDeliveryRecord | undefined)?.vehicleInspectionDone),
     insuranceDone: boolValue(current?.insuranceDone),
+    insuranceStatus: text((current as BookingDeliveryRecord | undefined)?.insuranceStatus || ""),
+    deliveryNote: text((current as BookingDeliveryRecord | undefined)?.deliveryNote || ""),
     workflowStatus,
     financeCaseSubmitted: boolValue(current?.financeCaseSubmitted),
     financeCaseSubmittedAt: text(current?.financeCaseSubmittedAt || ""),
@@ -518,13 +526,17 @@ export async function updateBookingDeliveryRecord(input: {
   status?: BookingDeliveryStatus;
   workflowStatus?: BookingDeliveryStatus | "";
   deliveryDate?: string;
+  deliveryCompletedDate?: string;
   deliveryLocation?: string;
   garageOutDate?: string;
   garageReturnDate?: string;
   spaFullSystemDone?: boolean;
   oilChangeDone?: boolean;
   decalRemovalDone?: boolean;
+  vehicleInspectionDone?: boolean;
   insuranceDone?: boolean;
+  insuranceStatus?: string;
+  deliveryNote?: string;
   financeCaseSubmitted?: boolean;
   financeCaseSubmittedAt?: string;
   financeCaseNote?: string;
@@ -546,13 +558,17 @@ export async function updateBookingDeliveryRecord(input: {
     statusSource: "manual",
     workflowStatus: nextStatus === "ยกเลิก" ? "ยกเลิก" : nextWorkflowStatus,
     deliveryDate: text(input.deliveryDate ?? current.deliveryDate),
+    deliveryCompletedDate: text(input.deliveryCompletedDate ?? current.deliveryCompletedDate),
     deliveryLocation: text(input.deliveryLocation ?? current.deliveryLocation),
     garageOutDate: text(input.garageOutDate ?? current.garageOutDate),
     garageReturnDate: text(input.garageReturnDate ?? current.garageReturnDate),
     spaFullSystemDone: typeof input.spaFullSystemDone === "boolean" ? input.spaFullSystemDone : boolValue(current.spaFullSystemDone),
     oilChangeDone: typeof input.oilChangeDone === "boolean" ? input.oilChangeDone : boolValue(current.oilChangeDone),
     decalRemovalDone: typeof input.decalRemovalDone === "boolean" ? input.decalRemovalDone : boolValue(current.decalRemovalDone),
+    vehicleInspectionDone: typeof input.vehicleInspectionDone === "boolean" ? input.vehicleInspectionDone : boolValue((current as BookingDeliveryRecord).vehicleInspectionDone),
     insuranceDone: typeof input.insuranceDone === "boolean" ? input.insuranceDone : boolValue(current.insuranceDone),
+    insuranceStatus: text(input.insuranceStatus ?? (current as BookingDeliveryRecord).insuranceStatus),
+    deliveryNote: text(input.deliveryNote ?? (current as BookingDeliveryRecord).deliveryNote),
     financeCaseSubmitted: typeof input.financeCaseSubmitted === "boolean" ? input.financeCaseSubmitted : boolValue(current.financeCaseSubmitted),
     financeCaseSubmittedAt: text(input.financeCaseSubmittedAt ?? current.financeCaseSubmittedAt),
     financeCaseNote: text(input.financeCaseNote ?? current.financeCaseNote),
