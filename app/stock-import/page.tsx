@@ -635,9 +635,9 @@ export default function StockImportPage() {
       />
 
       {stockStagingSectionEnabled ? (
-      <section className="mb-6 rounded-xl border border-brand/25 bg-[#10151f] p-4 shadow-glow">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
+      <section className="mb-6 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-brand/25 bg-[#10151f] p-4 shadow-glow">
+        <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
             <h2 className="flex items-center gap-2 text-lg font-black text-white">
               <FileSpreadsheet size={19} className="text-brand" />
               Gmail Auto Import Staging
@@ -649,17 +649,17 @@ export default function StockImportPage() {
               </p>
             ) : null}
           </div>
-          <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[520px]">
-            <button type="button" onClick={syncGmailStaging} disabled={stagingLoading} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-4 font-black text-ink disabled:opacity-60">
+          <div className="grid w-full min-w-0 gap-2 sm:grid-cols-3 lg:min-w-[520px]">
+            <button type="button" onClick={syncGmailStaging} disabled={stagingLoading} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 font-black text-ink disabled:opacity-60">
               {stagingLoading ? <Loader2 size={17} className="animate-spin" /> : <RefreshCw size={17} />}
               Sync Gmail
             </button>
-            <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-4 font-black text-white">
+            <label className="flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-4 font-black text-white">
               <Upload size={17} className="text-brand" />
               Upload Manual File
               <input type="file" accept=".xlsx,.xls,.csv" onChange={handleManualStagingFile} className="hidden" />
             </label>
-            <button type="button" onClick={loadStaging} disabled={stagingLoading} className="min-h-11 rounded-lg border border-line px-4 font-black text-white disabled:opacity-60">
+            <button type="button" onClick={loadStaging} disabled={stagingLoading} className="min-h-11 w-full rounded-lg border border-line px-4 font-black text-white disabled:opacity-60">
               Refresh
             </button>
           </div>
@@ -704,7 +704,7 @@ export default function StockImportPage() {
                         {[...(item.validation.errors || []), ...(item.validation.warnings || []), ...(item.diff?.warnings || [])].map((warning) => <p key={warning}>{warning}</p>)}
                       </div>
                     ) : null}
-                    <div className="overflow-x-auto rounded-lg border border-line">
+                    <div className="w-full max-w-full overflow-x-auto rounded-lg border border-line">
                       <table className="min-w-[760px] w-full text-left text-xs text-soft">
                         <thead className="bg-[#121923] text-white">
                           <tr>
@@ -765,9 +765,9 @@ export default function StockImportPage() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
-        <section className="space-y-4">
-          <div className="rounded-lg border border-line bg-panel p-4 shadow-glow">
+      <div className="grid w-full min-w-0 gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+        <section className="min-w-0 space-y-4">
+          <div className="min-w-0 rounded-lg border border-line bg-panel p-4 shadow-glow">
             <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-white">
               <Database size={18} className="text-brand" />
               สต๊อกล่าสุด
@@ -778,7 +778,7 @@ export default function StockImportPage() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-line bg-panel p-4 shadow-glow">
+          <div className="min-w-0 rounded-lg border border-line bg-panel p-4 shadow-glow">
             <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-white">
               <FileSpreadsheet size={18} className="text-brand" />
               เลือกไฟล์
@@ -822,7 +822,7 @@ export default function StockImportPage() {
           )}
 
           {headers.length > 0 && (
-            <div className="rounded-lg border border-amber-400/30 bg-amber-950/20 p-4 shadow-glow">
+            <div className="min-w-0 rounded-lg border border-amber-400/30 bg-amber-950/20 p-4 shadow-glow">
               <label className="flex items-start gap-3">
                 <input
                   type="checkbox"
@@ -900,13 +900,13 @@ export default function StockImportPage() {
           )}
         </section>
 
-        <section className="space-y-4">
+        <section className="min-w-0 space-y-4">
           {headers.length > 0 && (
-            <div className="rounded-lg border border-line bg-panel p-4 shadow-glow">
+            <div className="min-w-0 rounded-lg border border-line bg-panel p-4 shadow-glow">
               <h2 className="mb-3 text-lg font-bold text-white">จับคู่คอลัมน์</h2>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-2">
                 {fieldLabels.map((field) => (
-                  <label key={field.key} className="block">
+                  <label key={field.key} className="block min-w-0">
                     <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">{field.label}</span>
                     <select
                       value={mapping[field.key]}
@@ -931,12 +931,12 @@ export default function StockImportPage() {
           )}
 
           {previewRows.length > 0 && (
-            <div className="rounded-lg border border-line bg-panel p-4 shadow-glow">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
+            <div className="min-w-0 rounded-lg border border-line bg-panel p-4 shadow-glow">
+              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
                   <h2 className="text-lg font-bold text-white">Preview</h2>
                   <p className="text-xs text-soft">พบข้อมูลพร้อม import {parsedRows.length.toLocaleString("th-TH")} แถว</p>
-                  <p className="mt-1 text-xs text-soft">
+                  <p className="mt-1 break-words text-xs text-soft">
                     เลขตัวรถ {parsedVinCount.toLocaleString("th-TH")} / เลขเครื่อง {parsedEngineNoCount.toLocaleString("th-TH")} / สถานะ {parsedStatusCount.toLocaleString("th-TH")} / กลุ่มรถยนต์{" "}
                     {parsedVehicleGroupCount.toLocaleString("th-TH")} / หมายเหตุ PDI {parsedPdiNoteCount.toLocaleString("th-TH")} แถว
                   </p>
@@ -945,7 +945,7 @@ export default function StockImportPage() {
                   type="button"
                   disabled={importing || missingPlate || !parsedRows.length}
                   onClick={importRows}
-                  className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-bold text-ink"
+                  className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-bold text-ink sm:w-auto"
                 >
                   {importing ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
                   Import
@@ -956,7 +956,7 @@ export default function StockImportPage() {
                   <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${progress}%` }} />
                 </div>
               )}
-              <div className="overflow-x-auto rounded-lg border border-line">
+              <div className="w-full max-w-full overflow-x-auto rounded-lg border border-line">
                 <table className="w-full min-w-[760px] border-collapse text-left text-sm">
                   <thead className="bg-[#0b0d11] text-soft">
                     <tr>
@@ -988,7 +988,7 @@ export default function StockImportPage() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
+    <div className="min-w-0 rounded-lg border border-line bg-[#0b0d11] p-3">
       <p className="text-xs text-soft">{label}</p>
       <p className="mt-1 break-words text-base font-bold text-white">{value}</p>
     </div>
