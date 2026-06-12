@@ -396,7 +396,7 @@ export default function BookingDeliveryPage() {
     <PageContainer wide>
       <PageTitle
         title="Booking Delivery"
-        subtitle="ทั้งหมด, รอผลไฟแนนซ์, รอส่งมอบ, ส่งมอบแล้ว และยกเลิก รวมไว้ในที่เดียว"
+        subtitle="ยอดจองทั้งหมด, รอผลไฟแนนซ์, รอส่งมอบ, ส่งมอบแล้ว และยกเลิก รวมไว้ในที่เดียว"
         actions={
           <>
             <button
@@ -418,7 +418,7 @@ export default function BookingDeliveryPage() {
       {error && <div className="mb-4 rounded-lg border border-amber-300/40 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">{error}</div>}
 
       <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="ทั้งหมด" value={`${counts.total.toLocaleString("th-TH")} คัน`} icon={<ClipboardCheck size={18} />} />
+        <StatCard label="ยอดจองทั้งหมด" value={`${counts.total.toLocaleString("th-TH")} คัน`} icon={<ClipboardCheck size={18} />} />
         <StatCard label="รอผลไฟแนนซ์" value={`${counts.finance.toLocaleString("th-TH")} คัน`} icon={<ClipboardCheck size={18} />} />
         <StatCard label="รอส่งมอบ" value={`${counts.ready.toLocaleString("th-TH")} คัน`} icon={<ClipboardCheck size={18} />} />
         <StatCard label="ส่งมอบแล้ว" value={`${counts.delivered.toLocaleString("th-TH")} คัน`} icon={<CheckCircle2 size={18} />} tone="muted" />
@@ -463,7 +463,6 @@ export default function BookingDeliveryPage() {
           />
 
           <div className="flex flex-wrap gap-2">
-            <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>ทั้งหมด</FilterChip>
             {(["ยอดจอง", "รอผลไฟแนนซ์", "รอส่งมอบ", "ยอดส่งมอบ", "ยกเลิก"] as BookingDeliveryStatus[]).map((status) => (
               <FilterChip key={status} active={filter === status} onClick={() => setFilter(status)}>
                 {statusPickerLabels[status]}
