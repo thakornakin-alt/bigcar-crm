@@ -82,7 +82,7 @@ export async function upsertBookingDeliveryRecordByPlate(input: BookingDeliveryR
   );
 
   const existing = index >= 0 ? store.records[index] : null;
-  const next: BookingDeliveryRecord = {
+  const next: BookingDeliveryRecord = applyCommissionDefaults({
     ...existing,
     ...input,
     garageOutDate: text(input.garageOutDate || existing?.garageOutDate),
@@ -103,7 +103,7 @@ export async function upsertBookingDeliveryRecordByPlate(input: BookingDeliveryR
     financeAttachmentIds: Array.isArray(input.financeAttachmentIds) ? input.financeAttachmentIds.map((item) => text(item)).filter(Boolean) : stringArrayValue(existing?.financeAttachmentIds),
     createdAt: existing?.createdAt || input.createdAt || new Date().toISOString(),
     updatedAt: input.updatedAt || new Date().toISOString()
-  };
+  }, existing || input);
 
   if (index >= 0) {
     store.records[index] = next;
@@ -158,11 +158,11 @@ function resolveOwnerForCommission(source: Partial<BookingDeliveryRecord> | Reco
 function applyCommissionDefaults(
   record: Partial<BookingDeliveryRecord>,
   source?: Partial<BookingDeliveryRecord> | Record<string, unknown> | null
-  ) {
+) {
   const sourceRecord = (source || {}) as Record<string, unknown>;
   return {
     ...record,
-    ownerForCommission: text(record.ownerForCommission) || text(sourceRecord.saleName) || "-",
+    ownerForCommission: text(record.ownerForCommission) || resolveOwnerForCommission(source || record),
     commissionGrade: record.commissionGrade || normalizeCommissionGrade(sourceRecord.commissionGrade),
     countForCommission: typeof record.countForCommission === "boolean" ? record.countForCommission : false,
     commissionVersion: text(record.commissionVersion) || "2026",
@@ -305,7 +305,8 @@ async function resolveStockSnapshot(plate: string) {
     model: stockPick(raw, ["model", "รุ่นรถยนต์", "รุ่น"]),
     brand: stockPick(raw, ["brand", "ยี่ห้อ", "ยี่ห้อรถ"]),
     year: stockPick(raw, ["year", "ปีจด", "ปีรถ"]),
-    color: stockPick(raw, ["color", "สี"])
+    color: stockPick(raw, ["color", "สี"]),
+    commissionGrade: normalizeCommissionGrade(stockPick(raw, ["CAR GROUP", "carGroup", "car_group", "grade", "finalGrade"]))
   };
 }
 
@@ -627,7 +628,13 @@ export async function updateBookingDeliveryRecord(input: {
 }
 
 export async function cancelBookingDelivery(id: string, reason = "ผู้ใช้ยกเลิกรายการ") {
-  return updateBookingDeliveryRecord({ id, status: "ยกเลิก", workflowStatus: "ยกเลิก", cancelReason: reason, alertSummary: "ยกเลิกรายการ" });
+  return updateBookingDeliveryRecord({
+    id,
+    status: "ยกเลิก",
+    workflowStatus: "ยกเลิก",
+    cancelReason: reason,
+    alertSummary: "ยกเลิกรายการ"
+  });
 }
 
 export async function countBookingDeliveryRecords() {
