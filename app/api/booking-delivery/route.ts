@@ -34,6 +34,7 @@ function toStatus(value: unknown): BookingDeliveryStatus | undefined {
   if (text === "รอผลไฟแนนซ์") return text;
   if (text === "รอส่งมอบ") return text;
   if (text === "ยอดส่งมอบ") return text;
+  if (text === "ส่งมอบแล้ว") return "ยอดส่งมอบ";
   if (text === "ยกเลิก") return text;
   return undefined;
 }
@@ -44,6 +45,7 @@ function toWorkflowStatus(value: unknown): BookingDeliveryStatus | "" | undefine
   if (text === "รอผลไฟแนนซ์") return text;
   if (text === "รอส่งมอบ") return text;
   if (text === "ยอดส่งมอบ") return text;
+  if (text === "ส่งมอบแล้ว") return "ยอดส่งมอบ";
   if (text === "ยกเลิก") return text;
   if (!text) return "";
   return undefined;
@@ -124,13 +126,17 @@ export async function PATCH(request: Request) {
       status: status === "ยกเลิก" ? "ยกเลิก" : undefined,
       workflowStatus: toWorkflowStatus(body.workflowStatus ?? body.status),
       deliveryDate: String(body.deliveryDate || "").trim(),
+      deliveryCompletedDate: String(body.deliveryCompletedDate || "").trim(),
       deliveryLocation: String(body.deliveryLocation || "").trim(),
       garageOutDate: String(body.garageOutDate || "").trim(),
       garageReturnDate: String(body.garageReturnDate || "").trim(),
       spaFullSystemDone: typeof body.spaFullSystemDone === "boolean" ? body.spaFullSystemDone : undefined,
       oilChangeDone: typeof body.oilChangeDone === "boolean" ? body.oilChangeDone : undefined,
       decalRemovalDone: typeof body.decalRemovalDone === "boolean" ? body.decalRemovalDone : undefined,
+      vehicleInspectionDone: typeof body.vehicleInspectionDone === "boolean" ? body.vehicleInspectionDone : undefined,
       insuranceDone: typeof body.insuranceDone === "boolean" ? body.insuranceDone : undefined,
+      insuranceStatus: String(body.insuranceStatus || "").trim(),
+      deliveryNote: String(body.deliveryNote || "").trim(),
       financeCaseSubmitted: typeof body.financeCaseSubmitted === "boolean" ? body.financeCaseSubmitted : undefined,
       financeCaseSubmittedAt: String(body.financeCaseSubmittedAt || "").trim(),
       financeCaseNote: String(body.financeCaseNote || "").trim(),
