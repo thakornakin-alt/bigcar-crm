@@ -92,7 +92,7 @@ const aliases: Record<keyof StockVehicle, string[]> = {
   engineNo: ["เลขเครื่อง", "เลขเครื่องยนต์", "engine", "engine no", "engine no.", "engine number", "engineno", "enginenumber", "motor no", "motorno"],
   financeName: ["ไฟแนนซ์", "บริษัทไฟแนนซ์", "finance", "financename"],
   vin: ["เลขตัวรถ", "เลขตัวถัง", "vin", "chassis"],
-  finalGrade: ["เกรด final", "เกรดfinal", "finalgrade", "grade"],
+  finalGrade: ["เกรด final", "เกรดfinal", "finalgrade", "grade", "CAR GROUP", "car group", "Car Group", "car_group", "cargroup"],
   program: ["program"],
   parkingLocation: ["location", "สถานที่จอด", "โลเคชั่น", "parking"],
   status: ["สถานะ", "status"],
@@ -117,6 +117,12 @@ function text(value: unknown) {
 
 function money(value: unknown) {
   return text(value).replace(/[^\d.]/g, "");
+}
+
+function normalizeFinalGrade(value: unknown) {
+  const normalized = text(value).toUpperCase();
+  if (normalized === "G1" || normalized === "G2" || normalized === "G3") return normalized;
+  return "";
 }
 
 function yearOnly(value: unknown) {
@@ -256,7 +262,7 @@ export function parseStockWorkbook(bytes: Buffer) {
             vin: text(row[mapping.vin]) || sheetCell(sheet, vinFallbackColumnIndex, rowNumber),
             engineNo: text(row[mapping.engineNo]) || sheetCell(sheet, engineNoFallbackColumnIndex, rowNumber),
             financeName: text(row[mapping.financeName]),
-            finalGrade: text(row[mapping.finalGrade]),
+            finalGrade: normalizeFinalGrade(row[mapping.finalGrade]),
             program: text(row[mapping.program]),
             parkingLocation: text(row[mapping.parkingLocation]),
             status: text(row[mapping.status]),
