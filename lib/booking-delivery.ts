@@ -162,7 +162,7 @@ function applyCommissionDefaults(
   const sourceRecord = (source || {}) as Record<string, unknown>;
   return {
     ...record,
-    ownerForCommission: text(record.ownerForCommission) || resolveOwnerForCommission(source || record),
+    ownerForCommission: text(record.ownerForCommission) || text(sourceRecord.saleName) || "-",
     commissionGrade: record.commissionGrade || normalizeCommissionGrade(sourceRecord.commissionGrade),
     countForCommission: typeof record.countForCommission === "boolean" ? record.countForCommission : true,
     commissionVersion: text(record.commissionVersion) || "2026",
@@ -234,7 +234,11 @@ async function readStore(): Promise<BookingDeliveryStore> {
   const normalized = {
     records: records.map((record) => ({
       ...record,
-      status: normalizeLifecycleStatus(record.status),
+      status:
+        normalizeWorkflowStatus(record.status, (record as BookingDeliveryRecord).workflowStatus) === "ยอดส่งมอบ" &&
+        text((record as BookingDeliveryRecord).deliveryCompletedDate || "")
+          ? "ยอดส่งมอบ"
+          : normalizeLifecycleStatus(record.status),
       workflowStatus: normalizeWorkflowStatus(record.status, (record as BookingDeliveryRecord).workflowStatus),
     garageOutDate: text((record as BookingDeliveryRecord).garageOutDate || ""),
     garageReturnDate: text((record as BookingDeliveryRecord).garageReturnDate || ""),
@@ -242,11 +246,11 @@ async function readStore(): Promise<BookingDeliveryStore> {
     oilChangeDone: boolValue((record as BookingDeliveryRecord).oilChangeDone),
     decalRemovalDone: boolValue((record as BookingDeliveryRecord).decalRemovalDone),
       vehicleInspectionDone: boolValue((record as BookingDeliveryRecord).vehicleInspectionDone),
-    insuranceDone: boolValue((record as BookingDeliveryRecord).insuranceDone),
+      insuranceDone: boolValue((record as BookingDeliveryRecord).insuranceDone),
       insuranceStatus: text((record as BookingDeliveryRecord).insuranceStatus || ""),
       deliveryCompletedDate: text((record as BookingDeliveryRecord).deliveryCompletedDate || ""),
       deliveryNote: text((record as BookingDeliveryRecord).deliveryNote || ""),
-      ownerForCommission: text((record as BookingDeliveryRecord).ownerForCommission || ""),
+      ownerForCommission: text((record as BookingDeliveryRecord).ownerForCommission || (record as BookingDeliveryRecord).saleName || "-"),
       commissionGrade: normalizeCommissionGrade((record as BookingDeliveryRecord).commissionGrade || ""),
       countForCommission:
         typeof (record as BookingDeliveryRecord).countForCommission === "boolean"
@@ -604,7 +608,12 @@ export async function updateBookingDeliveryRecord(input: {
 
   const current = store.records[index];
   const nextWorkflowStatus = normalizeWorkflowStatus(current.status, input.workflowStatus ?? current.workflowStatus);
-  const nextStatus = input.status === "ยกเลิก" ? "ยกเลิก" : normalizeLifecycleStatus(current.status);
+  const nextStatus =
+    input.status === "ยกเลิก"
+      ? "ยกเลิก"
+      : input.workflowStatus === "ยอดส่งมอบ" && text(input.deliveryCompletedDate ?? current.deliveryCompletedDate)
+        ? "ยอดส่งมอบ"
+        : normalizeLifecycleStatus(current.status);
   const next: BookingDeliveryRecord = {
     ...current,
     status: nextStatus,
@@ -629,7 +638,7 @@ export async function updateBookingDeliveryRecord(input: {
       ? input.financeAttachmentIds.map((item) => text(item)).filter(Boolean)
       : stringArrayValue(current.financeAttachmentIds),
     countForCommission:
-      nextStatus === "ยกเลิก"
+      input.status === "ยกเลิก"
         ? false
         : typeof (current as BookingDeliveryRecord).countForCommission === "boolean"
           ? Boolean((current as BookingDeliveryRecord).countForCommission)
