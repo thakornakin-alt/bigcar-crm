@@ -4059,6 +4059,11 @@ type V4ResolvedColumn = V4ColumnSpec & {
   extraKey?: ExtraColumnKey;
 };
 
+function resolveV4BodyAlign(column: V4ResolvedColumn): V4ColumnAlign {
+  if (column.key === "plate" || column.key === "color" || column.key === "price") return "left";
+  return column.align;
+}
+
 type V4Layout = {
   marginX: number;
   headerTop: number;
@@ -4576,12 +4581,14 @@ function drawV4Header(ctx: CanvasRenderingContext2D, layout: V4Layout, groupName
     paddingX: 0,
     breakLongWords: false
   });
-  drawV4RightText(ctx, `หน้า ${page}/${totalPages}`, headerRight - 120, headerTop + 14, 120, 20, {
-    font: "700 18px Arial, Tahoma, sans-serif",
-    color: "#0f1720",
-    paddingX: 0,
-    breakLongWords: false
-  });
+  const pageText = `หน้า ${page}/${totalPages}`;
+  ctx.save();
+  ctx.font = "700 18px Arial, Tahoma, sans-serif";
+  ctx.fillStyle = "#0f1720";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "top";
+  ctx.fillText(pageText, headerRight - 4, headerTop + 14);
+  ctx.restore();
   ctx.restore();
 }
 
@@ -4958,10 +4965,10 @@ function drawV4Table(
         ctx.strokeRect(left, rowTop, column.width, rowHeight);
         const badgeReserve = isReserved ? 26 : 0;
         const plateHeight = Math.max(22, rowHeight - badgeReserve - (isReserved ? 8 : 0));
-        drawV4CenteredText(ctx, value, left, rowTop + 4, column.width, plateHeight, {
+        drawV4LeftText(ctx, value, left, rowTop + 4, column.width, plateHeight, {
           font: "700 18px Arial, Tahoma, sans-serif",
           color: "#111827",
-          paddingX: 10,
+          paddingX: 12,
           breakLongWords: false
         });
         if (isReserved) {
@@ -4987,7 +4994,7 @@ function drawV4Table(
           breakLongWords: true
         });
       } else if (column.key === "price") {
-        drawV4BodyCell(ctx, value, left, rowTop, column.width, rowHeight, "right", {
+        drawV4BodyCell(ctx, value, left, rowTop, column.width, rowHeight, "left", {
           font: "900 21px Arial, Tahoma, sans-serif",
           color: "#111827",
           background,
@@ -4996,7 +5003,7 @@ function drawV4Table(
           breakLongWords: false
         });
       } else {
-        drawV4BodyCell(ctx, value, left, rowTop, column.width, rowHeight, column.align, {
+        drawV4BodyCell(ctx, value, left, rowTop, column.width, rowHeight, resolveV4BodyAlign(column), {
           font: column.key === "year" ? "700 17px Arial, Tahoma, sans-serif" : "600 16px Arial, Tahoma, sans-serif",
           color: "#111827",
           background,
