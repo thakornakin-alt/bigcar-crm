@@ -73,7 +73,8 @@ function buildVehicle(index, scenario) {
     vehicleGroup: group,
     vin: `VIN${String(index + 1).padStart(4, "0")}`,
     engineNo: `ENG${String(index + 1).padStart(4, "0")}`,
-    extraFields: {}
+    pdiNote: scenario.pdiNote || "",
+    extraFields: scenario.extraFields || {}
   };
 }
 

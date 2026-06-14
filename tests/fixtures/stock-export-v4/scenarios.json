@@ -62,5 +62,17 @@
     "reserveIndices": [],
     "longName": false,
     "authUser": false
+  },
+  {
+    "name": "internal-pdi",
+    "group": "VAN",
+    "count": 1,
+    "reserveIndices": [],
+    "longName": false,
+    "authUser": true,
+    "pdiNote": "ต้องเปลี่ยนยางหน้า 1 เส้น",
+    "extraFields": {
+      "สีภายใน": "เบจ"
+    }
   }
 ]
