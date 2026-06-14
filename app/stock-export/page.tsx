@@ -4582,12 +4582,15 @@ function drawV4Header(ctx: CanvasRenderingContext2D, layout: V4Layout, groupName
     breakLongWords: false
   });
   const pageText = `หน้า ${page}/${totalPages}`;
+  const pageTextWidth = ctx.measureText(pageText).width;
+  const pageSafeRight = headerRight - 4;
+  const pageX = Math.max(headerLeft + 24, pageSafeRight - pageTextWidth);
   ctx.save();
   ctx.font = "700 18px Arial, Tahoma, sans-serif";
   ctx.fillStyle = "#0f1720";
-  ctx.textAlign = "right";
+  ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.fillText(pageText, headerRight - 4, headerTop + 14);
+  ctx.fillText(pageText, pageX, headerTop + 14);
   ctx.restore();
   ctx.restore();
 }
