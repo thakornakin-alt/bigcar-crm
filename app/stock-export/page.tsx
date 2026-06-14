@@ -1387,7 +1387,7 @@ export default function StockExportPage() {
     await ensureStockExportFontsReady();
 
     if (stockExportRendererV4Enabled) {
-      const v4Columns = resolveV4Columns(extraColumns);
+      const v4Columns = resolveV4Columns(exportMode, extraColumns);
       const v4Pages = paginateV4ExportGroups(exportGroups, v4Columns, exportMode, hasRegistrationYear, linePendingReservedPlateSet);
 
       for (const bundle of v4Pages) {
@@ -1469,7 +1469,7 @@ export default function StockExportPage() {
       const contact = await stockExportContactProfile(salesProfile);
       await ensureStockExportFontsReady();
       if (stockExportRendererV4Enabled) {
-        const v4Columns = resolveV4Columns(extraColumns);
+        const v4Columns = resolveV4Columns(exportMode, extraColumns);
         const v4Pages = paginateV4ExportGroups(exportGroups, v4Columns, exportMode, hasRegistrationYear, linePendingReservedPlateSet);
         const firstPage = v4Pages[0];
         if (!firstPage) throw new Error("ยังไม่มีหน้าสำหรับ Copy");
@@ -4042,7 +4042,7 @@ function renderStockTableCanvasV2(
 
 type V4ColumnAlign = "left" | "center" | "right";
 
-type V4ColumnKey = "plate" | "year" | "model" | "gear" | "color" | "mileage" | "location" | "price" | `extra:${string}`;
+type V4ColumnKey = "plate" | "year" | "model" | "gear" | "color" | "mileage" | "location" | "price" | "pdi" | `extra:${string}`;
 
 type V4ColumnSpec = {
   key: V4ColumnKey;
@@ -4094,7 +4094,8 @@ const V4_COLUMNS: V4ColumnSpec[] = [
   { key: "color", label: "สี", align: "center", weight: 0.58, minWidth: 92, wrap: true },
   { key: "mileage", label: "เลขไมล์", align: "center", weight: 0.82, minWidth: 116, wrap: false },
   { key: "location", label: "Location", align: "center", weight: 1.06, minWidth: 136, wrap: true },
-  { key: "price", label: "ราคาเสนอขายRT", align: "center", weight: 0.96, minWidth: 144, wrap: false }
+  { key: "price", label: "ราคาเสนอขายRT", align: "center", weight: 0.96, minWidth: 144, wrap: false },
+  { key: "pdi", label: "หมายเหตุ PDI", align: "left", weight: 1.5, minWidth: 360, wrap: true }
 ];
 
 function stockExportDisplayNameV4(user: { firstName: string; lastName: string; nickname: string } | null) {
@@ -4671,8 +4672,11 @@ function v4ExtraColumnMeta(key: ExtraColumnKey) {
   };
 }
 
-function resolveV4Columns(selectedColumns: ExtraColumnKey[]) {
-  const base: V4ColumnSpec[] = [...V4_COLUMNS];
+function resolveV4Columns(mode: ExportMode, selectedColumns: ExtraColumnKey[]) {
+  const base: V4ColumnSpec[] =
+    mode === "internal"
+      ? [...V4_COLUMNS]
+      : V4_COLUMNS.filter((column) => column.key !== "pdi");
   selectedColumns.forEach((key) => {
     const extra = v4ExtraColumnMeta(key);
     base.push({
@@ -4709,7 +4713,7 @@ function resolveV4Layout(mode: ExportMode, selectedColumns: ExtraColumnKey[], ha
   const tableHeaderHeight = 44;
   const footerHeight = 76;
   const bottomMargin = 24;
-  const columns = resolveV4Columns(selectedColumns);
+  const columns = resolveV4Columns(mode, selectedColumns);
   const contentWidth = columns.reduce((sum, column) => sum + column.width, 0);
   const pageWidth = contentWidth + marginX * 2;
   const bodyTop = tableTop + tableHeaderHeight;
@@ -4738,7 +4742,7 @@ function createV4MeasurementContext() {
   return ctx;
 }
 
-function v4ValueForColumn(vehicle: StockVehicle, column: V4ResolvedColumn) {
+function v4ValueForColumn(vehicle: StockVehicle, column: V4ResolvedColumn, mode: ExportMode) {
   if (column.extraKey) return defaultColumnValue(vehicle, column.extraKey);
   switch (column.key) {
     case "plate":
@@ -4757,15 +4761,17 @@ function v4ValueForColumn(vehicle: StockVehicle, column: V4ResolvedColumn) {
       return formatStockExportLocationDisplay(shortLocation(vehicle.parkingLocation));
     case "price":
       return formatPrice(vehicle.salePrice).replace(" บาท", "") || "-";
+    case "pdi":
+      return mode === "internal" ? pdiRemarkText(stockPdiRemark(vehicle)) : "";
     default:
       return "-";
   }
 }
 
-function measureV4RowMetrics(ctx: CanvasRenderingContext2D, vehicle: StockVehicle, columns: V4ResolvedColumn[], isReserved: boolean) {
+function measureV4RowMetrics(ctx: CanvasRenderingContext2D, vehicle: StockVehicle, columns: V4ResolvedColumn[], isReserved: boolean, mode: ExportMode) {
   const paddingY = 12;
   const textHeights = columns.map((column) => {
-    const value = v4ValueForColumn(vehicle, column);
+    const value = v4ValueForColumn(vehicle, column, mode);
     const font =
       column.key === "price"
         ? "900 22px Arial, Tahoma, sans-serif"
@@ -4830,7 +4836,7 @@ function paginateV4ExportGroups(
 
     group.vehicles.forEach((vehicle) => {
       const isReserved = reservedPlateSet.has(normalizePlateForMatch(vehicle.plate));
-      const rowMetrics = measureV4RowMetrics(ctx, vehicle, columns, isReserved);
+      const rowMetrics = measureV4RowMetrics(ctx, vehicle, columns, isReserved, mode);
       if (rowMetrics.rowHeight > layoutTemplate.bodyMaxHeight) {
         throw new Error(
           `V4 layout fail: page body overflow group=${group.name} plate=${vehicle.plate} column=${rowMetrics.tallestColumnKey} text=${rowMetrics.tallestText}`
@@ -4919,7 +4925,8 @@ function drawV4Table(
   layout: V4Layout,
   vehicles: StockVehicle[],
   rowHeights: number[],
-  bookingReservedPlateSet: Set<string>
+  bookingReservedPlateSet: Set<string>,
+  mode: ExportMode
 ) {
   const rowRects: Array<{ top: number; height: number; left: number; width: number }> = [];
 
@@ -4938,7 +4945,7 @@ function drawV4Table(
 
     left = layout.marginX;
     layout.columns.forEach((column) => {
-      const value = v4ValueForColumn(vehicle, column);
+      const value = v4ValueForColumn(vehicle, column, mode);
       const background = column.key === "price" ? "#eefaf3" : bg;
       if (column.key === "plate") {
         ctx.save();
@@ -5028,7 +5035,7 @@ function renderStockTableCanvasV4(
   const rowHeights =
     rowHeightsOverride ||
     rows.map((vehicle) =>
-      measureV4RowMetrics(measurementCtx, vehicle, layout.columns, bookingReservedPlateSet.has(normalizePlateForMatch(vehicle.plate))).rowHeight
+      measureV4RowMetrics(measurementCtx, vehicle, layout.columns, bookingReservedPlateSet.has(normalizePlateForMatch(vehicle.plate)), mode).rowHeight
     );
   const bodyHeight = rowHeights.reduce((sum, value) => sum + value, 0);
   const footerTop = layout.footerTop || layout.tableTop + layout.tableHeaderHeight + bodyHeight + 18;
@@ -5050,7 +5057,7 @@ function renderStockTableCanvasV4(
   ctx.fillRect(0, 0, layout.pageWidth, canvasHeight);
 
   drawV4Header(ctx, resolvedLayout, groupName, groupTotal, exportTotal, page, totalPages, stockExportDisplayNameV4(contact ? { firstName: contact.name, lastName: "", nickname: contact.name } : null));
-  const tableRowRects = drawV4Table(ctx, resolvedLayout, rows, rowHeights, bookingReservedPlateSet);
+  const tableRowRects = drawV4Table(ctx, resolvedLayout, rows, rowHeights, bookingReservedPlateSet, mode);
 
   drawV4Footer(ctx, resolvedLayout, contact);
   drawV4DebugOverlay(ctx, resolvedLayout, tableRowRects);
