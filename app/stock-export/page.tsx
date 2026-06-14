@@ -4051,6 +4051,7 @@ type V4ColumnSpec = {
   weight: number;
   minWidth: number;
   wrap: boolean;
+  extraKey?: ExtraColumnKey;
 };
 
 type V4ResolvedColumn = V4ColumnSpec & {
@@ -4685,7 +4686,8 @@ function resolveV4Columns(mode: ExportMode, selectedColumns: ExtraColumnKey[]) {
       align: extra.align,
       minWidth: extra.minWidth,
       weight: extra.weight,
-      wrap: extra.wrap
+      wrap: extra.wrap,
+      extraKey: key
     });
   });
 
