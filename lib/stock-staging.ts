@@ -91,7 +91,7 @@ const aliases: Record<keyof StockVehicle, string[]> = {
   engineNo: ["เลขเครื่อง", "เลขเครื่องยนต์", "engine", "engine no", "engine no.", "engine number", "engineno", "enginenumber", "motor no", "motorno"],
   financeName: ["ไฟแนนซ์", "บริษัทไฟแนนซ์", "finance", "financename"],
   vin: ["เลขตัวรถ", "เลขตัวถัง", "vin", "chassis"],
-  finalGrade: ["เกรด final", "เกรดfinal", "finalgrade", "grade"],
+  finalGrade: ["เกรด final", "เกรดfinal", "finalgrade", "grade", "car group", "cargroup"],
   program: ["program"],
   parkingLocation: ["location", "สถานที่จอด", "โลเคชั่น", "parking"],
   status: ["สถานะ", "status"],

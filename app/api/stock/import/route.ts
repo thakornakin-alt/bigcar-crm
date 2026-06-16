@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 function cleanRow(row: Partial<StockVehicle>): StockVehicle {
   const rawExtraFields = row.extraFields && typeof row.extraFields === "object" ? row.extraFields : {};
+  const rawRow = row as Partial<StockVehicle> & Record<string, unknown>;
   const extraFields = Object.fromEntries(
     Object.entries(rawExtraFields)
       .map(([key, value]) => [String(key || "").trim(), String(value || "").trim()])
@@ -37,7 +38,7 @@ function cleanRow(row: Partial<StockVehicle>): StockVehicle {
     vin: String(row.vin || "").trim(),
     engineNo: String(row.engineNo || "").trim(),
     financeName: String(row.financeName || "").trim(),
-    finalGrade: String(row.finalGrade || "").trim(),
+    finalGrade: String(row.finalGrade || rawRow["CAR GROUP"] || rawRow["Car Group"] || rawRow["car group"] || "").trim(),
     program: String(row.program || "").trim(),
     parkingLocation: String(row.parkingLocation || "").trim(),
     status: String(row.status || "").trim(),
