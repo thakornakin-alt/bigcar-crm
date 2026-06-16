@@ -152,7 +152,7 @@ function normalizeCommissionGrade(value: unknown) {
 
 function resolveOwnerForCommission(source: Partial<BookingDeliveryRecord> | Record<string, unknown> | null | undefined) {
   const raw = (source || {}) as Record<string, unknown>;
-  return text(raw.salesOwner || raw.saleName || raw.teamName || "-") || "-";
+  return text(raw.ownerForCommission || raw.saleName || "-") || "-";
 }
 
 function applyCommissionDefaults(
@@ -164,7 +164,7 @@ function applyCommissionDefaults(
     ...record,
     ownerForCommission: text(record.ownerForCommission) || text(sourceRecord.saleName) || "-",
     commissionGrade: record.commissionGrade || normalizeCommissionGrade(sourceRecord.commissionGrade),
-    countForCommission: typeof record.countForCommission === "boolean" ? record.countForCommission : true,
+    countForCommission: typeof record.countForCommission === "boolean" ? record.countForCommission : false,
     commissionVersion: text(record.commissionVersion) || "2026",
     commissionNote: text(record.commissionNote || "")
   } as BookingDeliveryRecord;
@@ -407,7 +407,7 @@ export async function upsertBookingDeliveryFromBookingReport(report: BookingRepo
     next.color = next.color || stockSnapshot.color;
     next.commissionGrade = next.commissionGrade || normalizeCommissionGrade(stockSnapshot.commissionGrade);
     next.ownerForCommission = next.ownerForCommission || resolveOwnerForCommission(next);
-    next.countForCommission = typeof next.countForCommission === "boolean" ? next.countForCommission : true;
+    next.countForCommission = typeof next.countForCommission === "boolean" ? next.countForCommission : false;
     next.commissionVersion = text(next.commissionVersion || "2026");
     next.commissionNote = text(next.commissionNote || "");
     next.summary = deriveSummary(getDisplayStatus(next) || "ยอดจอง", reportHistoryItem, null);
@@ -446,12 +446,12 @@ function buildRecordFromReports(
     saleName: text(booking.saleName || sales?.saleName),
     teamName: text(booking.teamName || sales?.teamName),
     teamId,
-    ownerForCommission: text((current as BookingDeliveryRecord | undefined)?.ownerForCommission || booking.saleName || sales?.saleName || booking.teamName || sales?.teamName || "-"),
+    ownerForCommission: text((current as BookingDeliveryRecord | undefined)?.ownerForCommission || booking.saleName || sales?.saleName || "-"),
     commissionGrade: normalizeCommissionGrade((current as BookingDeliveryRecord | undefined)?.commissionGrade || ""),
     countForCommission:
       typeof (current as BookingDeliveryRecord | undefined)?.countForCommission === "boolean"
         ? Boolean((current as BookingDeliveryRecord | undefined)?.countForCommission)
-        : true,
+        : false,
     commissionVersion: text((current as BookingDeliveryRecord | undefined)?.commissionVersion || "2026"),
     commissionNote: text((current as BookingDeliveryRecord | undefined)?.commissionNote || ""),
     source: text(
@@ -562,7 +562,7 @@ export async function upsertBookingDeliveryFromReportHistory(reports: ReportHist
       next.color = next.color || stockSnapshot.color;
       next.commissionGrade = next.commissionGrade || normalizeCommissionGrade(stockSnapshot.commissionGrade);
       next.ownerForCommission = next.ownerForCommission || resolveOwnerForCommission(next);
-      next.countForCommission = typeof next.countForCommission === "boolean" ? next.countForCommission : true;
+      next.countForCommission = typeof next.countForCommission === "boolean" ? next.countForCommission : false;
       next.commissionVersion = text(next.commissionVersion || "2026");
       next.commissionNote = text(next.commissionNote || "");
       next.summary = deriveSummary(getDisplayStatus(next) || "ยอดจอง", booking, salesReport);
@@ -642,7 +642,7 @@ export async function updateBookingDeliveryRecord(input: {
         ? false
         : typeof (current as BookingDeliveryRecord).countForCommission === "boolean"
           ? Boolean((current as BookingDeliveryRecord).countForCommission)
-          : true,
+          : false,
     alertSummary: text(input.alertSummary ?? ""),
     cancelReason: text(input.cancelReason ?? current.cancelReason),
     updatedAt: new Date().toISOString(),
