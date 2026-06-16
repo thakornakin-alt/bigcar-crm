@@ -11,7 +11,6 @@ import {
   Users,
   XCircle
 } from "lucide-react";
-import { PageContainer, PageTitle, SectionCard } from "@/app/components/ui";
 import {
   calculateMonthlyCommission,
   calculateQuarterlyBonus,
@@ -253,19 +252,20 @@ export default function CommissionPage() {
   }
 
   return (
-    <PageContainer wide>
-      <PageTitle
-        title="Commission"
-        subtitle="Read-only summary from Booking Delivery records"
-        actions={
-          <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-soft">
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">Source of truth: Booking Delivery</span>
-            <span className="rounded-full border border-brand/25 bg-brand/10 px-3 py-2 text-brand">Calculator: lib/commission-calculator.ts</span>
-          </div>
-        }
-      />
+    <main className="mx-auto min-h-screen w-full max-w-5xl px-4 pb-24 pt-5 sm:px-6">
+      <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">Commission</h1>
+          <p className="mt-1 text-sm text-soft">Read-only summary from Booking Delivery records</p>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2 text-xs font-bold text-soft">
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">Source of truth: Booking Delivery</span>
+          <span className="rounded-full border border-brand/25 bg-brand/10 px-3 py-2 text-brand">Calculator: lib/commission-calculator.ts</span>
+        </div>
+      </header>
 
-      <SectionCard className="mb-5">
+      <section className="mb-5 rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(17,24,32,0.92),rgba(7,10,15,0.94))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
         <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
           <label className="grid gap-2 text-sm font-bold text-white">
             เดือน
@@ -324,19 +324,19 @@ export default function CommissionPage() {
             </div>
           </label>
         </div>
-      </SectionCard>
+      </section>
 
       {state === "loading" ? (
-        <SectionCard className="mb-5">
+        <section className="mb-5 rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(17,24,32,0.92),rgba(7,10,15,0.94))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
           <div className="flex items-center gap-3 text-soft">
             <Loader2 size={18} className="animate-spin text-brand" />
             กำลังโหลดข้อมูล Commission...
           </div>
-        </SectionCard>
+        </section>
       ) : null}
 
       {state === "error" ? (
-        <SectionCard className="mb-5">
+        <section className="mb-5 rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(17,24,32,0.92),rgba(7,10,15,0.94))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
           <div className="flex items-start gap-3 text-red-100">
             <AlertTriangle size={18} className="mt-0.5 text-red-300" />
             <div>
@@ -344,7 +344,7 @@ export default function CommissionPage() {
               <p className="mt-1 text-sm text-soft">{error}</p>
             </div>
           </div>
-        </SectionCard>
+        </section>
       ) : null}
 
       <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -360,7 +360,10 @@ export default function CommissionPage() {
         />
       </div>
 
-      <SectionCard title="Owner Summary" className="mb-5">
+      <section className="mb-5 rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(17,24,32,0.92),rgba(7,10,15,0.94))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+        <h2 className="mb-3 flex items-center gap-2 text-lg font-black text-white">
+          Owner Summary
+        </h2>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filteredMonthlyResults.map((row) => (
             <div key={row.ownerForCommission} className="rounded-[22px] border border-white/10 bg-[#0b0f15] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.18)]">
@@ -397,9 +400,12 @@ export default function CommissionPage() {
             <div className="rounded-[22px] border border-white/10 bg-[#0b0f15] p-4 text-sm text-soft">ไม่พบข้อมูลที่ตรงกับตัวกรอง</div>
           ) : null}
         </div>
-      </SectionCard>
+      </section>
 
-      <SectionCard title="Detail Table" className="mb-5">
+      <section className="mb-5 rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(17,24,32,0.92),rgba(7,10,15,0.94))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+        <h2 className="mb-3 flex items-center gap-2 text-lg font-black text-white">
+          Detail Table
+        </h2>
         <div className="overflow-x-auto rounded-2xl border border-white/10">
           <table className="min-w-[1100px] w-full border-separate border-spacing-0 text-sm">
             <thead>
@@ -443,10 +449,13 @@ export default function CommissionPage() {
             </tbody>
           </table>
         </div>
-      </SectionCard>
+      </section>
 
       <div className="grid gap-5 xl:grid-cols-2">
-        <SectionCard title="Excluded Records">
+        <section className="rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(17,24,32,0.92),rgba(7,10,15,0.94))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+          <h2 className="mb-3 flex items-center gap-2 text-lg font-black text-white">
+            Excluded Records
+          </h2>
           <div className="grid gap-4">
             <ExcludedBlock
               title="Missing grade"
@@ -470,9 +479,12 @@ export default function CommissionPage() {
               })}
             />
           </div>
-        </SectionCard>
+        </section>
 
-        <SectionCard title="Quarterly Bonus">
+        <section className="rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(17,24,32,0.92),rgba(7,10,15,0.94))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+          <h2 className="mb-3 flex items-center gap-2 text-lg font-black text-white">
+            Quarterly Bonus
+          </h2>
           <div className="grid gap-4">
             <div className="rounded-[22px] border border-white/10 bg-[#0b0f15] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.18)]">
               <div className="flex items-center justify-between gap-3">
@@ -516,9 +528,9 @@ export default function CommissionPage() {
               </table>
             </div>
           </div>
-        </SectionCard>
+        </section>
       </div>
-    </PageContainer>
+    </main>
   );
 }
 
