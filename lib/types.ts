@@ -406,6 +406,11 @@ export type BookingDeliveryRecord = {
   saleName: string;
   teamName: string;
   teamId: string;
+  ownerForCommission?: string;
+  commissionGrade?: "G1" | "G2" | "G3" | "";
+  countForCommission?: boolean;
+  commissionVersion?: string;
+  commissionNote?: string;
   source: string;
   ownership: string;
   project: string;

@@ -144,6 +144,32 @@ function normalizeTeamId(value: string) {
     .replace(/[^a-z0-9ก-๙_-]/g, "");
 }
 
+function normalizeCommissionGrade(value: unknown) {
+  const normalized = text(value).toUpperCase();
+  if (normalized === "G1" || normalized === "G2" || normalized === "G3") return normalized;
+  return "";
+}
+
+function resolveOwnerForCommission(source: Partial<BookingDeliveryRecord> | Record<string, unknown> | null | undefined) {
+  const raw = (source || {}) as Record<string, unknown>;
+  return text(raw.ownerForCommission || raw.saleName || "-") || "-";
+}
+
+function applyCommissionDefaults(
+  record: Partial<BookingDeliveryRecord>,
+  source?: Partial<BookingDeliveryRecord> | Record<string, unknown> | null
+  ) {
+  const sourceRecord = (source || {}) as Record<string, unknown>;
+  return {
+    ...record,
+    ownerForCommission: text(record.ownerForCommission) || text(sourceRecord.saleName) || "-",
+    commissionGrade: record.commissionGrade || normalizeCommissionGrade(sourceRecord.commissionGrade),
+    countForCommission: typeof record.countForCommission === "boolean" ? record.countForCommission : false,
+    commissionVersion: text(record.commissionVersion) || "2026",
+    commissionNote: text(record.commissionNote || "")
+  } as BookingDeliveryRecord;
+}
+
 function deriveStatus(report: ReportHistoryItem | null, sales: ReportHistoryItem | null, current?: BookingDeliveryRecord): BookingDeliveryStatus {
   if (current?.statusSource === "manual" && text(current.status) === "ยกเลิก") return "ยกเลิก";
   if (report?.status === "send_cancelled" || report?.status === "deleted") return "ยกเลิก";
@@ -362,6 +388,11 @@ export async function upsertBookingDeliveryFromBookingReport(report: BookingRepo
     next.brand = next.brand || stockSnapshot.brand;
     next.year = next.year || stockSnapshot.year;
     next.color = next.color || stockSnapshot.color;
+    next.commissionGrade = next.commissionGrade || normalizeCommissionGrade(stockSnapshot.commissionGrade);
+    next.ownerForCommission = next.ownerForCommission || resolveOwnerForCommission(next);
+    next.countForCommission = typeof next.countForCommission === "boolean" ? next.countForCommission : false;
+    next.commissionVersion = text(next.commissionVersion || "2026");
+    next.commissionNote = text(next.commissionNote || "");
     next.summary = deriveSummary(getDisplayStatus(next) || "ยอดจอง", reportHistoryItem, null);
     next.alertSummary = deriveAlertSummary(getDisplayStatus(next), reportHistoryItem, null, next);
   }
@@ -398,6 +429,14 @@ function buildRecordFromReports(
     saleName: text(booking.saleName || sales?.saleName),
     teamName: text(booking.teamName || sales?.teamName),
     teamId,
+    ownerForCommission: text((current as BookingDeliveryRecord | undefined)?.ownerForCommission || booking.saleName || sales?.saleName || "-"),
+    commissionGrade: normalizeCommissionGrade((current as BookingDeliveryRecord | undefined)?.commissionGrade || ""),
+    countForCommission:
+      typeof (current as BookingDeliveryRecord | undefined)?.countForCommission === "boolean"
+        ? Boolean((current as BookingDeliveryRecord | undefined)?.countForCommission)
+        : false,
+    commissionVersion: text((current as BookingDeliveryRecord | undefined)?.commissionVersion || "2026"),
+    commissionNote: text((current as BookingDeliveryRecord | undefined)?.commissionNote || ""),
     source: text(
       extractLineValue(String(booking.reportText || sales?.reportText || ""), ["แหล่งที่มา"]) || current?.source
     ),
@@ -500,6 +539,11 @@ export async function upsertBookingDeliveryFromReportHistory(reports: ReportHist
       next.brand = next.brand || stockSnapshot.brand;
       next.year = next.year || stockSnapshot.year;
       next.color = next.color || stockSnapshot.color;
+      next.commissionGrade = next.commissionGrade || normalizeCommissionGrade(stockSnapshot.commissionGrade);
+      next.ownerForCommission = next.ownerForCommission || resolveOwnerForCommission(next);
+      next.countForCommission = typeof next.countForCommission === "boolean" ? next.countForCommission : false;
+      next.commissionVersion = text(next.commissionVersion || "2026");
+      next.commissionNote = text(next.commissionNote || "");
       next.summary = deriveSummary(getDisplayStatus(next) || "ยอดจอง", booking, salesReport);
       next.alertSummary = deriveAlertSummary(getDisplayStatus(next), booking, salesReport, next);
     }
@@ -559,6 +603,12 @@ export async function updateBookingDeliveryRecord(input: {
     financeAttachmentIds: Array.isArray(input.financeAttachmentIds)
       ? input.financeAttachmentIds.map((item) => text(item)).filter(Boolean)
       : stringArrayValue(current.financeAttachmentIds),
+    countForCommission:
+      input.status === "ยกเลิก"
+        ? false
+        : typeof (current as BookingDeliveryRecord).countForCommission === "boolean"
+          ? Boolean((current as BookingDeliveryRecord).countForCommission)
+          : false,
     alertSummary: text(input.alertSummary ?? ""),
     cancelReason: text(input.cancelReason ?? current.cancelReason),
     updatedAt: new Date().toISOString(),
