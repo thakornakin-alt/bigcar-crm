@@ -34,6 +34,7 @@ type DetailRow = {
   ownerKey: string;
   commissionAmount: number;
   statusLabel: string;
+  excludeReason: string;
 };
 
 async function api<T>(url: string): Promise<T> {
@@ -108,6 +109,23 @@ function getEligibleMonthlyRows(records: BookingDeliveryRecord[], selectedMonth:
   });
 }
 
+function getExcludeReason(record: BookingDeliveryRecord) {
+  const status = text(record.status);
+  const workflowStatus = text(record.workflowStatus);
+  const owner = normalizeOwner(record);
+  const grade = normalizeGrade(record);
+  const completedDate = text(record.deliveryCompletedDate || "");
+  const countForCommission = record.countForCommission !== false;
+
+  if (status === "ยกเลิก") return "ยกเลิก";
+  if (status !== "ยอดส่งมอบ" && status !== "ส่งมอบแล้ว") return `สถานะไม่ใช่ส่งมอบ (${status || workflowStatus || "-"})`;
+  if (!completedDate) return "ยังไม่มี deliveryCompletedDate";
+  if (!countForCommission) return "countForCommission = false";
+  if (!owner || owner === "-") return "missing owner";
+  if (!grade) return "missing grade";
+  return "ไม่นับ";
+}
+
 export default function CommissionPage() {
   const [records, setRecords] = useState<BookingDeliveryRecord[]>([]);
   const [state, setState] = useState<FetchState>("idle");
@@ -173,6 +191,10 @@ export default function CommissionPage() {
     const ownerCount = monthlyResults.length;
     const totalCars = monthlyResults.reduce((sum, row) => sum + row.totalCars, 0);
     const totalNet = monthlyResults.reduce((sum, row) => sum + row.totalCommission, 0);
+    const eligibleRecords = records.filter((record) => {
+      const key = getCommissionMonthKey(record.deliveryCompletedDate || "");
+      return Boolean(key && key.monthKey === selectedMonthYear) && isCommissionEligible(record);
+    });
     const missingGrade = records.filter((record) => {
       const key = getCommissionMonthKey(record.deliveryCompletedDate || "");
       return Boolean(key && key.monthKey === selectedMonthYear) && isDeliveredRecord(record) && !normalizeGrade(record);
@@ -181,8 +203,20 @@ export default function CommissionPage() {
       const key = getCommissionMonthKey(record.deliveryCompletedDate || "");
       return Boolean(key && key.monthKey === selectedMonthYear) && isDeliveredRecord(record) && !normalizeOwner(record);
     }).length;
+    const notDelivered = records.filter((record) => {
+      const key = getCommissionMonthKey(record.deliveryCompletedDate || "");
+      return Boolean(key && key.monthKey === selectedMonthYear) && !isDeliveredRecord(record);
+    }).length;
+    const excluded = records.filter((record) => {
+      const key = getCommissionMonthKey(record.deliveryCompletedDate || "");
+      return Boolean(key && key.monthKey === selectedMonthYear) && !isCommissionEligible(record);
+    }).length;
+    const countFalse = records.filter((record) => {
+      const key = getCommissionMonthKey(record.deliveryCompletedDate || "");
+      return Boolean(key && key.monthKey === selectedMonthYear) && record.countForCommission === false;
+    }).length;
 
-    return { ownerCount, totalCars, totalNet, missingGrade, missingOwner };
+    return { ownerCount, totalCars, totalNet, missingGrade, missingOwner, eligibleRecords: eligibleRecords.length, notDelivered, excluded, countFalse };
   }, [monthlyResults, records, selectedMonthYear]);
 
   const detailRows = useMemo<DetailRow[]>(() => {
@@ -198,6 +232,7 @@ export default function CommissionPage() {
         const isDelivered = isDeliveredRecord(record);
         const monthKey = getCommissionMonthKey(record.deliveryCompletedDate || "")?.monthKey || "-";
         const total = resolveBaseCommission(grade as "G1" | "G2" | "G3" | "");
+        const excludeReason = isEligible ? "eligible" : getExcludeReason(record);
         return {
           record,
           monthKey,
@@ -207,7 +242,8 @@ export default function CommissionPage() {
           hasGrade: Boolean(grade),
           ownerKey,
           commissionAmount: total,
-          statusLabel: isEligible ? "นับคอม" : "ไม่นับ"
+          statusLabel: isEligible ? "นับคอม" : "ไม่นับ",
+          excludeReason
         };
       })
       .filter((row) => {
@@ -360,6 +396,39 @@ export default function CommissionPage() {
         />
       </div>
 
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <MiniStatusCard label="eligible records" value={overallSummary.eligibleRecords} />
+        <MiniStatusCard label="excluded records" value={overallSummary.excluded} />
+        <MiniStatusCard label="not delivered" value={overallSummary.notDelivered} />
+        <MiniStatusCard label="countForCommission = false" value={overallSummary.countFalse} />
+      </div>
+
+      {state === "ready" && records.length === 0 ? (
+        <section className="mb-5 rounded-[24px] border border-amber-300/25 bg-amber-300/10 p-4 text-amber-50">
+          <p className="text-lg font-black">ยังไม่มีข้อมูล Booking Delivery</p>
+          <p className="mt-1 text-sm text-amber-50/80">หน้ารายงาน Commission จะเริ่มทำงานเมื่อมี Booking Delivery record จริงในเดือนที่เลือก</p>
+        </section>
+      ) : null}
+
+      {state === "ready" && records.length > 0 && overallSummary.eligibleRecords === 0 ? (
+        <section className="mb-5 rounded-[24px] border border-amber-300/25 bg-amber-300/10 p-4 text-amber-50">
+          <p className="text-lg font-black">ยังไม่มีรายการที่นับคอมได้</p>
+          <p className="mt-1 text-sm text-amber-50/80">ตรวจสอบ owner, grade, deliveryCompletedDate, status และ countForCommission ของ record ในเดือนที่เลือก</p>
+        </section>
+      ) : null}
+
+      {state === "ready" && records.length > 0 && (overallSummary.missingOwner > 0 || overallSummary.missingGrade > 0 || overallSummary.notDelivered > 0 || overallSummary.countFalse > 0) ? (
+        <section className="mb-5 rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(17,24,32,0.92),rgba(7,10,15,0.94))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+          <h2 className="mb-3 flex items-center gap-2 text-lg font-black text-white">Warning State</h2>
+          <div className="grid gap-2 text-sm text-soft md:grid-cols-2 xl:grid-cols-4">
+            <WarningPill label="missing owner" value={overallSummary.missingOwner} />
+            <WarningPill label="missing grade" value={overallSummary.missingGrade} />
+            <WarningPill label="not delivered" value={overallSummary.notDelivered} />
+            <WarningPill label="countForCommission = false" value={overallSummary.countFalse} />
+          </div>
+        </section>
+      ) : null}
+
       <section className="mb-5 rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(17,24,32,0.92),rgba(7,10,15,0.94))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
         <h2 className="mb-3 flex items-center gap-2 text-lg font-black text-white">
           Owner Summary
@@ -417,6 +486,7 @@ export default function CommissionPage() {
                 <Th>วันส่งมอบ</Th>
                 <Th>คอมรายคัน</Th>
                 <Th>สถานะนับคอม</Th>
+                <Th>เหตุผลตัดออก</Th>
               </tr>
             </thead>
             <tbody>
@@ -437,11 +507,12 @@ export default function CommissionPage() {
                       {row.statusLabel}
                     </span>
                   </Td>
+                  <Td>{row.excludeReason}</Td>
                 </tr>
               ))}
               {!detailRows.length ? (
                 <tr>
-                  <td className="px-0 py-4 text-sm text-soft" colSpan={7}>
+                  <td className="px-0 py-4 text-sm text-soft" colSpan={8}>
                     ไม่พบข้อมูลในช่วงเดือนนี้
                   </td>
                 </tr>
@@ -476,6 +547,13 @@ export default function CommissionPage() {
               items={excludedRows.filter((record) => {
                 const status = text(record.status);
                 return status === "ยกเลิก" || !isDeliveredRecord(record);
+              })}
+            />
+            <ExcludedBlock
+              title="countForCommission = false"
+              items={records.filter((record) => {
+                const key = getCommissionMonthKey(record.deliveryCompletedDate || "");
+                return Boolean(key && key.monthKey === selectedMonthYear) && record.countForCommission === false;
               })}
             />
           </div>
@@ -569,6 +647,24 @@ function InfoBox({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-[#11151d] px-3 py-2">
       <p className="text-[11px] font-black uppercase tracking-[0.12em] text-brand">{label}</p>
+      <p className="mt-1 text-lg font-black text-white">{value.toLocaleString("th-TH")}</p>
+    </div>
+  );
+}
+
+function MiniStatusCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-[22px] border border-white/10 bg-[#0b0f15] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.18)]">
+      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-soft">{label}</p>
+      <p className="mt-2 text-2xl font-black text-white">{value.toLocaleString("th-TH")}</p>
+    </div>
+  );
+}
+
+function WarningPill({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border border-amber-300/20 bg-black/20 px-3 py-2">
+      <p className="text-[11px] font-black uppercase tracking-[0.14em] text-amber-100">{label}</p>
       <p className="mt-1 text-lg font-black text-white">{value.toLocaleString("th-TH")}</p>
     </div>
   );
