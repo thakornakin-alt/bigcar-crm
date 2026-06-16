@@ -424,6 +424,7 @@ export type BookingDeliveryRecord = {
   netPayment: string;
   paymentType: string;
   deliveryDate: string;
+  deliveryCompletedDate?: string;
   deliveryLocation: string;
   garageOutDate: string;
   garageReturnDate: string;

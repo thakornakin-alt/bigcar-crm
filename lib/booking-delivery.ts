@@ -242,6 +242,7 @@ async function readStore(): Promise<BookingDeliveryStore> {
       oilChangeDone: boolValue((record as BookingDeliveryRecord).oilChangeDone),
       decalRemovalDone: boolValue((record as BookingDeliveryRecord).decalRemovalDone),
       insuranceDone: boolValue((record as BookingDeliveryRecord).insuranceDone),
+      deliveryCompletedDate: text((record as BookingDeliveryRecord).deliveryCompletedDate || (record as BookingDeliveryRecord).deliveryDate || ""),
       financeCaseSubmitted: boolValue((record as BookingDeliveryRecord).financeCaseSubmitted),
       financeCaseSubmittedAt: text((record as BookingDeliveryRecord).financeCaseSubmittedAt || ""),
       financeCaseNote: text((record as BookingDeliveryRecord).financeCaseNote || ""),
@@ -468,6 +469,7 @@ function buildRecordFromReports(
     netPayment: moneyText(extractLineValue(String(sales?.reportText || ""), ["จ่ายสุทธิ"]) || current?.netPayment),
     paymentType: text(extractLineValue(String(booking.reportText || sales?.reportText || ""), ["การชำระเงิน"]) || paymentText),
     deliveryDate: text(extractLineValue(String(sales?.reportText || ""), ["วันรับรถ"]) || current?.deliveryDate),
+    deliveryCompletedDate: text(current?.deliveryCompletedDate || current?.deliveryDate || ""),
     deliveryLocation: text(extractLineValue(String(sales?.reportText || ""), ["สาขา"]) || current?.deliveryLocation),
     garageOutDate: text(current?.garageOutDate || ""),
     garageReturnDate: text(current?.garageReturnDate || ""),
@@ -562,8 +564,9 @@ export async function updateBookingDeliveryRecord(input: {
   id: string;
   status?: BookingDeliveryStatus;
   workflowStatus?: BookingDeliveryStatus | "";
-  deliveryDate?: string;
-  deliveryLocation?: string;
+    deliveryDate?: string;
+    deliveryCompletedDate?: string;
+    deliveryLocation?: string;
   garageOutDate?: string;
   garageReturnDate?: string;
   spaFullSystemDone?: boolean;
@@ -591,6 +594,7 @@ export async function updateBookingDeliveryRecord(input: {
     statusSource: "manual",
     workflowStatus: nextStatus === "ยกเลิก" ? "ยกเลิก" : nextWorkflowStatus,
     deliveryDate: text(input.deliveryDate ?? current.deliveryDate),
+    deliveryCompletedDate: text(input.deliveryCompletedDate ?? current.deliveryCompletedDate ?? input.deliveryDate ?? current.deliveryDate),
     deliveryLocation: text(input.deliveryLocation ?? current.deliveryLocation),
     garageOutDate: text(input.garageOutDate ?? current.garageOutDate),
     garageReturnDate: text(input.garageReturnDate ?? current.garageReturnDate),
