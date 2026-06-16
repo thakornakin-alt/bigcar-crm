@@ -243,6 +243,11 @@ async function readStore(): Promise<BookingDeliveryStore> {
       decalRemovalDone: boolValue((record as BookingDeliveryRecord).decalRemovalDone),
       insuranceDone: boolValue((record as BookingDeliveryRecord).insuranceDone),
       deliveryCompletedDate: text((record as BookingDeliveryRecord).deliveryCompletedDate || (record as BookingDeliveryRecord).deliveryDate || ""),
+      ownerForCommission: text((record as BookingDeliveryRecord).ownerForCommission || (record as BookingDeliveryRecord).saleName || "-"),
+      commissionGrade: normalizeCommissionGrade((record as BookingDeliveryRecord).commissionGrade || (record as Record<string, unknown>).finalGrade || ""),
+      countForCommission: typeof (record as BookingDeliveryRecord).countForCommission === "boolean" ? Boolean((record as BookingDeliveryRecord).countForCommission) : false,
+      commissionVersion: text((record as BookingDeliveryRecord).commissionVersion || "2026"),
+      commissionNote: text((record as BookingDeliveryRecord).commissionNote || ""),
       financeCaseSubmitted: boolValue((record as BookingDeliveryRecord).financeCaseSubmitted),
       financeCaseSubmittedAt: text((record as BookingDeliveryRecord).financeCaseSubmittedAt || ""),
       financeCaseNote: text((record as BookingDeliveryRecord).financeCaseNote || ""),
@@ -307,7 +312,7 @@ async function resolveStockSnapshot(plate: string) {
     brand: stockPick(raw, ["brand", "ยี่ห้อ", "ยี่ห้อรถ"]),
     year: stockPick(raw, ["year", "ปีจด", "ปีรถ"]),
     color: stockPick(raw, ["color", "สี"]),
-    commissionGrade: normalizeCommissionGrade(stockPick(raw, ["CAR GROUP", "carGroup", "car_group", "grade", "finalGrade"]))
+    commissionGrade: normalizeCommissionGrade(stockPick(raw, ["CAR GROUP", "carGroup", "car_group", "finalGrade"]))
   };
 }
 
