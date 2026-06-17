@@ -50,6 +50,33 @@ const editableFieldOrder: Array<keyof ResolvedDocumentV2Data> = [
   "approverName"
 ];
 
+const contractEditableFieldOrder = [
+  "contractDate",
+  "contractDateDay",
+  "contractDateMonth",
+  "contractDateYear",
+  "customerName",
+  "customerAddress",
+  "idCard",
+  "phone",
+  "plateNo",
+  "brand",
+  "model",
+  "year",
+  "color",
+  "engineNo",
+  "chassisNo",
+  "sellPrice",
+  "deposit",
+  "remainingAmount",
+  "paymentDate",
+  "saleName",
+  "buyerSignature",
+  "sellerSignature",
+  "buyerWitness",
+  "sellerWitness"
+] as const;
+
 const mappingOptions: Array<{ key: DocumentV2FieldKey; label: string }> = [
   { key: "contractDate", label: "วันที่สัญญา" },
   { key: "contractDateDay", label: "วันที่สัญญา (วัน)" },
@@ -82,6 +109,87 @@ const mappingOptions: Array<{ key: DocumentV2FieldKey; label: string }> = [
 const keyLabel: Record<DocumentV2FieldKey, string> = Object.fromEntries(
   mappingOptions.map((m) => [m.key, m.label])
 ) as Record<DocumentV2FieldKey, string>;
+
+const contractFieldLabel: Record<string, string> = {
+  contractDate: "วันที่สัญญา",
+  contractDateDay: "วันที่สัญญา (วัน)",
+  contractDateMonth: "วันที่สัญญา (เดือน)",
+  contractDateYear: "วันที่สัญญา (ปี)",
+  customerName: "ชื่อลูกค้า",
+  customerAddress: "ที่อยู่ลูกค้า",
+  idCard: "เลขบัตรประชาชน",
+  phone: "เบอร์โทร",
+  plateNo: "ทะเบียน",
+  brand: "ยี่ห้อรถ",
+  model: "รุ่นรถ",
+  year: "ปีรถ",
+  color: "สี",
+  engineNo: "เลขเครื่อง",
+  chassisNo: "เลขตัวถัง",
+  sellPrice: "ราคาขาย",
+  deposit: "เงินจอง",
+  remainingAmount: "ยอดคงเหลือ",
+  paymentDate: "วันที่ชำระ",
+  saleName: "ชื่อเซลล์",
+  buyerSignature: "ลายเซ็นผู้ซื้อ",
+  sellerSignature: "ลายเซ็นผู้ขาย",
+  buyerWitness: "พยานผู้ซื้อ",
+  sellerWitness: "พยานผู้ขาย"
+};
+
+function getMappingStatusLabel(templateId: DocumentV2TemplateId, fieldKey: DocumentV2FieldKey) {
+  const template = documentTemplatesV2[templateId];
+  const templateFields = templateId === "contract-field"
+    ? new Set([
+        "customerName",
+        "contractDate",
+        "contractDateDay",
+        "contractDateMonth",
+        "contractDateYear",
+        "customerAddress",
+        "idCard",
+        "plateNo",
+        "brand",
+        "model",
+        "year",
+        "color",
+        "engineNo",
+        "chassisNo",
+        "sellPrice",
+        "deposit",
+        "remainingAmount",
+        "saleName"
+      ])
+    : new Set([
+        "currentDate",
+        "currentDateDay",
+        "currentDateMonth",
+        "currentDateYear",
+        "customerName",
+        "customerAddress",
+        "idCard",
+        "phone",
+        "plateNo",
+        "brand",
+        "model",
+        "year",
+        "color",
+        "engineNo",
+        "chassisNo",
+        "bookingNo",
+        "sellPrice",
+        "deposit",
+        "remainingAmount",
+        "financeCompany",
+        "saleName",
+        "approverName"
+      ]);
+  const inTemplate = templateFields.has(fieldKey);
+  return {
+    inTemplate,
+    label: inTemplate ? "available in template" : template?.mappingLocked ? "UI-only / no PDF widget" : "available in data only"
+  };
+}
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
@@ -170,6 +278,45 @@ export function DocumentGeneratorV2() {
   const reportRawKeys = useMemo(() => Object.keys(rawReportData).sort((a, b) => a.localeCompare(b)), [rawReportData]);
   const namedFields = useMemo(() => fields.filter((field) => isNamedPdfField(field.name)), [fields]);
   const unnamedFields = useMemo(() => fields.filter((field) => !isNamedPdfField(field.name)), [fields]);
+  const mappingStatusRows = useMemo(
+    () =>
+      mappingOptions.map((opt) => {
+        const sampleValue = String((sampleData as Record<string, unknown>)[opt.key] || "");
+        const mappedPdfFields = Object.entries(mapping)
+          .filter(([, value]) => value === opt.key)
+          .map(([pdfField]) => pdfField);
+        return {
+          ...opt,
+          sampleValue,
+          mappedPdfFields,
+          hasValue: sampleValue.trim() !== ""
+        };
+      }),
+    [mapping, sampleData]
+  );
+  const pdfFieldRows = useMemo(
+    () =>
+      fields.map((field) => {
+        const mappedKey = mapping[field.name] || "";
+        const mappedKeyLabel = mappedKey && !String(mappedKey).startsWith("raw:")
+          ? keyLabel[mappedKey as DocumentV2FieldKey] || String(mappedKey)
+          : String(mappedKey || "");
+        return {
+          ...field,
+          mappedKey,
+          mappedKeyLabel,
+          status:
+            mappedKey === ""
+              ? "unmapped"
+              : String(mappedKey).startsWith("raw:")
+                ? "mapped (raw)"
+                : "mapped"
+        };
+      }),
+    [fields, mapping]
+  );
+  const knownFieldsCount = mappingOptions.length;
+  const pdfWidgetsCount = fields.length;
   const mappedFieldCount = useMemo(
     () => Object.values(mapping).filter(Boolean).length,
     [mapping]
@@ -522,6 +669,14 @@ export function DocumentGeneratorV2() {
     } as ResolvedDocumentV2Data));
   }
 
+  function updateContractEditableField(key: string, value: string) {
+    setEditableTouched(true);
+    setEditableData((prev) => ({
+      ...(prev || sampleData || {}),
+      [key]: value
+    } as ResolvedDocumentV2Data));
+  }
+
   async function sharePng() {
     if (!pngBlob) {
       setError("ยังไม่มีไฟล์ PNG กรุณากดเซฟ PNG ก่อน");
@@ -550,6 +705,12 @@ export function DocumentGeneratorV2() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 text-white">
+      <div className="rounded border border-emerald-400/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+        <div className="text-xs font-black uppercase tracking-[0.24em] text-emerald-200">Document Generator V2 Active</div>
+        <div className="mt-1 font-semibold">Known fields count: {knownFieldsCount}</div>
+        <div className="font-semibold">PDF widgets count: {pdfWidgetsCount}</div>
+        <div className="font-semibold">Selected template: {templateId}</div>
+      </div>
       <h1 className="text-2xl font-bold">DocumentGeneratorV2</h1>
       <p className="text-sm text-gray-300">AcroForm only · ใช้ไฟล์เดียวกันทั้ง Load Fields + Preview/Export</p>
       {error ? <div className="rounded border border-red-500/40 bg-red-900/30 p-3 text-red-100">{error}</div> : null}
@@ -591,123 +752,201 @@ export function DocumentGeneratorV2() {
         </select>
       </div>
 
-      {settingsMode ? (
-        <>
-          <div className="flex flex-wrap gap-2">
-            <button onClick={loadFields} className="rounded bg-emerald-500 px-4 py-2 font-semibold text-black">โหลดรายชื่อ Fields</button>
-            <button onClick={loadReports} className="rounded border border-white/20 px-4 py-2">โหลดรายงานขาย</button>
-            <button onClick={loadMapping} className="rounded border border-white/20 px-4 py-2">โหลด Mapping</button>
-            <button
-              onClick={saveMapping}
-              disabled={saveState === "saving" || isMappingLocked}
-              className={`rounded border px-4 py-2 ${saveState === "saving" ? "border-emerald-400/40 bg-emerald-500/10" : "border-white/20"}`}
-            >
-              {isMappingLocked ? "Mapping ล็อกแล้ว" : saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "บันทึก Mapping"}
-            </button>
-            <button onClick={preview} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">{loading ? <Loader2 className="inline animate-spin" size={16} /> : <Eye className="inline" size={16} />} Preview PDF</button>
-            <button onClick={previewProbe} disabled={loading} className="rounded border border-yellow-300/40 px-4 py-2 text-yellow-200">ทดสอบ Field</button>
-            <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50"><ImageIcon className="inline" size={16} /> เซฟ PNG</button>
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <div className="rounded border border-white/10 p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="font-semibold">Known data fields</h2>
+            <span className="text-xs text-gray-400">{templateId}</span>
           </div>
-          <div className="text-xs text-gray-300 space-y-1">
-            <div>
-              สถานะ Mapping: {isMappingLocked ? "ล็อกสำหรับ PDF สัญญาซื้อขายรถยนต์" : saveState === "dirty" ? "มีการแก้ไข (รอบันทึกอัตโนมัติ)" : saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "ยังไม่เริ่ม"} {lastSavedAt && !isMappingLocked ? `· ล่าสุด ${lastSavedAt}` : ""}
+          {mappingOptions.length ? (
+            <div className="space-y-2">
+              {mappingOptions.map((opt) => {
+                const sampleValue = String((sampleData as Record<string, unknown>)[opt.key] || "");
+                const mappedPdfFields = Object.entries(mapping)
+                  .filter(([, value]) => value === opt.key)
+                  .map(([pdfField]) => pdfField);
+                const status = mappedPdfFields.length ? "mapped" : "unmapped";
+                const templateWidgetExists = fields.some((field) => mappedPdfFields.includes(field.name));
+                const displayStatus = templateWidgetExists
+                  ? status
+                  : templateId === "contract-field"
+                    ? "UI-only / no PDF widget"
+                    : "unmapped";
+                return (
+                  <div key={opt.key} className="rounded border border-white/10 bg-black/20 p-2 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="font-semibold text-white">{opt.label}</div>
+                      <div className={`rounded px-2 py-0.5 font-black uppercase tracking-wide ${
+                        displayStatus === "mapped"
+                          ? "bg-emerald-500/15 text-emerald-200"
+                          : "bg-amber-500/15 text-amber-200"
+                      }`}>
+                        {displayStatus}
+                      </div>
+                    </div>
+                    <div className="mt-1 text-gray-300">key: {opt.key}</div>
+                    <div className="mt-1 text-gray-300">
+                      PDF widget: {mappedPdfFields.length ? mappedPdfFields.join(", ") : "ไม่มีข้อมูล"}
+                    </div>
+                    <div className="mt-1 text-gray-300">Data: {sampleValue || "ไม่มีข้อมูล"}</div>
+                  </div>
+                );
+              })}
             </div>
-            <div>
-              ความพร้อมข้อมูล: แมพแล้ว {mappedFieldCount} ช่อง · มีข้อมูลจริง {mappedNonEmptyCount} ช่อง
-            </div>
-            {!canRunGenerate ? (
-              <div className="text-amber-300">
-                ยัง Preview/Export ไม่ได้: {!isTemplateReady ? "ยังไม่พร้อม template" : !reportsLoaded ? "ยังไม่โหลดรายงานขาย" : !selectedReport ? "ยังไม่เลือกรายงานขาย" : resolvingData ? "กำลังดึงข้อมูลจริงจากทะเบียน" : saveState === "saving" || saveState === "dirty" ? "กำลังบันทึก mapping" : "รอข้อมูล"}
-              </div>
-            ) : null}
-          </div>
+          ) : (
+            <div className="rounded border border-white/10 bg-black/20 p-3 text-sm text-gray-300">ไม่พบข้อมูล</div>
+          )}
+        </div>
 
-          <div className="rounded border border-emerald-400/20 bg-emerald-500/5 p-3">
-            <h2 className="mb-2 font-semibold">ข้อมูลที่จะใช้จริง</h2>
-            {resolvingData ? (
-              <p className="text-sm text-emerald-200">กำลังดึงข้อมูลจากรายงานขายและสต็อกตามทะเบียน...</p>
-            ) : (
-              <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
-                <div className="rounded bg-black/30 p-2">ทะเบียน: {sampleData.plateNo || "ไม่มีข้อมูล"}</div>
-                <div className="rounded bg-black/30 p-2">เลขเครื่อง: {sampleData.engineNo || "ไม่มีข้อมูล"}</div>
-                <div className="rounded bg-black/30 p-2">เลขตัวถัง: {sampleData.chassisNo || "ไม่มีข้อมูล"}</div>
-                <div className="rounded bg-black/30 p-2">ที่อยู่: {sampleData.customerAddress || "ไม่มีข้อมูล"}</div>
-              </div>
-            )}
-            {resolveDebug ? (
-              <p className="mt-2 text-xs text-gray-400">
-                Stock lookup: {resolveDebug.stockFound ? "พบรถ" : "ไม่พบรถ"} · engine={resolveDebug.resolvedEngineNo || "-"} · chassis={resolveDebug.resolvedChassisNo || "-"}
-              </p>
-            ) : null}
+        <div className="rounded border border-white/10 p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="font-semibold">PDF widgets</h2>
+            <span className="text-xs text-gray-400">{fields.length} fields</span>
           </div>
-
-          <div className="rounded border border-white/10 p-3">
-            <h2 className="mb-2 font-semibold">Field Probe</h2>
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              <input
-                value={probeField}
-                onChange={(e) => setProbeField(e.target.value)}
-                placeholder="เช่น Text1"
-                className="rounded bg-black/40 p-2 text-sm"
-              />
-              <input
-                value={probeValue}
-                onChange={(e) => setProbeValue(e.target.value)}
-                placeholder="ค่าทดสอบ"
-                className="rounded bg-black/40 p-2 text-sm"
-              />
-            </div>
-          </div>
-
-          <div className="rounded border border-white/10 p-3">
-            <h2 className="mb-2 font-semibold">Field Mapping</h2>
-            {isMappingLocked ? (
-              <p className="mb-3 rounded border border-emerald-400/20 bg-emerald-500/10 p-2 text-sm text-emerald-100">
-                PDF นี้ล็อก Mapping แล้ว เพื่อไม่ให้ตำแหน่ง/ช่องที่ตั้งไว้ขยับโดยไม่ตั้งใจ
-              </p>
-            ) : null}
-            {!fields.length ? (
-              <p className="text-sm text-gray-400">กดโหลดรายชื่อ Fields ก่อน</p>
-            ) : (
-              <div className="space-y-2">
-                {fields.map((f) => (
-                  <div key={f.name} className="grid grid-cols-2 gap-2">
-                    <div className="rounded bg-black/30 p-2 text-sm">{f.name}</div>
-                    <div className="space-y-1">
-                      <select
-                        value={mapping[f.name] || ""}
-                        disabled={isMappingLocked}
-                        onChange={(e) => setMapping((prev) => ({ ...prev, [f.name]: e.target.value as DocumentV2MappedValue }))}
-                        className="w-full rounded bg-black/40 p-2 text-sm disabled:cursor-not-allowed disabled:opacity-70"
-                      >
-                        <option value="">-- ไม่แมพ --</option>
-                        {mappingOptions.map((opt) => (
-                          <option key={opt.key} value={opt.key}>
-                            {opt.label}
-                          </option>
-                        ))}
-                        {reportRawKeys.length ? <option value="" disabled>──────── รายงานขาย (raw) ────────</option> : null}
-                        {reportRawKeys.map((rawKey) => (
-                          <option key={`raw-${rawKey}`} value={`raw:${rawKey}`}>
-                            raw: {rawKey}
-                          </option>
-                        ))}
-                      </select>
-                      {mapping[f.name] ? (
-                        <div className="text-xs text-emerald-300">
-                          {String(mapping[f.name]).startsWith("raw:")
-                            ? `ตัวอย่าง (raw): ${String(mapping[f.name]).slice(4)} = ${String(rawReportData[String(mapping[f.name]).slice(4)] || "ไม่มีข้อมูล")}`
-                            : `ตัวอย่าง: ${keyLabel[mapping[f.name] as DocumentV2FieldKey]} = ${String((sampleData as Record<string, unknown>)[mapping[f.name] as DocumentV2FieldKey] || "ไม่มีข้อมูล")}`}
-                        </div>
-                      ) : null}
+          {fields.length ? (
+            <div className="space-y-2">
+              {fields.map((field) => {
+                const mappedKey = mapping[field.name] || "";
+                const mappedKeyLabel = mappedKey && !String(mappedKey).startsWith("raw:")
+                  ? keyLabel[mappedKey as DocumentV2FieldKey] || String(mappedKey)
+                  : String(mappedKey || "");
+                return (
+                  <div key={field.name} className="rounded border border-white/10 bg-black/20 p-2 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="font-semibold text-white">{field.name}</div>
+                      <div className={`rounded px-2 py-0.5 font-black uppercase tracking-wide ${
+                        mappedKey ? "bg-emerald-500/15 text-emerald-200" : "bg-amber-500/15 text-amber-200"
+                      }`}>
+                        {mappedKey ? "mapped" : "unmapped"}
+                      </div>
+                    </div>
+                    <div className="mt-1 text-gray-300">type: {field.type}</div>
+                    <div className="mt-1 text-gray-300">
+                      mapped to: {mappedKey ? mappedKeyLabel || mappedKey : "ไม่พบข้อมูล"}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded border border-white/10 bg-black/20 p-3 text-sm text-gray-300">ไม่พบข้อมูล</div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button onClick={loadFields} className="rounded bg-emerald-500 px-4 py-2 font-semibold text-black">โหลดรายชื่อ Fields</button>
+        <button onClick={loadReports} className="rounded border border-white/20 px-4 py-2">โหลดรายงานขาย</button>
+        <button onClick={loadMapping} className="rounded border border-white/20 px-4 py-2">โหลด Mapping</button>
+        <button
+          onClick={saveMapping}
+          disabled={saveState === "saving" || isMappingLocked}
+          className={`rounded border px-4 py-2 ${saveState === "saving" ? "border-emerald-400/40 bg-emerald-500/10" : "border-white/20"}`}
+        >
+          {isMappingLocked ? "Mapping ล็อกแล้ว" : saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "บันทึก Mapping"}
+        </button>
+        <button onClick={preview} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">{loading ? <Loader2 className="inline animate-spin" size={16} /> : <Eye className="inline" size={16} />} Preview PDF</button>
+        <button onClick={previewProbe} disabled={loading} className="rounded border border-yellow-300/40 px-4 py-2 text-yellow-200">ทดสอบ Field</button>
+        <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50"><ImageIcon className="inline" size={16} /> เซฟ PNG</button>
+      </div>
+      <div className="text-xs text-gray-300 space-y-1">
+        <div>
+          สถานะ Mapping: {isMappingLocked ? "ล็อกสำหรับ PDF สัญญาซื้อขายรถยนต์" : saveState === "dirty" ? "มีการแก้ไข (รอบันทึกอัตโนมัติ)" : saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "ยังไม่เริ่ม"} {lastSavedAt && !isMappingLocked ? `· ล่าสุด ${lastSavedAt}` : ""}
+        </div>
+        <div>
+          ความพร้อมข้อมูล: แมพแล้ว {mappedFieldCount} ช่อง · มีข้อมูลจริง {mappedNonEmptyCount} ช่อง
+        </div>
+        {!canRunGenerate ? (
+          <div className="text-amber-300">
+            ยัง Preview/Export ไม่ได้: {!isTemplateReady ? "ยังไม่พร้อม template" : !reportsLoaded ? "ยังไม่โหลดรายงานขาย" : !selectedReport ? "ยังไม่เลือกรายงานขาย" : resolvingData ? "กำลังดึงข้อมูลจริงจากทะเบียน" : saveState === "saving" || saveState === "dirty" ? "กำลังบันทึก mapping" : "รอข้อมูล"}
           </div>
-        </>
-      ) : null}
+        ) : null}
+      </div>
+
+      <div className="rounded border border-emerald-400/20 bg-emerald-500/5 p-3">
+        <h2 className="mb-2 font-semibold">ข้อมูลที่จะใช้จริง</h2>
+        {resolvingData ? (
+          <p className="text-sm text-emerald-200">กำลังดึงข้อมูลจากรายงานขายและสต็อกตามทะเบียน...</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
+            <div className="rounded bg-black/30 p-2">ทะเบียน: {sampleData.plateNo || "ไม่มีข้อมูล"}</div>
+            <div className="rounded bg-black/30 p-2">เลขเครื่อง: {sampleData.engineNo || "ไม่มีข้อมูล"}</div>
+            <div className="rounded bg-black/30 p-2">เลขตัวถัง: {sampleData.chassisNo || "ไม่มีข้อมูล"}</div>
+            <div className="rounded bg-black/30 p-2">ที่อยู่: {sampleData.customerAddress || "ไม่มีข้อมูล"}</div>
+          </div>
+        )}
+        {resolveDebug ? (
+          <p className="mt-2 text-xs text-gray-400">
+            Stock lookup: {resolveDebug.stockFound ? "พบรถ" : "ไม่พบรถ"} · engine={resolveDebug.resolvedEngineNo || "-"} · chassis={resolveDebug.resolvedChassisNo || "-"}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="rounded border border-white/10 p-3">
+        <h2 className="mb-2 font-semibold">Field Probe</h2>
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          <input
+            value={probeField}
+            onChange={(e) => setProbeField(e.target.value)}
+            placeholder="เช่น Text1"
+            className="rounded bg-black/40 p-2 text-sm"
+          />
+          <input
+            value={probeValue}
+            onChange={(e) => setProbeValue(e.target.value)}
+            placeholder="ค่าทดสอบ"
+            className="rounded bg-black/40 p-2 text-sm"
+          />
+        </div>
+      </div>
+
+      <div className="rounded border border-white/10 p-3">
+        <h2 className="mb-2 font-semibold">Field Mapping</h2>
+        {isMappingLocked ? (
+          <p className="mb-3 rounded border border-emerald-400/20 bg-emerald-500/10 p-2 text-sm text-emerald-100">
+            PDF นี้ล็อก Mapping แล้ว เพื่อไม่ให้ตำแหน่ง/ช่องที่ตั้งไว้ขยับโดยไม่ตั้งใจ
+          </p>
+        ) : null}
+        {!fields.length ? (
+          <p className="text-sm text-gray-400">กดโหลดรายชื่อ Fields ก่อน</p>
+        ) : (
+          <div className="space-y-2">
+            {fields.map((f) => (
+              <div key={f.name} className="grid grid-cols-2 gap-2">
+                <div className="rounded bg-black/30 p-2 text-sm">{f.name}</div>
+                <div className="space-y-1">
+                  <select
+                    value={mapping[f.name] || ""}
+                    disabled={isMappingLocked}
+                    onChange={(e) => setMapping((prev) => ({ ...prev, [f.name]: e.target.value as DocumentV2MappedValue }))}
+                    className="w-full rounded bg-black/40 p-2 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <option value="">-- ไม่แมพ --</option>
+                    {mappingOptions.map((opt) => (
+                      <option key={opt.key} value={opt.key}>
+                        {opt.label}
+                      </option>
+                    ))}
+                    {reportRawKeys.length ? <option value="" disabled>──────── รายงานขาย (raw) ────────</option> : null}
+                    {reportRawKeys.map((rawKey) => (
+                      <option key={`raw-${rawKey}`} value={`raw:${rawKey}`}>
+                        raw: {rawKey}
+                      </option>
+                    ))}
+                  </select>
+                  {mapping[f.name] ? (
+                    <div className="text-xs text-emerald-300">
+                      {String(mapping[f.name]).startsWith("raw:")
+                        ? `ตัวอย่าง (raw): ${String(mapping[f.name]).slice(4)} = ${String(rawReportData[String(mapping[f.name]).slice(4)] || "ไม่มีข้อมูล")}`
+                        : `ตัวอย่าง: ${keyLabel[mapping[f.name] as DocumentV2FieldKey]} = ${String((sampleData as Record<string, unknown>)[mapping[f.name] as DocumentV2FieldKey] || "ไม่มีข้อมูล")}`}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {previewUrl ? (
         <div className="rounded border border-white/10 p-3">
@@ -724,11 +963,82 @@ export function DocumentGeneratorV2() {
         </div>
       ) : null}
 
-      {!settingsMode ? (
-        <div className="grid grid-cols-1 gap-2 rounded border border-white/10 p-3 sm:grid-cols-2">
-          <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">
-            <ImageIcon className="inline" size={16} /> เซฟ PNG
-          </button>
+      <div className="grid grid-cols-1 gap-2 rounded border border-white/10 p-3 sm:grid-cols-2">
+        <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">
+          <ImageIcon className="inline" size={16} /> เซฟ PNG
+        </button>
+      </div>
+
+      {templateId === "contract-field" ? (
+        <div className="rounded border border-white/10 p-3">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="font-semibold">แก้ข้อมูลก่อน Preview</h2>
+            <button
+              type="button"
+              onClick={() => resetEditableData()}
+              className="rounded border border-white/20 px-3 py-1 text-sm"
+            >
+              รีเซ็ตข้อมูล
+            </button>
+          </div>
+          <p className="mb-3 text-xs text-gray-300">แตะช่องด้านล่างเพื่อแก้ค่าก่อนสร้าง Preview / PNG ได้เลย</p>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {contractEditableFieldOrder.map((key) => {
+              const editableSource = (editableData || sampleData || {}) as Record<string, string>;
+              const currentValue = String(editableSource[key] || "");
+              const isDatePart = key.endsWith("Day") || key.endsWith("Month") || key.endsWith("Year");
+              const isDateHead = key === "contractDate";
+              if (isDatePart) {
+                return null;
+              }
+              if (isDateHead) {
+                const dayKey = "contractDateDay";
+                const monthKey = "contractDateMonth";
+                const yearKey = "contractDateYear";
+                return (
+                  <div key={key} className="space-y-1 md:col-span-2">
+                    <span className="block text-xs text-gray-300">{contractFieldLabel[key] || key}</span>
+                    <div className="grid grid-cols-[1fr_auto_1fr_auto_1.4fr] items-center gap-2">
+                      <input
+                        value={formatDatePartValue(String(editableSource[dayKey] || ""), "XX")}
+                        onChange={(e) => updateContractEditableField(dayKey, e.target.value)}
+                        placeholder="XX"
+                        inputMode="numeric"
+                        className="w-full min-w-0 rounded bg-black/40 p-2 text-center text-sm tracking-[0.25em]"
+                      />
+                      <span className="text-center text-xs text-gray-500">/</span>
+                      <input
+                        value={formatDatePartValue(String(editableSource[monthKey] || ""), "XX")}
+                        onChange={(e) => updateContractEditableField(monthKey, e.target.value)}
+                        placeholder="XX"
+                        inputMode="numeric"
+                        className="w-full min-w-0 rounded bg-black/40 p-2 text-center text-sm tracking-[0.25em]"
+                      />
+                      <span className="text-center text-xs text-gray-500">/</span>
+                      <input
+                        value={formatDatePartValue(String(editableSource[yearKey] || ""), "XXXX")}
+                        onChange={(e) => updateContractEditableField(yearKey, e.target.value)}
+                        placeholder="XXXX"
+                        inputMode="numeric"
+                        className="w-full min-w-0 rounded bg-black/40 p-2 text-center text-sm tracking-[0.25em]"
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-500">แสดงเป็นวัน / เดือน / ปี แบบแยกช่อง เพื่อคุม layout ให้คงที่</p>
+                  </div>
+                );
+              }
+              return (
+                <label key={key} className="space-y-1">
+                  <span className="block text-xs text-gray-300">{contractFieldLabel[key] || key}</span>
+                  <input
+                    value={currentValue}
+                    onChange={(e) => updateContractEditableField(key, e.target.value)}
+                    className="w-full rounded bg-black/40 p-2 text-sm"
+                  />
+                </label>
+              );
+            })}
+          </div>
         </div>
       ) : null}
 
