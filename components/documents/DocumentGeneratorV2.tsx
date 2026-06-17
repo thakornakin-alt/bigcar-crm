@@ -260,7 +260,7 @@ export function DocumentGeneratorV2() {
   const isHydratingMappingRef = useRef(false);
 
   const selectedTemplate = documentTemplatesV2[templateId];
-  const isMappingLocked = Boolean(selectedTemplate.mappingLocked);
+  const isPdfMappingLocked = Boolean(selectedTemplate.mappingLocked);
   const isDev = process.env.NODE_ENV === "development";
 
   const selectedReport = useMemo(
@@ -515,7 +515,7 @@ export function DocumentGeneratorV2() {
   }
 
   useEffect(() => {
-    if (isMappingLocked) return;
+    if (false) return;
     if (isHydratingMappingRef.current) return;
     if (Object.keys(mapping).length === 0) return;
     setSaveState((prev) => (prev === "saving" ? prev : "dirty"));
@@ -524,7 +524,7 @@ export function DocumentGeneratorV2() {
     }, 500);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMappingLocked, mapping, templateId]);
+  }, [mapping, templateId]);
 
   async function preview() {
     return generatePdf(false);
@@ -840,10 +840,10 @@ export function DocumentGeneratorV2() {
         <button onClick={loadMapping} className="rounded border border-white/20 px-4 py-2">โหลด Mapping</button>
         <button
           onClick={saveMapping}
-          disabled={saveState === "saving" || isMappingLocked}
+          disabled={saveState === "saving"}
           className={`rounded border px-4 py-2 ${saveState === "saving" ? "border-emerald-400/40 bg-emerald-500/10" : "border-white/20"}`}
         >
-          {isMappingLocked ? "Mapping ล็อกแล้ว" : saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "บันทึก Mapping"}
+          {saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "บันทึก Mapping"}
         </button>
         <button onClick={preview} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">{loading ? <Loader2 className="inline animate-spin" size={16} /> : <Eye className="inline" size={16} />} Preview PDF</button>
         <button onClick={previewProbe} disabled={loading} className="rounded border border-yellow-300/40 px-4 py-2 text-yellow-200">ทดสอบ Field</button>
@@ -851,7 +851,7 @@ export function DocumentGeneratorV2() {
       </div>
       <div className="text-xs text-gray-300 space-y-1">
         <div>
-          สถานะ Mapping: {isMappingLocked ? "ล็อกสำหรับ PDF สัญญาซื้อขายรถยนต์" : saveState === "dirty" ? "มีการแก้ไข (รอบันทึกอัตโนมัติ)" : saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "ยังไม่เริ่ม"} {lastSavedAt && !isMappingLocked ? `· ล่าสุด ${lastSavedAt}` : ""}
+          สถานะ Mapping: {saveState === "dirty" ? "มีการแก้ไข (รอบันทึกอัตโนมัติ)" : saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "ยังไม่เริ่ม"} {lastSavedAt ? `· ล่าสุด ${lastSavedAt}` : ""}
         </div>
         <div>
           ความพร้อมข้อมูล: แมพแล้ว {mappedFieldCount} ช่อง · มีข้อมูลจริง {mappedNonEmptyCount} ช่อง
@@ -902,7 +902,7 @@ export function DocumentGeneratorV2() {
 
       <div className="rounded border border-white/10 p-3">
         <h2 className="mb-2 font-semibold">Field Mapping</h2>
-        {isMappingLocked ? (
+        {isPdfMappingLocked ? (
           <p className="mb-3 rounded border border-emerald-400/20 bg-emerald-500/10 p-2 text-sm text-emerald-100">
             PDF นี้ล็อก Mapping แล้ว เพื่อไม่ให้ตำแหน่ง/ช่องที่ตั้งไว้ขยับโดยไม่ตั้งใจ
           </p>
@@ -917,7 +917,7 @@ export function DocumentGeneratorV2() {
                 <div className="space-y-1">
                   <select
                     value={mapping[f.name] || ""}
-                    disabled={isMappingLocked}
+                    disabled={false}
                     onChange={(e) => setMapping((prev) => ({ ...prev, [f.name]: e.target.value as DocumentV2MappedValue }))}
                     className="w-full rounded bg-black/40 p-2 text-sm disabled:cursor-not-allowed disabled:opacity-70"
                   >
