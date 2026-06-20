@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { importStock } from "@/lib/apps-script";
+import { clearAllLineReservations } from "@/lib/line-reservations";
 import type { StockVehicle } from "@/lib/types";
 import { saveStockExtraFields } from "@/lib/stock-extra-fields";
 
@@ -65,6 +66,16 @@ export async function POST(request: Request) {
 
     const result = await importStock({ rows, sourceName, clearExisting });
     await saveStockExtraFields(rows, { clearExisting });
+    const clearedReservations = await clearAllLineReservations(`stock-import:${sourceName || "manual"}`);
+    console.log(
+      "[stock-import-line-reservation-clear]",
+      JSON.stringify({
+        sourceName: sourceName || "manual",
+        clearExisting,
+        clearedCount: clearedReservations.clearedCount,
+        clearedAt: clearedReservations.clearedAt
+      })
+    );
     return NextResponse.json({
       result: {
         ...result,
@@ -73,6 +84,11 @@ export async function POST(request: Request) {
         clientStatusRows: rows.filter((row: StockVehicle) => row.status).length,
         clientVehicleGroupRows: rows.filter((row: StockVehicle) => row.vehicleGroup).length,
         clientPdiNoteRows: rows.filter((row: StockVehicle) => row.pdiNote).length
+      },
+      lineReservations: {
+        cleared: true,
+        clearedCount: clearedReservations.clearedCount,
+        clearedAt: clearedReservations.clearedAt
       }
     });
   } catch (error) {

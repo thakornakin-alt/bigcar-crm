@@ -57,6 +57,19 @@ export async function listLineReservationRecords() {
   return Object.values(store.byPlate).sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1));
 }
 
+export async function clearAllLineReservations(reason = "") {
+  const current = await readStore();
+  const clearedAt = new Date().toISOString();
+  const nextStore: LineReservationStore = { byPlate: {} };
+  await writeStore(nextStore);
+
+  return {
+    clearedAt,
+    clearedCount: Object.keys(current.byPlate || {}).length,
+    reason: String(reason || "").slice(0, 120)
+  };
+}
+
 export async function applyLineReservationCommand(input: {
   text: string;
   sourceGroupId?: string;
