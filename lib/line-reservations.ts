@@ -24,15 +24,36 @@ function normalizePlateForMatch(value: string) {
     .trim();
 }
 
-function parseReserveAction(text: string): { action: LineReservationAction; plate: string } | null {
+export function parseReserveAction(text: string): { action: LineReservationAction; plate: string } | null {
   const cleaned = String(text || "").trim();
   if (!cleaned) return null;
 
-  const reserveMatch = cleaned.match(/(?:^|\s)(?:ติดจอง|จอง|#?reserve)\s*[:：-]?\s*([^\s]+)/i);
-  if (reserveMatch?.[1]) return { action: "reserve", plate: reserveMatch[1] };
+  const normalizeCommandPlate = (value: string) =>
+    String(value || "")
+      .replace(/^(?:ทะเบียน(?:รถ)?|plate|license\s*plate)\s*[:：-]?\s*/i, "")
+      .trim();
 
-  const unreserveMatch = cleaned.match(/(?:^|\s)(?:ยกเลิก|ปล่อยจอง|#?unreserve)\s*[:：-]?\s*([^\s]+)/i);
-  if (unreserveMatch?.[1]) return { action: "unreserve", plate: unreserveMatch[1] };
+  const reservePatterns = [
+    /(?:^|\s)(?:ติดจอง|จองทะเบียน|จอง|#?reserve)\s*(?:ทะเบียน(?:รถ)?|plate|license\s*plate)?\s*[:：-]?\s*(.+)$/i
+  ];
+  for (const pattern of reservePatterns) {
+    const match = cleaned.match(pattern);
+    if (match?.[1]) {
+      const plate = normalizeCommandPlate(match[1]);
+      if (plate) return { action: "reserve", plate };
+    }
+  }
+
+  const unreservePatterns = [
+    /(?:^|\s)(?:ยกเลิกจองทะเบียน|ปล่อยจองทะเบียน|ยกเลิก|ปล่อยจอง|#?unreserve)\s*(?:ทะเบียน(?:รถ)?|plate|license\s*plate)?\s*[:：-]?\s*(.+)$/i
+  ];
+  for (const pattern of unreservePatterns) {
+    const match = cleaned.match(pattern);
+    if (match?.[1]) {
+      const plate = normalizeCommandPlate(match[1]);
+      if (plate) return { action: "unreserve", plate };
+    }
+  }
 
   return null;
 }
