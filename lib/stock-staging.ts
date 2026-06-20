@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import * as XLSX from "xlsx";
 import { importStock, listStockVehicles } from "@/lib/apps-script";
+import { clearAllLineReservations } from "@/lib/line-reservations";
 import { readJsonStore, writeJsonStore } from "@/lib/json-store";
 import { saveStockExtraFields } from "@/lib/stock-extra-fields";
 import type { StockVehicle } from "@/lib/types";
@@ -395,12 +396,31 @@ export async function confirmStockStagingItem(id: string, confirmedBy = "CRM Use
 
   const result = await importStock({ rows: item.rows, sourceName: item.fileName, clearExisting: true });
   await saveStockExtraFields(item.rows, { clearExisting: true });
+  const clearedReservations = await clearAllLineReservations(`stock-staging-confirm:${item.fileName}`);
+  console.log(
+    "[stock-staging-confirm-line-reservation-clear]",
+    JSON.stringify({
+      itemId: item.id,
+      fileName: item.fileName,
+      clearedCount: clearedReservations.clearedCount,
+      clearedAt: clearedReservations.clearedAt
+    })
+  );
   item.status = "Confirmed";
   item.confirmedAt = new Date().toISOString();
   item.confirmedBy = confirmedBy;
   store.latestConfirmedId = item.id;
   await writeStore(store);
-  return { item: { ...item, rows: [], previewRows: item.previewRows }, result };
+  return {
+    item: { ...item, rows: [], previewRows: item.previewRows },
+    result,
+    lineReservations: {
+      cleared: true,
+      activeCountAfter: 0,
+      clearedCount: clearedReservations.clearedCount,
+      clearedAt: clearedReservations.clearedAt
+    }
+  };
 }
 
 export async function rejectStockStagingItem(id: string) {
