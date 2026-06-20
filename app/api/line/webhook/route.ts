@@ -65,15 +65,50 @@ export async function POST(request: Request) {
 
   void Promise.all(groupsToSave.map((group) => saveLineGroup(group))).catch(() => undefined);
 
+  const reservationTraces: Array<{
+    text: string;
+    action: string;
+    plate: string;
+    plateNormalized: string;
+    writeSuccess: boolean;
+  }> = [];
+
   for (const event of events) {
     const messageText = String(event.message?.text || "").trim();
     if (!messageText) continue;
     const sourceGroupId = event.source?.groupId || event.source?.roomId || "";
-    void applyLineReservationCommand({
+    const result = await applyLineReservationCommand({
       text: messageText,
       sourceGroupId,
       receivedAt: new Date().toISOString()
-    }).catch(() => undefined);
+    }).catch((error) => {
+      console.log(
+        "[line-reservation-trace]",
+        JSON.stringify({
+          text: messageText.slice(0, 80),
+          action: "error",
+          plate: "",
+          plateNormalized: "",
+          writeSuccess: false,
+          error: error instanceof Error ? error.message : "Unknown error"
+        })
+      );
+      return null;
+    });
+
+    if (result) {
+      reservationTraces.push({
+        text: messageText.slice(0, 80),
+        action: result.action,
+        plate: result.plate.slice(0, 40),
+        plateNormalized: result.plateNormalized,
+        writeSuccess: result.writeSuccess
+      });
+    }
+  }
+
+  for (const trace of reservationTraces) {
+    console.log("[line-reservation-trace]", JSON.stringify(trace));
   }
 
   return NextResponse.json({ ok: true, queued: groupsToSave.length });

@@ -106,7 +106,8 @@ export async function applyLineReservationCommand(input: {
     action: parsed.action,
     plate: parsed.plate,
     plateNormalized,
-    active: record.active
+    active: record.active,
+    writeSuccess: true
   };
 }
 
