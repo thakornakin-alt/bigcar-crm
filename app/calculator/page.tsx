@@ -86,12 +86,9 @@ export default function CalculatorPage() {
   const [actualYear, setActualYear] = useState("");
   const [carColor, setCarColor] = useState("");
   const [mileage, setMileage] = useState("");
-  const [vehicleStatus, setVehicleStatus] = useState("พร้อมขาย");
-  const [carImageUrl, setCarImageUrl] = useState("");
-  const [importantNote, setImportantNote] = useState("");
   const [selectedDownLabel, setSelectedDownLabel] = useState("20%");
   const [selectedTermKey, setSelectedTermKey] = useState<(typeof terms)[number]["key"]>("months72");
-  const [quoteMode, setQuoteMode] = useState<QuoteMode>("installment");
+  const quoteMode: QuoteMode = "installment";
   const [carPrice, setCarPrice] = useState("684000");
   const [specialDownPayment, setSpecialDownPayment] = useState("");
   const [loading, setLoading] = useState(true);
@@ -175,17 +172,14 @@ export default function CalculatorPage() {
     setError("");
 
     try {
-      await exportInstallmentImage({
-        carModel,
-        actualYear,
-        carColor,
-        mileage,
-        vehicleStatus,
-        carImageUrl,
-        importantNote,
-        carPrice: price,
-        rate: selectedRate,
-        rows,
+        await exportInstallmentImage({
+          carModel,
+          actualYear,
+          carColor,
+          mileage,
+          carPrice: price,
+          rate: selectedRate,
+          rows,
         selectedQuoteRow,
         selectedTermKey,
         quoteMode,
@@ -297,36 +291,9 @@ export default function CalculatorPage() {
         <div className="grid gap-3 md:grid-cols-2">
           <TextField label="สีรถ" value={carColor} onChange={setCarColor} placeholder="ขาว / เทา / ดำ" />
           <TextField label="เลขไมล์" value={mileage} onChange={setMileage} placeholder="เช่น 68,000 กม." />
-          <TextField label="สถานะรถ" value={vehicleStatus} onChange={setVehicleStatus} placeholder="พร้อมขาย / ติดจองรอคอนเฟิร์ม" />
-          <TextField label="รูปภาพรถ (URL)" value={carImageUrl} onChange={setCarImageUrl} placeholder="https://..." />
-          <SelectField
-            label="ดาวน์ที่ใช้สรุปคำนวนค่างวด"
-            value={selectedDownLabel}
-            onChange={setSelectedDownLabel}
-            options={rows.map((row) => row.label)}
-          />
-          <SelectField
-            label="ระยะผ่อนที่ใช้สรุป"
-            value={selectedTermKey}
-            onChange={(value) => setSelectedTermKey(value as (typeof terms)[number]["key"])}
-            options={terms.map((term) => term.key)}
-            optionLabels={{ months48: "48 งวด", months60: "60 งวด", months72: "72 งวด", months84: "84 งวด" }}
-          />
         </div>
-        <label className="mt-3 block">
-          <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">หมายเหตุสำคัญ</span>
-          <textarea
-            value={importantNote}
-            onChange={(event) => setImportantNote(event.target.value)}
-            rows={2}
-            placeholder="เช่น ราคาและค่างวดขึ้นอยู่กับไฟแนนซ์และเงื่อนไขวันอนุมัติ"
-            className="w-full rounded-2xl border border-white/10 bg-[#080c12] px-3 py-2 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
-          />
-        </label>
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
-          <ModeButton active={quoteMode === "customer"} onClick={() => setQuoteMode("customer")} label="Customer Mode" />
-          <ModeButton active={quoteMode === "internal"} onClick={() => setQuoteMode("internal")} label="Internal Mode" />
-          <ModeButton active={quoteMode === "installment"} onClick={() => setQuoteMode("installment")} label="Installment Mode" />
+        <div className="mt-3 rounded-2xl border border-brand/30 bg-brand/10 px-3 py-3 text-sm font-semibold text-brand">
+          Quote mode locked: Installment Mode
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-soft">
           <span className="flex items-center gap-2">
@@ -507,9 +474,6 @@ async function exportInstallmentImage({
   actualYear,
   carColor,
   mileage,
-  vehicleStatus,
-  carImageUrl,
-  importantNote,
   carPrice,
   rate,
   rows,
@@ -526,9 +490,6 @@ async function exportInstallmentImage({
   actualYear: string;
   carColor: string;
   mileage: string;
-  vehicleStatus: string;
-  carImageUrl: string;
-  importantNote: string;
   carPrice: number;
   rate: InterestRate;
   rows: InstallmentRow[];
@@ -541,11 +502,8 @@ async function exportInstallmentImage({
   contactAvatarUrl: string;
   contactLineQrUrl: string;
 }) {
-  const selectedTerm = terms.find((term) => term.key === selectedTermKey) || terms[2];
-  const selectedPayment = selectedQuoteRow ? selectedQuoteRow.payments[selectedTermKey] : 0;
   const profileImage = await loadCanvasImage(contactAvatarUrl || "/logo-rdd.png").catch(() => null);
   const lineQrImage = contactLineQrUrl ? await loadCanvasImage(contactLineQrUrl).catch(() => null) : null;
-  const carImage = carImageUrl ? await loadCanvasImage(carImageUrl).catch(() => null) : null;
   const canvas = document.createElement("canvas");
   const scale = Math.max(window.devicePixelRatio || 1, 2);
   const width = 1280;
@@ -622,36 +580,7 @@ async function exportInstallmentImage({
   drawCanvasPill(ctx, "สี", carColor.trim() || "-", 262, 240, 170);
   drawCanvasPill(ctx, "เลขไมล์", mileage.trim() || "-", 450, 240, 180);
   drawCanvasPill(ctx, "ราคารถ", `${formatWholeMoney(carPrice)} บาท`, 648, 240, 240);
-  drawCanvasPill(ctx, "สถานะรถ", vehicleStatus.trim() || "พร้อมขาย", 906, 240, 260);
   drawCanvasPill(ctx, "ประเภท", rate.vehicleType, 64, 298, 420);
-  drawCanvasPill(ctx, "ดาวน์ที่เสนอ", selectedQuoteRow ? `${selectedQuoteRow.label} (${formatWholeMoney(selectedQuoteRow.downPayment)} บาท)` : "-", 502, 298, 390);
-  drawCanvasPill(ctx, "ระยะผ่อนที่เสนอ", `${selectedTerm.label} งวด • ${formatWholeMoney(selectedPayment)} บาท/งวด`, 910, 298, 256);
-
-  if (carImage) {
-    ctx.fillStyle = "#0b1118";
-    roundRect(ctx, 64, 354, 420, 96, 16);
-    ctx.fill();
-    ctx.strokeStyle = "#263241";
-    ctx.lineWidth = 1;
-    roundRect(ctx, 64, 354, 420, 96, 16);
-    ctx.stroke();
-    drawImageContain(ctx, carImage, 72, 362, 404, 80);
-  }
-  if (importantNote.trim()) {
-    ctx.fillStyle = "#0b1118";
-    roundRect(ctx, 502, 354, 664, 96, 16);
-    ctx.fill();
-    ctx.strokeStyle = "#263241";
-    ctx.lineWidth = 1;
-    roundRect(ctx, 502, 354, 664, 96, 16);
-    ctx.stroke();
-    ctx.fillStyle = "#9ca3af";
-    ctx.font = "700 14px Arial, sans-serif";
-    ctx.fillText("หมายเหตุสำคัญ", 518, 378);
-    ctx.fillStyle = "#e5e7eb";
-    ctx.font = "600 18px Arial, sans-serif";
-    drawFitText(ctx, importantNote.trim(), 518, 410, 632);
-  }
 
   const columns = [
     { label: "เรทดาวน์", rate: "", x: 64, width: 128, align: "left" },
