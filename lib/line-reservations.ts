@@ -108,7 +108,41 @@ export async function applyLineReservationCommand(input: {
   sourceGroupId?: string;
   receivedAt?: string;
 }) {
-  const parsedCommands = parseLineReservationCommands(input.text);
+  return applyLineReservationCommands([
+    {
+      text: input.text,
+      sourceGroupId: input.sourceGroupId,
+      receivedAt: input.receivedAt
+    }
+  ]);
+}
+
+export async function applyLineReservationCommands(
+  inputs: Array<{
+    text: string;
+    sourceGroupId?: string;
+    receivedAt?: string;
+  }>
+) {
+  const normalizedInputs = inputs
+    .map((input) => ({
+      text: String(input.text || ""),
+      sourceGroupId: String(input.sourceGroupId || ""),
+      receivedAt: input.receivedAt || new Date().toISOString()
+    }))
+    .filter((input) => input.text.trim());
+
+  if (!normalizedInputs.length) return null;
+
+  const parsedCommands = normalizedInputs.flatMap((input) =>
+    parseLineReservationCommands(input.text).map((parsed) => ({
+      ...parsed,
+      sourceGroupId: input.sourceGroupId,
+      receivedAt: input.receivedAt,
+      sourceText: input.text
+    }))
+  );
+
   if (!parsedCommands.length) return null;
 
   const store = await readStore();
@@ -129,9 +163,9 @@ export async function applyLineReservationCommand(input: {
       plate: parsed.plate,
       plateNormalized,
       active: parsed.action === "reserve",
-      updatedAt: input.receivedAt || new Date().toISOString(),
-      sourceGroupId: String(input.sourceGroupId || ""),
-      sourceText: input.text
+      updatedAt: parsed.receivedAt,
+      sourceGroupId: parsed.sourceGroupId,
+      sourceText: parsed.sourceText
     };
     store.byPlate[plateNormalized] = { ...current, ...record };
     applied.push({

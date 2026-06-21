@@ -98,3 +98,50 @@ test("applyLineReservationCommand supports multi-line unreserve", { concurrency:
     assert.deepEqual(active, []);
   });
 });
+
+test("sequential single-message commands accumulate reservations", { concurrency: false }, async () => {
+  await withTempDataDir(async () => {
+    const { applyLineReservationCommand, listActiveReservedPlateKeys } = await import("../lib/line-reservations.ts");
+
+    await applyLineReservationCommand({ text: "จองทะเบียน : 2ขภ 2660" });
+    await applyLineReservationCommand({ text: "จองทะเบียน : 2ฒธ 3700" });
+    await applyLineReservationCommand({ text: "จองทะเบียน : 6กฮ 1348" });
+
+    const active = await listActiveReservedPlateKeys();
+    assert.deepEqual(active.sort(), ["2ขภ2660", "2ฒธ3700", "6กฮ1348"]);
+  });
+});
+
+test("duplicate plate updates existing reservation instead of duplicating", { concurrency: false }, async () => {
+  await withTempDataDir(async () => {
+    const { applyLineReservationCommand, listLineReservationRecords } = await import("../lib/line-reservations.ts");
+
+    await applyLineReservationCommand({ text: "จองทะเบียน : 2ขภ 2660", receivedAt: "2026-06-21T00:00:00.000Z" });
+    await applyLineReservationCommand({ text: "ปล่อยจองทะเบียน : 2ขภ 2660", receivedAt: "2026-06-21T00:01:00.000Z" });
+    await applyLineReservationCommand({ text: "จองทะเบียน : 2ขภ 2660", receivedAt: "2026-06-21T00:02:00.000Z" });
+
+    const records = await listLineReservationRecords();
+    assert.equal(records.length, 1);
+    assert.equal(records[0]?.plateNormalized, "2ขภ2660");
+    assert.equal(records[0]?.active, true);
+    assert.equal(records[0]?.updatedAt, "2026-06-21T00:02:00.000Z");
+  });
+});
+
+test("clearAllLineReservations resets all active plates", { concurrency: false }, async () => {
+  await withTempDataDir(async () => {
+    const { applyLineReservationCommand, clearAllLineReservations, listActiveReservedPlateKeys } = await import("../lib/line-reservations.ts");
+
+    await applyLineReservationCommand({ text: "จองทะเบียน : 2ขภ 2660" });
+    await applyLineReservationCommand({ text: "จองทะเบียน : 2ฒธ 3700" });
+    await applyLineReservationCommand({ text: "จองทะเบียน : 6กฮ 1348" });
+
+    const before = await listActiveReservedPlateKeys();
+    assert.equal(before.length, 3);
+
+    await clearAllLineReservations("stock-import");
+
+    const after = await listActiveReservedPlateKeys();
+    assert.deepEqual(after, []);
+  });
+});
