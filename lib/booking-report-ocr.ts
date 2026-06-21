@@ -157,8 +157,45 @@ function joinAddressLines(lines: string[]) {
     .trim();
 }
 
+function isThaiMonthAbbreviation(token: string) {
+  return /^(?:ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)$/i.test(
+    safeString(token)
+  );
+}
+
+function isDateOnlyLine(line: string) {
+  const text = safeString(line);
+  if (!text) return false;
+  if (!/^\d{1,2}\s+[^\s]+\s+\d{2,4}$/.test(text)) return false;
+  const parts = text.split(/\s+/);
+  return parts.length === 3 && isThaiMonthAbbreviation(parts[1]);
+}
+
+function stripTrailingDateOnlyText(value: string) {
+  const text = safeString(value);
+  if (!text) return "";
+
+  const monthPattern = "(?:ม\\.ค\\.|ก\\.พ\\.|มี\\.ค\\.|เม\\.ย\\.|พ\\.ค\\.|มิ\\.ย\\.|ก\\.ค\\.|ส\\.ค\\.|ก\\.ย\\.|ต\\.ค\\.|พ\\.ย\\.|ธ\\.ค\\.|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)";
+  const trailingDate = new RegExp(`\\s+\\d{1,2}\\s+${monthPattern}\\s+\\d{2,4}\\.?\\s*$`, "i");
+  return text.replace(trailingDate, "").trim();
+}
+
 function isAddressNoiseLine(line: string) {
-  return /เกิดวันที่|date of birth|วันออกบัตร|date of issue|วันบัตรหมดอายุ|date of expiry|เจ้าพนักงานออกบัตร|date\b|expiry|issue\b/i.test(line);
+  return (
+    /เกิดวันที่|date of birth|วันออกบัตร|date of issue|วันบัตรหมดอายุ|date of expiry|เจ้าพนักงานออกบัตร|date\b|expiry|issue\b/i.test(
+      line
+    ) || isDateOnlyLine(line)
+  );
+}
+
+function cleanThaiIdAddress(value: string) {
+  const lines = normalizeTextLines(value);
+  const cleaned = lines.filter((line, index) => {
+    if (!isDateOnlyLine(line)) return true;
+    if (index < lines.length - 1) return true;
+    return false;
+  });
+  return stripTrailingDateOnlyText(joinAddressLines(cleaned));
 }
 
 function getPostalCodeFromAddressText(address: string) {
@@ -193,7 +230,7 @@ function extractAddress(lines: string[], text: string) {
     const collected = [afterMarker, ...lines.slice(addressStartIndex + 1, addressStartIndex + 4)]
       .map((line) => line.trim())
       .filter((line) => Boolean(line) && !isAddressNoiseLine(line));
-    return joinAddressLines(collected);
+    return cleanThaiIdAddress(joinAddressLines(collected));
   }
 
   const addressHints = lines.filter(
@@ -202,12 +239,12 @@ function extractAddress(lines: string[], text: string) {
       /ถ\.|ถนน|ซอย|แขวง|เขต|อ\.|อำเภอ|ต\.|ตำบล|จังหวัด|หมู่|บ้านเลขที่|road|rd\.?|street/i.test(line)
   );
   if (addressHints.length > 0) {
-    return joinAddressLines(addressHints.slice(0, 4));
+    return cleanThaiIdAddress(joinAddressLines(addressHints.slice(0, 4)));
   }
 
   const compactMatch = text.match(/(.{8,160}(?:ถ\.|ถนน|ซอย|แขวง|เขต|อ\.|อำเภอ|ต\.|ตำบล|จังหวัด).*)/i);
   const compactAddress = safeString(compactMatch?.[1] || "");
-  return isAddressNoiseLine(compactAddress) ? "" : compactAddress;
+  return cleanThaiIdAddress(isAddressNoiseLine(compactAddress) ? "" : compactAddress);
 }
 
 function attachPostalCode(fields: BookingReportOcrFields, sourceText: string) {

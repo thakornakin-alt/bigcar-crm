@@ -317,6 +317,47 @@ test("booking report OCR strips date-related lines from extracted address", { co
   }
 });
 
+test("booking report OCR removes date-only trailing line from Thai address without removing house number or moo", { concurrency: false }, async () => {
+  const originalFetch = globalThis.fetch;
+  const originalOpenAiKey = process.env.OPENAI_API_KEY;
+
+  delete process.env.OPENAI_API_KEY;
+
+  globalThis.fetch = (async (url: string | URL) => {
+    if (String(url).includes("api.ocr.space")) {
+      return new Response(
+        JSON.stringify({
+          OCRExitCode: 1,
+          IsErroredOnProcessing: false,
+          ParsedResults: [
+            {
+              ParsedText: "นาย สมชาย ใจดี\n1234567890123\n111/126 หมู่ที่ 4 ต.บางแก้ว อ.บางพลี จ.สมุทรปราการ 30 ก.ย. 2565"
+            }
+          ]
+        }),
+        { status: 200 }
+      );
+    }
+    throw new Error("OpenAI should not be called without key");
+  }) as typeof fetch;
+
+  try {
+    const { runBookingReportOcr } = await import("../lib/booking-report-ocr.ts");
+
+    const result = await runBookingReportOcr({
+      base64: "dGVzdA==",
+      mimeType: "image/jpeg",
+      documentType: "id_card"
+    });
+
+    assert.equal(result.fields.address, "111/126 หมู่ที่ 4 ต.บางแก้ว อ.บางพลี จ.สมุทรปราการ");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = originalOpenAiKey;
+  }
+});
+
 test("booking report OCR auto-fills postal code for matched Thai address", { concurrency: false }, async () => {
   const { mapOcrToBookingReportFields } = await import("../lib/booking-report-ocr.ts");
 
