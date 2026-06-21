@@ -38,6 +38,7 @@ const blankForm: BookingReportInput = {
   idCard: "",
   phone: "",
   address: "",
+  postalCode: "",
   buyerType: "individual",
   bookingPrice: "",
   plate: "",

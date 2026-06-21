@@ -49,6 +49,7 @@ export type BookingReportInput = {
   idCard: string;
   phone: string;
   address: string;
+  postalCode?: string;
   buyerType: BuyerType;
   bookingPrice: string;
   plate: string;

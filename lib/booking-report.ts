@@ -45,7 +45,8 @@ export function renderBookingReport(input: BookingReportInput) {
     `Sale ${input.saleName} ทีม${input.teamName}`,
     "",
     "ที่อยู่จัดส่งเอกสาร",
-    input.address
+    input.address,
+    input.postalCode ? `รหัสไปรษณีย์ : ${input.postalCode}` : ""
   ].join("\n");
 }
 

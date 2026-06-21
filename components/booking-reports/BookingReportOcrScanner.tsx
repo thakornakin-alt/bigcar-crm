@@ -13,6 +13,7 @@ type ReviewValues = {
   idCard: string;
   phone: string;
   address: string;
+  postalCode: string;
 };
 
 const documentOptions: Array<{ value: BookingReportOcrDocumentType; label: string; hint: string }> = [
@@ -48,7 +49,8 @@ function mergeIfEmpty(current: BookingReportInput, patch: ReviewValues) {
     customerName: current.customerName || patch.customerName,
     idCard: current.idCard || patch.idCard,
     phone: current.phone || patch.phone,
-    address: current.address || patch.address
+    address: current.address || patch.address,
+    postalCode: current.postalCode || patch.postalCode
   };
 }
 
@@ -60,7 +62,8 @@ function buildReviewValues(result: BookingReportOcrResult, buyerType: BuyerType)
       customerName: compressName(mapped.customerName || result.fields.companyName || result.fields.name),
       idCard: result.fields.taxId || mapped.idCard,
       phone: result.fields.phone || mapped.phone,
-      address: mapped.address || result.fields.companyAddress || result.fields.address
+      address: mapped.address || result.fields.companyAddress || result.fields.address,
+      postalCode: mapped.postalCode || result.fields.postalCode || ""
     };
   }
 
@@ -68,7 +71,8 @@ function buildReviewValues(result: BookingReportOcrResult, buyerType: BuyerType)
     customerName: compressName(result.fields.name || mapped.customerName),
     idCard: result.fields.idNumber || mapped.idCard,
     phone: result.fields.phone || mapped.phone,
-    address: result.fields.address || mapped.address
+    address: result.fields.address || mapped.address,
+    postalCode: mapped.postalCode || result.fields.postalCode || ""
   };
 }
 

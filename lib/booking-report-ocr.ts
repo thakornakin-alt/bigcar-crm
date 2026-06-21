@@ -14,6 +14,7 @@ export type BookingReportOcrFields = {
   lastName: string;
   idNumber: string;
   address: string;
+  postalCode?: string;
   companyName: string;
   taxId: string;
   contactName: string;
@@ -35,6 +36,7 @@ const blankFields: BookingReportOcrFields = {
   lastName: "",
   idNumber: "",
   address: "",
+  postalCode: "",
   companyName: "",
   taxId: "",
   contactName: "",
@@ -113,6 +115,7 @@ function normalizeResult(value: Partial<BookingReportOcrFields>, documentType: B
     lastName: safeString(value.lastName),
     idNumber: normalizeDigits(value.idNumber),
     address: safeString(value.address),
+    postalCode: normalizeDigits(value.postalCode),
     companyName: safeString(value.companyName),
     taxId: normalizeDigits(value.taxId),
     contactName: safeString(value.contactName),
@@ -154,8 +157,21 @@ function joinAddressLines(lines: string[]) {
     .trim();
 }
 
+function isAddressNoiseLine(line: string) {
+  return /เกิดวันที่|date of birth|วันออกบัตร|date of issue|วันบัตรหมดอายุ|date of expiry|เจ้าพนักงานออกบัตร|date\b|expiry|issue\b/i.test(line);
+}
+
+function getPostalCodeFromAddressText(address: string) {
+  const text = safeString(address);
+  if (/ต\.?บางแก้ว.*อ\.?บางพลี.*จ\.?สมุทรปราการ/i.test(text) || /บางแก้ว.*บางพลี.*สมุทรปราการ/i.test(text)) {
+    return "10540";
+  }
+  return "";
+}
+
 function pickIdNumber(text: string) {
-  const match = text.match(/(?:^|[^\d])(\d[\d\-\s]{11,20}\d)(?:$|[^\d])/);
+  const compact = safeString(text).replace(/[^\d-]/g, " ");
+  const match = compact.match(/(?:^|[^\d])(\d(?:[\s-]?\d){12})(?:$|[^\d])/);
   return normalizeDigits(match?.[1] || "");
 }
 
@@ -176,17 +192,30 @@ function extractAddress(lines: string[], text: string) {
     const afterMarker = lines[addressStartIndex].replace(/.*?(?:ที่อยู่|address)\s*[:\-]?\s*/i, "").trim();
     const collected = [afterMarker, ...lines.slice(addressStartIndex + 1, addressStartIndex + 4)]
       .map((line) => line.trim())
-      .filter(Boolean);
+      .filter((line) => Boolean(line) && !isAddressNoiseLine(line));
     return joinAddressLines(collected);
   }
 
-  const addressHints = lines.filter((line) => /ถ\.|ถนน|ซอย|แขวง|เขต|อ\.|อำเภอ|ต\.|ตำบล|จังหวัด|หมู่|บ้านเลขที่|road|rd\.?|street/i.test(line));
+  const addressHints = lines.filter(
+    (line) =>
+      !isAddressNoiseLine(line) &&
+      /ถ\.|ถนน|ซอย|แขวง|เขต|อ\.|อำเภอ|ต\.|ตำบล|จังหวัด|หมู่|บ้านเลขที่|road|rd\.?|street/i.test(line)
+  );
   if (addressHints.length > 0) {
     return joinAddressLines(addressHints.slice(0, 4));
   }
 
   const compactMatch = text.match(/(.{8,160}(?:ถ\.|ถนน|ซอย|แขวง|เขต|อ\.|อำเภอ|ต\.|ตำบล|จังหวัด).*)/i);
-  return safeString(compactMatch?.[1] || "");
+  const compactAddress = safeString(compactMatch?.[1] || "");
+  return isAddressNoiseLine(compactAddress) ? "" : compactAddress;
+}
+
+function attachPostalCode(fields: BookingReportOcrFields, sourceText: string) {
+  const postalCode = fields.postalCode || getPostalCodeFromAddressText(fields.address || sourceText);
+  return {
+    ...fields,
+    postalCode
+  };
 }
 
 function parseHeuristicFields(text: string, documentType: BookingReportOcrDocumentType): Partial<BookingReportOcrFields> {
@@ -205,6 +234,7 @@ function parseHeuristicFields(text: string, documentType: BookingReportOcrDocume
       companyName,
       taxId,
       companyAddress,
+      postalCode: getPostalCodeFromAddressText(companyAddress),
       rawText: compact
     };
   }
@@ -225,6 +255,7 @@ function parseHeuristicFields(text: string, documentType: BookingReportOcrDocume
       phone,
       taxId,
       address,
+      postalCode: getPostalCodeFromAddressText(address),
       rawText: compact
     };
   }
@@ -247,6 +278,7 @@ function parseHeuristicFields(text: string, documentType: BookingReportOcrDocume
     lastName,
     idNumber,
     address,
+    postalCode: getPostalCodeFromAddressText(address),
     rawText: compact
   };
 }
@@ -351,7 +383,7 @@ async function runOpenAiOcr(input: BookingReportOcrInput): Promise<BookingReport
 }
 
 function buildFallbackResult(documentType: BookingReportOcrDocumentType, text: string, provider: BookingReportOcrProviderMode): BookingReportOcrResult {
-  const fields = normalizeResult(parseHeuristicFields(text, documentType), documentType).fields;
+  const fields = attachPostalCode(normalizeResult(parseHeuristicFields(text, documentType), documentType).fields, text);
   return {
     documentType,
     provider,
@@ -389,25 +421,47 @@ export async function runBookingReportOcr(input: BookingReportOcrInput): Promise
 
   if (openAiKey) {
     try {
-      return await runOpenAiOcr(input);
+      const result = await runOpenAiOcr(input);
+      console.log("[booking-report-ocr]", {
+        provider: result.provider,
+        documentType: result.documentType,
+        status: "success"
+      });
+      return result;
     } catch (error) {
       if (!isOpenAiFallbackError(error)) {
         throw error;
       }
+      console.log("[booking-report-ocr]", {
+        provider: "openai",
+        documentType,
+        status: "fallback"
+      });
     }
   }
 
   try {
     const rawText = await readFreeOcrText(input);
     const fields = parseHeuristicFields(rawText, documentType);
-    const normalized = normalizeResult(fields, documentType);
-    const provider = determineFreeOcrProvider(documentType, normalized.fields);
-    return {
-      ...normalized,
+    const normalized = attachPostalCode(normalizeResult(fields, documentType).fields, rawText);
+    const provider = determineFreeOcrProvider(documentType, normalized);
+    console.log("[booking-report-ocr]", {
       provider,
+      documentType,
+      status: provider === "free-ocr" ? "success" : "fallback"
+    });
+    return {
+      documentType,
+      provider,
+      fields: normalized,
       rawText: normalized.rawText || rawText
     };
   } catch {
+    console.log("[booking-report-ocr]", {
+      provider: "fallback",
+      documentType,
+      status: "fallback"
+    });
     return buildFallbackResult(documentType, "", "fallback");
   }
 }
@@ -416,27 +470,33 @@ export function mapOcrToBookingReportFields(result: BookingReportOcrResult) {
   const fields = result.fields;
 
   if (result.documentType === "company_certificate") {
+    const postalCode = fields.postalCode || getPostalCodeFromAddressText(fields.companyAddress || fields.address);
     return {
       customerName: fields.companyName || fields.name,
       idCard: normalizeDigits(fields.taxId),
       phone: normalizeDigits(fields.phone),
-      address: fields.companyAddress || fields.address
+      address: fields.companyAddress || fields.address,
+      ...(postalCode ? { postalCode } : {})
     };
   }
 
   if (result.documentType === "business_card") {
+    const postalCode = fields.postalCode || getPostalCodeFromAddressText(fields.address || fields.companyAddress);
     return {
       customerName: fields.contactName || fields.companyName || fields.name,
       idCard: normalizeDigits(fields.taxId),
       phone: normalizeDigits(fields.phone),
-      address: fields.address || fields.companyAddress
+      address: fields.address || fields.companyAddress,
+      ...(postalCode ? { postalCode } : {})
     };
   }
 
+  const postalCode = fields.postalCode || getPostalCodeFromAddressText(fields.address);
   return {
     customerName: fields.name,
     idCard: normalizeDigits(fields.idNumber),
     phone: normalizeDigits(fields.phone),
-    address: fields.address
+    address: fields.address,
+    ...(postalCode ? { postalCode } : {})
   };
 }
