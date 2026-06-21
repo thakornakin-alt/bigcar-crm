@@ -1,4 +1,4 @@
-import { readJsonStore, writeJsonStore } from "@/lib/json-store.js";
+import { readJsonStore, writeJsonStore } from "@/lib/json-store";
 
 const STORE_FILE = "line-reservations.json";
 
