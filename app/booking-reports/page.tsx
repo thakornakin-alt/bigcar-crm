@@ -20,7 +20,7 @@ import { buildDefaultBookingSubject, renderBookingReport } from "@/lib/booking-r
 import { NativeAppHeader, NativeAppShell, NativeBadge, NativeButton, SectionCard, TopMenuButton } from "@/app/components/ui";
 import { bookingLineGroupStorageKey, defaultSystemSettings, readSystemSettings } from "@/lib/client-settings";
 import { normalizeCarYear } from "@/lib/format";
-import { documentFileToOcrPayloads, imagePayloadToDataUrl, isPdfFile, mergeOcrRecords } from "@/lib/ocr/client-document-ocr";
+import { BookingReportOcrScanner } from "@/components/booking-reports/BookingReportOcrScanner";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import { appendSalesProfileSignature } from "@/lib/sales-profile-signature";
 import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, DriveAttachment, DriveUploadResult, LineGroup, StockVehicle } from "@/lib/types";
@@ -73,28 +73,6 @@ const attachmentLabels: Array<{ key: BookingAttachmentCategory; label: string; h
   { key: "idCard", label: "รูปบัตรประชาชน", hint: "OCR รอบนี้เป็น Preview" },
   { key: "companyCertificate", label: "รูปหนังสือรับรองบริษัท", hint: "จำเป็นเมื่อผู้ซื้อเป็นบริษัท" }
 ];
-
-type OcrPreviewFields = {
-  name: string;
-  idNumber: string;
-  birthDate: string;
-  address: string;
-  companyName: string;
-  taxId: string;
-  companyAddress: string;
-  rawText: string;
-};
-
-const blankOcrPreview: OcrPreviewFields = {
-  name: "",
-  idNumber: "",
-  birthDate: "",
-  address: "",
-  companyName: "",
-  taxId: "",
-  companyAddress: "",
-  rawText: ""
-};
 
 async function readJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -205,11 +183,6 @@ export default function BookingReportsPage() {
   const [lineGroups, setLineGroups] = useState<LineGroup[]>([]);
   const [selectedLineGroupId, setSelectedLineGroupId] = useState("");
   const [sendingLine, setSendingLine] = useState(false);
-  const [ocrPreviewUrl, setOcrPreviewUrl] = useState("");
-  const [ocrPreview, setOcrPreview] = useState<OcrPreviewFields>(blankOcrPreview);
-  const [ocrReading, setOcrReading] = useState(false);
-  const [ocrStatus, setOcrStatus] = useState("");
-
   const reportText = useMemo(
     () => appendSalesProfileSignature(renderBookingReport({ ...form, reportText: "" }), salesProfile),
     [form, salesProfile]
@@ -345,85 +318,6 @@ export default function BookingReportsPage() {
 
   function update(field: keyof BookingReportInput, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
-  }
-
-  function updateOcr(field: keyof OcrPreviewFields, value: string) {
-    setOcrPreview((current) => ({ ...current, [field]: value }));
-  }
-
-  async function handleOcrImage(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const uploadFile = isPdfFile(file) ? file : await compressBookingImage(file);
-    setOcrPreview(blankOcrPreview);
-    setOcrReading(true);
-    setOcrStatus(isPdfFile(file) ? "กำลังแปลง PDF และอ่าน OCR..." : "กำลังอ่านเอกสารจากรูป...");
-    setMessage("");
-    setError("");
-    event.target.value = "";
-
-    try {
-      const ocrPayload = await documentFileToOcrPayloads(uploadFile);
-      if (ocrPayload.payloads[0]) setOcrPreviewUrl(imagePayloadToDataUrl(ocrPayload.payloads[0]));
-      const results: Record<string, unknown>[] = [];
-      for (const [index, payload] of ocrPayload.payloads.entries()) {
-        setOcrStatus(ocrPayload.sourceType === "pdf" ? `กำลัง OCR PDF หน้า ${index + 1}/${ocrPayload.processedPages}` : "กำลังอ่านเอกสารจากรูป...");
-        const data = await readJson<{ result: OcrPreviewFields }>("/api/ocr/document", {
-          method: "POST",
-          body: JSON.stringify({
-            ...payload,
-            buyerType: form.buyerType
-          })
-        });
-        results.push(data.result);
-      }
-      const result = mergeOcrRecords(results) as OcrPreviewFields;
-
-      setOcrPreview({
-        name: result.name || form.customerName,
-        idNumber: result.idNumber || form.idCard,
-        birthDate: result.birthDate || "",
-        address: result.address || form.address,
-        companyName: result.companyName || form.customerName,
-        taxId: result.taxId || form.idCard,
-        companyAddress: result.companyAddress || form.address,
-        rawText: result.rawText || ""
-      });
-      setOcrStatus(ocrPayload.sourceType === "pdf" ? `อ่าน OCR PDF สำเร็จ ${ocrPayload.processedPages}/${ocrPayload.pageCount} หน้า` : "อ่าน OCR สำเร็จ ตรวจข้อมูลก่อนกดยืนยัน");
-      setMessage("OCR อ่านข้อมูลแล้ว กรุณาตรวจและกดยืนยันก่อนเติมเข้ารายงานจอง");
-    } catch (err) {
-      setOcrPreview({
-        ...blankOcrPreview,
-        name: form.customerName,
-        idNumber: form.idCard,
-        address: form.address,
-        companyName: form.customerName,
-        taxId: form.idCard,
-        companyAddress: form.address
-      });
-      setOcrStatus("OCR อ่านไม่สำเร็จ สามารถกรอก/แก้ไข Preview เองแล้วกดยืนยันได้");
-      setError(err instanceof Error ? err.message : "OCR อ่านเอกสารไม่สำเร็จ");
-    } finally {
-      setOcrReading(false);
-    }
-  }
-
-  function resetOcrPreview() {
-    setOcrPreviewUrl("");
-    setOcrPreview(blankOcrPreview);
-    setOcrStatus("");
-    setOcrReading(false);
-  }
-
-  function confirmOcrPreview() {
-    setForm((current) => ({
-      ...current,
-      customerName: current.buyerType === "company" ? ocrPreview.companyName || current.customerName : ocrPreview.name || current.customerName,
-      idCard: current.buyerType === "company" ? ocrPreview.taxId || current.idCard : ocrPreview.idNumber || current.idCard,
-      address: current.buyerType === "company" ? ocrPreview.companyAddress || current.address : ocrPreview.address || current.address
-    }));
-    setMessage("ยืนยัน OCR Preview แล้ว และเติมข้อมูลเข้ารายงานจองให้ตรวจต่อได้");
-    setOcrStatus("ยืนยันแล้ว");
   }
 
   function updateMoney(field: keyof BookingReportInput, value: string) {
@@ -729,76 +623,19 @@ export default function BookingReportsPage() {
       )}
 
       <section className="mb-4">
-        <SectionCard title="OCR Smart Document" icon={<Camera size={18} />}>
-          <div className="grid gap-3 lg:grid-cols-[0.7fr_1.3fr]">
-            <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-2">
-                <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand px-3 text-sm font-black text-ink">
-                  <Camera size={18} />
-                  ถ่ายรูป
-                  <input type="file" accept="image/*" capture="environment" onChange={handleOcrImage} className="sr-only" />
-                </label>
-                <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-3 text-sm font-bold text-white">
-                  <Paperclip size={18} className="text-brand" />
-                  เพิ่มไฟล์
-                  <input type="file" accept="image/*,application/pdf" onChange={handleOcrImage} className="sr-only" />
-                </label>
-              </div>
-              <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs leading-5 text-soft">
-                รองรับบัตรประชาชน นามบัตร หนังสือรับรองบริษัท และ PDF หลายหน้า ต้อง Preview และกดยืนยันก่อนเสมอ ไม่มีการ Auto Save
-              </p>
-              {ocrStatus && (
-                <p className={`rounded-lg border px-3 py-2 text-xs font-bold leading-5 ${ocrReading ? "border-brand/40 bg-brand/10 text-brand" : "border-line bg-[#0b0d11] text-soft"}`}>
-                  {ocrReading && <Loader2 size={14} className="mr-1 inline animate-spin align-[-2px]" />}
-                  {ocrStatus}
-                </p>
-              )}
-              {ocrPreviewUrl && (
-                <div className="rounded-lg border border-line bg-[#0b0d11] p-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={ocrPreviewUrl} alt="OCR booking document preview" className="max-h-32 w-full rounded-md object-contain" />
-                  <button
-                    type="button"
-                    onClick={resetOcrPreview}
-                    className="mt-2 flex min-h-9 w-full items-center justify-center rounded-md border border-line bg-panel px-3 text-xs font-black text-white"
-                  >
-                    สแกนใหม่
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="grid gap-2 sm:grid-cols-2">
-              {form.buyerType === "company" ? (
-                <>
-                  <OcrField label="ชื่อบริษัท" value={ocrPreview.companyName} onChange={(value) => updateOcr("companyName", value)} />
-                  <OcrField label="เลขผู้เสียภาษี" value={ocrPreview.taxId} onChange={(value) => updateOcr("taxId", value)} />
-                  <OcrField label="ที่อยู่บริษัท" value={ocrPreview.companyAddress} onChange={(value) => updateOcr("companyAddress", value)} wide />
-                </>
-              ) : (
-                <>
-                  <OcrField label="ชื่อ-นามสกุล" value={ocrPreview.name} onChange={(value) => updateOcr("name", value)} />
-                  <OcrField label="เลขบัตรประชาชน" value={ocrPreview.idNumber} onChange={(value) => updateOcr("idNumber", value)} />
-                  <OcrField label="วันเกิด" value={ocrPreview.birthDate} onChange={(value) => updateOcr("birthDate", value)} />
-                  <OcrField label="ที่อยู่" value={ocrPreview.address} onChange={(value) => updateOcr("address", value)} wide />
-                </>
-              )}
-              {ocrPreview.rawText && (
-                <div className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs leading-5 text-soft sm:col-span-2">
-                  <p className="mb-1 font-black text-white">ข้อความที่ OCR อ่านได้</p>
-                  <p className="max-h-24 overflow-y-auto whitespace-pre-wrap">{ocrPreview.rawText}</p>
-                </div>
-              )}
-              <NativeButton
-                type="button"
-                onClick={confirmOcrPreview}
-                disabled={!ocrPreviewUrl || ocrReading}
-                className="sm:col-span-2"
-              >
-                {ocrReading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-                {ocrReading ? "กำลังอ่าน OCR..." : "ยืนยันและเติมเข้ารายงานจอง"}
-              </NativeButton>
-            </div>
+        <SectionCard title="OCR Smart Document" icon={<Clipboard size={18} />}>
+          <div className="flex flex-col gap-3">
+            <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs leading-5 text-soft">
+              รองรับบัตรประชาชน หนังสือรับรองบริษัท และนามบัตร เปิดสแกนใน modal/drawer แยก ตรวจข้อมูลก่อนเติมเข้ารายงานจองเสมอ และจะไม่บันทึกอัตโนมัติ
+            </p>
+            <BookingReportOcrScanner
+              buyerType={form.buyerType}
+              current={form}
+              onApply={(next) => {
+                setForm(next);
+                setMessage("OCR เติมข้อมูลลงฟอร์มแล้ว กรุณาตรวจต่อก่อนบันทึก Draft");
+              }}
+            />
           </div>
         </SectionCard>
       </section>
@@ -1113,31 +950,6 @@ function TextArea({
         placeholder={placeholder}
         rows={rows}
         className="min-h-24 w-full resize-y rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
-      />
-    </label>
-  );
-}
-
-function OcrField({
-  label,
-  value,
-  onChange,
-  wide = false
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  wide?: boolean;
-}) {
-  return (
-    <label className={`rounded-lg border border-line bg-[#0b0d11] px-3 py-2 ${wide ? "sm:col-span-2" : ""}`}>
-      <span className="text-xs font-bold text-soft">{label}</span>
-      <input
-        type="text"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder="ตรวจจากรูปแล้วแก้ไขก่อนยืนยัน"
-        className="mt-1 w-full bg-transparent text-sm font-black text-white outline-none placeholder:text-[#6f7785]"
       />
     </label>
   );
