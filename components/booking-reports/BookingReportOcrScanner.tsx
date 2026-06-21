@@ -271,6 +271,7 @@ export function BookingReportOcrScanner({
                 <ReviewRow label="ชื่อผู้ซื้อ" value={reviewValues.customerName || "-"} />
                 <ReviewRow label="เลขบัตร/เลขภาษี" value={reviewValues.idCard || "-"} />
                 <ReviewRow label="เบอร์โทร" value={reviewValues.phone || "-"} />
+                <ReviewRow label="รหัสไปรษณีย์" value={reviewValues.postalCode || "-"} />
                 <ReviewRow label="ที่อยู่" value={reviewValues.address || "-"} wide />
               </div>
 
