@@ -1,4 +1,4 @@
-import { readJsonStore, writeJsonStore } from "@/lib/json-store";
+import { readJsonStore, writeJsonStore } from "@/lib/json-store.js";
 
 const STORE_FILE = "line-reservations.json";
 
@@ -58,6 +58,18 @@ export function parseReserveAction(text: string): { action: LineReservationActio
   return null;
 }
 
+export function parseLineReservationCommands(text: string): Array<{
+  action: LineReservationAction;
+  plate: string;
+}> {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => parseReserveAction(line))
+    .filter((item): item is { action: LineReservationAction; plate: string } => Boolean(item));
+}
+
 async function readStore() {
   return readJsonStore<LineReservationStore>(STORE_FILE, { byPlate: {} });
 }
@@ -96,30 +108,44 @@ export async function applyLineReservationCommand(input: {
   sourceGroupId?: string;
   receivedAt?: string;
 }) {
-  const parsed = parseReserveAction(input.text);
-  if (!parsed) return null;
-
-  const plateNormalized = normalizePlateForMatch(parsed.plate);
-  if (!plateNormalized) return null;
+  const parsedCommands = parseLineReservationCommands(input.text);
+  if (!parsedCommands.length) return null;
 
   const store = await readStore();
-  const current = store.byPlate[plateNormalized];
-  const record: LineReservationRecord = {
-    plate: parsed.plate,
-    plateNormalized,
-    active: parsed.action === "reserve",
-    updatedAt: input.receivedAt || new Date().toISOString(),
-    sourceGroupId: String(input.sourceGroupId || ""),
-    sourceText: input.text
-  };
-  store.byPlate[plateNormalized] = { ...current, ...record };
+
+  const applied: Array<{
+    action: LineReservationAction;
+    plate: string;
+    plateNormalized: string;
+    active: boolean;
+  }> = [];
+
+  for (const parsed of parsedCommands) {
+    const plateNormalized = normalizePlateForMatch(parsed.plate);
+    if (!plateNormalized) continue;
+
+    const current = store.byPlate[plateNormalized];
+    const record: LineReservationRecord = {
+      plate: parsed.plate,
+      plateNormalized,
+      active: parsed.action === "reserve",
+      updatedAt: input.receivedAt || new Date().toISOString(),
+      sourceGroupId: String(input.sourceGroupId || ""),
+      sourceText: input.text
+    };
+    store.byPlate[plateNormalized] = { ...current, ...record };
+    applied.push({
+      action: parsed.action,
+      plate: parsed.plate,
+      plateNormalized,
+      active: record.active
+    });
+  }
+
+  if (!applied.length) return null;
+
   await writeStore(store);
 
-  return {
-    action: parsed.action,
-    plate: parsed.plate,
-    plateNormalized,
-    active: record.active
-  };
+  return applied.length === 1 ? applied[0] : { applied };
 }
 
