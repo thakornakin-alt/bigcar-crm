@@ -123,6 +123,11 @@ export function BookingReportOcrScanner({
       const merged = mergeOcrRecords(results.map((item) => item.fields)) as BookingReportOcrResult["fields"];
       const result: BookingReportOcrResult = {
         documentType,
+        provider: results.some((item) => item.provider === "openai")
+          ? "openai"
+          : results.some((item) => item.provider === "free-ocr")
+            ? "free-ocr"
+            : "fallback",
         fields: {
           ...merged,
           rawText: results.map((item) => item.rawText || item.fields.rawText).filter(Boolean).join("\n\n")
@@ -134,6 +139,7 @@ export function BookingReportOcrScanner({
     } catch (err) {
       setPreview({
         documentType,
+        provider: "fallback",
         fields: {
           name: "",
           firstName: "",
