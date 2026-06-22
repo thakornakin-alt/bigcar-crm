@@ -43,13 +43,18 @@ function compressName(name: string) {
   return name.trim().replace(/\s+/g, " ");
 }
 
+function buildFullAddress(address: string, postalCode: string) {
+  return [address, postalCode].filter(Boolean).join(" ").trim();
+}
+
 function mergeIfEmpty(current: BookingReportInput, patch: ReviewValues) {
+  const fullAddress = buildFullAddress(patch.address, patch.postalCode);
   return {
     ...current,
     customerName: current.customerName || patch.customerName,
     idCard: current.idCard || patch.idCard,
     phone: current.phone || patch.phone,
-    address: current.address || patch.address,
+    address: current.address || fullAddress,
     postalCode: current.postalCode || patch.postalCode
   };
 }
