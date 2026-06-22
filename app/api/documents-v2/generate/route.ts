@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       mapping[fieldProbeName] = "customerName";
       data.customerName = fieldProbeValue;
     }
-    const pdfBytes = await generateDocumentV2WithBytes(data, templateBytes, mapping, {
+    const pdfBytes = await generateDocumentV2WithBytes(data, templateBytes, template.id, mapping, {
       hideFieldBorders: Boolean(template.hideFieldBorders)
     });
     const outputName = template.fileName;

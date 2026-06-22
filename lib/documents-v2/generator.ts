@@ -1,7 +1,7 @@
 import { readFile } from "fs/promises";
 import path from "path";
 import fontkit from "@pdf-lib/fontkit";
-import { PDFDocument, TextAlignment } from "pdf-lib";
+import { PDFDocument, TextAlignment, rgb } from "pdf-lib";
 import type { DocumentV2Data, DocumentV2FieldDebug } from "@/lib/documents-v2/types";
 import { getTemplateById, type DocumentV2TemplateId } from "@/lib/documents-v2/template-config";
 import type { DocumentV2FieldMapping, DocumentV2FieldKey, DocumentV2MappedValue } from "@/lib/documents-v2/mapping-store";
@@ -153,6 +153,7 @@ export async function generateDocumentV2(data: DocumentV2Data, templateId?: stri
 export async function generateDocumentV2WithBytes(
   data: DocumentV2Data,
   bytes: Uint8Array,
+  templateId?: DocumentV2TemplateId,
   mapping?: DocumentV2FieldMapping,
   options: { hideFieldBorders?: boolean } = {}
 ): Promise<Uint8Array> {
@@ -193,6 +194,24 @@ export async function generateDocumentV2WithBytes(
   }
   setTextIfExists(form, ["manager_name", "MANAGER_NAME", "approverName"], fixedManagerName, thaiFont);
   form.updateFieldAppearances(thaiFont);
+
+  if (templateId === "temporary-receipt") {
+    const address = String((data as Record<string, unknown>).customerAddress || "").trim();
+    if (address) {
+      const firstPage = pdf.getPages()[0];
+      if (firstPage) {
+        firstPage.drawText(address, {
+          x: 74,
+          y: 630,
+          size: 9,
+          font: thaiFont,
+          color: rgb(0.02, 0.04, 0.07),
+          maxWidth: 310,
+          lineHeight: 10
+        });
+      }
+    }
+  }
 
   form.flatten();
   return pdf.save();

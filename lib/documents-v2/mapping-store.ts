@@ -26,6 +26,7 @@ export type DocumentV2FieldKey =
   | "sellPrice"
   | "deposit"
   | "remainingAmount"
+  | "remainingAmountThaiText"
   | "financeCompany"
   | "saleName"
   | "approverName";
@@ -75,7 +76,7 @@ const TEMPORARY_RECEIPT_DEFAULT_MAPPING: DocumentV2FieldMapping = {
   booking_no: "bookingNo",
   Sale: "saleName",
   FINANCE: "financeCompany",
-  TOTAL_THAI: "sellPrice",
+  TOTAL_THAI: "remainingAmountThaiText",
   SELL_Price: "sellPrice",
   TOTAL_PAY: "remainingAmount",
   Deposit: "deposit",

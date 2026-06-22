@@ -31,6 +31,7 @@ export type DocumentV2Data = {
   sellPrice: string;
   deposit: string;
   remainingAmount: string;
+  remainingAmountThaiText: string;
   financeCompany: string;
   saleName: string;
   approverName: string;
@@ -69,6 +70,64 @@ function normalizeMoney(rawValue: string) {
   const num = Number(only);
   if (!Number.isFinite(num)) return "";
   return num.toLocaleString("th-TH");
+}
+
+function thaiNumberToWords(input: number) {
+  if (!Number.isFinite(input)) return "";
+  const rounded = Math.round(input * 100) / 100;
+  const integerPart = Math.floor(Math.abs(rounded));
+  const satangPart = Math.round((Math.abs(rounded) - integerPart) * 100);
+  const unitWords = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"];
+  const digits = ["ศูนย์", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"];
+
+  function convertChunk(n: number): string {
+    if (n === 0) return "";
+    let result = "";
+    const chars = String(n).split("");
+    for (let i = 0; i < chars.length; i++) {
+      const digit = Number(chars[i]);
+      const pos = chars.length - i - 1;
+      if (digit === 0) continue;
+      if (pos === 0) {
+        if (digit === 1 && chars.length > 1) result += "เอ็ด";
+        else result += digits[digit];
+      } else if (pos === 1) {
+        if (digit === 1) result += "สิบ";
+        else if (digit === 2) result += "ยี่สิบ";
+        else result += `${digits[digit]}สิบ`;
+      } else {
+        result += `${digits[digit]}${unitWords[pos]}`;
+      }
+    }
+    return result;
+  }
+
+  function convertInteger(n: number): string {
+    if (n === 0) return "ศูนย์";
+    let remaining = n;
+    let result = "";
+    const million = 1_000_000;
+    const chunks: number[] = [];
+    while (remaining > 0) {
+      chunks.unshift(remaining % million);
+      remaining = Math.floor(remaining / million);
+    }
+    chunks.forEach((chunk, index) => {
+      if (chunk === 0) return;
+      const chunkText = convertChunk(chunk);
+      if (index > 0) {
+        result += chunkText ? `${chunkText}ล้าน` : "ล้าน";
+      } else {
+        result += chunkText;
+      }
+    });
+    return result || "ศูนย์";
+  }
+
+  const integerText = convertInteger(integerPart);
+  if (satangPart === 0) return `${integerText}บาทถ้วน`;
+  const satangText = convertInteger(satangPart);
+  return `${integerText}บาท${satangText}สตางค์`;
 }
 
 function normalizeDateParts(value?: string | null) {
@@ -159,6 +218,7 @@ export function mapBookingToDocumentV2(report?: ReportHistoryItem | null): Docum
     sellPrice: normalizeMoney(pick(raw, "salePrice", "finalPrice", "netPayment", "carPrice") || rawFinal),
     deposit: normalizeMoney(String(rawDeposit || "")),
     remainingAmount: remaining > 0 ? remaining.toLocaleString("th-TH") : "",
+    remainingAmountThaiText: remaining > 0 ? thaiNumberToWords(remaining) : "",
     financeCompany: pick(raw, "financeCompany", "finance", "bank", "ไฟแนนซ์"),
     saleName: pick(raw, "saleName", "salesName", "ownerName")
       || extractFromReportText(reportText, [/เซลล์เจ้าของเคส\s*[:：]\s*(.+)/i, /ผู้ขาย\s*[:：]\s*(.+)/i])
