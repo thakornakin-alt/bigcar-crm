@@ -133,6 +133,60 @@ function autoThaiTextFromTotalPay(totalPayValue: unknown) {
   return thaiNumberToWords(normalized);
 }
 
+function wrapTextToLines(
+  text: string,
+  font: Awaited<ReturnType<PDFDocument["embedFont"]>>,
+  fontSize: number,
+  maxWidth: number,
+  maxLines: number
+) {
+  const words = String(text || "").split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+
+  const flush = () => {
+    if (current.trim()) {
+      lines.push(current.trim());
+      current = "";
+    }
+  };
+
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (font.widthOfTextAtSize(next, fontSize) <= maxWidth) {
+      current = next;
+      continue;
+    }
+    flush();
+    current = word;
+    if (font.widthOfTextAtSize(current, fontSize) > maxWidth) {
+      while (current.length > 1 && font.widthOfTextAtSize(`${current}…`, fontSize) > maxWidth) {
+        current = current.slice(0, -1);
+      }
+      current = `${current}…`;
+      flush();
+    }
+    if (lines.length >= maxLines) break;
+  }
+  flush();
+
+  if (lines.length > maxLines) {
+    return lines.slice(0, maxLines);
+  }
+
+  if (lines.length === maxLines && current) {
+    const last = lines[maxLines - 1];
+    let candidate = `${last} ${current}`.trim();
+    while (candidate.length > 1 && font.widthOfTextAtSize(`${candidate}…`, fontSize) > maxWidth) {
+      candidate = candidate.slice(0, -1);
+    }
+    lines[maxLines - 1] = `${candidate}…`;
+    return lines;
+  }
+
+  return lines;
+}
+
 function makeFieldWidgetsInvisible(field: ReturnType<ReturnType<PDFDocument["getForm"]>["getFields"]>[number]) {
   try {
     const widgets = field.acroField.getWidgets();
@@ -200,14 +254,15 @@ export async function generateDocumentV2WithBytes(
     if (address) {
       const firstPage = pdf.getPages()[0];
       if (firstPage) {
-        firstPage.drawText(address, {
+        const lines = wrapTextToLines(address, thaiFont, 8.5, 310, 2);
+        firstPage.drawText(lines.join("\n"), {
           x: 74,
-          y: 630,
-          size: 9,
+          y: 636,
+          size: 8.5,
           font: thaiFont,
           color: rgb(0.02, 0.04, 0.07),
           maxWidth: 310,
-          lineHeight: 10
+          lineHeight: 9
         });
       }
     }
