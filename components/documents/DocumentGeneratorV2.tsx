@@ -873,22 +873,6 @@ export function DocumentGeneratorV2() {
         </div>
       ) : null}
 
-      {pngUrl ? (
-        <div className="rounded border border-white/10 p-3">
-          <h2 className="mb-2 font-semibold">PNG</h2>
-          <img src={pngUrl} alt="PNG preview" className="max-w-full rounded bg-white" />
-          <p className="mt-2 text-xs text-gray-300">บน iPhone ถ้าปุ่ม Download ไม่เข้า Photos ให้กด “แชร์/บันทึกรูป” แล้วเลือก Save Image</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <a href={pngUrl} download={pngFileName} className="inline-flex items-center gap-2 rounded bg-emerald-500 px-3 py-2 font-semibold text-black">
-              <Download size={16} /> ดาวน์โหลด PNG
-            </a>
-            <button onClick={sharePng} className="inline-flex items-center gap-2 rounded border border-white/20 px-3 py-2 font-semibold text-white">
-              <Share2 size={16} /> แชร์/บันทึกรูป
-            </button>
-          </div>
-        </div>
-      ) : null}
-
       {!settingsMode ? (
         <>
           <div className="grid grid-cols-1 gap-2 rounded border border-white/10 p-3 sm:grid-cols-3">
@@ -898,8 +882,16 @@ export function DocumentGeneratorV2() {
             <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">
               <ImageIcon className="inline" size={16} /> ดาวน์โหลด PNG
             </button>
+            <button
+              onClick={sharePng}
+              disabled={loading || !pngBlob}
+              className="rounded border border-white/20 px-4 py-2 disabled:opacity-50"
+            >
+              <Share2 className="inline" size={16} /> แชร์/บันทึกรูป
+            </button>
           </div>
           <p className="mt-2 text-xs text-gray-300">กดเพื่ออัปเดต Preview / PDF ตามข้อมูลที่แก้ด้านล่าง</p>
+          <p className="text-xs text-gray-300">บน iPhone ถ้าปุ่ม Download ไม่เข้า Photos ให้กด “แชร์/บันทึกรูป” แล้วเลือก Save Image</p>
         </>
       ) : null}
 
