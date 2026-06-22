@@ -59,6 +59,17 @@ function setTextIfExists(
   }
 }
 
+function setCheckboxIfExists(form: ReturnType<PDFDocument["getForm"]>, name: string, checked: boolean) {
+  try {
+    const field = form.getCheckBox(name);
+    if (checked) field.check();
+    else field.uncheck();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function normalizeMoneyLike(value: unknown) {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
@@ -200,6 +211,56 @@ function makeFieldWidgetsInvisible(field: ReturnType<ReturnType<PDFDocument["get
   }
 }
 
+function applyTemporaryReceiptExtras(
+  form: ReturnType<PDFDocument["getForm"]>,
+  data: Record<string, unknown>,
+  thaiFont: Awaited<ReturnType<PDFDocument["embedFont"]>>
+) {
+  const textFieldMap: Array<[string, string[]]> = [
+    ["line2Discount", ["fill_34"]],
+    ["line4Installment", ["fill_36"]],
+    ["line5DownPayment", ["Downpayment"]],
+    ["line6Amount", ["fill_38"]],
+    ["line7Amount", ["fill_39"]],
+    ["line8Amount", ["fill_40"]],
+    ["line9Amount", ["fill_41"]],
+    ["line10Amount", ["fill_42"]],
+    ["line11Amount", ["fill_43"]],
+    ["line12Amount", ["fill_44"]],
+    ["line13Amount", ["fill_45"]],
+    ["line14Amount", ["fill_46"]]
+  ];
+
+  textFieldMap.forEach(([dataKey, fieldNames]) => {
+    const value = String(data[dataKey] || "").trim();
+    setTextIfExists(form, fieldNames, value, thaiFont);
+  });
+
+  const checkboxRows: Array<{ key: string; yes: string; no: string }> = [
+    { key: "line6Status", yes: "undefined_3", no: "undefined_4" },
+    { key: "line7Status", yes: "undefined_5", no: "undefined_6" },
+    { key: "line8Status", yes: "undefined_7", no: "undefined_8" },
+    { key: "line9Status", yes: "undefined_9", no: "undefined_10" },
+    { key: "line10Status", yes: "undefined_11", no: "undefined_12" },
+    { key: "line11Status", yes: "undefined_13", no: "undefined_14" },
+    { key: "line12Status", yes: "undefined_15", no: "undefined_16" },
+    { key: "line13Status", yes: "undefined_17", no: "undefined_18" },
+    { key: "line14Status", yes: "undefined_20", no: "undefined_21" }
+  ];
+
+  checkboxRows.forEach(({ key, yes, no }) => {
+    const status = String(data[key] || "none");
+    const checkedYes = status === "gift";
+    const checkedNo = status === "charge";
+    setCheckboxIfExists(form, yes, checkedYes);
+    setCheckboxIfExists(form, no, checkedNo);
+    if (status === "none") {
+      setCheckboxIfExists(form, yes, false);
+      setCheckboxIfExists(form, no, false);
+    }
+  });
+}
+
 export async function generateDocumentV2(data: DocumentV2Data, templateId?: string): Promise<Uint8Array> {
   throw new Error("internal: use generateDocumentV2WithBytes");
 }
@@ -247,6 +308,9 @@ export async function generateDocumentV2WithBytes(
     setTextIfExists(form, [pdfField], value, thaiFont);
   }
   setTextIfExists(form, ["manager_name", "MANAGER_NAME", "approverName"], fixedManagerName, thaiFont);
+  if (templateId === "temporary-receipt") {
+    applyTemporaryReceiptExtras(form, allData, thaiFont);
+  }
   form.updateFieldAppearances(thaiFont);
 
   form.flatten();

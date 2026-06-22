@@ -17,6 +17,55 @@ type FieldsDebug = {
   fieldNames: string[];
 };
 
+type TemporaryReceiptExtraStatus = "none" | "gift" | "charge";
+type TemporaryReceiptExtraData = {
+  line2Discount: string;
+  line4Installment: string;
+  line5DownPayment: string;
+  line6Amount: string;
+  line7Amount: string;
+  line8Amount: string;
+  line9Amount: string;
+  line10Amount: string;
+  line11Amount: string;
+  line12Amount: string;
+  line13Amount: string;
+  line14Amount: string;
+  line6Status: TemporaryReceiptExtraStatus;
+  line7Status: TemporaryReceiptExtraStatus;
+  line8Status: TemporaryReceiptExtraStatus;
+  line9Status: TemporaryReceiptExtraStatus;
+  line10Status: TemporaryReceiptExtraStatus;
+  line11Status: TemporaryReceiptExtraStatus;
+  line12Status: TemporaryReceiptExtraStatus;
+  line13Status: TemporaryReceiptExtraStatus;
+  line14Status: TemporaryReceiptExtraStatus;
+};
+
+const DEFAULT_TEMPORARY_RECEIPT_EXTRAS: TemporaryReceiptExtraData = {
+  line2Discount: "",
+  line4Installment: "",
+  line5DownPayment: "",
+  line6Amount: "",
+  line7Amount: "",
+  line8Amount: "",
+  line9Amount: "",
+  line10Amount: "",
+  line11Amount: "",
+  line12Amount: "",
+  line13Amount: "",
+  line14Amount: "",
+  line6Status: "none",
+  line7Status: "none",
+  line8Status: "none",
+  line9Status: "none",
+  line10Status: "none",
+  line11Status: "none",
+  line12Status: "none",
+  line13Status: "none",
+  line14Status: "none"
+};
+
 function isNamedPdfField(name: string) {
   return !/^fill_\d+$/i.test(name) && !/^undefined_\d+$/i.test(name);
 }
@@ -146,6 +195,7 @@ export function DocumentGeneratorV2() {
   const [resolvedData, setResolvedData] = useState<ResolvedDocumentV2Data | null>(null);
   const [editableData, setEditableData] = useState<ResolvedDocumentV2Data | null>(null);
   const [editableTouched, setEditableTouched] = useState(false);
+  const [temporaryReceiptExtras, setTemporaryReceiptExtras] = useState<TemporaryReceiptExtraData>(DEFAULT_TEMPORARY_RECEIPT_EXTRAS);
   const [resolveDebug, setResolveDebug] = useState<DocumentV2ResolveDebug | null>(null);
   const [resolvingData, setResolvingData] = useState(false);
   const [settingsMode, setSettingsMode] = useState(false);
@@ -189,6 +239,18 @@ export function DocumentGeneratorV2() {
   function resetEditableData(next?: ResolvedDocumentV2Data | null) {
     setEditableData(next || resolvedData || mapBookingToDocumentV2(selectedReport));
     setEditableTouched(false);
+    setTemporaryReceiptExtras(DEFAULT_TEMPORARY_RECEIPT_EXTRAS);
+  }
+
+  function updateTemporaryReceiptExtra<K extends keyof TemporaryReceiptExtraData>(key: K, value: TemporaryReceiptExtraData[K]) {
+    setTemporaryReceiptExtras((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function buildGeneratePayload() {
+    return {
+      ...(editableData || sampleData || {}),
+      ...temporaryReceiptExtras
+    } as Record<string, string>;
   }
 
   async function loadFields() {
@@ -399,10 +461,11 @@ export function DocumentGeneratorV2() {
     try {
       setLoading(true);
       setError("");
+      const payloadData = buildGeneratePayload();
       const blob = await api<Blob>("/api/documents-v2/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report: selectedReport, templateId, data: editableData || sampleData })
+        body: JSON.stringify({ report: selectedReport, templateId, data: payloadData })
       });
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       const url = URL.createObjectURL(blob);
@@ -431,10 +494,11 @@ export function DocumentGeneratorV2() {
     try {
       setLoading(true);
       setError("");
+      const payloadData = buildGeneratePayload();
       const blob = await api<Blob>("/api/documents-v2/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report: selectedReport, templateId, data: editableData || sampleData, fieldProbeName: probeField, fieldProbeValue: probeValue })
+        body: JSON.stringify({ report: selectedReport, templateId, data: payloadData, fieldProbeName: probeField, fieldProbeValue: probeValue })
       });
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(URL.createObjectURL(blob));
@@ -461,10 +525,11 @@ export function DocumentGeneratorV2() {
     try {
       setLoading(true);
       setError("");
+      const payloadData = buildGeneratePayload();
       const blob = await api<Blob>("/api/documents-v2/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report: selectedReport, templateId, data: editableData || sampleData })
+        body: JSON.stringify({ report: selectedReport, templateId, data: payloadData })
       });
       const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as any;
       pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
@@ -802,6 +867,85 @@ export function DocumentGeneratorV2() {
                 </label>
               );
             })}
+          </div>
+          <div className="mt-4 rounded border border-white/10 bg-black/20 p-3">
+            <h3 className="font-semibold">ข้อมูลเพิ่มเติมสำหรับใบเสร็จชั่วคราว</h3>
+            <p className="mt-1 text-xs text-gray-300">ใช้เฉพาะตอน Preview / Generate PDF เท่านั้น</p>
+            <div className="mt-3 space-y-4">
+              <label className="block space-y-1">
+                <span className="block text-xs text-gray-300">ลำดับ 2 ส่วนลดราคาขาย</span>
+                <input
+                  value={temporaryReceiptExtras.line2Discount}
+                  onChange={(e) => updateTemporaryReceiptExtra("line2Discount", e.target.value)}
+                  inputMode="numeric"
+                  className="w-full rounded bg-black/40 p-2 text-sm"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="block text-xs text-gray-300">ลำดับ 4 ยอดจัดสินเชื่อเช่าซื้อ</span>
+                <input
+                  value={temporaryReceiptExtras.line4Installment}
+                  onChange={(e) => updateTemporaryReceiptExtra("line4Installment", e.target.value)}
+                  inputMode="numeric"
+                  className="w-full rounded bg-black/40 p-2 text-sm"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="block text-xs text-gray-300">ลำดับ 5 เงินดาวน์</span>
+                <input
+                  value={temporaryReceiptExtras.line5DownPayment}
+                  onChange={(e) => updateTemporaryReceiptExtra("line5DownPayment", e.target.value)}
+                  inputMode="numeric"
+                  className="w-full rounded bg-black/40 p-2 text-sm"
+                />
+              </label>
+
+              {[
+                { idx: 6, amountKey: "line6Amount", statusKey: "line6Status" },
+                { idx: 7, amountKey: "line7Amount", statusKey: "line7Status" },
+                { idx: 8, amountKey: "line8Amount", statusKey: "line8Status" },
+                { idx: 9, amountKey: "line9Amount", statusKey: "line9Status" },
+                { idx: 10, amountKey: "line10Amount", statusKey: "line10Status" },
+                { idx: 11, amountKey: "line11Amount", statusKey: "line11Status" },
+                { idx: 12, amountKey: "line12Amount", statusKey: "line12Status" },
+                { idx: 13, amountKey: "line13Amount", statusKey: "line13Status" },
+                { idx: 14, amountKey: "line14Amount", statusKey: "line14Status" }
+              ].map(({ idx, amountKey, statusKey }) => (
+                <div key={idx} className="rounded border border-white/10 bg-black/20 p-3">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-[1.2fr_1fr]">
+                    <label className="block space-y-1">
+                      <span className="block text-xs text-gray-300">ลำดับ {idx} จำนวนเงิน</span>
+                      <input
+                        value={temporaryReceiptExtras[amountKey as keyof TemporaryReceiptExtraData] as string}
+                        onChange={(e) => updateTemporaryReceiptExtra(amountKey as keyof TemporaryReceiptExtraData, e.target.value)}
+                        inputMode="numeric"
+                        className="w-full rounded bg-black/40 p-2 text-sm"
+                      />
+                    </label>
+                    <div className="space-y-1">
+                      <span className="block text-xs text-gray-300">ลำดับ {idx} สถานะ</span>
+                      <div className="flex flex-wrap gap-3 rounded bg-black/30 p-2 text-sm">
+                        {[
+                          { value: "none", label: "ไม่เลือก" },
+                          { value: "gift", label: "แถม" },
+                          { value: "charge", label: "เรียกเก็บ" }
+                        ].map((opt) => (
+                          <label key={opt.value} className="inline-flex items-center gap-2">
+                            <input
+                              type="radio"
+                              name={`temporary-receipt-${statusKey}`}
+                              checked={temporaryReceiptExtras[statusKey as keyof TemporaryReceiptExtraData] === opt.value}
+                              onChange={() => updateTemporaryReceiptExtra(statusKey as keyof TemporaryReceiptExtraData, opt.value as TemporaryReceiptExtraStatus)}
+                            />
+                            <span>{opt.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       ) : null}
