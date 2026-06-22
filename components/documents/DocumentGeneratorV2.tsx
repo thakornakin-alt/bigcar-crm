@@ -180,6 +180,64 @@ function formatDatePartValue(value: string, fallback: string) {
   return raw;
 }
 
+function thaiNumberToWords(input: number) {
+  if (!Number.isFinite(input)) return "";
+  const rounded = Math.round(input * 100) / 100;
+  const integerPart = Math.floor(Math.abs(rounded));
+  const satangPart = Math.round((Math.abs(rounded) - integerPart) * 100);
+  const unitWords = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"];
+  const digits = ["ศูนย์", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"];
+
+  function convertChunk(n: number): string {
+    if (n === 0) return "";
+    let result = "";
+    const chars = String(n).split("");
+    for (let i = 0; i < chars.length; i++) {
+      const digit = Number(chars[i]);
+      const pos = chars.length - i - 1;
+      if (digit === 0) continue;
+      if (pos === 0) {
+        if (digit === 1 && chars.length > 1) result += "เอ็ด";
+        else result += digits[digit];
+      } else if (pos === 1) {
+        if (digit === 1) result += "สิบ";
+        else if (digit === 2) result += "ยี่สิบ";
+        else result += `${digits[digit]}สิบ`;
+      } else {
+        result += `${digits[digit]}${unitWords[pos]}`;
+      }
+    }
+    return result;
+  }
+
+  function convertInteger(n: number): string {
+    if (n === 0) return "ศูนย์";
+    let remaining = n;
+    let result = "";
+    const million = 1_000_000;
+    const chunks: number[] = [];
+    while (remaining > 0) {
+      chunks.unshift(remaining % million);
+      remaining = Math.floor(remaining / million);
+    }
+    chunks.forEach((chunk, index) => {
+      if (chunk === 0) return;
+      const chunkText = convertChunk(chunk);
+      if (index > 0) {
+        result += chunkText ? `${chunkText}ล้าน` : "ล้าน";
+      } else {
+        result += chunkText;
+      }
+    });
+    return result || "ศูนย์";
+  }
+
+  const integerText = convertInteger(integerPart);
+  if (satangPart === 0) return `${integerText}บาทถ้วน`;
+  const satangText = convertInteger(satangPart);
+  return `${integerText}บาท${satangText}สตางค์`;
+}
+
 export function DocumentGeneratorV2() {
   const templates = getDocumentV2Templates();
   const [fields, setFields] = useState<FieldItem[]>([]);
@@ -265,11 +323,21 @@ export function DocumentGeneratorV2() {
     return net > 0 ? net.toLocaleString("th-TH") : "";
   }
 
+  function computeRemainingAmountThaiText() {
+    const currentTotal = String((editableData || sampleData || {}).remainingAmount || "");
+    const normalized = currentTotal.replace(/,/g, "").replace(/[^\d.-]/g, "");
+    if (!normalized) return String((sampleData || {}).remainingAmountThaiText || "");
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed)) return String((sampleData || {}).remainingAmountThaiText || "");
+    return parsed > 0 ? thaiNumberToWords(parsed) : "";
+  }
+
   function buildGeneratePayload() {
     const payload = {
       ...(editableData || sampleData || {}),
       ...temporaryReceiptExtras
     } as Record<string, string>;
+    payload.remainingAmountThaiText = computeRemainingAmountThaiText();
     payload.row3NetPriceNote = temporaryReceiptExtras.row3NetPriceNote || "";
     payload.row1Note = temporaryReceiptExtras.row1Note || "";
     payload.row3Note = temporaryReceiptExtras.row3Note || "";
@@ -686,7 +754,7 @@ export function DocumentGeneratorV2() {
             </button>
             <button onClick={preview} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">{loading ? <Loader2 className="inline animate-spin" size={16} /> : <Eye className="inline" size={16} />} Preview เอกสาร</button>
             <button onClick={previewProbe} disabled={loading} className="rounded border border-yellow-300/40 px-4 py-2 text-yellow-200">ทดสอบ Field</button>
-            <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50"><ImageIcon className="inline" size={16} /> อัปเดตเอกสาร</button>
+            <button onClick={preview} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50"><ImageIcon className="inline" size={16} /> อัปเดตเอกสาร</button>
           </div>
           <p className="text-xs text-gray-300">กดเพื่ออัปเดต Preview / PDF ตามข้อมูลที่แก้ด้านล่าง</p>
           <div className="text-xs text-gray-300 space-y-1">
@@ -809,7 +877,7 @@ export function DocumentGeneratorV2() {
       {!settingsMode ? (
         <>
           <div className="grid grid-cols-1 gap-2 rounded border border-white/10 p-3 sm:grid-cols-2">
-            <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">
+            <button onClick={preview} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">
               <ImageIcon className="inline" size={16} /> อัปเดตเอกสาร
             </button>
           </div>
@@ -1080,21 +1148,6 @@ export function DocumentGeneratorV2() {
         ) : null}
       </div>
 
-      {pngUrl ? (
-        <div className="rounded border border-white/10 p-3">
-          <h2 className="mb-2 font-semibold">PNG</h2>
-          <img src={pngUrl} alt="PNG preview" className="max-w-full rounded bg-white" />
-          <p className="mt-2 text-xs text-gray-300">บน iPhone ถ้าปุ่ม Download ไม่เข้า Photos ให้กด “แชร์/บันทึกรูป” แล้วเลือก Save Image</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <a href={pngUrl} download={pngFileName} className="inline-flex items-center gap-2 rounded bg-emerald-500 px-3 py-2 font-semibold text-black">
-              <Download size={16} /> Download PNG
-            </a>
-            <button onClick={sharePng} className="inline-flex items-center gap-2 rounded border border-white/20 px-3 py-2 font-semibold text-white">
-              <Share2 size={16} /> แชร์/บันทึกรูป
-            </button>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
