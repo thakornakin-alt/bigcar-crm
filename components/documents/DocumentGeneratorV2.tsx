@@ -524,49 +524,74 @@ export function DocumentGeneratorV2() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMappingLocked, mapping, templateId]);
 
-  async function preview() {
-    return generatePdf(false);
-  }
-
-  async function generatePdf(download = false) {
+  async function generatePdfBlob() {
     if (!isTemplateReady) {
       setError("ไม่พบ AcroForm fields ในไฟล์นี้");
-      return;
+      return null;
     }
     if (!selectedReport) {
       setError("กรุณาโหลดและเลือกรายงานขายก่อน Preview");
-      return;
+      return null;
     }
     if (!reportsLoaded) {
       setError("กรุณาโหลดรายงานขายก่อน");
-      return;
+      return null;
     }
     try {
       setLoading(true);
       setError("");
       const payloadData = buildGeneratePayload();
-      const blob = await api<Blob>("/api/documents-v2/generate", {
+      return await api<Blob>("/api/documents-v2/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ report: selectedReport, templateId, data: payloadData })
       });
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-      const url = URL.createObjectURL(blob);
-      setPreviewUrl(url);
-      if (download) {
-        const fileBase = [
-          loadedTemplateFile.replace(/\.pdf$/i, ""),
-          safeFilePart(sampleData.customerName),
-          safeFilePart(sampleData.plateNo)
-        ].filter(Boolean).join("-");
-        const fileName = `${fileBase || "document-v2"}.pdf`;
-        downloadObjectUrl(url, fileName);
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Preview ไม่สำเร็จ");
+      return null;
     } finally {
       setLoading(false);
     }
+  }
+
+  async function refreshDocumentPreviews() {
+    const blob = await generatePdfBlob();
+    if (!blob) return null;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    const pdfUrl = URL.createObjectURL(blob);
+    setPreviewUrl(pdfUrl);
+
+    const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as any;
+    pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+    const pdf = await pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 3 });
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas ไม่พร้อม");
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    const nextPngBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!nextPngBlob) throw new Error("แปลง PNG ไม่สำเร็จ");
+    if (pngUrl.startsWith("blob:")) URL.revokeObjectURL(pngUrl);
+    const fileBase = [
+      "sale-contract",
+      safeFilePart(sampleData.customerName),
+      safeFilePart(sampleData.plateNo)
+    ].filter(Boolean).join("-");
+    const fileName = `${fileBase || "document-v2"}.png`;
+    const nextPngUrl = URL.createObjectURL(nextPngBlob);
+    setPngUrl(nextPngUrl);
+    setPngBlob(nextPngBlob);
+    setPngFileName(fileName);
+    return { pdfUrl, nextPngUrl, nextPngBlob, fileName };
+  }
+
+  async function preview() {
+    return refreshDocumentPreviews();
   }
 
   async function previewProbe() {
@@ -593,6 +618,23 @@ export function DocumentGeneratorV2() {
   }
 
   async function exportPng() {
+    if (pngBlob && pngUrl) {
+      const file = new File([pngBlob], pngFileName, { type: "image/png" });
+      const nav = navigator as Navigator & {
+        canShare?: (data: { files?: File[] }) => boolean;
+        share?: (data: { files?: File[]; title?: string; text?: string }) => Promise<void>;
+      };
+      if (nav.share && (!nav.canShare || nav.canShare({ files: [file] }))) {
+        await nav.share({
+          files: [file],
+          title: "สัญญาซื้อขายรถยนต์",
+          text: "เอกสาร PNG จาก BIG CAR CRM"
+        });
+        return;
+      }
+      downloadObjectUrl(pngUrl, pngFileName);
+      return;
+    }
     if (!isTemplateReady) {
       setError("ไม่พบ AcroForm fields ในไฟล์นี้");
       return;
@@ -608,53 +650,10 @@ export function DocumentGeneratorV2() {
     try {
       setLoading(true);
       setError("");
-      const payloadData = buildGeneratePayload();
-      const blob = await api<Blob>("/api/documents-v2/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report: selectedReport, templateId, data: payloadData })
-      });
-      const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as any;
-      pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
-      const pdf = await pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
-      const page = await pdf.getPage(1);
-      const viewport = page.getViewport({ scale: 3 });
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas ไม่พร้อม");
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      await page.render({ canvasContext: ctx, viewport }).promise;
-      const nextPngBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
-      if (!nextPngBlob) throw new Error("แปลง PNG ไม่สำเร็จ");
-      if (pngUrl.startsWith("blob:")) URL.revokeObjectURL(pngUrl);
-      const fileBase = [
-        "sale-contract",
-        safeFilePart(sampleData.customerName),
-        safeFilePart(sampleData.plateNo)
-      ].filter(Boolean).join("-");
-      const fileName = `${fileBase || "document-v2"}.png`;
-      const url = URL.createObjectURL(nextPngBlob);
-      setPngUrl(url);
-      setPngBlob(nextPngBlob);
-      setPngFileName(fileName);
-      const file = new File([nextPngBlob], fileName, { type: "image/png" });
-      const nav = navigator as Navigator & {
-        canShare?: (data: { files?: File[] }) => boolean;
-        share?: (data: { files?: File[]; title?: string; text?: string }) => Promise<void>;
-      };
-      const shareData = {
-        title: "เอกสารจาก BIG CAR CRM",
-        text: "PNG จาก DocumentGeneratorV2",
-        files: [file]
-      };
-      if (nav.share && (!nav.canShare || nav.canShare(shareData))) {
-        await nav.share(shareData);
-        return;
+      const refreshed = await refreshDocumentPreviews();
+      if (refreshed?.nextPngUrl) {
+        downloadObjectUrl(refreshed.nextPngUrl, refreshed.fileName);
       }
-      downloadObjectUrl(url, fileName);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Export PNG ไม่สำเร็จ");
     } finally {
