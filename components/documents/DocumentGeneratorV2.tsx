@@ -1083,6 +1083,11 @@ export function DocumentGeneratorV2() {
             <div className="mt-4 rounded border border-white/10 bg-black/20 p-3">
               <h3 className="font-semibold">ข้อมูลหนังสือมอบอำนาจ</h3>
               <p className="mt-1 text-xs text-gray-300">ใช้เฉพาะตอน Preview / Generate PDF เท่านั้น</p>
+              <div className="mt-2 rounded border border-white/10 bg-black/30 p-2 text-xs text-gray-300">
+                <div className="font-medium text-gray-200">ที่อยู่จากรายงานขาย (อ้างอิงเท่านั้น)</div>
+                <div className="mt-1 whitespace-pre-wrap break-words">{String((editableData || sampleData || {}).customerAddress || "ไม่มีข้อมูล")}</div>
+                <div className="mt-1 text-[11px] text-gray-500">ระบบจะไม่แยกที่อยู่นี้ให้อัตโนมัติ ผู้ใช้กรอกบ้านเลขที่ / หมู่ / ซอย / ถนน / ตำบล / อำเภอ / จังหวัดเองได้</div>
+              </div>
               <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                 <label className="block space-y-1 md:col-span-2">
                   <span className="block text-xs text-gray-300">วัตถุประสงค์การมอบอำนาจ</span>
