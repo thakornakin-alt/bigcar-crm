@@ -270,16 +270,6 @@ export function DocumentGeneratorV2() {
     try {
       setError("");
       setIsTemplateReady(false);
-      const templateProbe = await fetch(selectedTemplate.path, { method: "GET", cache: "no-store" });
-      if (!templateProbe.ok) {
-        setDebug({
-          selectedTemplate: selectedTemplate,
-          fetchStatus: templateProbe.status,
-          fieldsCount: 0,
-          fieldNames: []
-        });
-        throw new Error("ไม่พบไฟล์ template");
-      }
       const res = await api<{
         ok: boolean;
         fields: FieldItem[];
@@ -952,21 +942,31 @@ export function DocumentGeneratorV2() {
                 />
               </label>
 
-              {[
-                { idx: 6, amountKey: "line6Amount", statusKey: "line6Status" },
-                { idx: 7, amountKey: "line7Amount", statusKey: "line7Status" },
-                { idx: 8, amountKey: "line8Amount", statusKey: "line8Status" },
-                { idx: 9, amountKey: "line9Amount", statusKey: "line9Status" },
-                { idx: 10, amountKey: "line10Amount", statusKey: "line10Status" },
-                { idx: 11, amountKey: "line11Amount", statusKey: "line11Status" },
-                { idx: 12, amountKey: "line12Amount", statusKey: "line12Status" },
-                { idx: 13, amountKey: "line13Amount", statusKey: "line13Status" },
-                { idx: 14, amountKey: "line14Amount", statusKey: "line14Status" }
+              {[ 
+                { idx: 6, title: "ลำดับ 6 ค่าประกันภัยรถยนต์", amountKey: "line6Amount", statusKey: "line6Status" },
+                { idx: 7, title: "ลำดับ 7 ค่าประกันชีวิต / ประกันสินเชื่อ", amountKey: "line7Amount", statusKey: "line7Status" },
+                { idx: 8, title: "ลำดับ 8 ค่าประกันเครื่องเกียร์ (EW) ไฟแนนซ์", amountKey: "line8Amount", statusKey: "line8Status" },
+                { idx: 9, title: "ลำดับ 9 ค่าประกันเครื่องเกียร์ (EW) อินทรา", amountKey: "line9Amount", statusKey: "line9Status" },
+                { idx: 10, title: "ลำดับ 10 ค่าบริการโอนกรรมสิทธิ์เล่มทะเบียน", amountKey: "line10Amount", statusKey: "line10Status" },
+                { idx: 11, title: "ลำดับ 11 ค่าปรับสภาพรถยนต์ตามมาตรฐาน", amountKey: "line11Amount", statusKey: "line11Status" },
+                { idx: 12, title: "ลำดับ 12 ค่าล้างและทำสปารถยนต์", amountKey: "line12Amount", statusKey: "line12Status" },
+                { idx: 13, title: "ลำดับ 13 ค่าขนส่งรถสไลด์", amountKey: "line13Amount", statusKey: "line13Status" },
+                { idx: 14, title: "ลำดับ 14 ค่าอื่น ๆ ถ้ามี", amountKey: "line14Amount", statusKey: "line14Status" }
               ].map(({ idx, amountKey, statusKey }) => (
                 <div key={idx} className="rounded border border-white/10 bg-black/20 p-3">
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-[1.2fr_1fr]">
                     <label className="block space-y-1">
-                      <span className="block text-xs text-gray-300">ลำดับ {idx} จำนวนเงิน</span>
+                      <span className="block text-xs text-gray-300">{[
+                        "ลำดับ 6 ค่าประกันภัยรถยนต์",
+                        "ลำดับ 7 ค่าประกันชีวิต / ประกันสินเชื่อ",
+                        "ลำดับ 8 ค่าประกันเครื่องเกียร์ (EW) ไฟแนนซ์",
+                        "ลำดับ 9 ค่าประกันเครื่องเกียร์ (EW) อินทรา",
+                        "ลำดับ 10 ค่าบริการโอนกรรมสิทธิ์เล่มทะเบียน",
+                        "ลำดับ 11 ค่าปรับสภาพรถยนต์ตามมาตรฐาน",
+                        "ลำดับ 12 ค่าล้างและทำสปารถยนต์",
+                        "ลำดับ 13 ค่าขนส่งรถสไลด์",
+                        "ลำดับ 14 ค่าอื่น ๆ ถ้ามี"
+                      ][idx - 6]}</span>
                       <input
                         value={temporaryReceiptExtras[amountKey as keyof TemporaryReceiptExtraData] as string}
                         onChange={(e) => updateTemporaryReceiptExtra(amountKey as keyof TemporaryReceiptExtraData, e.target.value)}
