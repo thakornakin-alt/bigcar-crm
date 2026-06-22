@@ -684,10 +684,11 @@ export function DocumentGeneratorV2() {
             >
               {isMappingLocked ? "Mapping ล็อกแล้ว" : saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "บันทึก Mapping"}
             </button>
-            <button onClick={preview} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">{loading ? <Loader2 className="inline animate-spin" size={16} /> : <Eye className="inline" size={16} />} Preview PDF</button>
+            <button onClick={preview} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">{loading ? <Loader2 className="inline animate-spin" size={16} /> : <Eye className="inline" size={16} />} Preview เอกสาร</button>
             <button onClick={previewProbe} disabled={loading} className="rounded border border-yellow-300/40 px-4 py-2 text-yellow-200">ทดสอบ Field</button>
-            <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50"><ImageIcon className="inline" size={16} /> เซฟ PNG</button>
+            <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50"><ImageIcon className="inline" size={16} /> อัปเดตเอกสาร</button>
           </div>
+          <p className="text-xs text-gray-300">กดเพื่ออัปเดต Preview / PDF ตามข้อมูลที่แก้ด้านล่าง</p>
           <div className="text-xs text-gray-300 space-y-1">
             <div>
               สถานะ Mapping: {isMappingLocked ? "ล็อกสำหรับ PDF สัญญาซื้อขายรถยนต์" : saveState === "dirty" ? "มีการแก้ไข (รอบันทึกอัตโนมัติ)" : saveState === "saving" ? "กำลังบันทึก..." : saveState === "saved" ? "บันทึกแล้ว" : saveState === "error" ? "บันทึกล้มเหลว" : "ยังไม่เริ่ม"} {lastSavedAt && !isMappingLocked ? `· ล่าสุด ${lastSavedAt}` : ""}
@@ -791,7 +792,8 @@ export function DocumentGeneratorV2() {
 
       {previewUrl ? (
         <div className="rounded border border-white/10 p-3">
-          <h2 className="mb-2 font-semibold">Preview PDF</h2>
+          <h2 className="mb-2 font-semibold">Preview เอกสาร</h2>
+          <p className="mb-2 text-xs text-gray-300">แสดงตัวอย่างเอกสารตามข้อมูลล่าสุด หากแก้ข้อมูลด้านล่าง ให้กด “อัปเดตเอกสาร” ก่อน Download PDF</p>
           <div
             className="max-h-[78svh] overflow-auto rounded bg-white"
             style={{ touchAction: "pan-x pan-y pinch-zoom", WebkitOverflowScrolling: "touch" }}
@@ -799,17 +801,20 @@ export function DocumentGeneratorV2() {
             <iframe src={previewUrl} className="h-[78svh] w-full rounded bg-white" />
           </div>
           <a href={previewUrl} download={loadedTemplateFile || selectedTemplate.fileName || "document-v2.pdf"} className="mt-2 inline-flex items-center gap-2 rounded bg-emerald-500 px-3 py-2 font-semibold text-black">
-            <Download size={16} /> Download PDF
+            <Download size={16} /> Download PDF ตาม Preview นี้
           </a>
         </div>
       ) : null}
 
       {!settingsMode ? (
-        <div className="grid grid-cols-1 gap-2 rounded border border-white/10 p-3 sm:grid-cols-2">
-          <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">
-            <ImageIcon className="inline" size={16} /> เซฟ PNG
-          </button>
-        </div>
+        <>
+          <div className="grid grid-cols-1 gap-2 rounded border border-white/10 p-3 sm:grid-cols-2">
+            <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">
+              <ImageIcon className="inline" size={16} /> อัปเดตเอกสาร
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-gray-300">กดเพื่ออัปเดต Preview / PDF ตามข้อมูลที่แก้ด้านล่าง</p>
+        </>
       ) : null}
 
       {templateId === "temporary-receipt" ? (
