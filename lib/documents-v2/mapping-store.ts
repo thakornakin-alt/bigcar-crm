@@ -77,6 +77,7 @@ const TEMPORARY_RECEIPT_DEFAULT_MAPPING: DocumentV2FieldMapping = {
   booking_no: "bookingNo",
   Sale: "saleName",
   FINANCE: "financeCompany",
+  Underline3: "raw:netSellPrice",
   TOTAL_THAI: "remainingAmountThaiText",
   SELL_Price: "sellPrice",
   TOTAL_PAY: "remainingAmount",

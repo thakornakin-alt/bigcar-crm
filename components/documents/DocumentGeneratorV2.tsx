@@ -19,6 +19,7 @@ type FieldsDebug = {
 
 type TemporaryReceiptExtraStatus = "none" | "gift" | "charge";
 type TemporaryReceiptExtraData = {
+  netSellPrice: string;
   line2Discount: string;
   line4Installment: string;
   line5DownPayment: string;
@@ -43,6 +44,7 @@ type TemporaryReceiptExtraData = {
 };
 
 const DEFAULT_TEMPORARY_RECEIPT_EXTRAS: TemporaryReceiptExtraData = {
+  netSellPrice: "",
   line2Discount: "",
   line4Installment: "",
   line5DownPayment: "",
@@ -246,11 +248,22 @@ export function DocumentGeneratorV2() {
     setTemporaryReceiptExtras((prev) => ({ ...prev, [key]: value }));
   }
 
+  function computeNetSellPrice() {
+    const sellPriceText = String((editableData || sampleData || {}).sellPrice || "");
+    const base = Number(sellPriceText.replace(/,/g, "").replace(/[^\d.-]/g, ""));
+    const discount = Number(String(temporaryReceiptExtras.line2Discount || "").replace(/,/g, "").replace(/[^\d.-]/g, ""));
+    if (!Number.isFinite(base)) return "";
+    const net = Number.isFinite(discount) ? Math.max(base - discount, 0) : base;
+    return net > 0 ? net.toLocaleString("th-TH") : "";
+  }
+
   function buildGeneratePayload() {
-    return {
+    const payload = {
       ...(editableData || sampleData || {}),
       ...temporaryReceiptExtras
     } as Record<string, string>;
+    payload.netSellPrice = temporaryReceiptExtras.netSellPrice || computeNetSellPrice();
+    return payload;
   }
 
   async function loadFields() {
@@ -814,6 +827,9 @@ export function DocumentGeneratorV2() {
             {editableFieldOrder.map((key) => {
               const editableSource = (editableData || sampleData || {}) as Record<string, string>;
               const currentValue = String(editableSource[String(key)] || "");
+              if (["sellPrice", "deposit", "remainingAmount"].includes(String(key))) {
+                return null;
+              }
               const isDatePart = String(key).endsWith("Day") || String(key).endsWith("Month") || String(key).endsWith("Year");
               const isDateHead = String(key) === "contractDate" || String(key) === "currentDate";
               if (isDatePart) {
@@ -873,6 +889,24 @@ export function DocumentGeneratorV2() {
             <p className="mt-1 text-xs text-gray-300">ใช้เฉพาะตอน Preview / Generate PDF เท่านั้น</p>
             <div className="mt-3 space-y-4">
               <label className="block space-y-1">
+                <span className="block text-xs text-gray-300">ลำดับ 1 ราคาขายรถยนต์</span>
+                <input
+                  value={String((editableData || sampleData || {}).sellPrice || "")}
+                  onChange={(e) => updateEditableField("sellPrice", e.target.value)}
+                  inputMode="numeric"
+                  className="w-full rounded bg-black/40 p-2 text-sm"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="block text-xs text-gray-300">ลำดับ 3 ราคารถยนต์สุทธิ</span>
+                <input
+                  value={temporaryReceiptExtras.netSellPrice || computeNetSellPrice()}
+                  onChange={(e) => updateTemporaryReceiptExtra("netSellPrice", e.target.value)}
+                  inputMode="numeric"
+                  className="w-full rounded bg-black/40 p-2 text-sm"
+                />
+              </label>
+              <label className="block space-y-1">
                 <span className="block text-xs text-gray-300">ลำดับ 2 ส่วนลดราคาขาย</span>
                 <input
                   value={temporaryReceiptExtras.line2Discount}
@@ -895,6 +929,24 @@ export function DocumentGeneratorV2() {
                 <input
                   value={temporaryReceiptExtras.line5DownPayment}
                   onChange={(e) => updateTemporaryReceiptExtra("line5DownPayment", e.target.value)}
+                  inputMode="numeric"
+                  className="w-full rounded bg-black/40 p-2 text-sm"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="block text-xs text-gray-300">ลำดับ 15 เงินมัดจำ</span>
+                <input
+                  value={String((editableData || sampleData || {}).deposit || "")}
+                  onChange={(e) => updateEditableField("deposit", e.target.value)}
+                  inputMode="numeric"
+                  className="w-full rounded bg-black/40 p-2 text-sm"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="block text-xs text-gray-300">ยอดชำระเงินรวมทั้งสิ้น</span>
+                <input
+                  value={String((editableData || sampleData || {}).remainingAmount || "")}
+                  onChange={(e) => updateEditableField("remainingAmount", e.target.value)}
                   inputMode="numeric"
                   className="w-full rounded bg-black/40 p-2 text-sm"
                 />
