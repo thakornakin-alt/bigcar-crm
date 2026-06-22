@@ -19,7 +19,11 @@ type FieldsDebug = {
 
 type TemporaryReceiptExtraStatus = "none" | "gift" | "charge";
 type TemporaryReceiptExtraData = {
-  netSellPrice: string;
+  row3NetPriceNote: string;
+  row1Note: string;
+  row3Note: string;
+  bookingDate: string;
+  depositDate: string;
   line2Discount: string;
   line4Installment: string;
   line5DownPayment: string;
@@ -44,7 +48,11 @@ type TemporaryReceiptExtraData = {
 };
 
 const DEFAULT_TEMPORARY_RECEIPT_EXTRAS: TemporaryReceiptExtraData = {
-  netSellPrice: "",
+  row3NetPriceNote: "",
+  row1Note: "",
+  row3Note: "",
+  bookingDate: "",
+  depositDate: "",
   line2Discount: "",
   line4Installment: "",
   line5DownPayment: "",
@@ -262,7 +270,11 @@ export function DocumentGeneratorV2() {
       ...(editableData || sampleData || {}),
       ...temporaryReceiptExtras
     } as Record<string, string>;
-    payload.netSellPrice = temporaryReceiptExtras.netSellPrice || computeNetSellPrice();
+    payload.row3NetPriceNote = temporaryReceiptExtras.row3NetPriceNote || "";
+    payload.row1Note = temporaryReceiptExtras.row1Note || "";
+    payload.row3Note = temporaryReceiptExtras.row3Note || "";
+    payload.bookingDate = temporaryReceiptExtras.bookingDate || "";
+    payload.depositDate = temporaryReceiptExtras.depositDate || "";
     return payload;
   }
 
@@ -888,11 +900,45 @@ export function DocumentGeneratorV2() {
                 />
               </label>
               <label className="block space-y-1">
+                <span className="block text-xs text-gray-300">หมายเหตุลำดับ 1</span>
+                <input
+                  value={temporaryReceiptExtras.row1Note}
+                  onChange={(e) => updateTemporaryReceiptExtra("row1Note", e.target.value)}
+                  className="w-full rounded bg-black/40 p-2 text-sm"
+                />
+              </label>
+              <label className="block space-y-1">
                 <span className="block text-xs text-gray-300">ลำดับ 3 ราคารถยนต์สุทธิ</span>
                 <input
-                  value={temporaryReceiptExtras.netSellPrice || computeNetSellPrice()}
-                  onChange={(e) => updateTemporaryReceiptExtra("netSellPrice", e.target.value)}
-                  inputMode="numeric"
+                  value={String((editableData || sampleData || {}).sellPrice || "")}
+                  readOnly
+                  className="w-full rounded bg-black/40 p-2 text-sm"
+                />
+                <p className="text-[11px] text-gray-500">ลำดับ 3 ใช้ค่าเดียวกับลำดับ 1 ตาม field PDF ปัจจุบัน</p>
+              </label>
+              <label className="block space-y-1">
+                <span className="block text-xs text-gray-300">หมายเหตุลำดับ 3</span>
+                <input
+                  value={temporaryReceiptExtras.row3Note}
+                  onChange={(e) => updateTemporaryReceiptExtra("row3Note", e.target.value)}
+                  className="w-full rounded bg-black/40 p-2 text-sm"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="block text-xs text-gray-300">วันที่ใบสั่งจอง</span>
+                <input
+                  value={temporaryReceiptExtras.bookingDate}
+                  onChange={(e) => updateTemporaryReceiptExtra("bookingDate", e.target.value)}
+                  placeholder="22/06/2026"
+                  className="w-full rounded bg-black/40 p-2 text-sm"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="block text-xs text-gray-300">วันที่ชำระเงินมัดจำ</span>
+                <input
+                  value={temporaryReceiptExtras.depositDate}
+                  onChange={(e) => updateTemporaryReceiptExtra("depositDate", e.target.value)}
+                  placeholder="22/06/2026"
                   className="w-full rounded bg-black/40 p-2 text-sm"
                 />
               </label>

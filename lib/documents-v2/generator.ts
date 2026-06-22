@@ -217,6 +217,10 @@ function applyTemporaryReceiptExtras(
   thaiFont: Awaited<ReturnType<PDFDocument["embedFont"]>>
 ) {
   const textFieldMap: Array<[string, string[]]> = [
+    ["bookingDate", ["fill_7"]],
+    ["depositDate", ["fill_9"]],
+    ["row1Note", ["Underline1"]],
+    ["row3Note", ["Underline3"]],
     ["line2Discount", ["fill_34"]],
     ["line4Installment", ["fill_36"]],
     ["line5DownPayment", ["Downpayment"]],

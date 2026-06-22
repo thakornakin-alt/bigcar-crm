@@ -77,11 +77,14 @@ const TEMPORARY_RECEIPT_DEFAULT_MAPPING: DocumentV2FieldMapping = {
   booking_no: "bookingNo",
   Sale: "saleName",
   FINANCE: "financeCompany",
-  Underline3: "raw:netSellPrice",
+  Underline3: "raw:row3Note",
   TOTAL_THAI: "remainingAmountThaiText",
   SELL_Price: "sellPrice",
   TOTAL_PAY: "remainingAmount",
   Deposit: "deposit",
+  fill_7: "raw:bookingDate",
+  fill_9: "raw:depositDate",
+  Underline1: "raw:row1Note",
   Sale_Name: "saleName",
   MANAGER_NAME: "approverName"
 };
