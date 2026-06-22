@@ -89,9 +89,27 @@ const TEMPORARY_RECEIPT_DEFAULT_MAPPING: DocumentV2FieldMapping = {
   MANAGER_NAME: "approverName"
 };
 
+const POWER_OF_ATTORNEY_DEFAULT_MAPPING: DocumentV2FieldMapping = {
+  Customer_name: "customerName",
+  customer_age: "raw:customer_age",
+  customer_race: "raw:customer_race",
+  customer_nationality: "raw:customer_nationality",
+  customer_house_no: "raw:customer_house_no",
+  customer_moo: "raw:customer_moo",
+  customer_soi: "raw:customer_soi",
+  customer_road: "raw:customer_road",
+  cusyomer_subdistrict: "raw:cusyomer_subdistrict",
+  customer_district: "raw:customer_district",
+  customer_province: "raw:customer_province",
+  vehicle_plate: "raw:vehicle_plate"
+};
+
 export function getDefaultDocumentV2Mapping(templateId?: string): DocumentV2FieldMapping {
   if (templateId === "temporary-receipt") {
     return { ...TEMPORARY_RECEIPT_DEFAULT_MAPPING };
+  }
+  if (templateId === "power-of-attorney") {
+    return { ...POWER_OF_ATTORNEY_DEFAULT_MAPPING };
   }
   return { ...DEFAULT_MAPPING };
 }

@@ -47,6 +47,21 @@ type TemporaryReceiptExtraData = {
   line14Status: TemporaryReceiptExtraStatus;
 };
 
+type PowerOfAttorneyPurpose = "มอบอำนาจรับรถแทน" | "สำหรับโอนรถยนต์";
+type PowerOfAttorneyExtraData = {
+  purpose: PowerOfAttorneyPurpose;
+  customer_age: string;
+  customer_race: string;
+  customer_nationality: string;
+  customer_house_no: string;
+  customer_moo: string;
+  customer_soi: string;
+  customer_road: string;
+  cusyomer_subdistrict: string;
+  customer_district: string;
+  customer_province: string;
+};
+
 const DEFAULT_TEMPORARY_RECEIPT_EXTRAS: TemporaryReceiptExtraData = {
   row3NetPriceNote: "",
   row1Note: "",
@@ -74,6 +89,20 @@ const DEFAULT_TEMPORARY_RECEIPT_EXTRAS: TemporaryReceiptExtraData = {
   line12Status: "none",
   line13Status: "none",
   line14Status: "none"
+};
+
+const DEFAULT_POWER_OF_ATTORNEY_EXTRAS: PowerOfAttorneyExtraData = {
+  purpose: "มอบอำนาจรับรถแทน",
+  customer_age: "",
+  customer_race: "",
+  customer_nationality: "",
+  customer_house_no: "",
+  customer_moo: "",
+  customer_soi: "",
+  customer_road: "",
+  cusyomer_subdistrict: "",
+  customer_district: "",
+  customer_province: ""
 };
 
 function isNamedPdfField(name: string) {
@@ -180,6 +209,13 @@ function formatDatePartValue(value: string, fallback: string) {
   return raw;
 }
 
+function composePowerOfAttorneyVehiclePlate(plateValue: unknown, purpose: PowerOfAttorneyPurpose) {
+  const plate = String(plateValue || "").trim().replace(/\s+/g, " ");
+  const selectedPurpose = purpose || "มอบอำนาจรับรถแทน";
+  if (!plate) return "";
+  return `${selectedPurpose} ทะเบียน ${plate}`;
+}
+
 function thaiNumberToWords(input: number) {
   if (!Number.isFinite(input)) return "";
   const rounded = Math.round(input * 100) / 100;
@@ -264,6 +300,7 @@ export function DocumentGeneratorV2() {
   const [editableData, setEditableData] = useState<ResolvedDocumentV2Data | null>(null);
   const [editableTouched, setEditableTouched] = useState(false);
   const [temporaryReceiptExtras, setTemporaryReceiptExtras] = useState<TemporaryReceiptExtraData>(DEFAULT_TEMPORARY_RECEIPT_EXTRAS);
+  const [powerOfAttorneyExtras, setPowerOfAttorneyExtras] = useState<PowerOfAttorneyExtraData>(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
   const [resolveDebug, setResolveDebug] = useState<DocumentV2ResolveDebug | null>(null);
   const [resolvingData, setResolvingData] = useState(false);
   const [settingsMode, setSettingsMode] = useState(false);
@@ -281,9 +318,24 @@ export function DocumentGeneratorV2() {
   const rawReportData = useMemo(
     () => ({
       ...Object.fromEntries(Object.entries((selectedReport || {}) as Record<string, unknown>).map(([k, v]) => [k, v == null ? "" : String(v)])),
-      ...(resolvedData || {})
+      ...(resolvedData || {}),
+      ...(templateId === "power-of-attorney"
+        ? {
+            customer_age: powerOfAttorneyExtras.customer_age,
+            customer_race: powerOfAttorneyExtras.customer_race,
+            customer_nationality: powerOfAttorneyExtras.customer_nationality,
+            customer_house_no: powerOfAttorneyExtras.customer_house_no,
+            customer_moo: powerOfAttorneyExtras.customer_moo,
+            customer_soi: powerOfAttorneyExtras.customer_soi,
+            customer_road: powerOfAttorneyExtras.customer_road,
+            cusyomer_subdistrict: powerOfAttorneyExtras.cusyomer_subdistrict,
+            customer_district: powerOfAttorneyExtras.customer_district,
+            customer_province: powerOfAttorneyExtras.customer_province,
+            vehicle_plate: composePowerOfAttorneyVehiclePlate((editableData || sampleData || {}).plateNo, powerOfAttorneyExtras.purpose)
+          }
+        : {})
     }),
-    [resolvedData, selectedReport]
+    [editableData, powerOfAttorneyExtras, resolvedData, sampleData, selectedReport, templateId]
   );
   const reportRawKeys = useMemo(() => Object.keys(rawReportData).sort((a, b) => a.localeCompare(b)), [rawReportData]);
   const namedFields = useMemo(() => fields.filter((field) => isNamedPdfField(field.name)), [fields]);
@@ -293,10 +345,11 @@ export function DocumentGeneratorV2() {
     [mapping]
   );
   const mappedNonEmptyCount = useMemo(() => {
+    const rawLookup = rawReportData as Record<string, unknown>;
     return Object.entries(mapping).reduce((acc, [, key]) => {
       if (!key) return acc;
       const value = String(key).startsWith("raw:")
-        ? rawReportData[String(key).slice(4)]
+        ? rawLookup[String(key).slice(4)]
         : (sampleData as Record<string, unknown>)[key];
       if (value !== undefined && value !== null && String(value).trim() !== "") return acc + 1;
       return acc;
@@ -308,10 +361,15 @@ export function DocumentGeneratorV2() {
     setEditableData(next || resolvedData || mapBookingToDocumentV2(selectedReport));
     setEditableTouched(false);
     setTemporaryReceiptExtras(DEFAULT_TEMPORARY_RECEIPT_EXTRAS);
+    setPowerOfAttorneyExtras(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
   }
 
   function updateTemporaryReceiptExtra<K extends keyof TemporaryReceiptExtraData>(key: K, value: TemporaryReceiptExtraData[K]) {
     setTemporaryReceiptExtras((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function updatePowerOfAttorneyExtra<K extends keyof PowerOfAttorneyExtraData>(key: K, value: PowerOfAttorneyExtraData[K]) {
+    setPowerOfAttorneyExtras((prev) => ({ ...prev, [key]: value }));
   }
 
   function computeNetSellPrice() {
@@ -338,6 +396,19 @@ export function DocumentGeneratorV2() {
       ...temporaryReceiptExtras
     } as Record<string, string>;
     payload.remainingAmountThaiText = computeRemainingAmountThaiText();
+    if (templateId === "power-of-attorney") {
+      payload.customer_age = powerOfAttorneyExtras.customer_age || "";
+      payload.customer_race = powerOfAttorneyExtras.customer_race || "";
+      payload.customer_nationality = powerOfAttorneyExtras.customer_nationality || "";
+      payload.customer_house_no = powerOfAttorneyExtras.customer_house_no || "";
+      payload.customer_moo = powerOfAttorneyExtras.customer_moo || "";
+      payload.customer_soi = powerOfAttorneyExtras.customer_soi || "";
+      payload.customer_road = powerOfAttorneyExtras.customer_road || "";
+      payload.cusyomer_subdistrict = powerOfAttorneyExtras.cusyomer_subdistrict || "";
+      payload.customer_district = powerOfAttorneyExtras.customer_district || "";
+      payload.customer_province = powerOfAttorneyExtras.customer_province || "";
+      payload.vehicle_plate = composePowerOfAttorneyVehiclePlate((editableData || sampleData || {}).plateNo, powerOfAttorneyExtras.purpose);
+    }
     payload.row3NetPriceNote = temporaryReceiptExtras.row3NetPriceNote || "";
     payload.row1Note = temporaryReceiptExtras.row1Note || "";
     payload.row3Note = temporaryReceiptExtras.row3Note || "";
@@ -470,6 +541,17 @@ export function DocumentGeneratorV2() {
       setEditableData(resolvedData || mapBookingToDocumentV2(selectedReport));
     }
   }, [resolvedData, selectedReport, editableTouched]);
+
+  useEffect(() => {
+    if (templateId === "power-of-attorney") {
+      setPowerOfAttorneyExtras((prev) => ({
+        ...DEFAULT_POWER_OF_ATTORNEY_EXTRAS,
+        purpose: prev.purpose || DEFAULT_POWER_OF_ATTORNEY_EXTRAS.purpose
+      }));
+    } else {
+      setPowerOfAttorneyExtras(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
+    }
+  }, [templateId, selectedReportId]);
 
   useEffect(() => {
     if (canRunGenerate && !previewUrl) {
@@ -842,11 +924,16 @@ export function DocumentGeneratorV2() {
                         ))}
                       </select>
                       {mapping[f.name] ? (
+                        (() => {
+                          const rawLookup = rawReportData as Record<string, unknown>;
+                          return (
                         <div className="text-xs text-emerald-300">
                           {String(mapping[f.name]).startsWith("raw:")
-                            ? `ตัวอย่าง (raw): ${String(mapping[f.name]).slice(4)} = ${String(rawReportData[String(mapping[f.name]).slice(4)] || "ไม่มีข้อมูล")}`
+                            ? `ตัวอย่าง (raw): ${String(mapping[f.name]).slice(4)} = ${String(rawLookup[String(mapping[f.name]).slice(4)] || "ไม่มีข้อมูล")}`
                             : `ตัวอย่าง: ${keyLabel[mapping[f.name] as DocumentV2FieldKey]} = ${String((sampleData as Record<string, unknown>)[mapping[f.name] as DocumentV2FieldKey] || "ไม่มีข้อมูล")}`}
                         </div>
+                          );
+                        })()
                       ) : null}
                     </div>
                   </div>
@@ -895,7 +982,7 @@ export function DocumentGeneratorV2() {
         </>
       ) : null}
 
-      {templateId === "temporary-receipt" ? (
+      {templateId === "temporary-receipt" || templateId === "power-of-attorney" ? (
         <div className="rounded border border-white/10 p-3">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className="font-semibold">แก้ข้อมูลก่อน Preview</h2>
@@ -932,6 +1019,9 @@ export function DocumentGeneratorV2() {
             {editableFieldOrder.map((key) => {
               const editableSource = (editableData || sampleData || {}) as Record<string, string>;
               const currentValue = String(editableSource[String(key)] || "");
+              if (templateId === "power-of-attorney" && String(key) === "plateNo") {
+                return null;
+              }
               if (["sellPrice", "deposit", "remainingAmount"].includes(String(key))) {
                 return null;
               }
@@ -989,6 +1079,56 @@ export function DocumentGeneratorV2() {
               );
             })}
           </div>
+          {templateId === "power-of-attorney" ? (
+            <div className="mt-4 rounded border border-white/10 bg-black/20 p-3">
+              <h3 className="font-semibold">ข้อมูลหนังสือมอบอำนาจ</h3>
+              <p className="mt-1 text-xs text-gray-300">ใช้เฉพาะตอน Preview / Generate PDF เท่านั้น</p>
+              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="block space-y-1 md:col-span-2">
+                  <span className="block text-xs text-gray-300">วัตถุประสงค์การมอบอำนาจ</span>
+                  <select
+                    value={powerOfAttorneyExtras.purpose}
+                    onChange={(e) => updatePowerOfAttorneyExtra("purpose", e.target.value as PowerOfAttorneyPurpose)}
+                    className="w-full rounded bg-black/40 p-2 text-sm"
+                  >
+                    <option value="มอบอำนาจรับรถแทน">มอบอำนาจรับรถแทน</option>
+                    <option value="สำหรับโอนรถยนต์">สำหรับโอนรถยนต์</option>
+                  </select>
+                </label>
+                <label className="block space-y-1 md:col-span-2">
+                  <span className="block text-xs text-gray-300">ทะเบียนรถ</span>
+                  <input
+                    value={String((editableData || sampleData || {}).plateNo || "")}
+                    onChange={(e) => updateEditableField("plateNo", e.target.value)}
+                    placeholder="1ขอ 7063"
+                    className="w-full rounded bg-black/40 p-2 text-sm"
+                  />
+                  <p className="text-[11px] text-gray-500">จะถูกเติมเป็น “{composePowerOfAttorneyVehiclePlate((editableData || sampleData || {}).plateNo, powerOfAttorneyExtras.purpose) || "มอบอำนาจรับรถแทน ทะเบียน ..."}” ใน field vehicle_plate</p>
+                </label>
+                {[
+                  ["customer_age", "อายุ"],
+                  ["customer_race", "เชื้อชาติ"],
+                  ["customer_nationality", "สัญชาติ"],
+                  ["customer_house_no", "บ้านเลขที่"],
+                  ["customer_moo", "หมู่ที่"],
+                  ["customer_soi", "ซอย"],
+                  ["customer_road", "ถนน"],
+                  ["cusyomer_subdistrict", "ตำบล/แขวง"],
+                  ["customer_district", "อำเภอ/เขต"],
+                  ["customer_province", "จังหวัด"]
+                ].map(([key, label]) => (
+                  <label key={key} className="block space-y-1">
+                    <span className="block text-xs text-gray-300">{label}</span>
+                      <input
+                        value={powerOfAttorneyExtras[key as keyof PowerOfAttorneyExtraData] as string}
+                      onChange={(e) => updatePowerOfAttorneyExtra(key as keyof PowerOfAttorneyExtraData, e.target.value)}
+                      className="w-full rounded bg-black/40 p-2 text-sm"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <div className="mt-4 rounded border border-white/10 bg-black/20 p-3">
             <h3 className="font-semibold">ข้อมูลเพิ่มเติมสำหรับใบเสร็จชั่วคราว</h3>
             <p className="mt-1 text-xs text-gray-300">ใช้เฉพาะตอน Preview / Generate PDF เท่านั้น</p>
