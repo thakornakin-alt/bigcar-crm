@@ -892,9 +892,12 @@ export function DocumentGeneratorV2() {
 
       {!settingsMode ? (
         <>
-          <div className="grid grid-cols-1 gap-2 rounded border border-white/10 p-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 rounded border border-white/10 p-3 sm:grid-cols-3">
             <button onClick={preview} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">
               <ImageIcon className="inline" size={16} /> อัปเดตเอกสาร
+            </button>
+            <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">
+              <ImageIcon className="inline" size={16} /> ดาวน์โหลด PNG
             </button>
           </div>
           <p className="mt-2 text-xs text-gray-300">กดเพื่ออัปเดต Preview / PDF ตามข้อมูลที่แก้ด้านล่าง</p>
