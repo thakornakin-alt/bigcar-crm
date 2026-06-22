@@ -64,6 +64,7 @@ const TEMPORARY_RECEIPT_DEFAULT_MAPPING: DocumentV2FieldMapping = {
   DATE_Year: "currentDateYear",
   Name_CUSTOMER: "customerName",
   CUSTOMER_NAE: "customerName",
+  fill_10: "customerAddress",
   ID_CARD: "idCard",
   Tel_Number: "phone",
   Lincese_no: "plateNo",

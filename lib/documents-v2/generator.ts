@@ -249,25 +249,6 @@ export async function generateDocumentV2WithBytes(
   setTextIfExists(form, ["manager_name", "MANAGER_NAME", "approverName"], fixedManagerName, thaiFont);
   form.updateFieldAppearances(thaiFont);
 
-  if (templateId === "temporary-receipt") {
-    const address = String((data as Record<string, unknown>).customerAddress || "").trim();
-    if (address) {
-      const firstPage = pdf.getPages()[0];
-      if (firstPage) {
-        const lines = wrapTextToLines(address, thaiFont, 8.5, 310, 2);
-        firstPage.drawText(lines.join("\n"), {
-          x: 74,
-          y: 636,
-          size: 8.5,
-          font: thaiFont,
-          color: rgb(0.02, 0.04, 0.07),
-          maxWidth: 310,
-          lineHeight: 9
-        });
-      }
-    }
-  }
-
   form.flatten();
   return pdf.save();
 }
