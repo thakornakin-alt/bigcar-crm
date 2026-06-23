@@ -1103,7 +1103,7 @@ export function DocumentGeneratorV2() {
         </>
       ) : null}
 
-      {isTemporaryReceipt ? (
+      {(isTemporaryReceipt || isPowerOfAttorney) ? (
         <div className="rounded border border-white/10 p-3">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className="font-semibold">แก้ข้อมูลก่อน Preview</h2>
@@ -1269,6 +1269,7 @@ export function DocumentGeneratorV2() {
               </div>
             </div>
           ) : null}
+          {isTemporaryReceipt ? (
           <div className="mt-4 rounded border border-white/10 bg-black/20 p-3">
             <h3 className="font-semibold">ข้อมูลเพิ่มเติมสำหรับใบเสร็จชั่วคราว</h3>
             <p className="mt-1 text-xs text-gray-300">ใช้เฉพาะตอน Preview / Generate PDF เท่านั้น</p>
@@ -1410,6 +1411,7 @@ export function DocumentGeneratorV2() {
               ))}
             </div>
           </div>
+          ) : null}
         </div>
       ) : null}
 
