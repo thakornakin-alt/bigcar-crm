@@ -1116,26 +1116,28 @@ export function DocumentGeneratorV2() {
             </button>
           </div>
           <p className="mb-3 text-xs text-gray-300">แตะช่องด้านล่างเพื่อแก้ค่าก่อนสร้าง Preview / PNG ได้เลย</p>
-          <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-            <label className="block space-y-1 md:col-span-2">
-              <span className="block text-xs text-gray-300">วันที่ใบสั่งจอง</span>
-              <input
-                value={temporaryReceiptExtras.bookingDate}
-                onChange={(e) => updateTemporaryReceiptExtra("bookingDate", e.target.value)}
-                placeholder="22/06/2026"
-                className="w-full rounded bg-black/40 p-2 text-sm"
-              />
-            </label>
-            <label className="block space-y-1 md:col-span-2">
-              <span className="block text-xs text-gray-300">วันที่ชำระเงินมัดจำ</span>
-              <input
-                value={temporaryReceiptExtras.depositDate}
-                onChange={(e) => updateTemporaryReceiptExtra("depositDate", e.target.value)}
-                placeholder="22/06/2026"
-                className="w-full rounded bg-black/40 p-2 text-sm"
-              />
-            </label>
-          </div>
+          {isTemporaryReceipt ? (
+            <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label className="block space-y-1 md:col-span-2">
+                <span className="block text-xs text-gray-300">วันที่ใบสั่งจอง</span>
+                <input
+                  value={temporaryReceiptExtras.bookingDate}
+                  onChange={(e) => updateTemporaryReceiptExtra("bookingDate", e.target.value)}
+                  placeholder="22/06/2026"
+                  className="w-full rounded bg-black/40 p-2 text-sm"
+                />
+              </label>
+              <label className="block space-y-1 md:col-span-2">
+                <span className="block text-xs text-gray-300">วันที่ชำระเงินมัดจำ</span>
+                <input
+                  value={temporaryReceiptExtras.depositDate}
+                  onChange={(e) => updateTemporaryReceiptExtra("depositDate", e.target.value)}
+                  placeholder="22/06/2026"
+                  className="w-full rounded bg-black/40 p-2 text-sm"
+                />
+              </label>
+            </div>
+          ) : null}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {!isPowerOfAttorney ? editableFieldOrder.map((key) => {
               const editableSource = (editableData || sampleData || {}) as Record<string, string>;
