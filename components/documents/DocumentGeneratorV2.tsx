@@ -8,6 +8,12 @@ import { documentTemplatesV2, getDocumentV2Templates, type DocumentV2TemplateId 
 import type { DocumentV2FieldKey, DocumentV2FieldMapping, DocumentV2MappedValue } from "@/lib/documents-v2/mapping-store";
 import { mapBookingToDocumentV2 } from "@/lib/documents-v2/types";
 import type { DocumentV2ResolveDebug, ResolvedDocumentV2Data } from "@/lib/documents-v2/resolve-data";
+import { PowerOfAttorneyOcrScanner } from "@/components/documents/PowerOfAttorneyOcrScanner";
+import {
+  composePowerOfAttorneyVehiclePlate,
+  splitPowerOfAttorneyAddress,
+  type PowerOfAttorneySuggestion
+} from "@/lib/documents-v2/power-of-attorney";
 
 type FieldItem = { name: string; type: string };
 type FieldsDebug = {
@@ -62,6 +68,8 @@ type PowerOfAttorneyExtraData = {
   customer_province: string;
 };
 
+type PowerOfAttorneyTouchKey = "customerName" | "plateNo" | keyof PowerOfAttorneyExtraData;
+
 const DEFAULT_TEMPORARY_RECEIPT_EXTRAS: TemporaryReceiptExtraData = {
   row3NetPriceNote: "",
   row1Note: "",
@@ -104,6 +112,16 @@ const DEFAULT_POWER_OF_ATTORNEY_EXTRAS: PowerOfAttorneyExtraData = {
   customer_district: "",
   customer_province: ""
 };
+
+const POWER_OF_ATTORNEY_ADDRESS_KEYS = [
+  "customer_house_no",
+  "customer_moo",
+  "customer_soi",
+  "customer_road",
+  "cusyomer_subdistrict",
+  "customer_district",
+  "customer_province"
+] as const;
 
 function isNamedPdfField(name: string) {
   return !/^fill_\d+$/i.test(name) && !/^undefined_\d+$/i.test(name);
@@ -209,13 +227,6 @@ function formatDatePartValue(value: string, fallback: string) {
   return raw;
 }
 
-function composePowerOfAttorneyVehiclePlate(plateValue: unknown, purpose: PowerOfAttorneyPurpose) {
-  const plate = String(plateValue || "").trim().replace(/\s+/g, " ");
-  const selectedPurpose = purpose || "มอบอำนาจรับรถแทน";
-  if (!plate) return "";
-  return `${selectedPurpose} ทะเบียน ${plate}`;
-}
-
 function thaiNumberToWords(input: number) {
   if (!Number.isFinite(input)) return "";
   const rounded = Math.round(input * 100) / 100;
@@ -301,6 +312,7 @@ export function DocumentGeneratorV2() {
   const [editableTouched, setEditableTouched] = useState(false);
   const [temporaryReceiptExtras, setTemporaryReceiptExtras] = useState<TemporaryReceiptExtraData>(DEFAULT_TEMPORARY_RECEIPT_EXTRAS);
   const [powerOfAttorneyExtras, setPowerOfAttorneyExtras] = useState<PowerOfAttorneyExtraData>(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
+  const powerOfAttorneyTouchedRef = useRef<Record<string, boolean>>({});
   const [resolveDebug, setResolveDebug] = useState<DocumentV2ResolveDebug | null>(null);
   const [resolvingData, setResolvingData] = useState(false);
   const [settingsMode, setSettingsMode] = useState(false);
@@ -362,6 +374,7 @@ export function DocumentGeneratorV2() {
     setEditableTouched(false);
     setTemporaryReceiptExtras(DEFAULT_TEMPORARY_RECEIPT_EXTRAS);
     setPowerOfAttorneyExtras(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
+    powerOfAttorneyTouchedRef.current = {};
   }
 
   function updateTemporaryReceiptExtra<K extends keyof TemporaryReceiptExtraData>(key: K, value: TemporaryReceiptExtraData[K]) {
@@ -369,7 +382,43 @@ export function DocumentGeneratorV2() {
   }
 
   function updatePowerOfAttorneyExtra<K extends keyof PowerOfAttorneyExtraData>(key: K, value: PowerOfAttorneyExtraData[K]) {
+    powerOfAttorneyTouchedRef.current[String(key)] = true;
     setPowerOfAttorneyExtras((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function applyPowerOfAttorneySuggestion(suggestion: PowerOfAttorneySuggestion) {
+    if (templateId !== "power-of-attorney") return;
+    const current = (editableData || sampleData || {}) as Record<string, string>;
+    const nextEditableData = { ...(editableData || sampleData || {}) } as ResolvedDocumentV2Data;
+
+    if (suggestion.customerName && !powerOfAttorneyTouchedRef.current.customerName && !String(current.customerName || "").trim()) {
+      nextEditableData.customerName = suggestion.customerName;
+      setEditableData(nextEditableData);
+      setEditableTouched(true);
+    }
+    if (suggestion.plateNo && !powerOfAttorneyTouchedRef.current.plateNo && !String(current.plateNo || "").trim()) {
+      nextEditableData.plateNo = suggestion.plateNo;
+      setEditableData(nextEditableData);
+      setEditableTouched(true);
+    }
+
+    setPowerOfAttorneyExtras((prev) => {
+      const next = { ...prev };
+      for (const key of POWER_OF_ATTORNEY_ADDRESS_KEYS) {
+        const value = suggestion[key];
+        if (!value || powerOfAttorneyTouchedRef.current[key] || String(next[key]).trim()) continue;
+        next[key] = value;
+      }
+      return next;
+    });
+  }
+
+  function autoSplitPowerOfAttorneyAddress(address: string) {
+    if (templateId !== "power-of-attorney") return;
+    applyPowerOfAttorneySuggestion({
+      ...splitPowerOfAttorneyAddress(address),
+      address
+    });
   }
 
   function computeNetSellPrice() {
@@ -543,14 +592,15 @@ export function DocumentGeneratorV2() {
   }, [resolvedData, selectedReport, editableTouched]);
 
   useEffect(() => {
-    if (templateId === "power-of-attorney") {
-      setPowerOfAttorneyExtras((prev) => ({
-        ...DEFAULT_POWER_OF_ATTORNEY_EXTRAS,
-        purpose: prev.purpose || DEFAULT_POWER_OF_ATTORNEY_EXTRAS.purpose
-      }));
-    } else {
-      setPowerOfAttorneyExtras(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
-    }
+    if (templateId !== "power-of-attorney") return;
+    const reportAddress = String((editableData || sampleData || {}).customerAddress || "").trim();
+    if (!reportAddress) return;
+    autoSplitPowerOfAttorneyAddress(reportAddress);
+  }, [editableData, sampleData, templateId]);
+
+  useEffect(() => {
+    powerOfAttorneyTouchedRef.current = {};
+    setPowerOfAttorneyExtras(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
   }, [templateId, selectedReportId]);
 
   useEffect(() => {
@@ -744,6 +794,9 @@ export function DocumentGeneratorV2() {
   }
 
   function updateEditableField(key: keyof ResolvedDocumentV2Data, value: string) {
+    if (templateId === "power-of-attorney" && (key === "customerName" || key === "plateNo")) {
+      powerOfAttorneyTouchedRef.current[String(key)] = true;
+    }
     setEditableTouched(true);
     setEditableData((prev) => ({
       ...(prev || sampleData || {}),
@@ -1083,6 +1136,13 @@ export function DocumentGeneratorV2() {
             <div className="mt-4 rounded border border-white/10 bg-black/20 p-3">
               <h3 className="font-semibold">ข้อมูลหนังสือมอบอำนาจ</h3>
               <p className="mt-1 text-xs text-gray-300">ใช้เฉพาะตอน Preview / Generate PDF เท่านั้น</p>
+              <div className="mt-3">
+                <PowerOfAttorneyOcrScanner
+                  currentName={String((editableData || sampleData || {}).customerName || "")}
+                  reportAddress={String((editableData || sampleData || {}).customerAddress || "")}
+                  onApply={applyPowerOfAttorneySuggestion}
+                />
+              </div>
               <div className="mt-2 rounded border border-white/10 bg-black/30 p-2 text-xs text-gray-300">
                 <div className="font-medium text-gray-200">ที่อยู่จากรายงานขาย (อ้างอิงเท่านั้น)</div>
                 <div className="mt-1 whitespace-pre-wrap break-words">{String((editableData || sampleData || {}).customerAddress || "ไม่มีข้อมูล")}</div>
