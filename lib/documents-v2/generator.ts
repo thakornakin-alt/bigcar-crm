@@ -42,12 +42,18 @@ function setTextIfExists(
   form: ReturnType<PDFDocument["getForm"]>,
   names: string[],
   value: string,
-  thaiFont: Awaited<ReturnType<PDFDocument["embedFont"]>>
+  thaiFont: Awaited<ReturnType<PDFDocument["embedFont"]>>,
+  fontSize?: number
 ) {
   if (!value) return;
   for (const n of names) {
     try {
       const field = form.getTextField(n);
+      if (fontSize) {
+        try {
+          field.setFontSize(fontSize);
+        } catch {}
+      }
       const shouldCenter = /^(SELL_Price|fill_34|fill_36|Downpayment|fill_38|fill_39|fill_40|fill_41|fill_42|fill_43|fill_44|fill_45|fill_46|Deposit|TOTAL_PAY|Underline\d+|customer_name|sale_name|manager_name|date_day|date_month|date_year)$/i.test(n);
       if (shouldCenter) {
         field.setAlignment(TextAlignment.Center);
@@ -265,6 +271,16 @@ function applyTemporaryReceiptExtras(
   });
 }
 
+function getPowerOfAttorneyFontSize(pdfField: string) {
+  const key = String(pdfField || "");
+  if (/^(Customer_name)$/i.test(key)) return 10;
+  if (/^(vehicle_plate)$/i.test(key)) return 9.5;
+  if (/^(customer_age|customer_race|customer_nationality|customer_house_no|customer_moo|customer_soi|customer_road|cusyomer_subdistrict|customer_district|customer_province)$/i.test(key)) {
+    return 8.5;
+  }
+  return undefined;
+}
+
 export async function generateDocumentV2(data: DocumentV2Data, templateId?: string): Promise<Uint8Array> {
   throw new Error("internal: use generateDocumentV2WithBytes");
 }
@@ -309,7 +325,8 @@ export async function generateDocumentV2WithBytes(
     if (/^(manager_name|MANAGER_NAME|approverName)$/i.test(pdfField)) {
       value = fixedManagerName;
     }
-    setTextIfExists(form, [pdfField], value, thaiFont);
+    const powerOfAttorneyFontSize = templateId === "power-of-attorney" ? getPowerOfAttorneyFontSize(pdfField) : undefined;
+    setTextIfExists(form, [pdfField], value, thaiFont, powerOfAttorneyFontSize);
   }
   setTextIfExists(form, ["manager_name", "MANAGER_NAME", "approverName"], fixedManagerName, thaiFont);
   if (templateId === "temporary-receipt") {
