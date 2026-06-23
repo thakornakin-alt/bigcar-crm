@@ -1096,15 +1096,9 @@ export function DocumentGeneratorV2() {
             </label>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {editableFieldOrder.map((key) => {
+            {templateId !== "power-of-attorney" ? editableFieldOrder.map((key) => {
               const editableSource = (editableData || sampleData || {}) as Record<string, string>;
               const currentValue = String(editableSource[String(key)] || "");
-              if (templateId === "power-of-attorney" && String(key) === "plateNo") {
-                return null;
-              }
-              if (templateId === "power-of-attorney" && (key === "currentDate" || key === "currentDateDay" || key === "currentDateMonth" || key === "currentDateYear")) {
-                return null;
-              }
               if (["sellPrice", "deposit", "remainingAmount"].includes(String(key))) {
                 return null;
               }
@@ -1158,9 +1152,9 @@ export function DocumentGeneratorV2() {
                     onChange={(e) => updateEditableField(key, e.target.value)}
                     className="w-full rounded bg-black/40 p-2 text-sm"
                   />
-                </label>
+                  </label>
               );
-            })}
+            }) : null}
           </div>
           {templateId === "power-of-attorney" ? (
             <div className="mt-4 rounded border border-white/10 bg-black/20 p-3">
