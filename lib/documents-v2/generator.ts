@@ -273,10 +273,8 @@ function applyTemporaryReceiptExtras(
 
 function getPowerOfAttorneyFontSize(pdfField: string) {
   const key = String(pdfField || "");
-  if (/^(Customer_name)$/i.test(key)) return 10;
-  if (/^(vehicle_plate)$/i.test(key)) return 8.5;
-  if (/^(customer_age|customer_race|customer_nationality|customer_house_no|customer_moo|customer_soi|customer_road|cusyomer_subdistrict|customer_district|customer_province)$/i.test(key)) {
-    return 8.5;
+  if (/^(Customer_name|customer_age|customer_race|customer_nationality|customer_house_no|customer_moo|customer_soi|customer_road|cusyomer_subdistrict|customer_district|customer_province|vehicle_plate|DOCUMENT_DAY|DOCUMENT_MONTH|DOCUMENT_YEAR)$/i.test(key)) {
+    return 11;
   }
   return undefined;
 }

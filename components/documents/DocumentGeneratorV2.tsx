@@ -239,6 +239,40 @@ function formatThaiBuddhistDate(value?: string | Date | null) {
   }).format(date);
 }
 
+function splitThaiBuddhistDateParts(input: string) {
+  const raw = String(input || "").trim();
+  if (!raw) {
+    const fallback = formatThaiBuddhistDate();
+    return splitThaiBuddhistDateParts(fallback);
+  }
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime()) && /\d{4}-\d{2}-\d{2}/.test(raw)) {
+    return {
+      day: String(parsed.getDate()).padStart(2, "0"),
+      month: new Intl.DateTimeFormat("th-TH-u-ca-buddhist", { month: "long" }).format(parsed),
+      year: String(parsed.getFullYear() + 543)
+    };
+  }
+  const match = raw.match(/^(\d{1,2})\s+([^\d]+?)\s+(\d{4})$/);
+  if (match) {
+    return {
+      day: match[1].padStart(2, "0"),
+      month: match[2].trim(),
+      year: match[3]
+    };
+  }
+  const parts = raw.split(/[\/\-\s]+/).filter(Boolean);
+  if (parts.length >= 3 && /^\d{1,2}$/.test(parts[0]) && /^\d{1,2}$/.test(parts[1]) && /^\d{4}$/.test(parts[2])) {
+    return {
+      day: parts[0].padStart(2, "0"),
+      month: parts[1].padStart(2, "0"),
+      year: parts[2]
+    };
+  }
+  const fallback = formatThaiBuddhistDate();
+  return splitThaiBuddhistDateParts(fallback);
+}
+
 function thaiNumberToWords(input: number) {
   if (!Number.isFinite(input)) return "";
   const rounded = Math.round(input * 100) / 100;
@@ -450,7 +484,12 @@ export function DocumentGeneratorV2() {
     } as Record<string, string>;
     payload.remainingAmountThaiText = computeRemainingAmountThaiText();
     if (templateId === "power-of-attorney") {
-      payload.documentDate = powerOfAttorneyExtras.documentDate || formatThaiBuddhistDate();
+      const documentDate = powerOfAttorneyExtras.documentDate || formatThaiBuddhistDate();
+      const documentDateParts = splitThaiBuddhistDateParts(documentDate);
+      payload.documentDate = documentDate;
+      payload.document_day = documentDateParts.day;
+      payload.document_month = documentDateParts.month;
+      payload.document_year = documentDateParts.year;
       payload.customer_age = powerOfAttorneyExtras.customer_age || "";
       payload.customer_race = powerOfAttorneyExtras.customer_race || "";
       payload.customer_nationality = powerOfAttorneyExtras.customer_nationality || "";
