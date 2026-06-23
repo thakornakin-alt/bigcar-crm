@@ -367,6 +367,8 @@ export function DocumentGeneratorV2() {
   const selectedTemplate = documentTemplatesV2[templateId];
   const isMappingLocked = Boolean(selectedTemplate.mappingLocked);
   const isDev = process.env.NODE_ENV === "development";
+  const isTemporaryReceipt = templateId === "temporary-receipt";
+  const isPowerOfAttorney = templateId === "power-of-attorney";
 
   const selectedReport = useMemo(
     () => reports.find((r) => r.id === selectedReportId) || null,
@@ -1101,7 +1103,7 @@ export function DocumentGeneratorV2() {
         </>
       ) : null}
 
-      {templateId === "temporary-receipt" || templateId === "power-of-attorney" ? (
+      {isTemporaryReceipt ? (
         <div className="rounded border border-white/10 p-3">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className="font-semibold">แก้ข้อมูลก่อน Preview</h2>
@@ -1135,7 +1137,7 @@ export function DocumentGeneratorV2() {
             </label>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {templateId !== "power-of-attorney" ? editableFieldOrder.map((key) => {
+            {!isPowerOfAttorney ? editableFieldOrder.map((key) => {
               const editableSource = (editableData || sampleData || {}) as Record<string, string>;
               const currentValue = String(editableSource[String(key)] || "");
               if (["sellPrice", "deposit", "remainingAmount"].includes(String(key))) {
@@ -1195,7 +1197,7 @@ export function DocumentGeneratorV2() {
               );
             }) : null}
           </div>
-          {templateId === "power-of-attorney" ? (
+          {isPowerOfAttorney ? (
             <div className="mt-4 rounded border border-white/10 bg-black/20 p-3">
               <h3 className="font-semibold">ข้อมูลหนังสือมอบอำนาจ</h3>
               <p className="mt-1 text-xs text-gray-300">ใช้เฉพาะตอน Preview / Generate PDF เท่านั้น</p>
