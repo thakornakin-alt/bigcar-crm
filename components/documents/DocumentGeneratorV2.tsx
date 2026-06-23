@@ -56,6 +56,7 @@ type TemporaryReceiptExtraData = {
 type PowerOfAttorneyPurpose = "มอบอำนาจรับรถแทน" | "สำหรับโอนรถยนต์";
 type PowerOfAttorneyExtraData = {
   purpose: PowerOfAttorneyPurpose;
+  documentDate: string;
   customer_age: string;
   customer_race: string;
   customer_nationality: string;
@@ -101,6 +102,7 @@ const DEFAULT_TEMPORARY_RECEIPT_EXTRAS: TemporaryReceiptExtraData = {
 
 const DEFAULT_POWER_OF_ATTORNEY_EXTRAS: PowerOfAttorneyExtraData = {
   purpose: "มอบอำนาจรับรถแทน",
+  documentDate: "",
   customer_age: "",
   customer_race: "",
   customer_nationality: "",
@@ -225,6 +227,16 @@ function formatDatePartValue(value: string, fallback: string) {
   const raw = String(value || "").trim();
   if (!raw) return fallback;
   return raw;
+}
+
+function formatThaiBuddhistDate(value?: string | Date | null) {
+  const date = value instanceof Date ? value : value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("th-TH-u-ca-buddhist", {
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  }).format(date);
 }
 
 function thaiNumberToWords(input: number) {
@@ -438,6 +450,7 @@ export function DocumentGeneratorV2() {
     } as Record<string, string>;
     payload.remainingAmountThaiText = computeRemainingAmountThaiText();
     if (templateId === "power-of-attorney") {
+      payload.documentDate = powerOfAttorneyExtras.documentDate || formatThaiBuddhistDate();
       payload.customer_age = powerOfAttorneyExtras.customer_age || "";
       payload.customer_race = powerOfAttorneyExtras.customer_race || "";
       payload.customer_nationality = powerOfAttorneyExtras.customer_nationality || "";
@@ -1089,6 +1102,9 @@ export function DocumentGeneratorV2() {
               if (templateId === "power-of-attorney" && String(key) === "plateNo") {
                 return null;
               }
+              if (templateId === "power-of-attorney" && (key === "currentDate" || key === "currentDateDay" || key === "currentDateMonth" || key === "currentDateYear")) {
+                return null;
+              }
               if (["sellPrice", "deposit", "remainingAmount"].includes(String(key))) {
                 return null;
               }
@@ -1163,6 +1179,16 @@ export function DocumentGeneratorV2() {
                 <div className="mt-1 text-[11px] text-gray-500">ระบบจะไม่แยกที่อยู่นี้ให้อัตโนมัติ ผู้ใช้กรอกบ้านเลขที่ / หมู่ / ซอย / ถนน / ตำบล / อำเภอ / จังหวัดเองได้</div>
               </div>
               <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="block space-y-1 md:col-span-2">
+                  <span className="block text-xs text-gray-300">วันที่</span>
+                  <input
+                    value={powerOfAttorneyExtras.documentDate || formatThaiBuddhistDate()}
+                    onChange={(e) => updatePowerOfAttorneyExtra("documentDate", e.target.value)}
+                    placeholder="23 มิถุนายน 2569"
+                    className="w-full rounded bg-black/40 p-2 text-sm"
+                  />
+                  <p className="text-[11px] text-gray-500">ใช้วันที่ปัจจุบันตามเวลาไทยเป็นค่าเริ่มต้น แต่แก้เองได้ก่อนอัปเดตเอกสาร</p>
+                </label>
                 <label className="block space-y-1 md:col-span-2">
                   <span className="block text-xs text-gray-300">วัตถุประสงค์การมอบอำนาจ</span>
                   <select

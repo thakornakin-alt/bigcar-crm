@@ -90,6 +90,7 @@ const TEMPORARY_RECEIPT_DEFAULT_MAPPING: DocumentV2FieldMapping = {
 };
 
 const POWER_OF_ATTORNEY_DEFAULT_MAPPING: DocumentV2FieldMapping = {
+  "L ll UU Yl": "raw:documentDate",
   Customer_name: "customerName",
   customer_age: "raw:customer_age",
   customer_race: "raw:customer_race",
