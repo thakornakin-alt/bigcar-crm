@@ -413,14 +413,6 @@ export function DocumentGeneratorV2() {
     });
   }
 
-  function autoSplitPowerOfAttorneyAddress(address: string) {
-    if (templateId !== "power-of-attorney") return;
-    applyPowerOfAttorneySuggestion({
-      ...splitPowerOfAttorneyAddress(address),
-      address
-    });
-  }
-
   function computeNetSellPrice() {
     const sellPriceText = String((editableData || sampleData || {}).sellPrice || "");
     const base = Number(sellPriceText.replace(/,/g, "").replace(/[^\d.-]/g, ""));
@@ -537,11 +529,30 @@ export function DocumentGeneratorV2() {
       setResolvedData(res.data || null);
       if (!editableTouched) setEditableData(res.data || null);
       setResolveDebug(res.debug || null);
+      if (templateId === "power-of-attorney") {
+        const reportAddress = String(res.data?.customerAddress || "").trim();
+        if (reportAddress) {
+          applyPowerOfAttorneySuggestion({
+            ...splitPowerOfAttorneyAddress(reportAddress),
+            address: reportAddress
+          });
+        }
+      }
     } catch (e) {
-      setResolvedData(mapBookingToDocumentV2(report) as ResolvedDocumentV2Data);
-      if (!editableTouched) setEditableData(mapBookingToDocumentV2(report) as ResolvedDocumentV2Data);
+      const fallbackData = mapBookingToDocumentV2(report) as ResolvedDocumentV2Data;
+      setResolvedData(fallbackData);
+      if (!editableTouched) setEditableData(fallbackData);
       setResolveDebug(null);
       setError(e instanceof Error ? e.message : "โหลดข้อมูลที่จะใช้จริงไม่สำเร็จ");
+      if (templateId === "power-of-attorney") {
+        const reportAddress = String(fallbackData.customerAddress || "").trim();
+        if (reportAddress) {
+          applyPowerOfAttorneySuggestion({
+            ...splitPowerOfAttorneyAddress(reportAddress),
+            address: reportAddress
+          });
+        }
+      }
     } finally {
       setResolvingData(false);
     }
@@ -593,10 +604,13 @@ export function DocumentGeneratorV2() {
 
   useEffect(() => {
     if (templateId !== "power-of-attorney") return;
-    const reportAddress = String((editableData || sampleData || {}).customerAddress || "").trim();
+    const reportAddress = String((resolvedData || sampleData || editableData || {}).customerAddress || "").trim();
     if (!reportAddress) return;
-    autoSplitPowerOfAttorneyAddress(reportAddress);
-  }, [editableData, sampleData, templateId]);
+    applyPowerOfAttorneySuggestion({
+      ...splitPowerOfAttorneyAddress(reportAddress),
+      address: reportAddress
+    });
+  }, [editableData, resolvedData, sampleData, templateId]);
 
   useEffect(() => {
     powerOfAttorneyTouchedRef.current = {};
