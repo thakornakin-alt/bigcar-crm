@@ -12,6 +12,16 @@ export type PowerOfAttorneyAddressParts = {
 
 export type PowerOfAttorneySuggestion = Partial<PowerOfAttorneyAddressParts> & {
   customerName?: string;
+  customerAge?: string;
+  customerRace?: string;
+  customerNationality?: string;
+  customerHouseNo?: string;
+  customerMoo?: string;
+  customerSoi?: string;
+  customerRoad?: string;
+  customerSubdistrict?: string;
+  customerDistrict?: string;
+  customerProvince?: string;
   customer_age?: string;
   customer_race?: string;
   customer_nationality?: string;

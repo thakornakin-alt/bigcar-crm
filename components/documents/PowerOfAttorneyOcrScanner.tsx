@@ -107,11 +107,25 @@ export function PowerOfAttorneyOcrScanner({ reportAddress, currentName, onApply 
   function applyPreview() {
     if (!reviewValues) return;
     const addressSuggestion = splitPowerOfAttorneyAddress(reviewValues.address || "");
+    const name = reviewValues.customerName || currentName || "";
+    const age = reviewValues.customer_age || "";
+    const race = reviewValues.customer_race || "";
+    const nationality = reviewValues.customer_nationality || "";
     onApply({
-      customerName: reviewValues.customerName || currentName || "",
-      customer_age: reviewValues.customer_age || "",
-      customer_race: reviewValues.customer_race || "",
-      customer_nationality: reviewValues.customer_nationality || "",
+      customerName: name,
+      customerAge: age,
+      customerRace: race,
+      customerNationality: nationality,
+      customer_age: age,
+      customer_race: race,
+      customer_nationality: nationality,
+      customerHouseNo: addressSuggestion.customer_house_no,
+      customerMoo: addressSuggestion.customer_moo,
+      customerSoi: addressSuggestion.customer_soi,
+      customerRoad: addressSuggestion.customer_road,
+      customerSubdistrict: addressSuggestion.cusyomer_subdistrict,
+      customerDistrict: addressSuggestion.customer_district,
+      customerProvince: addressSuggestion.customer_province,
       address: reviewValues.address || "",
       ...addressSuggestion
     });

@@ -436,24 +436,58 @@ export function DocumentGeneratorV2() {
     setPowerOfAttorneyExtras((prev) => ({ ...prev, [key]: value }));
   }
 
+  function normalizePowerOfAttorneySuggestion(suggestion: PowerOfAttorneySuggestion) {
+    return {
+      customerName: suggestion.customerName || "",
+      customer_age: suggestion.customer_age || suggestion.customerAge || "",
+      customer_race: suggestion.customer_race || suggestion.customerRace || "",
+      customer_nationality: suggestion.customer_nationality || suggestion.customerNationality || "",
+      customer_house_no: suggestion.customer_house_no || suggestion.customerHouseNo || "",
+      customer_moo: suggestion.customer_moo || suggestion.customerMoo || "",
+      customer_soi: suggestion.customer_soi || suggestion.customerSoi || "",
+      customer_road: suggestion.customer_road || suggestion.customerRoad || "",
+      cusyomer_subdistrict: suggestion.cusyomer_subdistrict || suggestion.customerSubdistrict || "",
+      customer_district: suggestion.customer_district || suggestion.customerDistrict || "",
+      customer_province: suggestion.customer_province || suggestion.customerProvince || "",
+      plateNo: suggestion.plateNo || "",
+      purpose: suggestion.purpose || DEFAULT_POWER_OF_ATTORNEY_EXTRAS.purpose,
+      address: suggestion.address || ""
+    };
+  }
+
   function applyPowerOfAttorneySuggestion(suggestion: PowerOfAttorneySuggestion) {
     if (templateId !== "power-of-attorney") return;
+    const normalized = normalizePowerOfAttorneySuggestion(suggestion);
     const current = (editableData || sampleData || {}) as Record<string, string>;
-    if (suggestion.customerName && !powerOfAttorneyTouchedRef.current.customerName && !String(powerOfAttorneyExtras.customerName || current.customerName || "").trim()) {
-      setPowerOfAttorneyExtras((prev) => ({ ...prev, customerName: suggestion.customerName || "" }));
+    if (normalized.customerName && !powerOfAttorneyTouchedRef.current.customerName && !String(powerOfAttorneyExtras.customerName || current.customerName || "").trim()) {
+      setPowerOfAttorneyExtras((prev) => ({ ...prev, customerName: normalized.customerName }));
     }
     const nextExtraUpdates: Partial<PowerOfAttorneyExtraData> = {};
     for (const key of ["customer_age", "customer_race", "customer_nationality", ...POWER_OF_ATTORNEY_ADDRESS_KEYS] as const) {
-      const value = suggestion[key];
+      const value = normalized[key];
       if (!value || powerOfAttorneyTouchedRef.current[String(key)] || String(powerOfAttorneyExtras[key] || "").trim()) continue;
       nextExtraUpdates[key] = String(value);
     }
     if (Object.keys(nextExtraUpdates).length) {
       setPowerOfAttorneyExtras((prev) => ({ ...prev, ...nextExtraUpdates }));
     }
-    if (suggestion.plateNo && !powerOfAttorneyTouchedRef.current.plateNo && !String(current.plateNo || "").trim()) {
+    setEditableData((prev) => {
+      const next = { ...(prev || editableData || sampleData || {}) } as Record<string, string>;
+      let changed = false;
+      if (normalized.customerName && !String(next.customerName || "").trim()) {
+        next.customerName = normalized.customerName;
+        changed = true;
+      }
+      if (normalized.plateNo && !String(next.plateNo || "").trim()) {
+        next.plateNo = normalized.plateNo;
+        changed = true;
+      }
+      return changed ? (next as ResolvedDocumentV2Data) : prev;
+    });
+    setEditableTouched(true);
+    if (normalized.plateNo && !powerOfAttorneyTouchedRef.current.plateNo && !String(current.plateNo || "").trim()) {
       const nextEditableData = { ...(editableData || sampleData || {}) } as ResolvedDocumentV2Data;
-      nextEditableData.plateNo = suggestion.plateNo;
+      nextEditableData.plateNo = normalized.plateNo;
       setEditableData(nextEditableData);
       setEditableTouched(true);
     }
