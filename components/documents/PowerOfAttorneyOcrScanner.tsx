@@ -109,6 +109,9 @@ export function PowerOfAttorneyOcrScanner({ reportAddress, currentName, onApply 
     const addressSuggestion = splitPowerOfAttorneyAddress(reviewValues.address || "");
     onApply({
       customerName: reviewValues.customerName || currentName || "",
+      customer_age: reviewValues.customer_age || "",
+      customer_race: reviewValues.customer_race || "",
+      customer_nationality: reviewValues.customer_nationality || "",
       address: reviewValues.address || "",
       ...addressSuggestion
     });
@@ -199,6 +202,9 @@ export function PowerOfAttorneyOcrScanner({ reportAddress, currentName, onApply 
               </div>
               <div className="grid gap-2 sm:grid-cols-2">
                 <ReviewRow label="ชื่อ" value={reviewValues.customerName || currentName || "-"} />
+                <ReviewRow label="อายุ" value={reviewValues.customer_age || "-"} />
+                <ReviewRow label="เชื้อชาติ" value={reviewValues.customer_race || "-"} />
+                <ReviewRow label="สัญชาติ" value={reviewValues.customer_nationality || "-"} />
                 <ReviewRow label="บ้านเลขที่" value={reviewValues.customer_house_no || "-"} />
                 <ReviewRow label="หมู่ที่" value={reviewValues.customer_moo || "-"} />
                 <ReviewRow label="ซอย" value={reviewValues.customer_soi || "-"} />
@@ -228,4 +234,3 @@ function ReviewRow({ label, value, wide = false }: { label: string; value: strin
     </div>
   );
 }
-

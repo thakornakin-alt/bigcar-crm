@@ -12,6 +12,9 @@ export type PowerOfAttorneyAddressParts = {
 
 export type PowerOfAttorneySuggestion = Partial<PowerOfAttorneyAddressParts> & {
   customerName?: string;
+  customer_age?: string;
+  customer_race?: string;
+  customer_nationality?: string;
   plateNo?: string;
   purpose?: PowerOfAttorneyPurpose;
   address?: string;
@@ -66,6 +69,13 @@ function removePostalCodes(text: string) {
   return String(text || "").replace(/\b\d{5}\b/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function removeTrailingHeightNoise(value: string) {
+  return String(value || "")
+    .replace(/\b(?:140|150|160|170|180)\b\.?/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function composePowerOfAttorneyVehiclePlate(plateValue: unknown, purpose: PowerOfAttorneyPurpose) {
   const plate = String(plateValue || "").trim().replace(/\s+/g, " ");
   const selectedPurpose = purpose || "มอบอำนาจรับรถแทน";
@@ -84,30 +94,30 @@ export function splitPowerOfAttorneyAddress(input: unknown): PowerOfAttorneyAddr
     /(?:หมู่ที่|หมู่|ม\.)\s*([0-9A-Za-z\/-]+)/i
   ]);
   const soi = pickMatch(compact, [
-    /(?:ซอย|ซ\.)\s*([^\s,]+(?:\s+[^\s,]+){0,2}?)(?=\s+(?:ถนน|ถ\.|ตำบล|ต\.|แขวง|อำเภอ|อ\.|เขต|จังหวัด|จ\.)|$)/i
+    /(?:ซอย|ซ\.)\s*([^\s,]+(?:\s+[^\s,]+){0,4}?)(?=\s+(?:ถนน|ถ\.|ตำบล|ต\.|แขวง|อำเภอ|อ\.|เขต|จังหวัด|จ\.)|$)/i
   ]);
   const road = pickMatch(compact, [
-    /(?:ถนน|ถ\.)\s*([^\s,]+(?:\s+[^\s,]+){0,3}?)(?=\s+(?:ตำบล|ต\.|แขวง|อำเภอ|อ\.|เขต|จังหวัด|จ\.)|$)/i
+    /(?:ถนน|ถ\.)\s*([^\s,]+(?:\s+[^\s,]+){0,4}?)(?=\s+(?:ตำบล|ต\.|แขวง|อำเภอ|อ\.|เขต|จังหวัด|จ\.)|$)/i
   ]);
   const subdistrict = pickMatch(compact, [
-    /(?:ตำบล|ต\.|แขวง)\s*([^\s,]+(?:\s+[^\s,]+){0,3}?)(?=\s+(?:อำเภอ|อ\.|เขต|จังหวัด|จ\.)|$)/i
+    /(?:ตำบล|ต\.|แขวง)\s*([^\s,]+(?:\s+[^\s,]+){0,4}?)(?=\s+(?:อำเภอ|อ\.|เขต|จังหวัด|จ\.)|$)/i
   ]);
   const district = pickMatch(compact, [
-    /(?:อำเภอ|อ\.|เขต)\s*([^\s,]+(?:\s+[^\s,]+){0,3}?)(?=\s+(?:จังหวัด|จ\.)|$)/i
+    /(?:อำเภอ|อ\.|เขต)\s*([^\s,]+(?:\s+[^\s,]+){0,4}?)(?=\s+(?:จังหวัด|จ\.)|$)/i
   ]);
   const province = pickMatch(compact, [
-    /(?:จังหวัด|จ\.)\s*([^\s,]+(?:\s+[^\s,]+){0,3}?)(?=$)/i
+    /(?:จังหวัด|จ\.)\s*([^\s,]+(?:\s+[^\s,]+){0,4}?)(?=$)/i
   ]);
 
   return {
     ...blankAddressParts,
-    customer_house_no: houseNo,
-    customer_moo: moo,
-    customer_soi: soi,
-    customer_road: road,
-    cusyomer_subdistrict: subdistrict,
-    customer_district: district,
-    customer_province: province
+    customer_house_no: removeTrailingHeightNoise(houseNo),
+    customer_moo: removeTrailingHeightNoise(moo),
+    customer_soi: removeTrailingHeightNoise(soi),
+    customer_road: removeTrailingHeightNoise(road),
+    cusyomer_subdistrict: removeTrailingHeightNoise(subdistrict),
+    customer_district: removeTrailingHeightNoise(district),
+    customer_province: removeTrailingHeightNoise(province)
   };
 }
 

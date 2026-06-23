@@ -72,6 +72,14 @@ function extractAddress(lines: string[]) {
   return cleanAddressText(source);
 }
 
+function extractLabeledValue(text: string, labels: RegExp[]) {
+  for (const label of labels) {
+    const match = safe(text).match(new RegExp(`${label.source}\\s*[:\\-]?\\s*([ก-๙A-Za-z0-9./\\- ]{1,60})`, "i"));
+    if (match?.[1]) return match[1].trim().replace(/\b(?:140|150|160|170|180)\b\.?/g, " ").replace(/\s+/g, " ").trim();
+  }
+  return "";
+}
+
 function extractTextFields(text: string, documentType: PowerOfAttorneyOcrDocumentType): PowerOfAttorneySuggestion & { rawText: string } {
   const lines = normalizeLines(text);
   const compact = lines.join(" ");
@@ -87,6 +95,9 @@ function extractTextFields(text: string, documentType: PowerOfAttorneyOcrDocumen
   }
 
   suggestion.customerName = extractThaiName(compact);
+  suggestion.customer_age = extractLabeledValue(compact, [/อายุ/]);
+  suggestion.customer_race = extractLabeledValue(compact, [/เชื้อชาติ/]);
+  suggestion.customer_nationality = extractLabeledValue(compact, [/สัญชาติ/]);
   Object.assign(suggestion, splitPowerOfAttorneyAddress(address));
   return suggestion;
 }

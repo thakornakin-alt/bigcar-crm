@@ -57,6 +57,7 @@ type PowerOfAttorneyPurpose = "มอบอำนาจรับรถแทน"
 type PowerOfAttorneyExtraData = {
   purpose: PowerOfAttorneyPurpose;
   documentDate: string;
+  customerName: string;
   customer_age: string;
   customer_race: string;
   customer_nationality: string;
@@ -103,6 +104,7 @@ const DEFAULT_TEMPORARY_RECEIPT_EXTRAS: TemporaryReceiptExtraData = {
 const DEFAULT_POWER_OF_ATTORNEY_EXTRAS: PowerOfAttorneyExtraData = {
   purpose: "มอบอำนาจรับรถแทน",
   documentDate: "",
+  customerName: "",
   customer_age: "",
   customer_race: "",
   customer_nationality: "",
@@ -437,28 +439,24 @@ export function DocumentGeneratorV2() {
   function applyPowerOfAttorneySuggestion(suggestion: PowerOfAttorneySuggestion) {
     if (templateId !== "power-of-attorney") return;
     const current = (editableData || sampleData || {}) as Record<string, string>;
-    const nextEditableData = { ...(editableData || sampleData || {}) } as ResolvedDocumentV2Data;
-
-    if (suggestion.customerName && !powerOfAttorneyTouchedRef.current.customerName && !String(current.customerName || "").trim()) {
-      nextEditableData.customerName = suggestion.customerName;
-      setEditableData(nextEditableData);
-      setEditableTouched(true);
+    if (suggestion.customerName && !powerOfAttorneyTouchedRef.current.customerName && !String(powerOfAttorneyExtras.customerName || current.customerName || "").trim()) {
+      setPowerOfAttorneyExtras((prev) => ({ ...prev, customerName: suggestion.customerName || "" }));
+    }
+    const nextExtraUpdates: Partial<PowerOfAttorneyExtraData> = {};
+    for (const key of ["customer_age", "customer_race", "customer_nationality", ...POWER_OF_ATTORNEY_ADDRESS_KEYS] as const) {
+      const value = suggestion[key];
+      if (!value || powerOfAttorneyTouchedRef.current[String(key)] || String(powerOfAttorneyExtras[key] || "").trim()) continue;
+      nextExtraUpdates[key] = String(value);
+    }
+    if (Object.keys(nextExtraUpdates).length) {
+      setPowerOfAttorneyExtras((prev) => ({ ...prev, ...nextExtraUpdates }));
     }
     if (suggestion.plateNo && !powerOfAttorneyTouchedRef.current.plateNo && !String(current.plateNo || "").trim()) {
+      const nextEditableData = { ...(editableData || sampleData || {}) } as ResolvedDocumentV2Data;
       nextEditableData.plateNo = suggestion.plateNo;
       setEditableData(nextEditableData);
       setEditableTouched(true);
     }
-
-    setPowerOfAttorneyExtras((prev) => {
-      const next = { ...prev };
-      for (const key of POWER_OF_ATTORNEY_ADDRESS_KEYS) {
-        const value = suggestion[key];
-        if (!value || powerOfAttorneyTouchedRef.current[key] || String(next[key]).trim()) continue;
-        next[key] = value;
-      }
-      return next;
-    });
   }
 
   function computeNetSellPrice() {
@@ -488,10 +486,12 @@ export function DocumentGeneratorV2() {
     if (templateId === "power-of-attorney") {
       const documentDate = powerOfAttorneyExtras.documentDate || formatThaiBuddhistDate();
       const documentDateParts = splitThaiBuddhistDateParts(documentDate);
+      const customerName = powerOfAttorneyExtras.customerName || String((editableData || sampleData || {}).customerName || "");
       payload.documentDate = documentDate;
       payload.document_day = documentDateParts.day;
       payload.document_month = documentDateParts.month;
       payload.document_year = documentDateParts.year;
+      payload.customerName = customerName;
       payload.customer_age = powerOfAttorneyExtras.customer_age || "";
       payload.customer_race = powerOfAttorneyExtras.customer_race || "";
       payload.customer_nationality = powerOfAttorneyExtras.customer_nationality || "";
@@ -1205,7 +1205,7 @@ export function DocumentGeneratorV2() {
               <p className="mt-1 text-xs text-gray-300">ใช้เฉพาะตอน Preview / Generate PDF เท่านั้น</p>
               <div className="mt-3">
                 <PowerOfAttorneyOcrScanner
-                  currentName={String((editableData || sampleData || {}).customerName || "")}
+                  currentName={String(powerOfAttorneyExtras.customerName || (editableData || sampleData || {}).customerName || "")}
                   reportAddress={String((editableData || sampleData || {}).customerAddress || "")}
                   onApply={applyPowerOfAttorneySuggestion}
                 />
@@ -1216,6 +1216,16 @@ export function DocumentGeneratorV2() {
                 <div className="mt-1 text-[11px] text-gray-500">ระบบจะไม่แยกที่อยู่นี้ให้อัตโนมัติ ผู้ใช้กรอกบ้านเลขที่ / หมู่ / ซอย / ถนน / ตำบล / อำเภอ / จังหวัดเองได้</div>
               </div>
               <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="block space-y-1 md:col-span-2">
+                  <span className="block text-xs text-gray-300">ชื่อผู้มอบอำนาจ</span>
+                  <input
+                    value={powerOfAttorneyExtras.customerName || String((editableData || sampleData || {}).customerName || "")}
+                    onChange={(e) => updatePowerOfAttorneyExtra("customerName", e.target.value)}
+                    placeholder="นายสมชาย ใจดี"
+                    className="w-full rounded bg-black/40 p-2 text-sm"
+                  />
+                  <p className="text-[11px] text-gray-500">จะถูกส่งไปที่ field Customer_name ตอนสร้าง PDF</p>
+                </label>
                 <label className="block space-y-1 md:col-span-2">
                   <span className="block text-xs text-gray-300">วันที่</span>
                   <input
