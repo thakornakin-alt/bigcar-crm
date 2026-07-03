@@ -1,4 +1,4 @@
-export type DocumentV2TemplateId = "contract-field" | "temporary-receipt" | "power-of-attorney" | "transport-transfer-request";
+export type DocumentV2TemplateId = "contract-field" | "temporary-receipt" | "power-of-attorney" | "transport-transfer-request" | "vehicle-delivery-document";
 
 export const DOCUMENT_V2_TEMPLATE_REGISTRY_VERSION = "2026-06-03-1";
 
@@ -41,6 +41,14 @@ export const documentTemplatesV2: Record<DocumentV2TemplateId, DocumentV2Templat
     title: "ใบคำขอโอนขนส่ง",
     fileName: "transport-transfer-request.pdf",
     path: "/document-templates/transport-transfer-request.pdf",
+    mappingLocked: false,
+    hideFieldBorders: false
+  },
+  "vehicle-delivery-document": {
+    id: "vehicle-delivery-document",
+    title: "เอกสารส่งมอบรถยนต์",
+    fileName: "vehicle-delivery-document.pdf",
+    path: "/document-templates/vehicle-delivery-document.pdf",
     mappingLocked: false,
     hideFieldBorders: false
   }
