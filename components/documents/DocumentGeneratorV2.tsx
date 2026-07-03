@@ -72,6 +72,24 @@ type PowerOfAttorneyExtraData = {
 
 type PowerOfAttorneyTouchKey = "customerName" | "plateNo" | keyof PowerOfAttorneyExtraData;
 
+type TransportTransferRequestExtraData = {
+  transferDate: string;
+  transferee_name: string;
+  transferee_age: string;
+  transferee_nationality: string;
+  transferee_address_no: string;
+  transferee_moo: string;
+  transferee_soi: string;
+  transferee_road: string;
+  transferee_subdistrict: string;
+  transferee_district: string;
+  transferee_province: string;
+  transferee_phone: string;
+  vehicle_plate_no: string;
+  vehicle_chassis_no: string;
+  vehicle_engine_no: string;
+};
+
 const DEFAULT_TEMPORARY_RECEIPT_EXTRAS: TemporaryReceiptExtraData = {
   row3NetPriceNote: "",
   row1Note: "",
@@ -115,6 +133,24 @@ const DEFAULT_POWER_OF_ATTORNEY_EXTRAS: PowerOfAttorneyExtraData = {
   cusyomer_subdistrict: "",
   customer_district: "",
   customer_province: ""
+};
+
+const DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS: TransportTransferRequestExtraData = {
+  transferDate: "",
+  transferee_name: "",
+  transferee_age: "",
+  transferee_nationality: "",
+  transferee_address_no: "",
+  transferee_moo: "",
+  transferee_soi: "",
+  transferee_road: "",
+  transferee_subdistrict: "",
+  transferee_district: "",
+  transferee_province: "",
+  transferee_phone: "",
+  vehicle_plate_no: "",
+  vehicle_chassis_no: "",
+  vehicle_engine_no: ""
 };
 
 const POWER_OF_ATTORNEY_ADDRESS_KEYS = [
@@ -275,6 +311,22 @@ function splitThaiBuddhistDateParts(input: string) {
   return splitThaiBuddhistDateParts(fallback);
 }
 
+function splitTransportTransferAddress(input: unknown): Pick<
+  TransportTransferRequestExtraData,
+  "transferee_address_no" | "transferee_moo" | "transferee_soi" | "transferee_road" | "transferee_subdistrict" | "transferee_district" | "transferee_province"
+> {
+  const parts = splitPowerOfAttorneyAddress(input);
+  return {
+    transferee_address_no: parts.customer_house_no,
+    transferee_moo: parts.customer_moo,
+    transferee_soi: parts.customer_soi,
+    transferee_road: parts.customer_road,
+    transferee_subdistrict: parts.cusyomer_subdistrict,
+    transferee_district: parts.customer_district,
+    transferee_province: parts.customer_province
+  };
+}
+
 function thaiNumberToWords(input: number) {
   if (!Number.isFinite(input)) return "";
   const rounded = Math.round(input * 100) / 100;
@@ -360,7 +412,9 @@ export function DocumentGeneratorV2() {
   const [editableTouched, setEditableTouched] = useState(false);
   const [temporaryReceiptExtras, setTemporaryReceiptExtras] = useState<TemporaryReceiptExtraData>(DEFAULT_TEMPORARY_RECEIPT_EXTRAS);
   const [powerOfAttorneyExtras, setPowerOfAttorneyExtras] = useState<PowerOfAttorneyExtraData>(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
+  const [transportTransferExtras, setTransportTransferExtras] = useState<TransportTransferRequestExtraData>(DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS);
   const powerOfAttorneyTouchedRef = useRef<Record<string, boolean>>({});
+  const transportTransferTouchedRef = useRef<Record<string, boolean>>({});
   const [resolveDebug, setResolveDebug] = useState<DocumentV2ResolveDebug | null>(null);
   const [resolvingData, setResolvingData] = useState(false);
   const [settingsMode, setSettingsMode] = useState(false);
@@ -371,6 +425,7 @@ export function DocumentGeneratorV2() {
   const isDev = process.env.NODE_ENV === "development";
   const isTemporaryReceipt = templateId === "temporary-receipt";
   const isPowerOfAttorney = templateId === "power-of-attorney";
+  const isTransportTransferRequest = templateId === "transport-transfer-request";
 
   const selectedReport = useMemo(
     () => reports.find((r) => r.id === selectedReportId) || null,
@@ -395,9 +450,28 @@ export function DocumentGeneratorV2() {
             customer_province: powerOfAttorneyExtras.customer_province,
             vehicle_plate: composePowerOfAttorneyVehiclePlate((editableData || sampleData || {}).plateNo, powerOfAttorneyExtras.purpose)
           }
+        : {}),
+      ...(templateId === "transport-transfer-request"
+        ? {
+            transferDate: transportTransferExtras.transferDate,
+            transferee_name: transportTransferExtras.transferee_name,
+            transferee_age: transportTransferExtras.transferee_age,
+            transferee_nationality: transportTransferExtras.transferee_nationality,
+            transferee_address_no: transportTransferExtras.transferee_address_no,
+            transferee_moo: transportTransferExtras.transferee_moo,
+            transferee_soi: transportTransferExtras.transferee_soi,
+            transferee_road: transportTransferExtras.transferee_road,
+            transferee_subdistrict: transportTransferExtras.transferee_subdistrict,
+            transferee_district: transportTransferExtras.transferee_district,
+            transferee_province: transportTransferExtras.transferee_province,
+            transferee_phone: transportTransferExtras.transferee_phone,
+            vehicle_plate_no: transportTransferExtras.vehicle_plate_no,
+            vehicle_chassis_no: transportTransferExtras.vehicle_chassis_no,
+            vehicle_engine_no: transportTransferExtras.vehicle_engine_no
+          }
         : {})
     }),
-    [editableData, powerOfAttorneyExtras, resolvedData, sampleData, selectedReport, templateId]
+    [editableData, powerOfAttorneyExtras, resolvedData, sampleData, selectedReport, templateId, transportTransferExtras]
   );
   const reportRawKeys = useMemo(() => Object.keys(rawReportData).sort((a, b) => a.localeCompare(b)), [rawReportData]);
   const namedFields = useMemo(() => fields.filter((field) => isNamedPdfField(field.name)), [fields]);
@@ -424,7 +498,9 @@ export function DocumentGeneratorV2() {
     setEditableTouched(false);
     setTemporaryReceiptExtras(DEFAULT_TEMPORARY_RECEIPT_EXTRAS);
     setPowerOfAttorneyExtras(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
+    setTransportTransferExtras(DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS);
     powerOfAttorneyTouchedRef.current = {};
+    transportTransferTouchedRef.current = {};
   }
 
   function updateTemporaryReceiptExtra<K extends keyof TemporaryReceiptExtraData>(key: K, value: TemporaryReceiptExtraData[K]) {
@@ -434,6 +510,11 @@ export function DocumentGeneratorV2() {
   function updatePowerOfAttorneyExtra<K extends keyof PowerOfAttorneyExtraData>(key: K, value: PowerOfAttorneyExtraData[K]) {
     powerOfAttorneyTouchedRef.current[String(key)] = true;
     setPowerOfAttorneyExtras((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function updateTransportTransferExtra<K extends keyof TransportTransferRequestExtraData>(key: K, value: TransportTransferRequestExtraData[K]) {
+    transportTransferTouchedRef.current[String(key)] = true;
+    setTransportTransferExtras((prev) => ({ ...prev, [key]: value }));
   }
 
   function normalizePowerOfAttorneySuggestion(suggestion: PowerOfAttorneySuggestion) {
@@ -493,6 +574,30 @@ export function DocumentGeneratorV2() {
     }
   }
 
+  function applyTransportTransferDefaults(sourceData: Partial<ResolvedDocumentV2Data>) {
+    if (templateId !== "transport-transfer-request") return;
+    const addressParts = splitTransportTransferAddress(sourceData.customerAddress || "");
+    const defaults: Partial<TransportTransferRequestExtraData> = {
+      transferDate: formatThaiBuddhistDate(),
+      transferee_name: String(sourceData.customerName || ""),
+      transferee_phone: String(sourceData.phone || ""),
+      vehicle_plate_no: String(sourceData.plateNo || ""),
+      vehicle_chassis_no: String(sourceData.chassisNo || ""),
+      vehicle_engine_no: String(sourceData.engineNo || ""),
+      ...addressParts
+    };
+    setTransportTransferExtras((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const [key, value] of Object.entries(defaults) as Array<[keyof TransportTransferRequestExtraData, string]>) {
+        if (!value || transportTransferTouchedRef.current[String(key)] || String(next[key] || "").trim()) continue;
+        next[key] = value;
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }
+
   function computeNetSellPrice() {
     const sellPriceText = String((editableData || sampleData || {}).sellPrice || "");
     const base = Number(sellPriceText.replace(/,/g, "").replace(/[^\d.-]/g, ""));
@@ -537,6 +642,28 @@ export function DocumentGeneratorV2() {
       payload.customer_district = powerOfAttorneyExtras.customer_district || "";
       payload.customer_province = powerOfAttorneyExtras.customer_province || "";
       payload.vehicle_plate = composePowerOfAttorneyVehiclePlate((editableData || sampleData || {}).plateNo, powerOfAttorneyExtras.purpose);
+    }
+    if (templateId === "transport-transfer-request") {
+      const transferDate = transportTransferExtras.transferDate || formatThaiBuddhistDate();
+      const transferDateParts = splitThaiBuddhistDateParts(transferDate);
+      payload.transferDate = transferDate;
+      payload.transfer_date_day = transferDateParts.day;
+      payload.transfer_date_month = transferDateParts.month;
+      payload.transfer_date_year = transferDateParts.year;
+      payload.vehicle_plate_no = transportTransferExtras.vehicle_plate_no || "";
+      payload.transferee_name = transportTransferExtras.transferee_name || "";
+      payload.transferee_age = transportTransferExtras.transferee_age || "";
+      payload.transferee_nationality = transportTransferExtras.transferee_nationality || "";
+      payload.transferee_address_no = transportTransferExtras.transferee_address_no || "";
+      payload.transferee_moo = transportTransferExtras.transferee_moo || "";
+      payload.transferee_soi = transportTransferExtras.transferee_soi || "";
+      payload.transferee_road = transportTransferExtras.transferee_road || "";
+      payload.transferee_subdistrict = transportTransferExtras.transferee_subdistrict || "";
+      payload.transferee_district = transportTransferExtras.transferee_district || "";
+      payload.transferee_province = transportTransferExtras.transferee_province || "";
+      payload.transferee_phone = transportTransferExtras.transferee_phone || "";
+      payload.vehicle_chassis_no = transportTransferExtras.vehicle_chassis_no || "";
+      payload.vehicle_engine_no = transportTransferExtras.vehicle_engine_no || "";
     }
     payload.row3NetPriceNote = temporaryReceiptExtras.row3NetPriceNote || "";
     payload.row1Note = temporaryReceiptExtras.row1Note || "";
@@ -626,6 +753,9 @@ export function DocumentGeneratorV2() {
           });
         }
       }
+      if (templateId === "transport-transfer-request") {
+        applyTransportTransferDefaults(res.data || {});
+      }
     } catch (e) {
       const fallbackData = mapBookingToDocumentV2(report) as ResolvedDocumentV2Data;
       setResolvedData(fallbackData);
@@ -640,6 +770,9 @@ export function DocumentGeneratorV2() {
             address: reportAddress
           });
         }
+      }
+      if (templateId === "transport-transfer-request") {
+        applyTransportTransferDefaults(fallbackData);
       }
     } finally {
       setResolvingData(false);
@@ -691,6 +824,13 @@ export function DocumentGeneratorV2() {
   }, [resolvedData, selectedReport, editableTouched]);
 
   useEffect(() => {
+    powerOfAttorneyTouchedRef.current = {};
+    transportTransferTouchedRef.current = {};
+    setPowerOfAttorneyExtras(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
+    setTransportTransferExtras(DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS);
+  }, [templateId, selectedReportId]);
+
+  useEffect(() => {
     if (templateId !== "power-of-attorney") return;
     const reportAddress = String((resolvedData || sampleData || editableData || {}).customerAddress || "").trim();
     if (!reportAddress) return;
@@ -701,9 +841,9 @@ export function DocumentGeneratorV2() {
   }, [editableData, resolvedData, sampleData, templateId]);
 
   useEffect(() => {
-    powerOfAttorneyTouchedRef.current = {};
-    setPowerOfAttorneyExtras(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
-  }, [templateId, selectedReportId]);
+    if (templateId !== "transport-transfer-request") return;
+    applyTransportTransferDefaults((resolvedData || sampleData || editableData || {}) as ResolvedDocumentV2Data);
+  }, [editableData, resolvedData, sampleData, templateId]);
 
   useEffect(() => {
     if (canRunGenerate && !previewUrl) {
@@ -1137,7 +1277,7 @@ export function DocumentGeneratorV2() {
         </>
       ) : null}
 
-      {(isTemporaryReceipt || isPowerOfAttorney) ? (
+      {(isTemporaryReceipt || isPowerOfAttorney || isTransportTransferRequest) ? (
         <div className="rounded border border-white/10 p-3">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className="font-semibold">แก้ข้อมูลก่อน Preview</h2>
@@ -1173,7 +1313,7 @@ export function DocumentGeneratorV2() {
             </div>
           ) : null}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {!isPowerOfAttorney ? editableFieldOrder.map((key) => {
+            {(!isPowerOfAttorney && !isTransportTransferRequest) ? editableFieldOrder.map((key) => {
               const editableSource = (editableData || sampleData || {}) as Record<string, string>;
               const currentValue = String(editableSource[String(key)] || "");
               if (["sellPrice", "deposit", "remainingAmount"].includes(String(key))) {
@@ -1233,6 +1373,54 @@ export function DocumentGeneratorV2() {
               );
             }) : null}
           </div>
+          {isTransportTransferRequest ? (
+            <div className="mt-4 rounded border border-white/10 bg-black/20 p-3">
+              <h3 className="font-semibold">ข้อมูลใบคำขอโอนขนส่ง</h3>
+              <p className="mt-1 text-xs text-gray-300">ใช้เฉพาะตอน Preview / Generate PDF เท่านั้น</p>
+              <div className="mt-2 rounded border border-white/10 bg-black/30 p-2 text-xs text-gray-300">
+                <div className="font-medium text-gray-200">ที่อยู่จากรายงานขาย (ใช้ช่วยแยกเบื้องต้น)</div>
+                <div className="mt-1 whitespace-pre-wrap break-words">{String((editableData || sampleData || {}).customerAddress || "ไม่มีข้อมูล")}</div>
+                <div className="mt-1 text-[11px] text-gray-500">ระบบเติมเฉพาะช่องที่มั่นใจและยังว่างอยู่ ผู้ใช้แก้เองได้ก่อนอัปเดตเอกสาร</div>
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="block space-y-1 md:col-span-2">
+                  <span className="block text-xs text-gray-300">วันที่โอน</span>
+                  <input
+                    value={transportTransferExtras.transferDate || formatThaiBuddhistDate()}
+                    onChange={(e) => updateTransportTransferExtra("transferDate", e.target.value)}
+                    placeholder="23 มิถุนายน 2569"
+                    className="w-full rounded bg-black/40 p-2 text-sm"
+                  />
+                  <p className="text-[11px] text-gray-500">จะแยกลง field transfer_date_day / transfer_date_month / transfer_date_year ตอนสร้าง PDF</p>
+                </label>
+                {[
+                  ["transferee_name", "ชื่อผู้รับโอน"],
+                  ["transferee_age", "อายุ"],
+                  ["transferee_nationality", "สัญชาติ"],
+                  ["transferee_address_no", "บ้านเลขที่"],
+                  ["transferee_moo", "หมู่ที่"],
+                  ["transferee_soi", "ซอย"],
+                  ["transferee_road", "ถนน"],
+                  ["transferee_subdistrict", "ตำบล/แขวง"],
+                  ["transferee_district", "อำเภอ/เขต"],
+                  ["transferee_province", "จังหวัด"],
+                  ["transferee_phone", "โทรศัพท์"],
+                  ["vehicle_plate_no", "ทะเบียนรถ"],
+                  ["vehicle_chassis_no", "เลขตัวรถ"],
+                  ["vehicle_engine_no", "เลขเครื่องยนต์"]
+                ].map(([key, label]) => (
+                  <label key={key} className="block space-y-1">
+                    <span className="block text-xs text-gray-300">{label}</span>
+                    <input
+                      value={transportTransferExtras[key as keyof TransportTransferRequestExtraData] as string}
+                      onChange={(e) => updateTransportTransferExtra(key as keyof TransportTransferRequestExtraData, e.target.value)}
+                      className="w-full rounded bg-black/40 p-2 text-sm"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {isPowerOfAttorney ? (
             <div className="mt-4 rounded border border-white/10 bg-black/20 p-3">
               <h3 className="font-semibold">ข้อมูลหนังสือมอบอำนาจ</h3>

@@ -107,12 +107,35 @@ const POWER_OF_ATTORNEY_DEFAULT_MAPPING: DocumentV2FieldMapping = {
   vehicle_plate: "raw:vehicle_plate"
 };
 
+const TRANSPORT_TRANSFER_REQUEST_DEFAULT_MAPPING: DocumentV2FieldMapping = {
+  transfer_date_day: "raw:transfer_date_day",
+  transfer_date_month: "raw:transfer_date_month",
+  transfer_date_year: "raw:transfer_date_year",
+  vehicle_plate_no: "raw:vehicle_plate_no",
+  transferee_name: "raw:transferee_name",
+  transferee_age: "raw:transferee_age",
+  transferee_nationality: "raw:transferee_nationality",
+  transferee_address_no: "raw:transferee_address_no",
+  transferee_moo: "raw:transferee_moo",
+  transferee_soi: "raw:transferee_soi",
+  transferee_road: "raw:transferee_road",
+  transferee_subdistrict: "raw:transferee_subdistrict",
+  transferee_district: "raw:transferee_district",
+  transferee_province: "raw:transferee_province",
+  transferee_phone: "raw:transferee_phone",
+  vehicle_chassis_no: "raw:vehicle_chassis_no",
+  vehicle_engine_no: "raw:vehicle_engine_no"
+};
+
 export function getDefaultDocumentV2Mapping(templateId?: string): DocumentV2FieldMapping {
   if (templateId === "temporary-receipt") {
     return { ...TEMPORARY_RECEIPT_DEFAULT_MAPPING };
   }
   if (templateId === "power-of-attorney") {
     return { ...POWER_OF_ATTORNEY_DEFAULT_MAPPING };
+  }
+  if (templateId === "transport-transfer-request") {
+    return { ...TRANSPORT_TRANSFER_REQUEST_DEFAULT_MAPPING };
   }
   return { ...DEFAULT_MAPPING };
 }
