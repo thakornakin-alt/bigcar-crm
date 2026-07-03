@@ -127,6 +127,23 @@ const TRANSPORT_TRANSFER_REQUEST_DEFAULT_MAPPING: DocumentV2FieldMapping = {
   vehicle_engine_no: "raw:vehicle_engine_no"
 };
 
+const VEHICLE_DELIVERY_DOCUMENT_DEFAULT_MAPPING: DocumentV2FieldMapping = {
+  delivery_date: "raw:delivery_date",
+  customer_name: "raw:customer_name",
+  customer_id_no: "raw:customer_id_no",
+  customer_address_1: "raw:customer_address_1",
+  customer_address_2: "raw:customer_address_2",
+  customer_postal_code: "raw:customer_postal_code",
+  customer_phone: "raw:customer_phone",
+  vehicle_brand: "raw:vehicle_brand",
+  vehicle_model: "raw:vehicle_model",
+  vehicle_year: "raw:vehicle_year",
+  vehicle_color: "raw:vehicle_color",
+  vehicle_plate: "raw:vehicle_plate",
+  vehicle_chassis_no: "raw:vehicle_chassis_no",
+  customer_id_card_image_af_image: "raw:customer_id_card_image"
+};
+
 export function getDefaultDocumentV2Mapping(templateId?: string): DocumentV2FieldMapping {
   if (templateId === "temporary-receipt") {
     return { ...TEMPORARY_RECEIPT_DEFAULT_MAPPING };
@@ -136,6 +153,9 @@ export function getDefaultDocumentV2Mapping(templateId?: string): DocumentV2Fiel
   }
   if (templateId === "transport-transfer-request") {
     return { ...TRANSPORT_TRANSFER_REQUEST_DEFAULT_MAPPING };
+  }
+  if (templateId === "vehicle-delivery-document") {
+    return { ...VEHICLE_DELIVERY_DOCUMENT_DEFAULT_MAPPING };
   }
   return { ...DEFAULT_MAPPING };
 }

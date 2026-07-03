@@ -279,6 +279,62 @@ function getPowerOfAttorneyFontSize(pdfField: string) {
   return undefined;
 }
 
+function decodeDataUrlImage(value: unknown) {
+  const raw = String(value || "").trim();
+  const match = raw.match(/^data:(image\/(?:png|jpeg|jpg));base64,(.+)$/i);
+  if (!match) return null;
+  const mime = match[1].toLowerCase();
+  return {
+    mime,
+    bytes: Buffer.from(match[2], "base64")
+  };
+}
+
+async function prepareVehicleDeliveryIdCardImage(
+  pdf: PDFDocument,
+  form: ReturnType<PDFDocument["getForm"]>,
+  data: Record<string, unknown>
+) {
+  const imageData = decodeDataUrlImage(data.customer_id_card_image);
+  if (!imageData) return;
+  let image;
+  if (imageData.mime === "image/png") {
+    image = await pdf.embedPng(imageData.bytes);
+  } else {
+    image = await pdf.embedJpg(imageData.bytes);
+  }
+
+  let button;
+  try {
+    button = form.getButton("customer_id_card_image_af_image");
+  } catch {
+    return;
+  }
+  const widget = button.acroField.getWidgets()[0];
+  if (!widget) return;
+  const rect = widget.getRectangle();
+  const pageRef = widget.P?.();
+  const page = pdf.getPages().find((candidate) => candidate.ref === pageRef) || pdf.getPage(0);
+  makeFieldWidgetsInvisible(button);
+  return { image, page, rect };
+}
+
+function drawVehicleDeliveryIdCardImage(placement: Awaited<ReturnType<typeof prepareVehicleDeliveryIdCardImage>> | null) {
+  if (!placement) return;
+  const { image, page, rect } = placement;
+  const imageWidth = image.width;
+  const imageHeight = image.height;
+  const scale = Math.min(rect.width / imageWidth, rect.height / imageHeight);
+  const drawWidth = imageWidth * scale;
+  const drawHeight = imageHeight * scale;
+  page.drawImage(image, {
+    x: rect.x + (rect.width - drawWidth) / 2,
+    y: rect.y + (rect.height - drawHeight) / 2,
+    width: drawWidth,
+    height: drawHeight
+  });
+}
+
 export async function generateDocumentV2(data: DocumentV2Data, templateId?: string): Promise<Uint8Array> {
   throw new Error("internal: use generateDocumentV2WithBytes");
 }
@@ -330,8 +386,12 @@ export async function generateDocumentV2WithBytes(
   if (templateId === "temporary-receipt") {
     applyTemporaryReceiptExtras(form, allData, thaiFont);
   }
+  const vehicleDeliveryIdCardImage = templateId === "vehicle-delivery-document"
+    ? await prepareVehicleDeliveryIdCardImage(pdf, form, allData)
+    : null;
   form.updateFieldAppearances(thaiFont);
 
   form.flatten();
+  drawVehicleDeliveryIdCardImage(vehicleDeliveryIdCardImage);
   return pdf.save();
 }

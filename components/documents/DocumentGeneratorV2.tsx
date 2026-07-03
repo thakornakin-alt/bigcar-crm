@@ -90,6 +90,23 @@ type TransportTransferRequestExtraData = {
   vehicle_engine_no: string;
 };
 
+type VehicleDeliveryDocumentExtraData = {
+  deliveryDate: string;
+  customer_name: string;
+  customer_id_no: string;
+  customer_address_1: string;
+  customer_address_2: string;
+  customer_postal_code: string;
+  customer_phone: string;
+  vehicle_brand: string;
+  vehicle_model: string;
+  vehicle_year: string;
+  vehicle_color: string;
+  vehicle_plate: string;
+  vehicle_chassis_no: string;
+  customer_id_card_image: string;
+};
+
 const DEFAULT_TEMPORARY_RECEIPT_EXTRAS: TemporaryReceiptExtraData = {
   row3NetPriceNote: "",
   row1Note: "",
@@ -151,6 +168,23 @@ const DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS: TransportTransferRequestExtraDa
   vehicle_plate_no: "",
   vehicle_chassis_no: "",
   vehicle_engine_no: ""
+};
+
+const DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS: VehicleDeliveryDocumentExtraData = {
+  deliveryDate: "",
+  customer_name: "",
+  customer_id_no: "",
+  customer_address_1: "",
+  customer_address_2: "",
+  customer_postal_code: "",
+  customer_phone: "",
+  vehicle_brand: "",
+  vehicle_model: "",
+  vehicle_year: "",
+  vehicle_color: "",
+  vehicle_plate: "",
+  vehicle_chassis_no: "",
+  customer_id_card_image: ""
 };
 
 const POWER_OF_ATTORNEY_ADDRESS_KEYS = [
@@ -327,6 +361,27 @@ function splitTransportTransferAddress(input: unknown): Pick<
   };
 }
 
+function splitVehicleDeliveryAddress(input: unknown) {
+  const raw = String(input || "").trim();
+  const postalMatch = raw.match(/(?:^|\D)(\d{5})(?!\d)\s*$/);
+  const postalCode = postalMatch?.[1] || "";
+  const addressWithoutPostal = postalCode ? raw.replace(new RegExp(`\\s*${postalCode}\\s*$`), "").trim() : raw;
+  return {
+    customer_address_1: addressWithoutPostal,
+    customer_address_2: "",
+    customer_postal_code: postalCode
+  };
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("อ่านไฟล์รูปไม่สำเร็จ"));
+    reader.readAsDataURL(file);
+  });
+}
+
 function thaiNumberToWords(input: number) {
   if (!Number.isFinite(input)) return "";
   const rounded = Math.round(input * 100) / 100;
@@ -413,8 +468,10 @@ export function DocumentGeneratorV2() {
   const [temporaryReceiptExtras, setTemporaryReceiptExtras] = useState<TemporaryReceiptExtraData>(DEFAULT_TEMPORARY_RECEIPT_EXTRAS);
   const [powerOfAttorneyExtras, setPowerOfAttorneyExtras] = useState<PowerOfAttorneyExtraData>(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
   const [transportTransferExtras, setTransportTransferExtras] = useState<TransportTransferRequestExtraData>(DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS);
+  const [vehicleDeliveryExtras, setVehicleDeliveryExtras] = useState<VehicleDeliveryDocumentExtraData>(DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS);
   const powerOfAttorneyTouchedRef = useRef<Record<string, boolean>>({});
   const transportTransferTouchedRef = useRef<Record<string, boolean>>({});
+  const vehicleDeliveryTouchedRef = useRef<Record<string, boolean>>({});
   const [resolveDebug, setResolveDebug] = useState<DocumentV2ResolveDebug | null>(null);
   const [resolvingData, setResolvingData] = useState(false);
   const [settingsMode, setSettingsMode] = useState(false);
@@ -426,6 +483,7 @@ export function DocumentGeneratorV2() {
   const isTemporaryReceipt = templateId === "temporary-receipt";
   const isPowerOfAttorney = templateId === "power-of-attorney";
   const isTransportTransferRequest = templateId === "transport-transfer-request";
+  const isVehicleDeliveryDocument = templateId === "vehicle-delivery-document";
 
   const selectedReport = useMemo(
     () => reports.find((r) => r.id === selectedReportId) || null,
@@ -470,8 +528,27 @@ export function DocumentGeneratorV2() {
             vehicle_engine_no: transportTransferExtras.vehicle_engine_no
           }
         : {})
+      ,
+      ...(templateId === "vehicle-delivery-document"
+        ? {
+            delivery_date: vehicleDeliveryExtras.deliveryDate || formatThaiBuddhistDate(),
+            customer_name: vehicleDeliveryExtras.customer_name,
+            customer_id_no: vehicleDeliveryExtras.customer_id_no,
+            customer_address_1: vehicleDeliveryExtras.customer_address_1,
+            customer_address_2: vehicleDeliveryExtras.customer_address_2,
+            customer_postal_code: vehicleDeliveryExtras.customer_postal_code,
+            customer_phone: vehicleDeliveryExtras.customer_phone,
+            vehicle_brand: vehicleDeliveryExtras.vehicle_brand,
+            vehicle_model: vehicleDeliveryExtras.vehicle_model,
+            vehicle_year: vehicleDeliveryExtras.vehicle_year,
+            vehicle_color: vehicleDeliveryExtras.vehicle_color,
+            vehicle_plate: vehicleDeliveryExtras.vehicle_plate,
+            vehicle_chassis_no: vehicleDeliveryExtras.vehicle_chassis_no,
+            customer_id_card_image: vehicleDeliveryExtras.customer_id_card_image
+          }
+        : {})
     }),
-    [editableData, powerOfAttorneyExtras, resolvedData, sampleData, selectedReport, templateId, transportTransferExtras]
+    [editableData, powerOfAttorneyExtras, resolvedData, sampleData, selectedReport, templateId, transportTransferExtras, vehicleDeliveryExtras]
   );
   const reportRawKeys = useMemo(() => Object.keys(rawReportData).sort((a, b) => a.localeCompare(b)), [rawReportData]);
   const namedFields = useMemo(() => fields.filter((field) => isNamedPdfField(field.name)), [fields]);
@@ -499,8 +576,10 @@ export function DocumentGeneratorV2() {
     setTemporaryReceiptExtras(DEFAULT_TEMPORARY_RECEIPT_EXTRAS);
     setPowerOfAttorneyExtras(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
     setTransportTransferExtras(DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS);
+    setVehicleDeliveryExtras(DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS);
     powerOfAttorneyTouchedRef.current = {};
     transportTransferTouchedRef.current = {};
+    vehicleDeliveryTouchedRef.current = {};
   }
 
   function updateTemporaryReceiptExtra<K extends keyof TemporaryReceiptExtraData>(key: K, value: TemporaryReceiptExtraData[K]) {
@@ -515,6 +594,11 @@ export function DocumentGeneratorV2() {
   function updateTransportTransferExtra<K extends keyof TransportTransferRequestExtraData>(key: K, value: TransportTransferRequestExtraData[K]) {
     transportTransferTouchedRef.current[String(key)] = true;
     setTransportTransferExtras((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function updateVehicleDeliveryExtra<K extends keyof VehicleDeliveryDocumentExtraData>(key: K, value: VehicleDeliveryDocumentExtraData[K]) {
+    vehicleDeliveryTouchedRef.current[String(key)] = true;
+    setVehicleDeliveryExtras((prev) => ({ ...prev, [key]: value }));
   }
 
   function normalizePowerOfAttorneySuggestion(suggestion: PowerOfAttorneySuggestion) {
@@ -598,6 +682,34 @@ export function DocumentGeneratorV2() {
     });
   }
 
+  function applyVehicleDeliveryDefaults(sourceData: Partial<ResolvedDocumentV2Data>) {
+    if (templateId !== "vehicle-delivery-document") return;
+    const addressParts = splitVehicleDeliveryAddress(sourceData.customerAddress || "");
+    const defaults: Partial<VehicleDeliveryDocumentExtraData> = {
+      deliveryDate: formatThaiBuddhistDate(),
+      customer_name: String(sourceData.customerName || ""),
+      customer_id_no: String(sourceData.idCard || ""),
+      customer_phone: String(sourceData.phone || ""),
+      vehicle_brand: String(sourceData.brand || ""),
+      vehicle_model: String(sourceData.model || ""),
+      vehicle_year: String(sourceData.year || ""),
+      vehicle_color: String(sourceData.color || ""),
+      vehicle_plate: String(sourceData.plateNo || ""),
+      vehicle_chassis_no: String(sourceData.chassisNo || ""),
+      ...addressParts
+    };
+    setVehicleDeliveryExtras((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const [key, value] of Object.entries(defaults) as Array<[keyof VehicleDeliveryDocumentExtraData, string]>) {
+        if (!value || vehicleDeliveryTouchedRef.current[String(key)] || String(next[key] || "").trim()) continue;
+        next[key] = value;
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }
+
   function computeNetSellPrice() {
     const sellPriceText = String((editableData || sampleData || {}).sellPrice || "");
     const base = Number(sellPriceText.replace(/,/g, "").replace(/[^\d.-]/g, ""));
@@ -664,6 +776,22 @@ export function DocumentGeneratorV2() {
       payload.transferee_phone = transportTransferExtras.transferee_phone || "";
       payload.vehicle_chassis_no = transportTransferExtras.vehicle_chassis_no || "";
       payload.vehicle_engine_no = transportTransferExtras.vehicle_engine_no || "";
+    }
+    if (templateId === "vehicle-delivery-document") {
+      payload.delivery_date = vehicleDeliveryExtras.deliveryDate || formatThaiBuddhistDate();
+      payload.customer_name = vehicleDeliveryExtras.customer_name || "";
+      payload.customer_id_no = vehicleDeliveryExtras.customer_id_no || "";
+      payload.customer_address_1 = vehicleDeliveryExtras.customer_address_1 || "";
+      payload.customer_address_2 = vehicleDeliveryExtras.customer_address_2 || "";
+      payload.customer_postal_code = vehicleDeliveryExtras.customer_postal_code || "";
+      payload.customer_phone = vehicleDeliveryExtras.customer_phone || "";
+      payload.vehicle_brand = vehicleDeliveryExtras.vehicle_brand || "";
+      payload.vehicle_model = vehicleDeliveryExtras.vehicle_model || "";
+      payload.vehicle_year = vehicleDeliveryExtras.vehicle_year || "";
+      payload.vehicle_color = vehicleDeliveryExtras.vehicle_color || "";
+      payload.vehicle_plate = vehicleDeliveryExtras.vehicle_plate || "";
+      payload.vehicle_chassis_no = vehicleDeliveryExtras.vehicle_chassis_no || "";
+      payload.customer_id_card_image = vehicleDeliveryExtras.customer_id_card_image || "";
     }
     payload.row3NetPriceNote = temporaryReceiptExtras.row3NetPriceNote || "";
     payload.row1Note = temporaryReceiptExtras.row1Note || "";
@@ -756,6 +884,9 @@ export function DocumentGeneratorV2() {
       if (templateId === "transport-transfer-request") {
         applyTransportTransferDefaults(res.data || {});
       }
+      if (templateId === "vehicle-delivery-document") {
+        applyVehicleDeliveryDefaults(res.data || {});
+      }
     } catch (e) {
       const fallbackData = mapBookingToDocumentV2(report) as ResolvedDocumentV2Data;
       setResolvedData(fallbackData);
@@ -773,6 +904,9 @@ export function DocumentGeneratorV2() {
       }
       if (templateId === "transport-transfer-request") {
         applyTransportTransferDefaults(fallbackData);
+      }
+      if (templateId === "vehicle-delivery-document") {
+        applyVehicleDeliveryDefaults(fallbackData);
       }
     } finally {
       setResolvingData(false);
@@ -826,8 +960,10 @@ export function DocumentGeneratorV2() {
   useEffect(() => {
     powerOfAttorneyTouchedRef.current = {};
     transportTransferTouchedRef.current = {};
+    vehicleDeliveryTouchedRef.current = {};
     setPowerOfAttorneyExtras(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
     setTransportTransferExtras(DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS);
+    setVehicleDeliveryExtras(DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS);
   }, [templateId, selectedReportId]);
 
   useEffect(() => {
@@ -843,6 +979,11 @@ export function DocumentGeneratorV2() {
   useEffect(() => {
     if (templateId !== "transport-transfer-request") return;
     applyTransportTransferDefaults((resolvedData || sampleData || editableData || {}) as ResolvedDocumentV2Data);
+  }, [editableData, resolvedData, sampleData, templateId]);
+
+  useEffect(() => {
+    if (templateId !== "vehicle-delivery-document") return;
+    applyVehicleDeliveryDefaults((resolvedData || sampleData || editableData || {}) as ResolvedDocumentV2Data);
   }, [editableData, resolvedData, sampleData, templateId]);
 
   useEffect(() => {
@@ -1044,6 +1185,21 @@ export function DocumentGeneratorV2() {
       ...(prev || sampleData || {}),
       [key]: value
     } as ResolvedDocumentV2Data));
+  }
+
+  async function handleVehicleDeliveryIdCardImage(file: File | null) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("กรุณาเลือกไฟล์รูปภาพบัตรประชาชน");
+      return;
+    }
+    try {
+      setError("");
+      const dataUrl = await readFileAsDataUrl(file);
+      updateVehicleDeliveryExtra("customer_id_card_image", dataUrl);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "อ่านไฟล์รูปไม่สำเร็จ");
+    }
   }
 
   async function sharePng() {
@@ -1277,7 +1433,7 @@ export function DocumentGeneratorV2() {
         </>
       ) : null}
 
-      {(isTemporaryReceipt || isPowerOfAttorney || isTransportTransferRequest) ? (
+      {(isTemporaryReceipt || isPowerOfAttorney || isTransportTransferRequest || isVehicleDeliveryDocument) ? (
         <div className="rounded border border-white/10 p-3">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className="font-semibold">แก้ข้อมูลก่อน Preview</h2>
@@ -1313,7 +1469,7 @@ export function DocumentGeneratorV2() {
             </div>
           ) : null}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {(!isPowerOfAttorney && !isTransportTransferRequest) ? editableFieldOrder.map((key) => {
+            {(!isPowerOfAttorney && !isTransportTransferRequest && !isVehicleDeliveryDocument) ? editableFieldOrder.map((key) => {
               const editableSource = (editableData || sampleData || {}) as Record<string, string>;
               const currentValue = String(editableSource[String(key)] || "");
               if (["sellPrice", "deposit", "remainingAmount"].includes(String(key))) {
@@ -1373,6 +1529,68 @@ export function DocumentGeneratorV2() {
               );
             }) : null}
           </div>
+          {isVehicleDeliveryDocument ? (
+            <div className="mt-4 rounded border border-white/10 bg-black/20 p-3">
+              <h3 className="font-semibold">ข้อมูลเอกสารส่งมอบรถยนต์</h3>
+              <p className="mt-1 text-xs text-gray-300">ใช้เฉพาะตอน Preview / Generate PDF เท่านั้น</p>
+              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="block space-y-1 md:col-span-2">
+                  <span className="block text-xs text-gray-300">วันที่ส่งมอบ</span>
+                  <input
+                    value={vehicleDeliveryExtras.deliveryDate || formatThaiBuddhistDate()}
+                    onChange={(e) => updateVehicleDeliveryExtra("deliveryDate", e.target.value)}
+                    placeholder="23 มิถุนายน 2569"
+                    className="w-full rounded bg-black/40 p-2 text-sm"
+                  />
+                </label>
+                {[
+                  ["customer_name", "ชื่อลูกค้า"],
+                  ["customer_id_no", "เลขบัตรประชาชน"],
+                  ["customer_address_1", "ที่อยู่บรรทัด 1"],
+                  ["customer_address_2", "ที่อยู่บรรทัด 2"],
+                  ["customer_postal_code", "รหัสไปรษณีย์"],
+                  ["customer_phone", "โทรศัพท์"],
+                  ["vehicle_brand", "ยี่ห้อ"],
+                  ["vehicle_model", "รุ่น"],
+                  ["vehicle_year", "ปี"],
+                  ["vehicle_color", "สี"],
+                  ["vehicle_plate", "ทะเบียน"],
+                  ["vehicle_chassis_no", "เลขตัวถัง"]
+                ].map(([key, label]) => (
+                  <label key={key} className="block space-y-1">
+                    <span className="block text-xs text-gray-300">{label}</span>
+                    <input
+                      value={vehicleDeliveryExtras[key as keyof VehicleDeliveryDocumentExtraData] as string}
+                      onChange={(e) => updateVehicleDeliveryExtra(key as keyof VehicleDeliveryDocumentExtraData, e.target.value)}
+                      className="w-full rounded bg-black/40 p-2 text-sm"
+                    />
+                  </label>
+                ))}
+                <div className="space-y-2 md:col-span-2">
+                  <label className="block space-y-1">
+                    <span className="block text-xs text-gray-300">แนบรูปบัตรประชาชน</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleVehicleDeliveryIdCardImage(e.target.files?.[0] || null)}
+                      className="w-full rounded bg-black/40 p-2 text-sm"
+                    />
+                  </label>
+                  {vehicleDeliveryExtras.customer_id_card_image ? (
+                    <div className="rounded border border-white/10 bg-black/30 p-2">
+                      <div className="mb-2 text-xs text-gray-300">Preview รูปบัตรประชาชน</div>
+                      <img
+                        src={vehicleDeliveryExtras.customer_id_card_image}
+                        alt="Preview รูปบัตรประชาชน"
+                        className="max-h-48 max-w-full rounded object-contain"
+                      />
+                    </div>
+                  ) : null}
+                  <p className="text-[11px] text-gray-500">รูปจะถูกวางแบบ contain/center ใน field customer_id_card_image_af_image โดยไม่ crop หรือ stretch</p>
+                </div>
+              </div>
+            </div>
+          ) : null}
           {isTransportTransferRequest ? (
             <div className="mt-4 rounded border border-white/10 bg-black/20 p-3">
               <h3 className="font-semibold">ข้อมูลใบคำขอโอนขนส่ง</h3>
