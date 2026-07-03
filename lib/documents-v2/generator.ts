@@ -65,6 +65,53 @@ function setTextIfExists(
   }
 }
 
+function getFirstWidgetWidth(field: ReturnType<ReturnType<PDFDocument["getForm"]>["getTextField"]>) {
+  try {
+    const widget = field.acroField.getWidgets()[0];
+    if (!widget) return 0;
+    return widget.getRectangle().width;
+  } catch {
+    return 0;
+  }
+}
+
+function shrinkVehicleModelFontSize(
+  value: string,
+  field: ReturnType<ReturnType<PDFDocument["getForm"]>["getTextField"]>,
+  thaiFont: Awaited<ReturnType<PDFDocument["embedFont"]>>
+) {
+  const width = getFirstWidgetWidth(field);
+  if (!width || !value) return undefined;
+  const padding = 4;
+  const maxWidth = Math.max(width - padding, 1);
+  const defaultSize = 11;
+  const minSize = 7.5;
+  let size = defaultSize;
+  while (size > minSize && thaiFont.widthOfTextAtSize(value, size) > maxWidth) {
+    size -= 0.25;
+  }
+  return Math.max(size, minSize);
+}
+
+function setVehicleModelTextIfExists(
+  form: ReturnType<PDFDocument["getForm"]>,
+  value: string,
+  thaiFont: Awaited<ReturnType<PDFDocument["embedFont"]>>
+) {
+  if (!value) return;
+  try {
+    const field = form.getTextField("vehicle_model");
+    const fontSize = shrinkVehicleModelFontSize(value, field, thaiFont);
+    if (fontSize) {
+      try {
+        field.setFontSize(fontSize);
+      } catch {}
+    }
+    field.setText(value);
+    field.updateAppearances(thaiFont);
+  } catch {}
+}
+
 function setCheckboxIfExists(form: ReturnType<PDFDocument["getForm"]>, name: string, checked: boolean) {
   try {
     const field = form.getCheckBox(name);
@@ -380,7 +427,11 @@ export async function generateDocumentV2WithBytes(
       value = fixedManagerName;
     }
     const powerOfAttorneyFontSize = templateId === "power-of-attorney" ? getPowerOfAttorneyFontSize(pdfField) : undefined;
-    setTextIfExists(form, [pdfField], value, thaiFont, powerOfAttorneyFontSize);
+    if (templateId === "vehicle-delivery-document" && pdfField === "vehicle_model") {
+      setVehicleModelTextIfExists(form, value, thaiFont);
+    } else {
+      setTextIfExists(form, [pdfField], value, thaiFont, powerOfAttorneyFontSize);
+    }
   }
   setTextIfExists(form, ["manager_name", "MANAGER_NAME", "approverName"], fixedManagerName, thaiFont);
   if (templateId === "temporary-receipt") {

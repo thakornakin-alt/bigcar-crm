@@ -469,6 +469,7 @@ export function DocumentGeneratorV2() {
   const [powerOfAttorneyExtras, setPowerOfAttorneyExtras] = useState<PowerOfAttorneyExtraData>(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
   const [transportTransferExtras, setTransportTransferExtras] = useState<TransportTransferRequestExtraData>(DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS);
   const [vehicleDeliveryExtras, setVehicleDeliveryExtras] = useState<VehicleDeliveryDocumentExtraData>(DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS);
+  const vehicleDeliveryIdCardInputRef = useRef<HTMLInputElement | null>(null);
   const powerOfAttorneyTouchedRef = useRef<Record<string, boolean>>({});
   const transportTransferTouchedRef = useRef<Record<string, boolean>>({});
   const vehicleDeliveryTouchedRef = useRef<Record<string, boolean>>({});
@@ -1568,14 +1569,39 @@ export function DocumentGeneratorV2() {
                 ))}
                 <div className="space-y-2 md:col-span-2">
                   <label className="block space-y-1">
-                    <span className="block text-xs text-gray-300">แนบรูปบัตรประชาชน</span>
+                    <span className="block text-xs text-gray-300">ถ่าย/แนบรูปบัตรประชาชน</span>
                     <input
+                      ref={vehicleDeliveryIdCardInputRef}
                       type="file"
                       accept="image/*"
+                      capture="environment"
                       onChange={(e) => handleVehicleDeliveryIdCardImage(e.target.files?.[0] || null)}
-                      className="w-full rounded bg-black/40 p-2 text-sm"
+                      className="sr-only"
                     />
                   </label>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => vehicleDeliveryIdCardInputRef.current?.click()}
+                      className="rounded border border-white/20 px-3 py-2 text-sm"
+                    >
+                      {vehicleDeliveryExtras.customer_id_card_image ? "เปลี่ยนรูปบัตรประชาชน" : "ถ่าย/แนบรูปบัตรประชาชน"}
+                    </button>
+                    {vehicleDeliveryExtras.customer_id_card_image ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateVehicleDeliveryExtra("customer_id_card_image", "");
+                          if (vehicleDeliveryIdCardInputRef.current) {
+                            vehicleDeliveryIdCardInputRef.current.value = "";
+                          }
+                        }}
+                        className="rounded border border-red-300/40 px-3 py-2 text-sm text-red-100"
+                      >
+                        ลบรูป
+                      </button>
+                    ) : null}
+                  </div>
                   {vehicleDeliveryExtras.customer_id_card_image ? (
                     <div className="rounded border border-white/10 bg-black/30 p-2">
                       <div className="mb-2 text-xs text-gray-300">Preview รูปบัตรประชาชน</div>
