@@ -469,7 +469,8 @@ export function DocumentGeneratorV2() {
   const [powerOfAttorneyExtras, setPowerOfAttorneyExtras] = useState<PowerOfAttorneyExtraData>(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
   const [transportTransferExtras, setTransportTransferExtras] = useState<TransportTransferRequestExtraData>(DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS);
   const [vehicleDeliveryExtras, setVehicleDeliveryExtras] = useState<VehicleDeliveryDocumentExtraData>(DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS);
-  const vehicleDeliveryIdCardInputRef = useRef<HTMLInputElement | null>(null);
+  const vehicleDeliveryIdCardCameraInputRef = useRef<HTMLInputElement | null>(null);
+  const vehicleDeliveryIdCardPickerInputRef = useRef<HTMLInputElement | null>(null);
   const powerOfAttorneyTouchedRef = useRef<Record<string, boolean>>({});
   const transportTransferTouchedRef = useRef<Record<string, boolean>>({});
   const vehicleDeliveryTouchedRef = useRef<Record<string, boolean>>({});
@@ -1571,10 +1572,17 @@ export function DocumentGeneratorV2() {
                   <label className="block space-y-1">
                     <span className="block text-xs text-gray-300">ถ่าย/แนบรูปบัตรประชาชน</span>
                     <input
-                      ref={vehicleDeliveryIdCardInputRef}
+                      ref={vehicleDeliveryIdCardCameraInputRef}
                       type="file"
                       accept="image/*"
                       capture="environment"
+                      onChange={(e) => handleVehicleDeliveryIdCardImage(e.target.files?.[0] || null)}
+                      className="sr-only"
+                    />
+                    <input
+                      ref={vehicleDeliveryIdCardPickerInputRef}
+                      type="file"
+                      accept="image/*"
                       onChange={(e) => handleVehicleDeliveryIdCardImage(e.target.files?.[0] || null)}
                       className="sr-only"
                     />
@@ -1582,18 +1590,28 @@ export function DocumentGeneratorV2() {
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => vehicleDeliveryIdCardInputRef.current?.click()}
+                      onClick={() => vehicleDeliveryIdCardCameraInputRef.current?.click()}
                       className="rounded border border-white/20 px-3 py-2 text-sm"
                     >
-                      {vehicleDeliveryExtras.customer_id_card_image ? "เปลี่ยนรูปบัตรประชาชน" : "ถ่าย/แนบรูปบัตรประชาชน"}
+                      ถ่ายรูปบัตรประชาชน
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => vehicleDeliveryIdCardPickerInputRef.current?.click()}
+                      className="rounded border border-white/20 px-3 py-2 text-sm"
+                    >
+                      {vehicleDeliveryExtras.customer_id_card_image ? "เปลี่ยนรูป" : "เลือกรูปบัตรจากเครื่อง"}
                     </button>
                     {vehicleDeliveryExtras.customer_id_card_image ? (
                       <button
                         type="button"
                         onClick={() => {
                           updateVehicleDeliveryExtra("customer_id_card_image", "");
-                          if (vehicleDeliveryIdCardInputRef.current) {
-                            vehicleDeliveryIdCardInputRef.current.value = "";
+                          if (vehicleDeliveryIdCardCameraInputRef.current) {
+                            vehicleDeliveryIdCardCameraInputRef.current.value = "";
+                          }
+                          if (vehicleDeliveryIdCardPickerInputRef.current) {
+                            vehicleDeliveryIdCardPickerInputRef.current.value = "";
                           }
                         }}
                         className="rounded border border-red-300/40 px-3 py-2 text-sm text-red-100"
