@@ -39,7 +39,8 @@ export function VehicleDeliveryOcrScanner({ imageDataUrl, onApply }: Props) {
   const [preview, setPreview] = useState<VehicleDeliveryOcrResult | null>(null);
 
   const reviewValues = useMemo(() => (preview ? preview.fields : null), [preview]);
-  const canScan = Boolean(imageDataUrl);
+  const hasImage = Boolean(String(imageDataUrl || "").trim().startsWith("data:image/"));
+  const canScan = hasImage;
 
   async function scanImage() {
     if (!imageDataUrl) {
@@ -128,7 +129,7 @@ export function VehicleDeliveryOcrScanner({ imageDataUrl, onApply }: Props) {
             OCR จะเติมได้เฉพาะชื่อลูกค้า เลขบัตร ที่อยู่ และรหัสไปรษณีย์เท่านั้น ข้อมูลรถ วันที่ ทะเบียน เบอร์โทร และรูปบัตรจะไม่ถูกแก้
           </p>
 
-          {imageDataUrl ? (
+          {hasImage ? (
             <div className="rounded-lg border border-line bg-[#0b0d11] p-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={imageDataUrl} alt="Preview รูปบัตรประชาชนสำหรับ OCR" className="max-h-40 w-full rounded-md object-contain" />
@@ -144,6 +145,12 @@ export function VehicleDeliveryOcrScanner({ imageDataUrl, onApply }: Props) {
             {reading ? <Loader2 size={18} className="animate-spin" /> : <ScanLine size={18} />}
             สแกนข้อมูลจากบัตรประชาชน
           </button>
+
+          {!hasImage ? (
+            <p className="rounded-lg border border-dashed border-line bg-[#0b0d11] px-3 py-2 text-xs leading-5 text-soft">
+              กรุณาถ่ายหรือเลือกรูปบัตรก่อนสแกน
+            </p>
+          ) : null}
 
           {status && (
             <p className={`rounded-lg border px-3 py-2 text-xs font-bold leading-5 ${reading ? "border-brand/40 bg-brand/10 text-brand" : "border-line bg-[#0b0d11] text-soft"}`}>
