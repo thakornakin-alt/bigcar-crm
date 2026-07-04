@@ -107,6 +107,16 @@ type VehicleDeliveryDocumentExtraData = {
   customer_id_card_image: string;
 };
 
+type VehicleDeliveryCropState = {
+  open: boolean;
+  source: string;
+  imageWidth: number;
+  imageHeight: number;
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+};
+
 const DEFAULT_TEMPORARY_RECEIPT_EXTRAS: TemporaryReceiptExtraData = {
   row3NetPriceNote: "",
   row1Note: "",
@@ -185,6 +195,16 @@ const DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS: VehicleDeliveryDocumentExtraData
   vehicle_plate: "",
   vehicle_chassis_no: "",
   customer_id_card_image: ""
+};
+
+const DEFAULT_VEHICLE_DELIVERY_CROP_STATE: VehicleDeliveryCropState = {
+  open: false,
+  source: "",
+  imageWidth: 0,
+  imageHeight: 0,
+  scale: 1,
+  offsetX: 0,
+  offsetY: 0
 };
 
 const POWER_OF_ATTORNEY_ADDRESS_KEYS = [
@@ -382,6 +402,46 @@ function readFileAsDataUrl(file: File) {
   });
 }
 
+function loadImageSize(source: string) {
+  return new Promise<{ width: number; height: number }>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve({ width: image.naturalWidth || image.width, height: image.naturalHeight || image.height });
+    image.onerror = () => reject(new Error("โหลดรูปไม่สำเร็จ"));
+    image.src = source;
+  });
+}
+
+function getVehicleDeliveryCropBounds(
+  cropFrame: { width: number; height: number },
+  imageWidth: number,
+  imageHeight: number,
+  scale: number
+) {
+  const scaledWidth = imageWidth * scale;
+  const scaledHeight = imageHeight * scale;
+  return {
+    minX: Math.min(0, cropFrame.width - scaledWidth),
+    maxX: 0,
+    minY: Math.min(0, cropFrame.height - scaledHeight),
+    maxY: 0
+  };
+}
+
+function clampVehicleDeliveryOffset(
+  offsetX: number,
+  offsetY: number,
+  cropFrame: { width: number; height: number },
+  imageWidth: number,
+  imageHeight: number,
+  scale: number
+) {
+  const bounds = getVehicleDeliveryCropBounds(cropFrame, imageWidth, imageHeight, scale);
+  return {
+    offsetX: Math.min(bounds.maxX, Math.max(bounds.minX, offsetX)),
+    offsetY: Math.min(bounds.maxY, Math.max(bounds.minY, offsetY))
+  };
+}
+
 function thaiNumberToWords(input: number) {
   if (!Number.isFinite(input)) return "";
   const rounded = Math.round(input * 100) / 100;
@@ -469,8 +529,11 @@ export function DocumentGeneratorV2() {
   const [powerOfAttorneyExtras, setPowerOfAttorneyExtras] = useState<PowerOfAttorneyExtraData>(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
   const [transportTransferExtras, setTransportTransferExtras] = useState<TransportTransferRequestExtraData>(DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS);
   const [vehicleDeliveryExtras, setVehicleDeliveryExtras] = useState<VehicleDeliveryDocumentExtraData>(DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS);
+  const [vehicleDeliveryCrop, setVehicleDeliveryCrop] = useState<VehicleDeliveryCropState>(DEFAULT_VEHICLE_DELIVERY_CROP_STATE);
   const vehicleDeliveryIdCardCameraInputRef = useRef<HTMLInputElement | null>(null);
   const vehicleDeliveryIdCardPickerInputRef = useRef<HTMLInputElement | null>(null);
+  const vehicleDeliveryCropFrameRef = useRef<HTMLDivElement | null>(null);
+  const vehicleDeliveryCropDragRef = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
   const powerOfAttorneyTouchedRef = useRef<Record<string, boolean>>({});
   const transportTransferTouchedRef = useRef<Record<string, boolean>>({});
   const vehicleDeliveryTouchedRef = useRef<Record<string, boolean>>({});
@@ -601,6 +664,80 @@ export function DocumentGeneratorV2() {
   function updateVehicleDeliveryExtra<K extends keyof VehicleDeliveryDocumentExtraData>(key: K, value: VehicleDeliveryDocumentExtraData[K]) {
     vehicleDeliveryTouchedRef.current[String(key)] = true;
     setVehicleDeliveryExtras((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function closeVehicleDeliveryCropper() {
+    setVehicleDeliveryCrop(DEFAULT_VEHICLE_DELIVERY_CROP_STATE);
+  }
+
+  function applyVehicleDeliveryCropSource(source: string, imageWidth: number, imageHeight: number) {
+    const frame = vehicleDeliveryCropFrameRef.current;
+    const frameWidth = frame?.clientWidth || 640;
+    const frameHeight = frame?.clientHeight || Math.round(frameWidth / 1.586);
+    const minScale = Math.max(frameWidth / imageWidth, frameHeight / imageHeight);
+    const nextScale = Math.max(minScale, 1);
+    const centered = clampVehicleDeliveryOffset(
+      (frameWidth - imageWidth * nextScale) / 2,
+      (frameHeight - imageHeight * nextScale) / 2,
+      { width: frameWidth, height: frameHeight },
+      imageWidth,
+      imageHeight,
+      nextScale
+    );
+    setVehicleDeliveryCrop({
+      open: true,
+      source,
+      imageWidth,
+      imageHeight,
+      scale: nextScale,
+      offsetX: centered.offsetX,
+      offsetY: centered.offsetY
+    });
+  }
+
+  async function openVehicleDeliveryCropper(file: File | null) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("กรุณาเลือกไฟล์รูปภาพบัตรประชาชน");
+      return;
+    }
+    try {
+      setError("");
+      const dataUrl = await readFileAsDataUrl(file);
+      const dims = await loadImageSize(dataUrl);
+      await applyVehicleDeliveryCropSource(dataUrl, dims.width, dims.height);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "อ่านไฟล์รูปไม่สำเร็จ");
+    }
+  }
+
+  async function confirmVehicleDeliveryCrop() {
+    const frame = vehicleDeliveryCropFrameRef.current;
+    if (!frame || !vehicleDeliveryCrop.source || !vehicleDeliveryCrop.imageWidth || !vehicleDeliveryCrop.imageHeight) return;
+    const frameWidth = frame.clientWidth || 640;
+    const frameHeight = frame.clientHeight || Math.round(frameWidth / 1.586);
+    const outputWidth = Math.max(1, Math.round(frameWidth / vehicleDeliveryCrop.scale));
+    const outputHeight = Math.max(1, Math.round(frameHeight / vehicleDeliveryCrop.scale));
+    const sourceX = Math.max(0, Math.min(vehicleDeliveryCrop.imageWidth - outputWidth, Math.round((-vehicleDeliveryCrop.offsetX) / vehicleDeliveryCrop.scale)));
+    const sourceY = Math.max(0, Math.min(vehicleDeliveryCrop.imageHeight - outputHeight, Math.round((-vehicleDeliveryCrop.offsetY) / vehicleDeliveryCrop.scale)));
+    const canvas = document.createElement("canvas");
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      setError("Canvas ไม่พร้อม");
+      return;
+    }
+    const image = new Image();
+    image.src = vehicleDeliveryCrop.source;
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("โหลดรูปไม่สำเร็จ"));
+    });
+    ctx.drawImage(image, sourceX, sourceY, outputWidth, outputHeight, 0, 0, outputWidth, outputHeight);
+    const cropped = canvas.toDataURL("image/jpeg", 0.95);
+    updateVehicleDeliveryExtra("customer_id_card_image", cropped);
+    closeVehicleDeliveryCropper();
   }
 
   function normalizePowerOfAttorneySuggestion(suggestion: PowerOfAttorneySuggestion) {
@@ -1190,18 +1327,46 @@ export function DocumentGeneratorV2() {
   }
 
   async function handleVehicleDeliveryIdCardImage(file: File | null) {
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setError("กรุณาเลือกไฟล์รูปภาพบัตรประชาชน");
-      return;
-    }
+    await openVehicleDeliveryCropper(file);
+  }
+
+  function handleVehicleDeliveryCropPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    const frame = vehicleDeliveryCropFrameRef.current;
+    if (!frame) return;
+    vehicleDeliveryCropDragRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      offsetX: vehicleDeliveryCrop.offsetX,
+      offsetY: vehicleDeliveryCrop.offsetY
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handleVehicleDeliveryCropPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (!vehicleDeliveryCropDragRef.current) return;
+    const frame = vehicleDeliveryCropFrameRef.current;
+    if (!frame) return;
+    const frameWidth = frame.clientWidth || 640;
+    const frameHeight = frame.clientHeight || Math.round(frameWidth / 1.586);
+    const deltaX = event.clientX - vehicleDeliveryCropDragRef.current.x;
+    const deltaY = event.clientY - vehicleDeliveryCropDragRef.current.y;
+    const next = clampVehicleDeliveryOffset(
+      vehicleDeliveryCropDragRef.current.offsetX + deltaX,
+      vehicleDeliveryCropDragRef.current.offsetY + deltaY,
+      { width: frameWidth, height: frameHeight },
+      vehicleDeliveryCrop.imageWidth,
+      vehicleDeliveryCrop.imageHeight,
+      vehicleDeliveryCrop.scale
+    );
+    setVehicleDeliveryCrop((prev) => ({ ...prev, offsetX: next.offsetX, offsetY: next.offsetY }));
+  }
+
+  function handleVehicleDeliveryCropPointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    if (!vehicleDeliveryCropDragRef.current) return;
     try {
-      setError("");
-      const dataUrl = await readFileAsDataUrl(file);
-      updateVehicleDeliveryExtra("customer_id_card_image", dataUrl);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "อ่านไฟล์รูปไม่สำเร็จ");
-    }
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {}
+    vehicleDeliveryCropDragRef.current = null;
   }
 
   async function sharePng() {
@@ -1907,6 +2072,97 @@ export function DocumentGeneratorV2() {
               ))}
             </div>
           </div>
+          ) : null}
+
+          {vehicleDeliveryCrop.open ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+              <div className="w-full max-w-4xl rounded border border-white/10 bg-slate-950 p-4 shadow-2xl">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="font-semibold">ครอปรูปบัตรประชาชน</h3>
+                    <p className="mt-1 text-xs text-gray-300">กรุณาปรับให้บัตรเต็มกรอบก่อนกด “ใช้รูปนี้”</p>
+                  </div>
+                  <button type="button" onClick={closeVehicleDeliveryCropper} className="rounded border border-white/20 px-3 py-1 text-sm">
+                    ยกเลิก
+                  </button>
+                </div>
+                <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_220px]">
+                  <div className="space-y-3">
+                    <div
+                      ref={vehicleDeliveryCropFrameRef}
+                      className="relative mx-auto w-full max-w-3xl overflow-hidden rounded border border-white/10 bg-black"
+                      style={{ aspectRatio: "1.586 / 1", touchAction: "none" }}
+                      onPointerDown={handleVehicleDeliveryCropPointerDown}
+                      onPointerMove={handleVehicleDeliveryCropPointerMove}
+                      onPointerUp={handleVehicleDeliveryCropPointerUp}
+                      onPointerCancel={handleVehicleDeliveryCropPointerUp}
+                      onPointerLeave={handleVehicleDeliveryCropPointerUp}
+                    >
+                      {vehicleDeliveryCrop.source ? (
+                        <img
+                          src={vehicleDeliveryCrop.source}
+                          alt="รูปบัตรประชาชนสำหรับครอป"
+                          draggable={false}
+                          className="absolute left-0 top-0 select-none"
+                          style={{
+                            width: `${vehicleDeliveryCrop.imageWidth}px`,
+                            height: `${vehicleDeliveryCrop.imageHeight}px`,
+                            transform: `translate(${vehicleDeliveryCrop.offsetX}px, ${vehicleDeliveryCrop.offsetY}px) scale(${vehicleDeliveryCrop.scale})`,
+                            transformOrigin: "top left",
+                            userSelect: "none",
+                            pointerEvents: "none"
+                          }}
+                        />
+                      ) : null}
+                      <div className="pointer-events-none absolute inset-0 border-2 border-dashed border-emerald-400/80" />
+                    </div>
+                    <p className="text-xs text-gray-300">ลากรูปเพื่อจัดตำแหน่ง แล้วใช้สไลเดอร์เพื่อซูมเข้าออก</p>
+                  </div>
+                  <div className="space-y-3 rounded border border-white/10 bg-black/30 p-3">
+                    <label className="block space-y-2">
+                      <span className="block text-xs text-gray-300">ซูม</span>
+                      <input
+                        type="range"
+                        min={Math.max(1, Math.round((vehicleDeliveryCrop.imageWidth && vehicleDeliveryCrop.imageHeight && vehicleDeliveryCropFrameRef.current
+                          ? Math.max(vehicleDeliveryCropFrameRef.current.clientWidth / vehicleDeliveryCrop.imageWidth, vehicleDeliveryCropFrameRef.current.clientHeight / vehicleDeliveryCrop.imageHeight)
+                          : 1) * 100) / 100)}
+                        max="4"
+                        step="0.01"
+                        value={vehicleDeliveryCrop.scale}
+                        onChange={(e) => {
+                          const nextScale = Number(e.target.value);
+                          const frame = vehicleDeliveryCropFrameRef.current;
+                          if (!frame || !vehicleDeliveryCrop.imageWidth || !vehicleDeliveryCrop.imageHeight) return;
+                          const bounds = clampVehicleDeliveryOffset(
+                            vehicleDeliveryCrop.offsetX,
+                            vehicleDeliveryCrop.offsetY,
+                            { width: frame.clientWidth || 640, height: frame.clientHeight || Math.round((frame.clientWidth || 640) / 1.586) },
+                            vehicleDeliveryCrop.imageWidth,
+                            vehicleDeliveryCrop.imageHeight,
+                            nextScale
+                          );
+                          setVehicleDeliveryCrop((prev) => ({ ...prev, scale: nextScale, offsetX: bounds.offsetX, offsetY: bounds.offsetY }));
+                        }}
+                        className="w-full"
+                      />
+                    </label>
+                    <p className="text-xs text-gray-300">แนะนำ: ให้บัตรเต็มกรอบก่อนกดใช้รูปนี้</p>
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={confirmVehicleDeliveryCrop}
+                        className="rounded bg-emerald-500 px-3 py-2 font-semibold text-black"
+                      >
+                        ใช้รูปนี้
+                      </button>
+                      <button type="button" onClick={closeVehicleDeliveryCropper} className="rounded border border-white/20 px-3 py-2 text-sm">
+                        ยกเลิก
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : null}
         </div>
       ) : null}
