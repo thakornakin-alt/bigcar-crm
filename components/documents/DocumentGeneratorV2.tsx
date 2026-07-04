@@ -622,19 +622,37 @@ export function DocumentGeneratorV2() {
     };
   }
 
-  function applyPowerOfAttorneySuggestion(suggestion: PowerOfAttorneySuggestion, options: { markEditableTouched?: boolean } = {}) {
+  function applyPowerOfAttorneySuggestion(suggestion: PowerOfAttorneySuggestion, options: { markEditableTouched?: boolean; overwrite?: boolean } = {}) {
     if (templateId !== "power-of-attorney") return;
     const markEditableTouched = options.markEditableTouched ?? true;
+    const overwrite = options.overwrite ?? false;
     const normalized = normalizePowerOfAttorneySuggestion(suggestion);
     const current = (editableData || sampleData || {}) as Record<string, string>;
-    if (normalized.customerName && !powerOfAttorneyTouchedRef.current.customerName && !String(powerOfAttorneyExtras.customerName || current.customerName || "").trim()) {
+    if (overwrite) {
+      setPowerOfAttorneyExtras((prev) => ({
+        ...prev,
+        customerName: normalized.customerName || "",
+        customer_age: normalized.customer_age || "",
+        customer_race: normalized.customer_race || "",
+        customer_nationality: normalized.customer_nationality || "",
+        customer_house_no: normalized.customer_house_no || "",
+        customer_moo: normalized.customer_moo || "",
+        customer_soi: normalized.customer_soi || "",
+        customer_road: normalized.customer_road || "",
+        cusyomer_subdistrict: normalized.cusyomer_subdistrict || "",
+        customer_district: normalized.customer_district || "",
+        customer_province: normalized.customer_province || ""
+      }));
+    } else if (normalized.customerName && !powerOfAttorneyTouchedRef.current.customerName && !String(powerOfAttorneyExtras.customerName || current.customerName || "").trim()) {
       setPowerOfAttorneyExtras((prev) => ({ ...prev, customerName: normalized.customerName }));
     }
     const nextExtraUpdates: Partial<PowerOfAttorneyExtraData> = {};
-    for (const key of ["customer_age", "customer_race", "customer_nationality", ...POWER_OF_ATTORNEY_ADDRESS_KEYS] as const) {
-      const value = normalized[key];
-      if (!value || powerOfAttorneyTouchedRef.current[String(key)] || String(powerOfAttorneyExtras[key] || "").trim()) continue;
-      nextExtraUpdates[key] = String(value);
+    if (!overwrite) {
+      for (const key of ["customer_age", "customer_race", "customer_nationality", ...POWER_OF_ATTORNEY_ADDRESS_KEYS] as const) {
+        const value = normalized[key];
+        if (!value || powerOfAttorneyTouchedRef.current[String(key)] || String(powerOfAttorneyExtras[key] || "").trim()) continue;
+        nextExtraUpdates[key] = String(value);
+      }
     }
     if (Object.keys(nextExtraUpdates).length) {
       setPowerOfAttorneyExtras((prev) => ({ ...prev, ...nextExtraUpdates }));
@@ -642,18 +660,18 @@ export function DocumentGeneratorV2() {
     setEditableData((prev) => {
       const next = { ...(prev || editableData || sampleData || {}) } as Record<string, string>;
       let changed = false;
-      if (normalized.customerName && !String(next.customerName || "").trim()) {
+      if (normalized.customerName && (overwrite || !String(next.customerName || "").trim())) {
         next.customerName = normalized.customerName;
         changed = true;
       }
-      if (normalized.plateNo && !String(next.plateNo || "").trim()) {
+      if (normalized.plateNo && (overwrite || !String(next.plateNo || "").trim())) {
         next.plateNo = normalized.plateNo;
         changed = true;
       }
       return changed ? (next as ResolvedDocumentV2Data) : prev;
     });
     if (markEditableTouched) setEditableTouched(true);
-    if (normalized.plateNo && !powerOfAttorneyTouchedRef.current.plateNo && !String(current.plateNo || "").trim()) {
+    if (!overwrite && normalized.plateNo && !powerOfAttorneyTouchedRef.current.plateNo && !String(current.plateNo || "").trim()) {
       const nextEditableData = { ...(editableData || sampleData || {}) } as ResolvedDocumentV2Data;
       nextEditableData.plateNo = normalized.plateNo;
       setEditableData(nextEditableData);
@@ -877,12 +895,12 @@ export function DocumentGeneratorV2() {
       setResolveDebug(res.debug || null);
       if (templateId === "power-of-attorney") {
         const reportAddress = String(res.data?.customerAddress || "").trim();
-        if (reportAddress) {
-          applyPowerOfAttorneySuggestion({
-            ...splitPowerOfAttorneyAddress(reportAddress),
-            address: reportAddress
-          }, { markEditableTouched: false });
-        }
+        applyPowerOfAttorneySuggestion({
+          customerName: String(res.data?.customerName || ""),
+          plateNo: String(res.data?.plateNo || ""),
+          ...splitPowerOfAttorneyAddress(reportAddress),
+          address: reportAddress
+        }, { markEditableTouched: false, overwrite: true });
       }
       if (templateId === "transport-transfer-request") {
         applyTransportTransferDefaults(res.data || {});
@@ -898,12 +916,12 @@ export function DocumentGeneratorV2() {
       setError(e instanceof Error ? e.message : "โหลดข้อมูลที่จะใช้จริงไม่สำเร็จ");
       if (templateId === "power-of-attorney") {
         const reportAddress = String(fallbackData.customerAddress || "").trim();
-        if (reportAddress) {
-          applyPowerOfAttorneySuggestion({
-            ...splitPowerOfAttorneyAddress(reportAddress),
-            address: reportAddress
-          }, { markEditableTouched: false });
-        }
+        applyPowerOfAttorneySuggestion({
+          customerName: String(fallbackData.customerName || ""),
+          plateNo: String(fallbackData.plateNo || ""),
+          ...splitPowerOfAttorneyAddress(reportAddress),
+          address: reportAddress
+        }, { markEditableTouched: false, overwrite: true });
       }
       if (templateId === "transport-transfer-request") {
         applyTransportTransferDefaults(fallbackData);
