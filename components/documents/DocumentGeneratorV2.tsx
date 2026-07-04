@@ -427,6 +427,15 @@ function getVehicleDeliveryCropBounds(
   };
 }
 
+function getVehicleDeliveryContainScale(
+  cropFrame: { width: number; height: number },
+  imageWidth: number,
+  imageHeight: number
+) {
+  if (!cropFrame.width || !cropFrame.height || !imageWidth || !imageHeight) return 1;
+  return Math.min(cropFrame.width / imageWidth, cropFrame.height / imageHeight);
+}
+
 function clampVehicleDeliveryOffset(
   offsetX: number,
   offsetY: number,
@@ -674,8 +683,8 @@ export function DocumentGeneratorV2() {
     const frame = vehicleDeliveryCropFrameRef.current;
     const frameWidth = frame?.clientWidth || 640;
     const frameHeight = frame?.clientHeight || Math.round(frameWidth / 1.586);
-    const minScale = Math.max(frameWidth / imageWidth, frameHeight / imageHeight);
-    const nextScale = Math.max(minScale, 1);
+    const containScale = Math.max(getVehicleDeliveryContainScale({ width: frameWidth, height: frameHeight }, imageWidth, imageHeight), 0.2);
+    const nextScale = containScale;
     const centered = clampVehicleDeliveryOffset(
       (frameWidth - imageWidth * nextScale) / 2,
       (frameHeight - imageHeight * nextScale) / 2,
@@ -2087,11 +2096,11 @@ export function DocumentGeneratorV2() {
                   </button>
                 </div>
                 <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_220px]">
-                  <div className="space-y-3">
-                    <div
-                      ref={vehicleDeliveryCropFrameRef}
-                      className="relative mx-auto w-full max-w-3xl overflow-hidden rounded border border-white/10 bg-black"
-                      style={{ aspectRatio: "1.586 / 1", touchAction: "none" }}
+                      <div className="space-y-3">
+                        <div
+                          ref={vehicleDeliveryCropFrameRef}
+                          className="relative mx-auto w-full max-w-3xl overflow-hidden rounded border border-white/10 bg-black"
+                          style={{ aspectRatio: "1.586 / 1", touchAction: "none" }}
                       onPointerDown={handleVehicleDeliveryCropPointerDown}
                       onPointerMove={handleVehicleDeliveryCropPointerMove}
                       onPointerUp={handleVehicleDeliveryCropPointerUp}
@@ -2123,9 +2132,16 @@ export function DocumentGeneratorV2() {
                       <span className="block text-xs text-gray-300">ซูม</span>
                       <input
                         type="range"
-                        min={Math.max(1, Math.round((vehicleDeliveryCrop.imageWidth && vehicleDeliveryCrop.imageHeight && vehicleDeliveryCropFrameRef.current
-                          ? Math.max(vehicleDeliveryCropFrameRef.current.clientWidth / vehicleDeliveryCrop.imageWidth, vehicleDeliveryCropFrameRef.current.clientHeight / vehicleDeliveryCrop.imageHeight)
-                          : 1) * 100) / 100)}
+                        min={Math.max(0.2, (vehicleDeliveryCropFrameRef.current && vehicleDeliveryCrop.imageWidth && vehicleDeliveryCrop.imageHeight
+                          ? getVehicleDeliveryContainScale(
+                              {
+                                width: vehicleDeliveryCropFrameRef.current.clientWidth || 640,
+                                height: vehicleDeliveryCropFrameRef.current.clientHeight || Math.round((vehicleDeliveryCropFrameRef.current.clientWidth || 640) / 1.586)
+                              },
+                              vehicleDeliveryCrop.imageWidth,
+                              vehicleDeliveryCrop.imageHeight
+                            )
+                          : 1))}
                         max="4"
                         step="0.01"
                         value={vehicleDeliveryCrop.scale}
@@ -2146,7 +2162,34 @@ export function DocumentGeneratorV2() {
                         className="w-full"
                       />
                     </label>
-                    <p className="text-xs text-gray-300">แนะนำ: ให้บัตรเต็มกรอบก่อนกดใช้รูปนี้</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const frame = vehicleDeliveryCropFrameRef.current;
+                        if (!frame || !vehicleDeliveryCrop.imageWidth || !vehicleDeliveryCrop.imageHeight) return;
+                        const frameWidth = frame.clientWidth || 640;
+                        const frameHeight = frame.clientHeight || Math.round(frameWidth / 1.586);
+                        const containScale = Math.max(getVehicleDeliveryContainScale({ width: frameWidth, height: frameHeight }, vehicleDeliveryCrop.imageWidth, vehicleDeliveryCrop.imageHeight), 0.2);
+                        const centered = clampVehicleDeliveryOffset(
+                          (frameWidth - vehicleDeliveryCrop.imageWidth * containScale) / 2,
+                          (frameHeight - vehicleDeliveryCrop.imageHeight * containScale) / 2,
+                          { width: frameWidth, height: frameHeight },
+                          vehicleDeliveryCrop.imageWidth,
+                          vehicleDeliveryCrop.imageHeight,
+                          containScale
+                        );
+                        setVehicleDeliveryCrop((prev) => ({
+                          ...prev,
+                          scale: containScale,
+                          offsetX: centered.offsetX,
+                          offsetY: centered.offsetY
+                        }));
+                      }}
+                      className="rounded border border-white/20 px-3 py-2 text-sm"
+                    >
+                      พอดีภาพ
+                    </button>
+                    <p className="text-xs text-gray-300">เริ่มต้นจะพอดีภาพทั้งใบก่อน แล้วค่อยซูมเข้าเพื่อจัด crop ให้เต็มกรอบ</p>
                     <div className="flex flex-col gap-2">
                       <button
                         type="button"
