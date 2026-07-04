@@ -39,16 +39,17 @@ export function VehicleDeliveryOcrScanner({ imageDataUrl, onApply }: Props) {
   const [preview, setPreview] = useState<VehicleDeliveryOcrResult | null>(null);
 
   const reviewValues = useMemo(() => (preview ? preview.fields : null), [preview]);
-  const hasImage = Boolean(String(imageDataUrl || "").trim().startsWith("data:image/"));
+  const normalizedImageDataUrl = String(imageDataUrl || "").trim();
+  const hasImage = normalizedImageDataUrl.length > 0;
   const canScan = hasImage;
 
   async function scanImage() {
-    if (!imageDataUrl) {
+    if (!normalizedImageDataUrl) {
       setError("กรุณาถ่ายหรือแนบรูปบัตรประชาชนก่อนสแกน");
       return;
     }
 
-    const payload = parseDataUrl(imageDataUrl);
+    const payload = parseDataUrl(normalizedImageDataUrl);
     if (!payload.base64 || !payload.mimeType.startsWith("image/")) {
       setError("รูปบัตรประชาชนไม่พร้อมสำหรับ OCR");
       return;
@@ -132,7 +133,7 @@ export function VehicleDeliveryOcrScanner({ imageDataUrl, onApply }: Props) {
           {hasImage ? (
             <div className="rounded-lg border border-line bg-[#0b0d11] p-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={imageDataUrl} alt="Preview รูปบัตรประชาชนสำหรับ OCR" className="max-h-40 w-full rounded-md object-contain" />
+              <img src={normalizedImageDataUrl} alt="Preview รูปบัตรประชาชนสำหรับ OCR" className="max-h-40 w-full rounded-md object-contain" />
             </div>
           ) : null}
 
@@ -146,11 +147,9 @@ export function VehicleDeliveryOcrScanner({ imageDataUrl, onApply }: Props) {
             สแกนข้อมูลจากบัตรประชาชน
           </button>
 
-          {!hasImage ? (
-            <p className="rounded-lg border border-dashed border-line bg-[#0b0d11] px-3 py-2 text-xs leading-5 text-soft">
-              กรุณาถ่ายหรือเลือกรูปบัตรก่อนสแกน
-            </p>
-          ) : null}
+          <p className={`rounded-lg border px-3 py-2 text-xs leading-5 ${hasImage ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100" : "border-dashed border-line bg-[#0b0d11] text-soft"}`}>
+            {hasImage ? "พร้อมสแกนข้อมูลจากบัตรประชาชน" : "กรุณาถ่ายหรือเลือกรูปบัตรก่อนสแกน"}
+          </p>
 
           {status && (
             <p className={`rounded-lg border px-3 py-2 text-xs font-bold leading-5 ${reading ? "border-brand/40 bg-brand/10 text-brand" : "border-line bg-[#0b0d11] text-soft"}`}>
