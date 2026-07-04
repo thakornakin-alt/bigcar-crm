@@ -9,11 +9,13 @@ import type { DocumentV2FieldKey, DocumentV2FieldMapping, DocumentV2MappedValue 
 import { mapBookingToDocumentV2 } from "@/lib/documents-v2/types";
 import type { DocumentV2ResolveDebug, ResolvedDocumentV2Data } from "@/lib/documents-v2/resolve-data";
 import { PowerOfAttorneyOcrScanner } from "@/components/documents/PowerOfAttorneyOcrScanner";
+import { VehicleDeliveryOcrScanner } from "@/components/documents/VehicleDeliveryOcrScanner";
 import {
   composePowerOfAttorneyVehiclePlate,
   splitPowerOfAttorneyAddress,
   type PowerOfAttorneySuggestion
 } from "@/lib/documents-v2/power-of-attorney";
+import type { VehicleDeliveryOcrFields } from "@/lib/documents-v2/vehicle-delivery-ocr";
 
 type FieldItem = { name: string; type: string };
 type FieldsDebug = {
@@ -1227,6 +1229,28 @@ export function DocumentGeneratorV2() {
     }
   }
 
+  function applyVehicleDeliveryOcrFields(fields: Partial<VehicleDeliveryOcrFields>) {
+    const allowedKeys: Array<keyof VehicleDeliveryDocumentExtraData> = [
+      "customer_name",
+      "customer_id_no",
+      "customer_address_1",
+      "customer_address_2",
+      "customer_postal_code"
+    ];
+    setVehicleDeliveryExtras((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const key of allowedKeys) {
+        const value = String(fields[key as keyof VehicleDeliveryOcrFields] || "").trim();
+        if (!value) continue;
+        vehicleDeliveryTouchedRef.current[String(key)] = true;
+        next[key] = value;
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }
+
   async function sharePng() {
     if (!pngBlob) {
       setError("ยังไม่มีไฟล์ PNG กรุณากดเซฟ PNG ก่อน");
@@ -1651,6 +1675,10 @@ export function DocumentGeneratorV2() {
                       />
                     </div>
                   ) : null}
+                  <VehicleDeliveryOcrScanner
+                    imageDataUrl={vehicleDeliveryExtras.customer_id_card_image}
+                    onApply={applyVehicleDeliveryOcrFields}
+                  />
                   <p className="text-[11px] text-gray-500">รูปจะถูกวางแบบ contain/center ใน field customer_id_card_image_af_image โดยไม่ crop หรือ stretch และพื้นหลังขาว</p>
                 </div>
               </div>
