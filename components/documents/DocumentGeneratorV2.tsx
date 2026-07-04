@@ -622,8 +622,9 @@ export function DocumentGeneratorV2() {
     };
   }
 
-  function applyPowerOfAttorneySuggestion(suggestion: PowerOfAttorneySuggestion) {
+  function applyPowerOfAttorneySuggestion(suggestion: PowerOfAttorneySuggestion, options: { markEditableTouched?: boolean } = {}) {
     if (templateId !== "power-of-attorney") return;
+    const markEditableTouched = options.markEditableTouched ?? true;
     const normalized = normalizePowerOfAttorneySuggestion(suggestion);
     const current = (editableData || sampleData || {}) as Record<string, string>;
     if (normalized.customerName && !powerOfAttorneyTouchedRef.current.customerName && !String(powerOfAttorneyExtras.customerName || current.customerName || "").trim()) {
@@ -651,12 +652,12 @@ export function DocumentGeneratorV2() {
       }
       return changed ? (next as ResolvedDocumentV2Data) : prev;
     });
-    setEditableTouched(true);
+    if (markEditableTouched) setEditableTouched(true);
     if (normalized.plateNo && !powerOfAttorneyTouchedRef.current.plateNo && !String(current.plateNo || "").trim()) {
       const nextEditableData = { ...(editableData || sampleData || {}) } as ResolvedDocumentV2Data;
       nextEditableData.plateNo = normalized.plateNo;
       setEditableData(nextEditableData);
-      setEditableTouched(true);
+      if (markEditableTouched) setEditableTouched(true);
     }
   }
 
@@ -880,7 +881,7 @@ export function DocumentGeneratorV2() {
           applyPowerOfAttorneySuggestion({
             ...splitPowerOfAttorneyAddress(reportAddress),
             address: reportAddress
-          });
+          }, { markEditableTouched: false });
         }
       }
       if (templateId === "transport-transfer-request") {
@@ -901,7 +902,7 @@ export function DocumentGeneratorV2() {
           applyPowerOfAttorneySuggestion({
             ...splitPowerOfAttorneyAddress(reportAddress),
             address: reportAddress
-          });
+          }, { markEditableTouched: false });
         }
       }
       if (templateId === "transport-transfer-request") {
@@ -966,7 +967,11 @@ export function DocumentGeneratorV2() {
     setPowerOfAttorneyExtras(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
     setTransportTransferExtras(DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS);
     setVehicleDeliveryExtras(DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS);
-  }, [templateId, selectedReportId]);
+    if (templateId === "power-of-attorney") {
+      setEditableTouched(false);
+      setEditableData(mapBookingToDocumentV2(selectedReport));
+    }
+  }, [templateId, selectedReportId, selectedReport]);
 
   useEffect(() => {
     if (templateId !== "power-of-attorney") return;
@@ -975,7 +980,7 @@ export function DocumentGeneratorV2() {
     applyPowerOfAttorneySuggestion({
       ...splitPowerOfAttorneyAddress(reportAddress),
       address: reportAddress
-    });
+    }, { markEditableTouched: false });
   }, [editableData, resolvedData, sampleData, templateId]);
 
   useEffect(() => {
