@@ -1,0 +1,127 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import type { BookingDeliveryRecord, BookingReport, BookingReportInput } from "../lib/types.ts";
+
+import {
+  bookingFoundationFromReport,
+  mergeBookingFoundation,
+  preserveCreatedAt,
+  resolveBookingLifecycleTimestamps
+} from "../lib/booking-delivery-foundation.ts";
+import { saveBookingReportAndMaster } from "../lib/booking-report-persistence.ts";
+
+const bookingInput: BookingReportInput = {
+  bookingDate: "2026-07-23",
+  customerName: "ลูกค้าทดสอบ",
+  idCard: "",
+  phone: "0800000000",
+  address: "",
+  buyerType: "individual",
+  bookingPrice: "10000",
+  plate: "TEST 1234",
+  brand: "Test",
+  model: "Model",
+  year: "2024",
+  color: "Black",
+  salePrice: "500000",
+  finalPrice: "490000",
+  finalPriceNote: "",
+  discount: "10000",
+  paymentType: "เงินสด",
+  source: "",
+  ownership: "",
+  project: "",
+  campaign: "",
+  saleName: "Tester",
+  teamName: "QA",
+  conditions: "",
+  emailSubject: "",
+  emailTo: "",
+  emailCc: "",
+  emailBcc: "",
+  reportText: "",
+  status: "draft"
+};
+
+const report: BookingReport = {
+  ...bookingInput,
+  id: "BR-TEST",
+  createdAt: "2026-07-23T01:00:00.000Z",
+  updatedAt: "2026-07-23T01:00:00.000Z"
+};
+
+test("new Booking Report sends bookingDate to Master foundation and defaults isCounted to true", () => {
+  const foundation = bookingFoundationFromReport(report.bookingDate);
+  assert.equal(foundation.bookingDate, "2026-07-23");
+  assert.equal(foundation.isCounted, true);
+});
+
+test("existing upsert preserves createdAt", () => {
+  assert.equal(
+    preserveCreatedAt("2026-07-23T01:00:00.000Z", "2026-07-01T01:00:00.000Z"),
+    "2026-07-01T01:00:00.000Z"
+  );
+});
+
+test("existing upsert does not lose bookingDate when incoming value is blank", () => {
+  const foundation = mergeBookingFoundation(
+    { bookingDate: "" },
+    { bookingDate: "2026-07-10", isCounted: false }
+  );
+  assert.equal(foundation.bookingDate, "2026-07-10");
+  assert.equal(foundation.isCounted, false);
+});
+
+test("delivery transition uses deliveryDate for deliveredAt", () => {
+  const timestamps = resolveBookingLifecycleTimestamps({
+    workflowStatus: "ยอดส่งมอบ",
+    status: "ยอดจอง",
+    deliveryDate: "2026-07-30",
+    now: "2026-07-31T01:00:00.000Z"
+  });
+  assert.equal(timestamps.deliveredAt, "2026-07-30");
+  assert.equal(timestamps.cancelledAt, undefined);
+});
+
+test("delivery transition uses current time when deliveryDate is missing", () => {
+  const timestamps = resolveBookingLifecycleTimestamps({
+    workflowStatus: "ยอดส่งมอบ",
+    status: "ยอดจอง",
+    now: "2026-07-31T01:00:00.000Z"
+  });
+  assert.equal(timestamps.deliveredAt, "2026-07-31T01:00:00.000Z");
+});
+
+test("cancel transition sets cancelledAt", () => {
+  const timestamps = resolveBookingLifecycleTimestamps({
+    workflowStatus: "ยกเลิก",
+    status: "ยกเลิก",
+    now: "2026-07-31T02:00:00.000Z"
+  });
+  assert.equal(timestamps.cancelledAt, "2026-07-31T02:00:00.000Z");
+});
+
+test("Master failure is returned as partial success without losing saved Booking Report", async () => {
+  const result = await saveBookingReportAndMaster(bookingInput, {
+    saveReport: async () => report,
+    upsertMaster: async () => {
+      throw new Error("master unavailable");
+    }
+  });
+
+  assert.equal(result.partialSuccess, true);
+  assert.equal(result.report.id, "BR-TEST");
+  assert.equal(result.bookingDelivery, null);
+  assert.match(result.warning, /master unavailable/);
+});
+
+test("successful persistence returns the Master record", async () => {
+  const master = { id: "BR-TEST" } as BookingDeliveryRecord;
+  const result = await saveBookingReportAndMaster(bookingInput, {
+    saveReport: async () => report,
+    upsertMaster: async () => master
+  });
+
+  assert.equal(result.partialSuccess, false);
+  assert.equal(result.bookingDelivery, master);
+});

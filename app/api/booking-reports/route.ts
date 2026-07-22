@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { renderBookingReport } from "@/lib/booking-report";
 import { saveBookingReport } from "@/lib/apps-script";
 import { upsertBookingDeliveryFromBookingReport } from "@/lib/booking-delivery";
+import { saveBookingReportAndMaster } from "@/lib/booking-report-persistence";
 import type { BookingReportInput, BuyerType } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 function cleanReport(body: Partial<BookingReportInput>): BookingReportInput {
   const report = {
+    bookingDate: String(body.bookingDate || "").trim(),
     customerName: String(body.customerName || "").trim(),
     idCard: String(body.idCard || "").trim(),
     phone: String(body.phone || "").trim(),
@@ -50,13 +52,22 @@ export async function POST(request: Request) {
   try {
     const input = cleanReport(await request.json());
 
-    if (!input.customerName || !input.plate || !input.saleName) {
-      return NextResponse.json({ error: "Customer name, plate and sale are required" }, { status: 400 });
+    if (!input.bookingDate || !input.customerName || !input.plate || !input.saleName) {
+      return NextResponse.json({ error: "Booking date, customer name, plate and sale are required" }, { status: 400 });
     }
 
-    const report = await saveBookingReport(input);
-    await upsertBookingDeliveryFromBookingReport(report).catch(() => null);
-    return NextResponse.json({ report }, { status: 201 });
+    const result = await saveBookingReportAndMaster(input, {
+      saveReport: saveBookingReport,
+      upsertMaster: upsertBookingDeliveryFromBookingReport
+    });
+    if (result.partialSuccess) {
+      console.error("[booking-reports] report saved but Booking Delivery Master failed", {
+        reportId: result.report.id,
+        warning: result.warning
+      });
+      return NextResponse.json(result, { status: 207 });
+    }
+    return NextResponse.json(result, { status: 201 });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to save booking report" },

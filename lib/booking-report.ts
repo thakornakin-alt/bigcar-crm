@@ -19,6 +19,7 @@ export function renderBookingReport(input: BookingReportInput) {
   return [
     "รายงานการจอง",
     "",
+    `วันที่จอง : ${input.bookingDate}`,
     `ชื่อผู้ซื้อ : ${input.customerName}`,
     `เลขบัตรปชช : ${input.idCard}`,
     `เบอร์โทร : ${input.phone}`,

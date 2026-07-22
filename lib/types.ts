@@ -45,6 +45,7 @@ export type InstallmentRow = {
 export type BuyerType = "individual" | "company";
 
 export type BookingReportInput = {
+  bookingDate: string;
   customerName: string;
   idCard: string;
   phone: string;
@@ -356,6 +357,7 @@ export type ReportHistoryType = "booking" | "sales";
 export type ReportHistoryItem = {
   id: string;
   type: ReportHistoryType;
+  bookingDate?: string;
   createdAt: string;
   updatedAt: string;
   status: string;
@@ -394,6 +396,10 @@ export type BookingDeliveryStatus =
 export type BookingDeliveryRecord = {
   id: string;
   bookingId: string;
+  bookingDate?: string;
+  deliveredAt?: string;
+  cancelledAt?: string;
+  isCounted?: boolean;
   bookingReportId: string;
   salesReportId: string;
   plate: string;

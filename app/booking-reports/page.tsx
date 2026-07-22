@@ -33,7 +33,19 @@ const defaultEmailTo = "RDDUsedcarBooked@segroup.co.th";
 const defaultEmailCc = "rongsarit.s@tgh.co.th";
 const defaultTeamName = "พี่ลีฟ";
 
+function todayInBangkok() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
 const blankForm: BookingReportInput = {
+  bookingDate: todayInBangkok(),
   customerName: "",
   idCard: "",
   phone: "",
@@ -446,13 +458,19 @@ export default function BookingReportsPage() {
     );
 
     try {
-      const data = await readJson<{ report: { id: string } }>("/api/booking-reports", {
+      const data = await readJson<{
+        report: { id: string };
+        partialSuccess?: boolean;
+        warning?: string;
+      }>("/api/booking-reports", {
         method: "POST",
         body: JSON.stringify(payload)
       });
       setSavedReportId(data.report.id);
       setUploadedAttachments(uploadResult.attachments);
-      if (uploadWarning) {
+      if (data.partialSuccess) {
+        setError(data.warning || "บันทึก Booking Report แล้ว แต่ Booking Delivery Master ไม่สำเร็จ");
+      } else if (uploadWarning) {
         setError(`${uploadWarning} - บันทึก Draft ลง Google Sheets แบบไม่มีไฟล์ Drive แล้ว`);
       } else {
         setMessage(uploadResult.attachments.length ? "อัปโหลดรูปเข้า Google Drive และบันทึก Draft รายงานจองแล้ว" : "บันทึก Draft ลง Google Sheets แล้ว ยังไม่มีการส่ง Email/LINE จริง");
@@ -644,6 +662,7 @@ export default function BookingReportsPage() {
       <form onSubmit={saveDraft} className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
         <div className="space-y-4">
           <SectionCard title="ข้อมูลลูกค้า" icon={<ClipboardList size={18} />}>
+            <Field label="วันที่จอง" type="date" value={form.bookingDate} onChange={(value) => update("bookingDate", value)} required />
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -876,7 +895,8 @@ function Field({
   onChange,
   placeholder,
   required,
-  inputMode
+  inputMode,
+  type = "text"
 }: {
   label: string;
   value: string;
@@ -884,11 +904,13 @@ function Field({
   placeholder?: string;
   required?: boolean;
   inputMode?: "text" | "tel" | "numeric";
+  type?: "text" | "date";
 }) {
   return (
     <label className="block">
       <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">{label}</span>
       <input
+        type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}

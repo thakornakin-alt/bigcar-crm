@@ -1,5 +1,11 @@
 import { listReportHistory, lookupStockByPlate } from "@/lib/apps-script";
 import { buildBookingDeliveryAlertSummary } from "@/lib/booking-delivery-alert";
+import {
+  bookingFoundationFromReport,
+  mergeBookingFoundation,
+  preserveCreatedAt,
+  resolveBookingLifecycleTimestamps
+} from "@/lib/booking-delivery-foundation";
 import { mergeStockExtraFields } from "@/lib/stock-extra-fields";
 import { getLastJsonStoreTiming, readJsonStore, writeJsonStore } from "@/lib/json-store";
 import type { BookingDeliveryRecord, BookingDeliveryStatus, BookingReport, ReportHistoryItem } from "@/lib/types";
@@ -85,6 +91,7 @@ export async function upsertBookingDeliveryRecordByPlate(input: BookingDeliveryR
   const next: BookingDeliveryRecord = {
     ...existing,
     ...input,
+    ...mergeBookingFoundation(input, existing),
     garageOutDate: text(input.garageOutDate || existing?.garageOutDate),
     garageReturnDate: text(input.garageReturnDate || existing?.garageReturnDate),
     spaFullSystemDone: typeof input.spaFullSystemDone === "boolean" ? input.spaFullSystemDone : boolValue(existing?.spaFullSystemDone),
@@ -101,7 +108,7 @@ export async function upsertBookingDeliveryRecordByPlate(input: BookingDeliveryR
     financeCaseSubmittedAt: text(input.financeCaseSubmittedAt || existing?.financeCaseSubmittedAt),
     financeCaseNote: text(input.financeCaseNote || existing?.financeCaseNote),
     financeAttachmentIds: Array.isArray(input.financeAttachmentIds) ? input.financeAttachmentIds.map((item) => text(item)).filter(Boolean) : stringArrayValue(existing?.financeAttachmentIds),
-    createdAt: existing?.createdAt || input.createdAt || new Date().toISOString(),
+    createdAt: preserveCreatedAt(input.createdAt, existing?.createdAt) || new Date().toISOString(),
     updatedAt: input.updatedAt || new Date().toISOString()
   };
 
@@ -208,6 +215,12 @@ async function readStore(): Promise<BookingDeliveryStore> {
   const normalized = {
     records: records.map((record) => ({
       ...record,
+      bookingDate: text((record as BookingDeliveryRecord).bookingDate) || undefined,
+      deliveredAt: text((record as BookingDeliveryRecord).deliveredAt) || undefined,
+      cancelledAt: text((record as BookingDeliveryRecord).cancelledAt) || undefined,
+      isCounted: typeof (record as BookingDeliveryRecord).isCounted === "boolean"
+        ? (record as BookingDeliveryRecord).isCounted
+        : undefined,
       status: normalizeLifecycleStatus(record.status),
       workflowStatus: normalizeWorkflowStatus(record.status, (record as BookingDeliveryRecord).workflowStatus),
       garageOutDate: text((record as BookingDeliveryRecord).garageOutDate || ""),
@@ -303,6 +316,7 @@ export async function upsertBookingDeliveryFromBookingReport(report: BookingRepo
   const reportHistoryItem: ReportHistoryItem = {
     id: report.id,
     type: "booking",
+    bookingDate: text(report.bookingDate) || undefined,
     createdAt: report.createdAt || new Date().toISOString(),
     updatedAt: report.updatedAt || report.createdAt || new Date().toISOString(),
     status: report.status === "send_cancelled" ? "send_cancelled" : "draft",
@@ -385,6 +399,7 @@ function buildRecordFromReports(
   return {
     id: current?.id || booking.id,
     bookingId: resolvedBookingId,
+    ...bookingFoundationFromReport(booking.bookingDate, current),
     bookingReportId: booking.id,
     salesReportId: sales?.id || current?.salesReportId || "",
     plate: text(booking.plate || sales?.plate),
@@ -538,10 +553,20 @@ export async function updateBookingDeliveryRecord(input: {
   if (index < 0) throw new Error("ไม่พบ Booking Delivery");
 
   const current = store.records[index];
+  const now = new Date().toISOString();
   const nextWorkflowStatus = normalizeWorkflowStatus(current.status, input.workflowStatus ?? current.workflowStatus);
   const nextStatus = input.status === "ยกเลิก" ? "ยกเลิก" : normalizeLifecycleStatus(current.status);
+  const lifecycleTimestamps = resolveBookingLifecycleTimestamps({
+    workflowStatus: nextWorkflowStatus,
+    status: nextStatus,
+    deliveryDate: input.deliveryDate ?? current.deliveryDate,
+    deliveredAt: current.deliveredAt,
+    cancelledAt: current.cancelledAt,
+    now
+  });
   const next: BookingDeliveryRecord = {
     ...current,
+    ...lifecycleTimestamps,
     status: nextStatus,
     statusSource: "manual",
     workflowStatus: nextStatus === "ยกเลิก" ? "ยกเลิก" : nextWorkflowStatus,
@@ -561,7 +586,7 @@ export async function updateBookingDeliveryRecord(input: {
       : stringArrayValue(current.financeAttachmentIds),
     alertSummary: text(input.alertSummary ?? ""),
     cancelReason: text(input.cancelReason ?? current.cancelReason),
-    updatedAt: new Date().toISOString(),
+    updatedAt: now,
     summary: deriveSummary(nextStatus === "ยกเลิก" ? "ยกเลิก" : nextWorkflowStatus || "ยอดจอง", null, null, current)
   };
 
