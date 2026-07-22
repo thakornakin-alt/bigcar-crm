@@ -532,6 +532,8 @@ export async function updateBookingDeliveryRecord(input: {
   id: string;
   status?: BookingDeliveryStatus;
   workflowStatus?: BookingDeliveryStatus | "";
+  bookingDate?: string;
+  isCounted?: boolean;
   deliveryDate?: string;
   deliveryLocation?: string;
   garageOutDate?: string;
@@ -567,6 +569,12 @@ export async function updateBookingDeliveryRecord(input: {
   const next: BookingDeliveryRecord = {
     ...current,
     ...lifecycleTimestamps,
+    bookingDate: input.bookingDate === undefined ? current.bookingDate : text(input.bookingDate) || undefined,
+    isCounted: typeof input.isCounted === "boolean"
+      ? input.isCounted
+      : typeof current.isCounted === "boolean"
+        ? current.isCounted
+        : true,
     status: nextStatus,
     statusSource: "manual",
     workflowStatus: nextStatus === "ยกเลิก" ? "ยกเลิก" : nextWorkflowStatus,

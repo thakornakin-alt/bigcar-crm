@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import {
-  cancelBookingDelivery,
   getLastBookingDeliveryTiming,
   listBookingDeliveryRecords,
   syncBookingDeliveryFromReportHistory,
@@ -114,29 +113,28 @@ export async function PATCH(request: Request) {
 
     const rawStatus = String(body.status || "").trim();
     const status = toStatus(rawStatus);
-    if (rawStatus === "ยกเลิก") {
-      const record = await cancelBookingDelivery(id, String(body.cancelReason || "").trim() || "ผู้ใช้ยกเลิกรายการ");
-      return NextResponse.json({ record });
-    }
-
     const record = await updateBookingDeliveryRecord({
       id,
       status: status === "ยกเลิก" ? "ยกเลิก" : undefined,
       workflowStatus: toWorkflowStatus(body.workflowStatus ?? body.status),
-      deliveryDate: String(body.deliveryDate || "").trim(),
-      deliveryLocation: String(body.deliveryLocation || "").trim(),
-      garageOutDate: String(body.garageOutDate || "").trim(),
-      garageReturnDate: String(body.garageReturnDate || "").trim(),
+      bookingDate: body.bookingDate === undefined ? undefined : String(body.bookingDate || "").trim(),
+      isCounted: typeof body.isCounted === "boolean" ? body.isCounted : undefined,
+      deliveryDate: body.deliveryDate === undefined ? undefined : String(body.deliveryDate || "").trim(),
+      deliveryLocation: body.deliveryLocation === undefined ? undefined : String(body.deliveryLocation || "").trim(),
+      garageOutDate: body.garageOutDate === undefined ? undefined : String(body.garageOutDate || "").trim(),
+      garageReturnDate: body.garageReturnDate === undefined ? undefined : String(body.garageReturnDate || "").trim(),
       spaFullSystemDone: typeof body.spaFullSystemDone === "boolean" ? body.spaFullSystemDone : undefined,
       oilChangeDone: typeof body.oilChangeDone === "boolean" ? body.oilChangeDone : undefined,
       decalRemovalDone: typeof body.decalRemovalDone === "boolean" ? body.decalRemovalDone : undefined,
       insuranceDone: typeof body.insuranceDone === "boolean" ? body.insuranceDone : undefined,
       financeCaseSubmitted: typeof body.financeCaseSubmitted === "boolean" ? body.financeCaseSubmitted : undefined,
-      financeCaseSubmittedAt: String(body.financeCaseSubmittedAt || "").trim(),
-      financeCaseNote: String(body.financeCaseNote || "").trim(),
+      financeCaseSubmittedAt: body.financeCaseSubmittedAt === undefined ? undefined : String(body.financeCaseSubmittedAt || "").trim(),
+      financeCaseNote: body.financeCaseNote === undefined ? undefined : String(body.financeCaseNote || "").trim(),
       financeAttachmentIds: Array.isArray(body.financeAttachmentIds) ? body.financeAttachmentIds.map((item) => String(item || "").trim()).filter(Boolean) : undefined,
-      alertSummary: String(body.alertSummary || "").trim(),
-      cancelReason: String(body.cancelReason || "").trim()
+      alertSummary: body.alertSummary === undefined ? undefined : String(body.alertSummary || "").trim(),
+      cancelReason: rawStatus === "ยกเลิก"
+        ? String(body.cancelReason || "").trim() || "ผู้ใช้ยกเลิกรายการ"
+        : body.cancelReason === undefined ? undefined : String(body.cancelReason || "").trim()
     });
     return NextResponse.json({ record });
   } catch (error) {
