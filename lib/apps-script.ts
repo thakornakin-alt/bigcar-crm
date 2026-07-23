@@ -170,33 +170,70 @@ async function callAppsScriptDetailed<T>(action: AppsScriptAction, payload: Reco
 }
 
 async function callAppsScript<T>(action: AppsScriptAction, payload: Record<string, unknown> = {}) {
-  const response = await fetchWithTimeout(getAppsScriptUrl(), {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8"
-    },
-    body: JSON.stringify({ action, ...payload }),
-    cache: "no-store"
-  });
-
-  const text = await response.text();
-  let data: AppsScriptResponse<T>;
-
+  const shouldLogSaveBookingReport = action === "saveBookingReport";
+  const fetchStartedAt = new Date();
+  if (shouldLogSaveBookingReport) {
+    console.info("[saveBookingReport:diagnostic] fetch start", {
+      timestamp: fetchStartedAt.toISOString()
+    });
+  }
   try {
-    data = JSON.parse(text) as AppsScriptResponse<T>;
-  } catch {
-    throw new Error("Apps Script returned an invalid JSON response");
-  }
+    const response = await fetchWithTimeout(getAppsScriptUrl(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8"
+      },
+      body: JSON.stringify({ action, ...payload }),
+      cache: "no-store"
+    });
+    const fetchEndedAt = new Date();
+    if (shouldLogSaveBookingReport) {
+      console.info("[saveBookingReport:diagnostic] fetch end", {
+        timestamp: fetchEndedAt.toISOString(),
+        elapsedMs: fetchEndedAt.getTime() - fetchStartedAt.getTime(),
+        responseStatus: response.status,
+        responseStatusText: response.statusText
+      });
+    }
 
-  if (!response.ok) {
-    throw new Error("Apps Script request failed");
-  }
+    const text = await response.text();
+    if (shouldLogSaveBookingReport) {
+      console.info("[saveBookingReport:diagnostic] raw response", {
+        text
+      });
+    }
+    let data: AppsScriptResponse<T>;
 
-  if (data.ok !== true) {
-    throw new Error(data.error || "Apps Script request failed");
-  }
+    try {
+      data = JSON.parse(text) as AppsScriptResponse<T>;
+      if (shouldLogSaveBookingReport) {
+        console.info("[saveBookingReport:diagnostic] JSON parse result", {
+          data
+        });
+      }
+    } catch {
+      throw new Error("Apps Script returned an invalid JSON response");
+    }
 
-  return data;
+    if (!response.ok) {
+      throw new Error("Apps Script request failed");
+    }
+
+    if (data.ok !== true) {
+      throw new Error(data.error || "Apps Script request failed");
+    }
+
+    return data;
+  } catch (error) {
+    if (shouldLogSaveBookingReport) {
+      console.error("[saveBookingReport:diagnostic] exception", {
+        name: error instanceof Error ? error.name : "UnknownError",
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+    }
+    throw error;
+  }
 }
 
 export async function listCustomers() {
