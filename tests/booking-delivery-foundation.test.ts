@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import type { BookingDeliveryRecord, BookingReport, BookingReportInput } from "../lib/types.ts";
 
+import {
+  listBookingDeliveryRecords,
+  upsertBookingDeliveryFromBookingReport
+} from "../lib/booking-delivery.ts";
 import {
   bookingFoundationFromReport,
   mergeBookingFoundation,
@@ -124,4 +131,38 @@ test("successful persistence returns the Master record", async () => {
 
   assert.equal(result.partialSuccess, false);
   assert.equal(result.bookingDelivery, master);
+});
+
+test("two new Booking Reports create separate Master records with different bookingId values", async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "booking-delivery-test-"));
+  const previousDataDir = process.env.BIG_CAR_DATA_DIR;
+  const previousProvider = process.env.DATA_PROVIDER;
+  process.env.BIG_CAR_DATA_DIR = dataDir;
+  process.env.DATA_PROVIDER = "json";
+
+  try {
+    const first = await upsertBookingDeliveryFromBookingReport({
+      ...report,
+      id: "BR-TEST-001",
+      plate: "TEST 1001"
+    });
+    const second = await upsertBookingDeliveryFromBookingReport({
+      ...report,
+      id: "BR-TEST-002",
+      customerName: "ลูกค้าทดสอบ 2",
+      plate: "TEST 1002"
+    });
+    const records = await listBookingDeliveryRecords();
+
+    assert.notEqual(first.bookingId, second.bookingId);
+    assert.equal(records.length, 2);
+    assert.ok(records.some((record) => record.bookingReportId === "BR-TEST-001"));
+    assert.ok(records.some((record) => record.bookingReportId === "BR-TEST-002"));
+  } finally {
+    if (previousDataDir === undefined) delete process.env.BIG_CAR_DATA_DIR;
+    else process.env.BIG_CAR_DATA_DIR = previousDataDir;
+    if (previousProvider === undefined) delete process.env.DATA_PROVIDER;
+    else process.env.DATA_PROVIDER = previousProvider;
+    await rm(dataDir, { recursive: true, force: true });
+  }
 });

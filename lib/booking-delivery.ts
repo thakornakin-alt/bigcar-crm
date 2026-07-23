@@ -348,7 +348,7 @@ export async function upsertBookingDeliveryFromBookingReport(report: BookingRepo
     reportHistoryItem,
     null,
     existing || undefined,
-    existing?.bookingId || nextBookingId([...(existing ? [existing] : [])], report.createdAt || new Date().toISOString())
+    existing?.bookingId || nextBookingId(existingStore.records, report.createdAt || new Date().toISOString())
   );
   if (!existing) {
     const payment = text(report.paymentType || "");
