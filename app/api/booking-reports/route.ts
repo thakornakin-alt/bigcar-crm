@@ -65,10 +65,27 @@ export async function POST(request: Request) {
         reportId: result.report.id,
         warning: result.warning
       });
+      console.info("[booking-reports:diagnostic] final HTTP response", {
+        reportId: result.report.id,
+        partialSuccess: true,
+        status: 207
+      });
       return NextResponse.json(result, { status: 207 });
     }
+    console.info("[booking-reports:diagnostic] final HTTP response", {
+      reportId: result.report.id,
+      partialSuccess: false,
+      status: 201
+    });
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
+    console.error("[booking-reports:diagnostic] final HTTP response", {
+      partialSuccess: false,
+      status: 500,
+      name: error instanceof Error ? error.name : "UnknownError",
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to save booking report" },
       { status: 500 }
