@@ -16,6 +16,10 @@ function secret() {
   return FALLBACK_AUTH_SECRET;
 }
 
+export function assertAuthConfigured() {
+  return secret();
+}
+
 function base64Url(input: string) {
   return Buffer.from(input, "utf8").toString("base64url");
 }

@@ -1,21 +1,13 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { listSalesUsers, updateSalesUser } from "@/lib/apps-script";
-import { salesProfileCookieName, setSalesProfileCookie, verifySalesProfileToken } from "@/lib/auth-session";
+import { setSalesProfileCookie } from "@/lib/auth-session";
+import { recordActivity } from "@/lib/activity-log";
+import { RequestAuthError, requireAdmin } from "@/lib/request-user";
 import type { SalesUserRole } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-const adminRoles = new Set(["super_admin", "admin"]);
 const validRoles = new Set(["super_admin", "admin", "sales", "viewer"]);
-
-function requireAdmin() {
-  const token = cookies().get(salesProfileCookieName)?.value;
-  const user = verifySalesProfileToken(token);
-  if (!user) throw new Error("กรุณา Login ก่อน");
-  if (!adminRoles.has(user.role)) throw new Error("ไม่มีสิทธิ์เข้าถึง Admin");
-  return user;
-}
 
 export async function GET() {
   try {
@@ -23,6 +15,7 @@ export async function GET() {
     const users = await listSalesUsers();
     return NextResponse.json({ users });
   } catch (error) {
+    if (error instanceof RequestAuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "โหลดผู้ใช้ไม่สำเร็จ" },
       { status: 403 }
@@ -42,11 +35,16 @@ export async function PATCH(request: Request) {
       position: typeof body.position === "string" ? body.position : undefined,
       branch: typeof body.branch === "string" ? body.branch : undefined
     });
+    await recordActivity(currentUser, {
+      action: "user.update", targetType: "salesUser", targetId: nextUser.id, source: "api",
+      after: { role: nextUser.role, locked: nextUser.locked, position: nextUser.position, branch: nextUser.branch }
+    });
 
     const response = NextResponse.json({ user: nextUser });
     if (nextUser.id === currentUser.id) setSalesProfileCookie(response, nextUser);
     return response;
   } catch (error) {
+    if (error instanceof RequestAuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "อัปเดตผู้ใช้ไม่สำเร็จ" },
       { status: 400 }

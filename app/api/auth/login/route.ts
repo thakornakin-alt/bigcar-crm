@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { loginSalesUser } from "@/lib/apps-script";
 import { recordActivity } from "@/lib/activity-log";
-import { setSalesProfileCookie } from "@/lib/auth-session";
+import { assertAuthConfigured, setSalesProfileCookie } from "@/lib/auth-session";
 import { saveSalesProfile } from "@/lib/sales-profile-store";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
+    assertAuthConfigured();
     const body = await request.json();
     const user = await loginSalesUser({
       email: String(body.email || "").trim(),
@@ -20,7 +21,8 @@ export async function POST(request: Request) {
       action: "auth.login",
       targetType: "salesUser",
       targetId: user.id,
-      detail: user.email
+      detail: user.email,
+      source: "api"
     });
     return response;
   } catch (error) {
