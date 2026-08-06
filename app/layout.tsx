@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
-import { GlobalNav } from "@/app/components/ui";
+import { RouteAwareShell } from "@/app/components/route-aware-shell";
+import { getRddFeatureFlags } from "@/lib/feature-flags";
 
 export const metadata: Metadata = {
   title: "Big Car CRM",
@@ -16,11 +17,11 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
+  const flags = getRddFeatureFlags();
   return (
     <html lang="th">
       <body>
-        <GlobalNav />
-        {children}
+        <RouteAwareShell rddShellEnabled={flags.shell}>{children}</RouteAwareShell>
       </body>
     </html>
   );

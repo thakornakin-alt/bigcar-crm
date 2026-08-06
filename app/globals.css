@@ -5,6 +5,19 @@
 :root {
   color-scheme: dark;
   background: #08090b;
+  --rdd-maroon-700: #741f2c;
+  --rdd-maroon-600: #8f2637;
+  --rdd-maroon-100: #f5e9eb;
+  --rdd-charcoal-950: #171719;
+  --rdd-charcoal-800: #303036;
+  --rdd-warm-50: #faf8f5;
+  --rdd-warm-100: #f1ece6;
+  --rdd-success: #287a55;
+  --rdd-warning: #a86517;
+  --rdd-danger: #b13a45;
+  --rdd-info: #356a91;
+  --rdd-shell-max-width: 1600px;
+  --rdd-shell-gutter: clamp(0.75rem, 2vw, 1.5rem);
 }
 
 * {
@@ -43,4 +56,21 @@ button:disabled {
 
 ::selection {
   background: rgba(34, 197, 94, 0.35);
+}
+
+.rdd-crm-shell {
+  min-height: 100vh;
+  --brand: var(--rdd-maroon-600);
+}
+
+.rdd-crm-shell > main,
+.rdd-crm-shell > nav {
+  width: min(calc(100% - (2 * var(--rdd-shell-gutter))), var(--rdd-shell-max-width));
+  margin-inline: auto;
+}
+
+@media (max-width: 640px) {
+  .rdd-crm-shell > nav {
+    border-radius: 0 0 1rem 1rem;
+  }
 }
