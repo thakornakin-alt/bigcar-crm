@@ -9,6 +9,8 @@ import {
 import { mergeStockExtraFields } from "@/lib/stock-extra-fields";
 import { getLastJsonStoreTiming, readJsonStore, writeJsonStore } from "@/lib/json-store";
 import type { BookingDeliveryRecord, BookingDeliveryStatus, BookingReport, ReportHistoryItem } from "@/lib/types";
+import type { BookingDeliveryActor } from "@/lib/rdd-workspace-adapter";
+import { attachOwnerToNewRecord, incrementRecordVersion, normalizeWorkspaceRecord } from "@/lib/rdd-workspace-adapter";
 
 type BookingDeliveryStore = {
   records: BookingDeliveryRecord[];
@@ -213,7 +215,7 @@ async function readStore(): Promise<BookingDeliveryStore> {
   const normalizeStart = Date.now();
   const records = Array.isArray(parsed.records) ? parsed.records : [];
   const normalized = {
-    records: records.map((record) => ({
+    records: records.map((record) => normalizeWorkspaceRecord({
       ...record,
       bookingDate: text((record as BookingDeliveryRecord).bookingDate) || undefined,
       deliveredAt: text((record as BookingDeliveryRecord).deliveredAt) || undefined,
@@ -233,7 +235,7 @@ async function readStore(): Promise<BookingDeliveryStore> {
       financeCaseSubmittedAt: text((record as BookingDeliveryRecord).financeCaseSubmittedAt || ""),
       financeCaseNote: text((record as BookingDeliveryRecord).financeCaseNote || ""),
       financeAttachmentIds: stringArrayValue((record as BookingDeliveryRecord).financeAttachmentIds)
-    })) as BookingDeliveryRecord[]
+    } as BookingDeliveryRecord))
   };
   console.info("[booking-delivery-timing] normalize records", {
     ms: Date.now() - normalizeStart,
@@ -301,7 +303,7 @@ export async function syncBookingDeliveryFromReportHistory() {
   return upsertBookingDeliveryFromReportHistory(reports);
 }
 
-export async function upsertBookingDeliveryFromBookingReport(report: BookingReport) {
+export async function upsertBookingDeliveryFromBookingReport(report: BookingReport, actor?: BookingDeliveryActor | null) {
   const existingStore = await readStore();
   const normalizedPlate = normalizePlate(report.plate);
   const normalizedCustomer = text(report.customerName).toLowerCase();
@@ -344,12 +346,13 @@ export async function upsertBookingDeliveryFromBookingReport(report: BookingRepo
   };
 
   const existing = existingStore.records.find((record) => record.bookingReportId === report.id || normalizePlate(record.plate) === normalizedPlate) || null;
-  const next = buildRecordFromReports(
+  let next = buildRecordFromReports(
     reportHistoryItem,
     null,
     existing || undefined,
     existing?.bookingId || nextBookingId(existingStore.records, report.createdAt || new Date().toISOString())
   );
+  if (!existing) next = attachOwnerToNewRecord(next, actor);
   if (!existing) {
     const payment = text(report.paymentType || "");
     if (payment.toLowerCase().includes("finance") || payment.includes("ไฟแนนซ์")) {
@@ -597,6 +600,8 @@ export async function updateBookingDeliveryRecord(input: {
     updatedAt: now,
     summary: deriveSummary(nextStatus === "ยกเลิก" ? "ยกเลิก" : nextWorkflowStatus || "ยอดจอง", null, null, current)
   };
+
+  Object.assign(next, incrementRecordVersion(next));
 
   next.alertSummary = text(input.alertSummary ?? deriveAlertSummary(nextStatus === "ยกเลิก" ? "ยกเลิก" : next.workflowStatus || "ยอดจอง", null, null, next));
 

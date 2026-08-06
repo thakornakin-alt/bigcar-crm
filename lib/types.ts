@@ -256,6 +256,22 @@ export type ActivityLog = Required<ActivityLogInput> & {
   at: string;
 };
 
+export type RddActivityEvent = {
+  id: string;
+  occurredAt: string;
+  actorUserId: string;
+  actorName: string;
+  actorRole: SalesUserRole | "";
+  action: string;
+  targetType: string;
+  targetId: string;
+  source: "web" | "api" | "system";
+  requestId?: string;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+};
+
 export type CustomerLookup = {
   customerName: string;
   phone: string;
@@ -400,6 +416,11 @@ export type BookingDeliveryRecord = {
   deliveredAt?: string;
   cancelledAt?: string;
   isCounted?: boolean;
+  ownerUserId?: string;
+  ownerName?: string;
+  collaboratorUserIds?: string[];
+  recordVersion?: number;
+  metadataVersion?: number;
   bookingReportId: string;
   salesReportId: string;
   plate: string;
