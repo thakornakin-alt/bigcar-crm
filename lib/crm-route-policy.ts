@@ -13,7 +13,8 @@ const ADMIN_APIS = [
 const PUBLIC_APIS = ["/api/auth/login", "/api/auth/me", "/api/site-admin/login"];
 const EXTERNAL_APIS = [
   "/api/line/webhook",
-  "/api/realtime-booking/gmail-oauth/callback"
+  "/api/realtime-booking/gmail-oauth/callback",
+  "/api/realtime-booking/gmail-webhook"
 ];
 
 function matches(pathname: string, prefix: string) {
@@ -34,4 +35,3 @@ export function routeAccess(pathname: string): RouteAccess {
 export function isPublicWebsitePath(pathname: string) {
   return routeAccess(pathname) === "public" && !pathname.startsWith("/api/");
 }
-
