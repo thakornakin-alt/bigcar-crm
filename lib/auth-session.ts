@@ -1,13 +1,19 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import type { NextResponse } from "next/server";
 import type { SalesUser } from "@/lib/types";
+import { FALLBACK_AUTH_SECRET, SALES_PROFILE_COOKIE_NAME, SESSION_MAX_AGE_SECONDS, usableAuthSecret } from "./edge-session";
 
-export const salesProfileCookieName = "bigcar_sales_profile";
+export const salesProfileCookieName = SALES_PROFILE_COOKIE_NAME;
 
-const maxAge = 60 * 60 * 24 * 30;
+const maxAge = SESSION_MAX_AGE_SECONDS;
 
 function secret() {
-  return process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "big-car-crm-local-profile-secret";
+  const configured = usableAuthSecret(process.env);
+  if (configured) return configured;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("AUTH_SECRET or NEXTAUTH_SECRET must be configured securely in production");
+  }
+  return FALLBACK_AUTH_SECRET;
 }
 
 function base64Url(input: string) {
@@ -19,7 +25,8 @@ function sign(payload: string) {
 }
 
 export function createSalesProfileToken(user: SalesUser) {
-  const payload = base64Url(JSON.stringify({ user, iat: Date.now() }));
+  const iat = Date.now();
+  const payload = base64Url(JSON.stringify({ user, iat, exp: iat + maxAge * 1000 }));
   return `${payload}.${sign(payload)}`;
 }
 
@@ -33,8 +40,11 @@ export function verifySalesProfileToken(token?: string) {
   if (!valid) return null;
 
   try {
-    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { user?: SalesUser };
-    return parsed.user || null;
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { user?: SalesUser; iat?: number; exp?: number };
+    const issuedAt = Number(parsed.iat || 0);
+    const expiresAt = Number(parsed.exp || issuedAt + maxAge * 1000);
+    if (!parsed.user?.id || !issuedAt || issuedAt > Date.now() + 60_000 || expiresAt <= Date.now()) return null;
+    return parsed.user;
   } catch {
     return null;
   }
