@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { addCustomer, listCustomers } from "@/lib/apps-script";
 import { recordActivity } from "@/lib/activity-log";
-import { canReadAllCustomers, getRequestSalesUser, salesUserOwnerName } from "@/lib/request-user";
+import { RequestAuthError, requireUser, requireWritableUser, salesUserOwnerName } from "@/lib/request-user";
+import { filterByOwnership, ownershipScope } from "@/lib/rdd-ownership";
 import type { CustomerInput } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -17,16 +18,15 @@ function cleanInput(body: Partial<CustomerInput>): CustomerInput {
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const currentUser = getRequestSalesUser();
+    const currentUser = requireUser();
     const customers = await listCustomers();
-    const visibleCustomers =
-      currentUser && !canReadAllCustomers(currentUser)
-        ? customers.filter((customer) => customer.ownerId === currentUser.id)
-        : customers;
+    const scope = ownershipScope(new URL(request.url).searchParams.get("scope"));
+    const visibleCustomers = filterByOwnership(customers, scope, currentUser.id);
     return NextResponse.json({ customers: visibleCustomers, total: customers.length });
   } catch (error) {
+    if (error instanceof RequestAuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to load customers" },
       { status: 500 }
@@ -36,12 +36,10 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const currentUser = getRequestSalesUser();
+    const currentUser = requireWritableUser();
     const input = cleanInput(await request.json());
-    if (currentUser) {
-      input.ownerId = currentUser.id;
-      input.ownerName = salesUserOwnerName(currentUser);
-    }
+    input.ownerId = currentUser.id;
+    input.ownerName = salesUserOwnerName(currentUser);
 
     if (!input.car || !input.name || !input.phone) {
       return NextResponse.json({ error: "Car, Name and Phone are required" }, { status: 400 });
@@ -52,10 +50,13 @@ export async function POST(request: Request) {
       action: "customer.create",
       targetType: "customer",
       targetId: customer.no,
-      detail: `${customer.name} / ${customer.car}`
+      detail: `${customer.name} / ${customer.car}`,
+      source: "api",
+      after: { ownerId: customer.ownerId || "" }
     });
     return NextResponse.json({ customer }, { status: 201 });
   } catch (error) {
+    if (error instanceof RequestAuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to save customer" },
       { status: 500 }

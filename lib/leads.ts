@@ -120,3 +120,22 @@ export async function addSalesLead(input: SalesLeadInput) {
   await writeStore(store);
   return lead;
 }
+
+export async function updateSalesLead(id: string, input: SalesLeadInput) {
+  const store = await readStore();
+  const index = store.leads.findIndex((lead) => lead.id === String(id || "").trim());
+  if (index < 0) throw new Error("ไม่พบลูกค้ามุ่งหวัง");
+  const current = store.leads[index];
+  const clean = cleanLead(input);
+  if (!clean.name || !clean.phone || !clean.vehicleGroup) throw new Error("กรุณากรอกชื่อ เบอร์ และกลุ่มรถยนต์");
+  const next: SalesLead = {
+    ...current,
+    ...clean,
+    ownerId: current.ownerId || "",
+    ownerName: current.ownerName || "",
+    updatedAt: new Date().toISOString()
+  };
+  store.leads[index] = next;
+  await writeStore(store);
+  return next;
+}

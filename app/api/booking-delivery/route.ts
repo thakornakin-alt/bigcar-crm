@@ -7,6 +7,9 @@ import {
 } from "@/lib/booking-delivery";
 import { getLastJsonStoreTiming } from "@/lib/json-store";
 import type { BookingDeliveryStatus } from "@/lib/types";
+import { recordActivity } from "@/lib/activity-log";
+import { filterByOwnership, ownershipScope } from "@/lib/rdd-ownership";
+import { RequestAuthError, requireUser, requireWritableUser } from "@/lib/request-user";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +55,7 @@ export async function GET(request: Request) {
   const totalStart = Date.now();
   const provider = String(process.env.BIG_CAR_STORE_PROVIDER || "json").trim().toLowerCase();
   try {
+    const actor = requireUser();
     timingLog("start GET /api/booking-delivery", {
       ts: totalStart,
       provider
@@ -62,7 +66,8 @@ export async function GET(request: Request) {
     timingLog("parse query", { sync: querySync || "", shouldSync });
 
     const listStart = Date.now();
-    const records = shouldSync ? await syncBookingDeliveryFromReportHistory() : await listBookingDeliveryRecords();
+    const allRecords = shouldSync ? await syncBookingDeliveryFromReportHistory() : await listBookingDeliveryRecords();
+    const records = filterByOwnership(allRecords, ownershipScope(url.searchParams.get("scope")), actor.id);
     timingLog(shouldSync ? "syncBookingDeliveryFromReportHistory()" : "listBookingDeliveryRecords()", {
       ms: Date.now() - listStart,
       count: Array.isArray(records) ? records.length : 0
@@ -79,6 +84,7 @@ export async function GET(request: Request) {
       }
     );
   } catch (error) {
+    if (error instanceof RequestAuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     timingLog("GET error", {
       ms: Date.now() - totalStart,
       error: error instanceof Error ? error.message : "unknown"
@@ -105,6 +111,7 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    const actor = requireWritableUser();
     const body = (await request.json()) as Record<string, unknown>;
     const id = String(body.id || body.bookingId || "").trim();
     if (!id) {
@@ -136,8 +143,16 @@ export async function PATCH(request: Request) {
         ? String(body.cancelReason || "").trim() || "ผู้ใช้ยกเลิกรายการ"
         : body.cancelReason === undefined ? undefined : String(body.cancelReason || "").trim()
     });
+    await recordActivity(actor, {
+      action: "bookingDelivery.update",
+      targetType: "bookingDelivery",
+      targetId: record.id,
+      source: "api",
+      after: { status: record.status, workflowStatus: record.workflowStatus, recordVersion: record.recordVersion }
+    });
     return NextResponse.json({ record });
   } catch (error) {
+    if (error instanceof RequestAuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "บันทึก Booking Delivery ไม่สำเร็จ" },
       { status: 400 }

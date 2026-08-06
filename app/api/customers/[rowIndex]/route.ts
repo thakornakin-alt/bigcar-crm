@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { deleteCustomer, listCustomers, updateCustomer } from "@/lib/apps-script";
 import { recordActivity } from "@/lib/activity-log";
-import { canAccessCustomerOwner, getRequestSalesUser } from "@/lib/request-user";
+import { canAccessCustomerOwner, RequestAuthError, requireWritableUser } from "@/lib/request-user";
 import type { CustomerInput } from "@/lib/types";
 
 function cleanInput(body: Partial<CustomerInput>): CustomerInput {
@@ -25,7 +25,7 @@ function getRowIndex(params: { rowIndex: string }) {
 
 export async function PUT(request: Request, { params }: { params: { rowIndex: string } }) {
   try {
-    const currentUser = getRequestSalesUser();
+    const currentUser = requireWritableUser();
     const rowIndex = getRowIndex(params);
     const input = cleanInput(await request.json());
     const existing = (await listCustomers()).find((customer) => customer.rowIndex === rowIndex);
@@ -37,16 +37,22 @@ export async function PUT(request: Request, { params }: { params: { rowIndex: st
     if (!input.car || !input.name || !input.phone) {
       return NextResponse.json({ error: "Car, Name and Phone are required" }, { status: 400 });
     }
+    input.ownerId = existing.ownerId || "";
+    input.ownerName = existing.ownerName || "";
 
     const customer = await updateCustomer(rowIndex, input);
     await recordActivity(currentUser, {
       action: "customer.update",
       targetType: "customer",
       targetId: customer.no,
-      detail: `${customer.name} / ${customer.car}`
+      detail: `${customer.name} / ${customer.car}`,
+      source: "api",
+      before: { ownerId: existing.ownerId || "" },
+      after: { ownerId: customer.ownerId || "" }
     });
     return NextResponse.json({ customer });
   } catch (error) {
+    if (error instanceof RequestAuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to update customer" },
       { status: 500 }
@@ -56,7 +62,7 @@ export async function PUT(request: Request, { params }: { params: { rowIndex: st
 
 export async function DELETE(_request: Request, { params }: { params: { rowIndex: string } }) {
   try {
-    const currentUser = getRequestSalesUser();
+    const currentUser = requireWritableUser();
     const rowIndex = getRowIndex(params);
     const existing = (await listCustomers()).find((customer) => customer.rowIndex === rowIndex);
     if (!existing) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
@@ -72,6 +78,7 @@ export async function DELETE(_request: Request, { params }: { params: { rowIndex
     });
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (error instanceof RequestAuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to delete customer" },
       { status: 500 }
