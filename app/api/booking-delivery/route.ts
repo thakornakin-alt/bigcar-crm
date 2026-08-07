@@ -8,8 +8,9 @@ import {
 import { getLastJsonStoreTiming } from "@/lib/json-store";
 import type { BookingDeliveryStatus } from "@/lib/types";
 import { recordActivity } from "@/lib/activity-log";
+import { getRddFeatureFlags } from "@/lib/feature-flags";
 import { filterByOwnership, ownershipScope } from "@/lib/rdd-ownership";
-import { RequestAuthError, requireUser, requireWritableUser } from "@/lib/request-user";
+import { getRequestSalesUser, RequestAuthError, requireUser, requireWritableUser } from "@/lib/request-user";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,7 @@ export async function GET(request: Request) {
   const totalStart = Date.now();
   const provider = String(process.env.BIG_CAR_STORE_PROVIDER || "json").trim().toLowerCase();
   try {
-    const actor = requireUser();
+    const actor = getRddFeatureFlags().authEnforcement ? requireUser() : getRequestSalesUser();
     timingLog("start GET /api/booking-delivery", {
       ts: totalStart,
       provider
@@ -67,7 +68,10 @@ export async function GET(request: Request) {
 
     const listStart = Date.now();
     const allRecords = shouldSync ? await syncBookingDeliveryFromReportHistory() : await listBookingDeliveryRecords();
-    const records = filterByOwnership(allRecords, ownershipScope(url.searchParams.get("scope")), actor.id);
+    const scope = ownershipScope(url.searchParams.get("scope"));
+    const records = scope === "mine" && !actor
+      ? []
+      : filterByOwnership(allRecords, scope, actor?.id || "");
     timingLog(shouldSync ? "syncBookingDeliveryFromReportHistory()" : "listBookingDeliveryRecords()", {
       ms: Date.now() - listStart,
       count: Array.isArray(records) ? records.length : 0
