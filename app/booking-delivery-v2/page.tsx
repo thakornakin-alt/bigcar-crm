@@ -99,6 +99,7 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export default function BookingDeliveryV2Page() {
+  const [printedAt, setPrintedAt] = useState("");
   const [records, setRecords] = useState<BookingDeliveryRecord[]>([]);
   const [year, setYear] = useState(initialMonth.year);
   const [month, setMonth] = useState(initialMonth.month);
@@ -118,6 +119,14 @@ export default function BookingDeliveryV2Page() {
     deliveryDate: "",
     isCounted: true
   });
+
+  useEffect(() => {
+    setPrintedAt(new Intl.DateTimeFormat("th-TH", {
+      timeZone: "Asia/Bangkok",
+      dateStyle: "medium",
+      timeStyle: "short"
+    }).format(new Date()));
+  }, []);
 
   const range = useMemo(() => getBangkokMonthRange(year, month), [year, month]);
   const monthLabel = `${monthNames[month - 1]} ${year + 543}`;
@@ -263,7 +272,7 @@ export default function BookingDeliveryV2Page() {
           <p className="text-sm font-bold">BIG CAR CRM</p>
           <h1 className="text-2xl font-black">รายงาน Booking–Delivery</h1>
           <p>ประจำเดือน {monthLabel}</p>
-          <p className="text-xs">พิมพ์เมื่อ {new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "medium", timeStyle: "short" }).format(new Date())}</p>
+          <p className="text-xs">พิมพ์เมื่อ {printedAt}</p>
         </div>
 
         <section className="no-print mb-4 overflow-hidden rounded-[26px] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(214,182,108,0.18),transparent_35%),linear-gradient(145deg,rgba(20,20,20,0.96),rgba(7,8,10,0.96))] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.3)]">
