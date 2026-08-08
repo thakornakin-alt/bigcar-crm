@@ -4,6 +4,7 @@ import { forwardRef, FormEvent, ReactNode, useEffect, useRef, useState } from "r
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CheckCircle2, Loader2, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
+import { safeReturnTo } from "@/lib/safe-return-to";
 
 type LoginState = {
   email: string;
@@ -49,7 +50,8 @@ export default function LoginHomePage() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "เข้าสู่ระบบไม่สำเร็จ");
-      router.push("/dashboard");
+      const returnTo = new URLSearchParams(window.location.search).get("returnTo");
+      router.push(safeReturnTo(returnTo));
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "เข้าสู่ระบบไม่สำเร็จ");
