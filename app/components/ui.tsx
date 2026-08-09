@@ -3,7 +3,7 @@
 import { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Calculator, CalendarDays, Car, CheckSquare, ClipboardCheck, FileText, Home, Menu, Plus, Radio, Settings, UploadCloud, Users, Wrench, X } from "lucide-react";
+import { Bell, Calculator, CalendarDays, Car, CheckSquare, ClipboardCheck, FileText, Home, LayoutDashboard, Menu, Plus, Radio, Rows3, Settings, UploadCloud, Users, Wrench, X } from "lucide-react";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 
 function classNames(...values: Array<string | false | null | undefined>) {
@@ -138,10 +138,17 @@ const globalNavItems = [
   { href: "/settings", label: "ตั้งค่า", icon: Settings }
 ];
 
-export function GlobalNav() {
+export function GlobalNav({ workspaceEnabled = false }: { workspaceEnabled?: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const hasOddMenuCount = globalNavItems.length % 2 === 1;
+  const items = workspaceEnabled
+    ? [
+        { href: "/rdd-home", label: "RDD Home", icon: LayoutDashboard },
+        { href: "/booking-delivery-workspace", label: "Workspace", icon: Rows3 },
+        ...globalNavItems
+      ]
+    : globalNavItems;
+  const hasOddMenuCount = items.length % 2 === 1;
 
   function isActive(href: string) {
     if (href === "/") return pathname === "/";
@@ -164,7 +171,7 @@ export function GlobalNav() {
         </div>
 
         <div className="hidden flex-1 flex-wrap items-center justify-center gap-1 lg:flex">
-          {globalNavItems.map((item) => {
+          {items.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href);
             return (
@@ -200,7 +207,7 @@ export function GlobalNav() {
 
       {open && (
         <div className="grid grid-cols-2 gap-2 border-t border-white/10 p-3 lg:hidden">
-          {globalNavItems.map((item, index) => {
+          {items.map((item, index) => {
             const Icon = item.icon;
             const active = isActive(item.href);
             return (
