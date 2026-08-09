@@ -26,8 +26,8 @@ function config() {
 }
 
 function authorized(request: Request) {
-  const expected = Buffer.from(String(process.env.PHASE24_QA_WRITE_TOKEN || ""));
-  const actual = Buffer.from(String(request.headers.get("x-phase24-token") || ""));
+  const expected = Buffer.from(String(process.env.PHASE24_QA_WRITE_TOKEN || "").trim());
+  const actual = Buffer.from(String(request.headers.get("x-phase24-token") || "").trim());
   return expected.length >= 32 && expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
