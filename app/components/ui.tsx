@@ -87,23 +87,22 @@ export function TopMenuButton({
 export function ProfileIndicator() {
   const { user, loading } = useSalesProfile();
   const name = loading ? "..." : user?.nickname || user?.firstName || "RDD";
-  const avatarStyle = { backgroundImage: `url(${user?.avatarUrl || "/logo-rdd.png"})` };
+  const initials = loading ? "…" : name.trim().slice(0, 2).toUpperCase() || "U";
 
   return (
     <Link
       href="/profile"
-      className="flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-2.5 text-sm font-black text-white transition hover:border-brand/50 hover:bg-white/[0.07]"
+      data-testid="global-user-profile"
+      className="flex min-h-10 min-w-0 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-2 text-sm font-black text-white transition hover:border-brand/50 hover:bg-white/[0.07] sm:min-h-11 sm:rounded-2xl sm:px-2.5"
       aria-label="โปรไฟล์"
       title="โปรไฟล์"
     >
-      <span
-        className={`flex h-8 shrink-0 items-center justify-center bg-center ring-1 ring-brand/30 ${
-          user?.avatarUrl ? "w-8 rounded-full bg-brand bg-cover" : "w-10 rounded-md bg-white bg-contain bg-no-repeat"
-        }`}
-        style={avatarStyle}
-        aria-hidden="true"
-      />
-      <span className="max-w-[92px] truncate">{name}</span>
+      {user?.avatarUrl ? (
+        <span data-testid="global-user-avatar" className="h-8 w-8 shrink-0 rounded-full bg-brand bg-cover bg-center ring-1 ring-brand/30" style={{ backgroundImage: `url(${user.avatarUrl})` }} aria-hidden="true" />
+      ) : (
+        <span data-testid="global-user-initials" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand/15 text-[11px] font-black text-brand ring-1 ring-brand/35" aria-hidden="true">{initials}</span>
+      )}
+      <span className="max-w-[48px] truncate sm:max-w-[92px]">{name}</span>
     </Link>
   );
 }
@@ -149,6 +148,7 @@ export function GlobalNav({ workspaceEnabled = false }: { workspaceEnabled?: boo
       ]
     : globalNavItems;
   const hasOddMenuCount = items.length % 2 === 1;
+  const homeHref = workspaceEnabled ? "/rdd-home" : "/dashboard";
 
   function isActive(href: string) {
     if (href === "/") return pathname === "/";
@@ -158,46 +158,20 @@ export function GlobalNav({ workspaceEnabled = false }: { workspaceEnabled?: boo
 
   return (
     <nav className="sticky top-0 z-50 mb-5 rounded-[24px] border border-white/10 bg-[#070b10]/88 shadow-[0_18px_48px_rgba(0,0,0,0.28)] backdrop-blur-xl">
-      <div className="flex min-h-[66px] items-center justify-between gap-3 px-3 sm:px-4">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-          <Link href="/dashboard" className="flex shrink-0 items-center gap-2" aria-label="BIG CAR RDD CRM หน้าแรก">
-            <span className="h-10 w-14 shrink-0 rounded-xl bg-white bg-contain bg-center bg-no-repeat ring-1 ring-brand/25" style={{ backgroundImage: "url('/logo-rdd.png')" }} />
-            <span className="hidden leading-tight xl:block">
-              <span className="block text-sm font-black tracking-[0.16em] text-white">BIG CAR RDD</span>
-              <span className="block text-[11px] font-bold uppercase tracking-[0.22em] text-brand">Workspace</span>
-            </span>
-          </Link>
+      <div data-testid="authenticated-global-header" className="grid min-h-[66px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 px-2 sm:gap-3 sm:px-4">
+        <div className="min-w-0 justify-self-start">
           <ProfileIndicator />
         </div>
 
-        <div className="hidden flex-1 flex-wrap items-center justify-center gap-1 lg:flex">
-          {items.map((item) => {
-            const Icon = item.icon;
-            const active = isActive(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={classNames(
-                  "flex min-h-10 items-center gap-2 rounded-xl px-2.5 text-xs font-bold transition xl:px-3 xl:text-sm",
-                  active ? "bg-white text-ink shadow-[0_10px_30px_rgba(255,255,255,0.12)]" : "text-soft hover:bg-white/7 hover:text-white"
-                )}
-                aria-current={active ? "page" : undefined}
-              >
-                <Icon size={17} className={active ? "text-ink" : "text-brand"} />
-                {item.label}
-              </Link>
-            );
-          })}
-        </div>
+        <Link data-testid="global-crm-title" href={homeHref} className="justify-self-center whitespace-nowrap text-xs font-black tracking-[0.08em] text-white transition hover:text-brand sm:text-base sm:tracking-[0.14em]" aria-label="BIG CAR CRM หน้าแรก">BIG CAR CRM</Link>
 
-        <div className="flex items-center gap-2">
-          <TopMenuButton href="/notifications" icon={<Bell size={18} />} iconOnly label="แจ้งเตือน" variant="ghost" />
-          <SettingsIconButton />
+        <div className="flex items-center justify-self-end gap-1 sm:gap-2">
+          <Link href="/notifications" aria-label="แจ้งเตือน" title="แจ้งเตือน" className="flex h-10 w-10 items-center justify-center rounded-xl border border-line/70 bg-[#0b0d11] text-brand transition hover:border-brand/60 hover:text-white sm:h-11 sm:w-11"><Bell size={18} /></Link>
+          <Link href="/settings" aria-label="Settings" title="Settings" className="flex h-10 w-10 items-center justify-center rounded-xl border border-line/70 bg-[#0b0d11] text-brand transition hover:border-brand/60 hover:text-white sm:h-11 sm:w-11"><Settings size={18} /></Link>
           <button
             type="button"
             onClick={() => setOpen((current) => !current)}
-            className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-brand lg:hidden"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-brand sm:h-11 sm:w-11"
             aria-label={open ? "ปิดเมนู" : "เปิดเมนู"}
           >
             {open ? <X size={19} /> : <Menu size={19} />}
@@ -206,7 +180,7 @@ export function GlobalNav({ workspaceEnabled = false }: { workspaceEnabled?: boo
       </div>
 
       {open && (
-        <div className="grid grid-cols-2 gap-2 border-t border-white/10 p-3 lg:hidden">
+        <div className="grid grid-cols-2 gap-2 border-t border-white/10 p-3 sm:grid-cols-3 xl:grid-cols-5">
           {items.map((item, index) => {
             const Icon = item.icon;
             const active = isActive(item.href);
@@ -217,7 +191,7 @@ export function GlobalNav({ workspaceEnabled = false }: { workspaceEnabled?: boo
                 onClick={() => setOpen(false)}
                 className={classNames(
                   "flex min-h-12 items-center gap-3 rounded-xl border px-3 text-sm font-bold",
-                  hasOddMenuCount && index === 0 ? "col-span-2" : "",
+                  hasOddMenuCount && index === 0 ? "col-span-2 sm:col-span-1" : "",
                   active ? "border-white bg-white text-ink" : "border-white/10 bg-white/5 text-white"
                 )}
               >

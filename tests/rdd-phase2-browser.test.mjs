@@ -44,6 +44,14 @@ for (const width of [360, 390, 430, 768, 1440]) {
       await page.goto(`${baseUrl}/rdd-home`, { waitUntil: "networkidle" });
       assert.equal(await page.getByText("วันนี้ต้องเร่งงานไหน", { exact: true }).count(), 1);
       assert.equal(await page.getByText("ผู้ใช้งาน", { exact: true }).count(), 0);
+      assert.equal(await page.getByTestId("authenticated-global-header").count(), 1);
+      assert.equal(await page.getByTestId("global-user-profile").count(), 1);
+      assert.equal(await page.getByTestId("global-user-initials").count(), 1);
+      assert.equal(await page.getByTestId("global-crm-title").getAttribute("href"), "/rdd-home");
+      assert.equal(await page.getByTestId("authenticated-global-header").locator('[style*="logo-rdd"]').count(), 0);
+      const headerBox = await page.getByTestId("authenticated-global-header").boundingBox();
+      const titleBox = await page.getByTestId("global-crm-title").boundingBox();
+      assert.ok(Math.abs((titleBox.x + titleBox.width / 2) - (headerBox.x + headerBox.width / 2)) <= 1);
       assert.ok(await page.getByTestId("historical-data-notice").count() >= 1);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
       await page.goto(`${baseUrl}/booking-delivery-workspace`, { waitUntil: "networkidle" });
@@ -58,6 +66,24 @@ for (const width of [360, 390, 430, 768, 1440]) {
     }
   });
 }
+
+test("Global CRM header preserves utilities and menu navigation", { skip: !baseUrl }, async () => {
+  const browser = await chromium.launch({ headless: true });
+  const context = await contextFor(browser, 390);
+  const page = await context.newPage();
+  try {
+    await page.goto(`${baseUrl}/rdd-home`, { waitUntil: "networkidle" });
+    const header = page.getByTestId("authenticated-global-header");
+    assert.equal(await header.getByRole("link", { name: "แจ้งเตือน" }).count(), 1);
+    assert.equal(await header.getByRole("link", { name: "Settings" }).count(), 1);
+    await header.getByRole("button", { name: "เปิดเมนู" }).click();
+    assert.equal(await page.getByRole("link", { name: "Workspace", exact: true }).count(), 1);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
+  } finally {
+    await context.close();
+    await browser.close();
+  }
+});
 
 for (const width of [360, 390, 430]) {
   test(`Workspace mobile chrome and vehicle cards stay compact at ${width}px`, { skip: !baseUrl }, async () => {
