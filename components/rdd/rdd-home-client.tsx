@@ -55,19 +55,10 @@ export function RddHomeClient({ initialYear, initialMonth }: { initialYear: numb
   return (
     <main className="mx-auto min-h-screen w-full max-w-[1600px] px-3 pb-28 sm:px-5 lg:px-6">
       <header className="mb-5 overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(116,31,44,0.45),transparent_36%),linear-gradient(145deg,#1b1b1f,#09090b)] p-4 shadow-[0_28px_80px_rgba(0,0,0,0.3)] sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.28em] text-[#d6b66c]">RDD Command Center</p>
-            <h1 className="mt-2 text-2xl font-black text-white sm:text-3xl">วันนี้ต้องเร่งงานไหน</h1>
-            <p className="mt-2 text-sm text-white/58">ภาพรวม Booking Delivery ที่เชื่อถือได้จากข้อมูลปัจจุบัน</p>
-          </div>
-          <div className="flex min-h-12 items-center gap-3 rounded-2xl border border-white/10 bg-black/25 px-3">
-            <span className="h-9 w-9 rounded-full bg-white bg-contain bg-center bg-no-repeat ring-1 ring-[#d6b66c]/40" style={{ backgroundImage: `url(${user?.avatarUrl || "/logo-rdd.png"})` }} />
-            <div>
-              <p className="text-xs text-white/48">ผู้ใช้งาน</p>
-              <p className="max-w-40 truncate text-sm font-black text-white">{user?.nickname || user?.firstName || "กำลังโหลด"}</p>
-            </div>
-          </div>
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-[0.28em] text-[#d6b66c]">RDD Command Center</p>
+          <h1 className="mt-2 text-2xl font-black text-white sm:text-3xl">วันนี้ต้องเร่งงานไหน</h1>
+          <p className="mt-2 text-sm text-white/58">ภาพรวม Booking Delivery ที่เชื่อถือได้จากข้อมูลปัจจุบัน</p>
         </div>
 
         <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(260px,1fr)_auto_auto]">

@@ -43,9 +43,11 @@ for (const width of [360, 390, 430, 768, 1440]) {
     try {
       await page.goto(`${baseUrl}/rdd-home`, { waitUntil: "networkidle" });
       assert.equal(await page.getByText("วันนี้ต้องเร่งงานไหน", { exact: true }).count(), 1);
+      assert.equal(await page.getByText("ผู้ใช้งาน", { exact: true }).count(), 0);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
       await page.goto(`${baseUrl}/booking-delivery-workspace`, { waitUntil: "networkidle" });
       assert.equal(await page.getByText("Booking Delivery Workspace", { exact: true }).count(), 1);
+      assert.equal(await page.getByText("ผู้ใช้งาน", { exact: true }).count(), 0);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
       assert.deepEqual(errors.filter((message) => /hydration|server-rendered html|text content did not match/i.test(message)), []);
     } finally {
