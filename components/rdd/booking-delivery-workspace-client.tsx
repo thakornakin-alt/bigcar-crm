@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ChevronRight, FileText, RotateCcw, Search, X } from "lucide-react";
+import { ChevronLeft, FileText, RotateCcw, Search, SlidersHorizontal, X } from "lucide-react";
 import { useBookingDeliveryRead } from "@/components/rdd/use-booking-delivery-read";
 import { RddEmpty, RddError, RddSkeleton, RddStatusChip } from "@/components/rdd/rdd-ui";
 import { parseBusinessDate } from "@/lib/booking-delivery-v2";
@@ -98,6 +98,7 @@ export function BookingDeliveryWorkspaceClient({
     pending
   }).sort((a, b) => String(b.bookingDate || b.updatedAt).localeCompare(String(a.bookingDate || a.updatedAt))), [records, year, month, query, scope, user?.id, purchase, status, pending]);
   const selected = useMemo(() => records.find((record) => record.id === selectedId) || null, [records, selectedId]);
+  const scopeLabel = scope === "all" ? "ทั้งหมด" : scope === "mine" ? "ของฉัน" : "ยังไม่ระบุ";
 
   function clearFilters() {
     setYear(currentYear);
@@ -111,35 +112,53 @@ export function BookingDeliveryWorkspaceClient({
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-[1600px] overflow-x-clip px-3 pb-28 sm:px-5 lg:px-6">
-      <header className="mb-4 rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(116,31,44,0.42),transparent_34%),linear-gradient(145deg,#1b1b1f,#09090b)] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.28)] sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#d6b66c]">RDD Workspace · Read only</p>
-            <h1 className="mt-2 text-2xl font-black text-white sm:text-3xl">Booking Delivery Workspace</h1>
-            <p className="mt-1 text-sm text-white/52">มุมมองทำงานแบบตาราง โดยไม่แก้ข้อมูลต้นทาง</p>
+      <header data-testid="workspace-header" className="mb-3 rounded-[22px] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(116,31,44,0.42),transparent_34%),linear-gradient(145deg,#1b1b1f,#09090b)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.28)] sm:mb-4 sm:rounded-[28px] sm:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="hidden text-[10px] font-black uppercase tracking-[0.24em] text-[#d6b66c] sm:block">RDD Workspace · Read only</p>
+            <div className="flex items-center gap-2">
+              <h1 className="truncate text-xl font-black text-white sm:mt-2 sm:text-3xl">Booking Delivery<span className="hidden sm:inline"> Workspace</span></h1>
+              <span className="shrink-0 rounded-full border border-[#d6b66c]/30 bg-[#d6b66c]/10 px-2 py-0.5 text-[9px] font-black text-[#f6df9d] sm:hidden">READ ONLY</span>
+            </div>
+            <p data-testid="workspace-mobile-summary" className="mt-0.5 text-xs font-bold text-white/55 sm:hidden">{monthNames[month - 1]} {year + 543} · {scopeLabel} {visible.length.toLocaleString("th-TH")} คัน</p>
+            <p className="mt-1 hidden text-sm text-white/52 sm:block">มุมมองทำงานแบบตาราง โดยไม่แก้ข้อมูลต้นทาง</p>
           </div>
-          <Link href="/rdd-home" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/12 bg-white/5 px-3 text-sm font-black text-white"><ChevronRight size={17} className="rotate-180" />RDD Home</Link>
+          <Link href="/rdd-home" aria-label="กลับ RDD Home" className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl border border-white/12 bg-white/5 text-white sm:min-w-0 sm:gap-2 sm:px-3 sm:text-sm sm:font-black"><ChevronLeft size={18} /><span className="hidden sm:inline">RDD Home</span></Link>
         </div>
 
-        <div className="mt-4 grid gap-2 xl:grid-cols-[minmax(260px,1fr)_auto_auto_auto_auto_auto]">
+        <div className="mt-3 grid gap-2 sm:mt-4 xl:grid-cols-[minmax(260px,1fr)_auto_auto_auto_auto_auto]">
           <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-white/12 bg-black/25 px-3 focus-within:border-[#d6b66c]/70">
             <Search size={18} className="text-[#d6b66c]" />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ทะเบียนก่อน แล้วตามด้วยชื่อลูกค้า" className="w-full bg-transparent text-white outline-none placeholder:text-white/35" />
           </label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="hidden grid-cols-2 gap-2 sm:grid">
             <select aria-label="เดือน" value={month} onChange={(event) => setMonth(Number(event.target.value))} className="workspace-select">{monthNames.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}</select>
             <select aria-label="ปี" value={year} onChange={(event) => setYear(Number(event.target.value))} className="workspace-select">{Array.from({ length: 7 }, (_, index) => currentYear - 3 + index).map((item) => <option key={item} value={item}>{item + 543}</option>)}</select>
           </div>
-          <select aria-label="ประเภทซื้อ" value={purchase} onChange={(event) => setPurchase(event.target.value as typeof purchase)} className="workspace-select"><option value="all">ทุกประเภทซื้อ</option><option value="เงินสด">เงินสด</option><option value="ไฟแนนซ์">ไฟแนนซ์</option><option value="ไม่ระบุ">ไม่ระบุ</option></select>
-          <select aria-label="สถานะ" value={status} onChange={(event) => setStatus(event.target.value as typeof status)} className="workspace-select">{statusOptions.map((item) => <option key={item} value={item}>{item === "all" ? "ทุกสถานะ" : item}</option>)}</select>
-          <select aria-label="งานค้าง" value={pending} onChange={(event) => setPending(event.target.value as typeof pending)} className="workspace-select"><option value="all">งานค้างทั้งหมด</option><option value="delivery_today">ส่งมอบวันนี้</option><option value="delivery_tomorrow">ส่งมอบพรุ่งนี้</option><option value="delivery_overdue">เลยกำหนดส่งมอบ</option><option value="garage_return_due">ถึงกำหนดรถกลับ</option></select>
-          <button type="button" onClick={clearFilters} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-white/12 bg-white/5 px-3 text-sm font-black text-white"><RotateCcw size={16} />ล้าง</button>
+          <select aria-label="ประเภทซื้อ" value={purchase} onChange={(event) => setPurchase(event.target.value as typeof purchase)} className="workspace-select hidden sm:block"><option value="all">ทุกประเภทซื้อ</option><option value="เงินสด">เงินสด</option><option value="ไฟแนนซ์">ไฟแนนซ์</option><option value="ไม่ระบุ">ไม่ระบุ</option></select>
+          <select aria-label="สถานะ" value={status} onChange={(event) => setStatus(event.target.value as typeof status)} className="workspace-select hidden sm:block">{statusOptions.map((item) => <option key={item} value={item}>{item === "all" ? "ทุกสถานะ" : item}</option>)}</select>
+          <select aria-label="งานค้าง" value={pending} onChange={(event) => setPending(event.target.value as typeof pending)} className="workspace-select hidden sm:block"><option value="all">งานค้างทั้งหมด</option><option value="delivery_today">ส่งมอบวันนี้</option><option value="delivery_tomorrow">ส่งมอบพรุ่งนี้</option><option value="delivery_overdue">เลยกำหนดส่งมอบ</option><option value="garage_return_due">ถึงกำหนดรถกลับ</option></select>
+          <button type="button" onClick={clearFilters} className="hidden min-h-12 items-center justify-center gap-2 rounded-2xl border border-white/12 bg-white/5 px-3 text-sm font-black text-white sm:inline-flex"><RotateCcw size={16} />ล้าง</button>
         </div>
 
-        <div className="mt-3 grid grid-cols-3 gap-2 sm:flex">
+        <div data-testid="workspace-mobile-filters" className="mt-2 grid grid-cols-4 gap-1.5 sm:hidden">
+          <select aria-label="เดือนแบบย่อ" value={month} onChange={(event) => setMonth(Number(event.target.value))} className="workspace-select compact">{monthNames.map((name, index) => <option key={name} value={index + 1}>{name.slice(0, 3)}</option>)}</select>
+          <select aria-label="สถานะแบบย่อ" value={status} onChange={(event) => setStatus(event.target.value as typeof status)} className="workspace-select compact">{statusOptions.map((item) => <option key={item} value={item}>{item === "all" ? "สถานะ" : item}</option>)}</select>
+          <select aria-label="งานค้างแบบย่อ" value={pending} onChange={(event) => setPending(event.target.value as typeof pending)} className="workspace-select compact"><option value="all">งานค้าง</option><option value="delivery_today">วันนี้</option><option value="delivery_tomorrow">พรุ่งนี้</option><option value="delivery_overdue">เลยกำหนด</option><option value="garage_return_due">รถกลับ</option></select>
+          <details className="group relative">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-1 rounded-xl border border-white/12 bg-white/5 px-1 text-[11px] font-black text-white"><SlidersHorizontal size={14} />ตัวกรอง</summary>
+            <div className="absolute right-0 z-40 mt-2 grid w-[min(320px,calc(100vw-24px))] gap-2 rounded-2xl border border-white/12 bg-[#151519] p-3 shadow-2xl">
+              <select aria-label="ปีเพิ่มเติม" value={year} onChange={(event) => setYear(Number(event.target.value))} className="workspace-select">{Array.from({ length: 7 }, (_, index) => currentYear - 3 + index).map((item) => <option key={item} value={item}>{item + 543}</option>)}</select>
+              <select aria-label="ประเภทซื้อเพิ่มเติม" value={purchase} onChange={(event) => setPurchase(event.target.value as typeof purchase)} className="workspace-select"><option value="all">ทุกประเภทซื้อ</option><option value="เงินสด">เงินสด</option><option value="ไฟแนนซ์">ไฟแนนซ์</option><option value="ไม่ระบุ">ไม่ระบุ</option></select>
+              <button type="button" onClick={clearFilters} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/5 px-3 text-sm font-black text-white"><RotateCcw size={16} />ล้างตัวกรอง</button>
+            </div>
+          </details>
+        </div>
+
+        <div data-testid="workspace-scope-controls" className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5 sm:mt-3 sm:gap-2">
           {(["all", "mine", "unassigned"] as OwnershipScope[]).map((item) => (
-            <button key={item} type="button" onClick={() => setScope(item)} className={`min-h-11 rounded-xl border px-3 text-xs font-black sm:text-sm ${scope === item ? "border-[#d6b66c] bg-[#d6b66c] text-[#17120a]" : "border-white/10 bg-black/20 text-white/60"}`}>
-              {item === "all" ? "ทั้งหมด" : item === "mine" ? "ของฉัน" : "ยังไม่ระบุเจ้าของ"} · {counts[item].toLocaleString("th-TH")}
+            <button key={item} type="button" onClick={() => setScope(item)} className={`min-h-10 shrink-0 rounded-xl border px-3 text-xs font-black sm:min-h-11 sm:text-sm ${scope === item ? "border-[#d6b66c] bg-[#d6b66c] text-[#17120a]" : "border-white/10 bg-black/20 text-white/60"}`}>
+              {item === "all" ? "ทั้งหมด" : item === "mine" ? "ของฉัน" : "ยังไม่ระบุ"} {counts[item].toLocaleString("th-TH")}
             </button>
           ))}
         </div>
@@ -153,7 +172,7 @@ export function BookingDeliveryWorkspaceClient({
             <RddEmpty title="ไม่พบรายการตามตัวกรอง" detail="ลองล้างตัวกรองหรือเลือกเดือนอื่น ข้อมูลที่ไม่ทราบวันที่ยังไม่ถูกซ่อน" />
           ) : (
             <section className="overflow-hidden rounded-[24px] border border-white/10 bg-[#0b0b0e] shadow-[0_20px_60px_rgba(0,0,0,0.26)]">
-              <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+              <div className="flex items-center justify-between border-b border-white/10 px-3 py-2.5 sm:px-4 sm:py-3">
                 <div><p className="font-black text-white">รายการติดตาม</p><p className="text-xs text-white/45">{visible.length.toLocaleString("th-TH")} รายการ · คลิกเพื่อดูรายละเอียด</p></div>
                 <span className="rounded-full border border-[#d6b66c]/30 bg-[#d6b66c]/10 px-3 py-1 text-xs font-black text-[#f6df9d]">READ ONLY</span>
               </div>
@@ -188,9 +207,11 @@ export function BookingDeliveryWorkspaceClient({
 
               <div className="divide-y divide-white/10 lg:hidden">
                 {visible.map((record) => (
-                  <button key={record.id} type="button" onClick={() => setSelectedId(record.id)} className="block w-full p-4 text-left active:bg-white/[0.05]">
-                    <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-lg font-black text-[#f6df9d]">{record.plate || "ไม่ระบุทะเบียน"}</p><p className="mt-1 truncate text-sm font-bold text-white">{record.customerName || "ไม่ระบุลูกค้า"}</p></div><RddStatusChip record={record} /></div>
-                    <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-white/52"><span>ประเภทซื้อ <b className="text-white">{purchaseTypeForRecord(record)}</b></span><span>วันนัดส่ง <b className="text-white">{thaiDate(record.deliveryDate)}</b></span><span className="col-span-2">งานค้าง <b className="text-amber-100">{pendingSummary(record)}</b></span></div>
+                  <button data-testid="workspace-mobile-card" key={record.id} type="button" onClick={() => setSelectedId(record.id)} className="block min-h-[108px] w-full px-3 py-2.5 text-left active:bg-white/[0.05]">
+                    <div className="flex items-center justify-between gap-2"><p className="min-w-0 truncate text-base font-black text-[#f6df9d]">{record.plate || "ไม่ระบุทะเบียน"}</p><RddStatusChip record={record} /></div>
+                    <p className="mt-0.5 truncate text-sm font-bold text-white">{record.customerName || "ไม่ระบุลูกค้า"}</p>
+                    <p className="mt-1 truncate text-xs text-white/52">{purchaseTypeForRecord(record)} · นัดส่ง {thaiDate(record.deliveryDate)} · งานค้าง {pendingSummary(record)}</p>
+                    {(record.saleName || record.ownerName) && <p className="mt-1 truncate text-xs font-bold text-white/68">{record.saleName || record.ownerName}</p>}
                   </button>
                 ))}
               </div>
@@ -202,7 +223,8 @@ export function BookingDeliveryWorkspaceClient({
       {selected && <WorkspaceDetail record={selected} onClose={() => setSelectedId("")} />}
 
       <style jsx>{`
-        .workspace-select { min-height: 48px; border-radius: 16px; border: 1px solid rgba(255,255,255,.12); background: #111114; padding: 0 12px; color: white; font-size: 13px; font-weight: 800; }
+        .workspace-select { min-height: 48px; border-radius: 16px; border: 1px solid rgba(255,255,255,.12); background: #111114; padding: 0 12px; color: white; font-size: 13px; font-weight: 800; min-width: 0; width: 100%; }
+        .workspace-select.compact { min-height: 44px; border-radius: 12px; padding: 0 5px; font-size: 11px; }
       `}</style>
     </main>
   );
@@ -230,5 +252,7 @@ function WorkspaceDetail({ record, onClose }: { record: BookingDeliveryRecord; o
 }
 
 function DetailGroup({ title, items }: { title: string; items: Array<[string, unknown]> }) {
-  return <section className="mt-5 rounded-2xl border border-white/10 bg-white/[0.035] p-4"><h3 className="font-black text-white">{title}</h3><div className="mt-3 grid grid-cols-2 gap-3">{items.map(([label, value]) => <div key={label} className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#d6b66c]">{label}</p><p className="mt-1 break-words text-sm font-bold text-white">{String(value || "—")}</p></div>)}</div></section>;
+  const meaningful = items.filter(([, value]) => value !== undefined && value !== null && value !== "" && value !== "—");
+  if (meaningful.length === 0) return <section data-testid="workspace-empty-detail-group" className="mt-3 rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2.5 text-sm"><span className="font-black text-white">{title}</span><span className="text-white/45"> · ยังไม่มีข้อมูล</span></section>;
+  return <section className="mt-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3 sm:mt-5 sm:p-4"><h3 className="font-black text-white">{title}</h3><div className="mt-2 grid grid-cols-2 gap-2.5 sm:mt-3 sm:gap-3">{meaningful.map(([label, value]) => <div key={label} className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#d6b66c]">{label}</p><p className="mt-0.5 break-words text-sm font-bold text-white">{String(value)}</p></div>)}</div></section>;
 }

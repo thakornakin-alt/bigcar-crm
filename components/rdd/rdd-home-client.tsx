@@ -90,41 +90,33 @@ export function RddHomeClient({ initialYear, initialMonth }: { initialYear: numb
             <RddEmpty title="ยังไม่มีรายการที่ผูกกับบัญชีนี้" detail="ข้อมูลเก่ายังอยู่ใน ‘ทั้งหมด’" />
           )}
 
-          <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <RddSection eyebrow="Today / Urgent" title="งานที่ต้องตาม">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              {reminders.map((item) => (
+                <Link key={item.kind} href={`/booking-delivery-workspace?pending=${item.filterValue}&scope=${scope}`} className="flex min-h-12 items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 transition hover:border-[#d6b66c]/45 sm:min-h-14 sm:rounded-2xl sm:px-4">
+                  <span className="text-sm font-bold text-white">{item.label}</span>
+                  <span className="flex items-center gap-1.5 font-black text-[#f6df9d]">{item.count.toLocaleString("th-TH")} <ChevronRight size={16} /></span>
+                </Link>
+              ))}
+            </div>
+          </RddSection>
+
+          <section className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
             {cards.map((card) => {
               const Icon = card.icon;
               return (
-                <Link key={card.label} href={`/booking-delivery-workspace?month=${monthKey}&status=${encodeURIComponent(card.filter)}&scope=${scope}`} className="rounded-[24px] border border-white/10 bg-white/[0.045] p-4 transition hover:border-[#d6b66c]/45 sm:p-5">
+                <Link key={card.label} href={`/booking-delivery-workspace?month=${monthKey}&status=${encodeURIComponent(card.filter)}&scope=${scope}`} className="rounded-[20px] border border-white/10 bg-white/[0.045] p-3.5 transition hover:border-[#d6b66c]/45 sm:rounded-[24px] sm:p-5">
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-xs font-bold leading-5 text-white/55 sm:text-sm">{card.label}</p>
                     <Icon size={19} className={card.tone} />
                   </div>
-                  <p className={`mt-4 text-3xl font-black ${card.tone}`}>{card.value.toLocaleString("th-TH")}</p>
+                  <p className={`mt-2.5 text-3xl font-black sm:mt-4 ${card.tone}`}>{card.value.toLocaleString("th-TH")}</p>
                 </Link>
               );
             })}
           </section>
 
-          {kpis.unknownBookingDate > 0 && (
-            <div className="flex items-start gap-3 rounded-2xl border border-amber-300/25 bg-amber-300/8 px-4 py-3 text-sm text-amber-100">
-              <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-              มีข้อมูลเก่า {kpis.unknownBookingDate.toLocaleString("th-TH")} รายการที่ไม่ทราบวันที่จอง รายการยังคงแสดงและไม่ถูกเดาวันที่
-            </div>
-          )}
-
-          <div className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
-            <RddSection eyebrow="Today / Urgent" title="งานที่ต้องตาม">
-              <div className="grid gap-2">
-                {reminders.map((item) => (
-                  <Link key={item.kind} href={`/booking-delivery-workspace?pending=${item.filterValue}&scope=${scope}`} className="flex min-h-14 items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-4 transition hover:border-[#d6b66c]/45">
-                    <span className="font-bold text-white">{item.label}</span>
-                    <span className="flex items-center gap-2 font-black text-[#f6df9d]">{item.count.toLocaleString("th-TH")} <ChevronRight size={16} /></span>
-                  </Link>
-                ))}
-              </div>
-            </RddSection>
-
-            <RddSection eyebrow="Upcoming" title="นัดส่งมอบถัดไป" action={<span className="text-xs text-white/42">ใกล้ที่สุดก่อน</span>}>
+          <RddSection eyebrow="Upcoming" title="นัดส่งมอบถัดไป" action={<span className="text-xs text-white/42">ใกล้ที่สุดก่อน</span>}>
               {upcoming.length ? (
                 <div className="grid gap-2">
                   {upcoming.map((record) => (
@@ -139,8 +131,18 @@ export function RddHomeClient({ initialYear, initialMonth }: { initialYear: numb
                   ))}
                 </div>
               ) : <RddEmpty title="ยังไม่มีนัดส่งมอบข้างหน้า" detail="แสดงเฉพาะรายการที่มีวันนัดส่งมอบชัดเจน" />}
-            </RddSection>
-          </div>
+          </RddSection>
+
+          {kpis.unknownBookingDate > 0 && (
+            <details data-testid="historical-data-notice" className="group rounded-xl border border-amber-300/20 bg-amber-300/[0.055] text-sm text-amber-100">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 py-2">
+                <AlertTriangle size={16} className="shrink-0" />
+                <span className="min-w-0 flex-1 truncate">ข้อมูลเก่า {kpis.unknownBookingDate.toLocaleString("th-TH")} รายการไม่มีวันที่จอง</span>
+                <span className="shrink-0 text-xs font-black text-[#f6df9d]">ดูรายละเอียด</span>
+              </summary>
+              <p className="border-t border-amber-200/10 px-3 py-2 text-xs leading-5 text-amber-100/75">รายการยังคงแสดงอยู่ และระบบจะไม่คาดเดาวันที่ย้อนหลัง</p>
+            </details>
+          )}
 
           <Link href={`/booking-delivery-workspace?scope=${scope}`} className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-[#d6b66c] px-5 font-black text-[#17120a]">
             เปิด Booking Delivery Workspace <ChevronRight size={18} />

@@ -44,10 +44,12 @@ for (const width of [360, 390, 430, 768, 1440]) {
       await page.goto(`${baseUrl}/rdd-home`, { waitUntil: "networkidle" });
       assert.equal(await page.getByText("วันนี้ต้องเร่งงานไหน", { exact: true }).count(), 1);
       assert.equal(await page.getByText("ผู้ใช้งาน", { exact: true }).count(), 0);
+      assert.ok(await page.getByTestId("historical-data-notice").count() >= 1);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
       await page.goto(`${baseUrl}/booking-delivery-workspace`, { waitUntil: "networkidle" });
       assert.equal(await page.getByText("Booking Delivery Workspace", { exact: true }).count(), 1);
       assert.equal(await page.getByText("ผู้ใช้งาน", { exact: true }).count(), 0);
+      assert.equal(await page.getByTestId("workspace-scope-controls").getByRole("button").count(), 3);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
       assert.deepEqual(errors.filter((message) => /hydration|server-rendered html|text content did not match/i.test(message)), []);
     } finally {
@@ -56,6 +58,42 @@ for (const width of [360, 390, 430, 768, 1440]) {
     }
   });
 }
+
+for (const width of [360, 390, 430]) {
+  test(`Workspace mobile chrome and vehicle cards stay compact at ${width}px`, { skip: !baseUrl }, async () => {
+    const browser = await chromium.launch({ headless: true });
+    const context = await contextFor(browser, width);
+    const page = await context.newPage();
+    try {
+      await page.goto(`${baseUrl}/booking-delivery-workspace`, { waitUntil: "networkidle" });
+      await page.getByTestId("workspace-mobile-summary").waitFor();
+      assert.ok((await page.getByTestId("workspace-header").boundingBox()).height < 330);
+      assert.equal(await page.getByTestId("workspace-mobile-filters").locator(":scope > select").count(), 3);
+      assert.ok((await page.getByTestId("workspace-mobile-card").first().boundingBox()).height <= 120);
+      await page.getByRole("button", { name: /TEST 0002/ }).click();
+      assert.ok(await page.getByTestId("workspace-empty-detail-group").count() >= 1);
+    } finally {
+      await context.close();
+      await browser.close();
+    }
+  });
+}
+
+test("Home historical notice remains compact and lower priority on mobile", { skip: !baseUrl }, async () => {
+  const browser = await chromium.launch({ headless: true });
+  const context = await contextFor(browser, 390);
+  const page = await context.newPage();
+  try {
+    await page.goto(`${baseUrl}/rdd-home`, { waitUntil: "networkidle" });
+    const urgent = page.getByRole("heading", { name: "งานที่ต้องตาม" });
+    const notice = page.getByTestId("historical-data-notice");
+    assert.ok((await urgent.boundingBox()).y < (await notice.boundingBox()).y);
+    assert.ok((await notice.boundingBox()).height <= 60);
+  } finally {
+    await context.close();
+    await browser.close();
+  }
+});
 
 for (const width of [360, 390]) {
   test(`Workspace detail closes and reopens without stale overlay at ${width}px`, { skip: !baseUrl }, async () => {
