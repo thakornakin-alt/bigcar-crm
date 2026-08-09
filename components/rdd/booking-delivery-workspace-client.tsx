@@ -116,10 +116,7 @@ export function BookingDeliveryWorkspaceClient({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="hidden text-[10px] font-black uppercase tracking-[0.24em] text-[#d6b66c] sm:block">RDD Workspace · Read only</p>
-            <div className="flex items-center gap-2">
-              <h1 className="truncate text-xl font-black text-white sm:mt-2 sm:text-3xl">Booking Delivery<span className="hidden sm:inline"> Workspace</span></h1>
-              <span className="shrink-0 rounded-full border border-[#d6b66c]/30 bg-[#d6b66c]/10 px-2 py-0.5 text-[9px] font-black text-[#f6df9d] sm:hidden">READ ONLY</span>
-            </div>
+            <h1 className="truncate text-xl font-black text-white sm:mt-2 sm:text-3xl">Booking Delivery<span className="hidden sm:inline"> Workspace</span></h1>
             <p data-testid="workspace-mobile-summary" className="mt-0.5 text-xs font-bold text-white/55 sm:hidden">{monthNames[month - 1]} {year + 543} · {scopeLabel} {visible.length.toLocaleString("th-TH")} คัน</p>
             <p className="mt-1 hidden text-sm text-white/52 sm:block">มุมมองทำงานแบบตาราง โดยไม่แก้ข้อมูลต้นทาง</p>
           </div>
