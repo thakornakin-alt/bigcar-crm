@@ -9,7 +9,7 @@ test("public website and login dependencies stay public", () => {
 });
 
 test("CRM pages and APIs require authentication", () => {
-  for (const path of ["/dashboard", "/calculator", "/booking-delivery-v2", "/api/stock/list", "/api/finance/rates"]) {
+  for (const path of ["/dashboard", "/calculator", "/booking-delivery-v2", "/rdd-home", "/booking-delivery-workspace", "/api/stock/list", "/api/finance/rates"]) {
     assert.equal(routeAccess(path), "authenticated", path);
   }
 });
