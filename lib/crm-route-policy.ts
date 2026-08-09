@@ -12,6 +12,7 @@ const ADMIN_APIS = [
 ];
 const PUBLIC_APIS = ["/api/auth/login", "/api/auth/me", "/api/site-admin/login"];
 const EXTERNAL_APIS = [
+  "/api/internal/phase24-qa-metadata",
   "/api/line/webhook",
   "/api/realtime-booking/gmail-oauth/callback",
   "/api/realtime-booking/gmail-webhook"
