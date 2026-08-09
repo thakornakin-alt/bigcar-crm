@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Search,
   TriangleAlert,
+  X,
   XCircle
 } from "lucide-react";
 import {
@@ -133,6 +134,7 @@ function formatDateDisplay(value: string) {
 export default function BookingDeliveryPage() {
   const [records, setRecords] = useState<BookingDeliveryRecord[]>([]);
   const [selectedId, setSelectedId] = useState("");
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -411,7 +413,10 @@ export default function BookingDeliveryPage() {
                   <button
                     key={record.id}
                     type="button"
-                    onClick={() => setSelectedId(record.id)}
+                    onClick={() => {
+                      setSelectedId(record.id);
+                      setMobileDetailOpen(true);
+                    }}
                     className={`text-left rounded-[22px] border p-4 transition ${
                       active ? "border-brand bg-brand/10 shadow-[0_16px_38px_rgba(34,197,94,0.12)]" : "border-white/10 bg-[#0b0d11] hover:border-brand/50"
                     }`}
@@ -449,13 +454,33 @@ export default function BookingDeliveryPage() {
           )}
         </SectionCard>
 
+        {mobileDetailOpen && (
+          <button
+            type="button"
+            aria-label="ปิดรายละเอียด"
+            data-testid="booking-delivery-mobile-overlay"
+            onClick={() => setMobileDetailOpen(false)}
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+          />
+        )}
+
         <SectionCard
           title="รายละเอียดงาน"
           icon={<AlertCircle size={18} />}
-          className="max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-30 max-lg:max-h-[82vh] max-lg:overflow-y-auto max-lg:rounded-t-[28px] lg:sticky lg:top-4"
+          className={`${mobileDetailOpen ? "max-lg:block" : "max-lg:hidden"} max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-50 max-lg:max-h-[82vh] max-lg:overflow-y-auto max-lg:rounded-t-[28px] lg:sticky lg:top-4 lg:block`}
         >
           {selectedRecord ? (
-            <div className="space-y-4">
+            <div data-testid="booking-delivery-detail-panel" className="space-y-4">
+              <div className="flex items-center justify-end lg:hidden">
+                <button
+                  type="button"
+                  aria-label="ปิดรายละเอียด"
+                  onClick={() => setMobileDetailOpen(false)}
+                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-line bg-[#11141a] text-white"
+                >
+                  <X size={20} />
+                </button>
+              </div>
               <div className="rounded-[22px] border border-white/10 bg-[#0b0d11] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
@@ -657,6 +682,13 @@ export default function BookingDeliveryPage() {
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
+                  onClick={() => setMobileDetailOpen(false)}
+                  className="inline-flex min-h-12 items-center gap-2 rounded-2xl border border-line bg-[#11141a] px-4 text-sm font-black text-white lg:hidden"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
                   onClick={saveSelected}
                   disabled={saving}
                   className="inline-flex min-h-12 items-center gap-2 rounded-2xl border border-brand bg-brand px-4 text-sm font-black text-ink transition disabled:cursor-not-allowed disabled:opacity-50"
@@ -670,7 +702,7 @@ export default function BookingDeliveryPage() {
                   className="inline-flex min-h-12 items-center gap-2 rounded-2xl border border-red-400/40 bg-red-950/20 px-4 text-sm font-black text-red-100 transition hover:border-red-300"
                 >
                   <XCircle size={17} />
-                  ยกเลิก
+                  ตั้งสถานะยกเลิก
                 </button>
               </div>
 
