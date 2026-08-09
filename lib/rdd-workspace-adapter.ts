@@ -19,7 +19,11 @@ export function normalizeWorkspaceRecord(record: BookingDeliveryRecord): Booking
     recordVersion: Number.isInteger(record.recordVersion) && Number(record.recordVersion) >= 0
       ? Number(record.recordVersion)
       : 0,
-    metadataVersion: Number.isInteger(record.metadataVersion) ? record.metadataVersion : 0
+    metadataVersion: Number.isInteger(record.metadataVersion) ? record.metadataVersion : 0,
+    qaTestRecord: typeof record.qaTestRecord === "boolean" ? record.qaTestRecord : undefined,
+    excludeFromMetrics: typeof record.excludeFromMetrics === "boolean" ? record.excludeFromMetrics : undefined,
+    archivedAt: String(record.archivedAt || "").trim() || undefined,
+    archiveReason: String(record.archiveReason || "").trim() || undefined
   };
 }
 
@@ -39,4 +43,3 @@ export function incrementRecordVersion(record: BookingDeliveryRecord) {
   const normalized = normalizeWorkspaceRecord(record);
   return { ...normalized, recordVersion: (normalized.recordVersion || 0) + 1, metadataVersion: RDD_METADATA_VERSION };
 }
-

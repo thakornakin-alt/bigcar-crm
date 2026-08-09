@@ -421,6 +421,10 @@ export type BookingDeliveryRecord = {
   collaboratorUserIds?: string[];
   recordVersion?: number;
   metadataVersion?: number;
+  qaTestRecord?: boolean;
+  excludeFromMetrics?: boolean;
+  archivedAt?: string;
+  archiveReason?: string;
   bookingReportId: string;
   salesReportId: string;
   plate: string;

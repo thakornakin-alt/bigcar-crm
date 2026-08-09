@@ -63,6 +63,11 @@ export function recordMatchesRddSearch(record: BookingDeliveryRecord, query: str
   return normalizeRddSearch(record.customerName).includes(needle);
 }
 
+export function operationalRddRecords(records: readonly BookingDeliveryRecord[], includeQa = false) {
+  if (includeQa) return [...records];
+  return records.filter((record) => record.qaTestRecord !== true && record.excludeFromMetrics !== true);
+}
+
 export function recordInRddMonth(record: BookingDeliveryRecord, year: number, month: number) {
   const range = getBangkokMonthRange(year, month);
   const booking = parseBusinessDate(record.bookingDate);
@@ -90,9 +95,10 @@ export function filterRddWorkspaceRecords(
     status?: "all" | RddDisplayStatus;
     pending?: "all" | RddReminderKind;
     today?: string;
+    includeQa?: boolean;
   }
 ) {
-  const owned = filterByOwnership(records, input.scope || "all", input.userId || "");
+  const owned = filterByOwnership(operationalRddRecords(records, input.includeQa === true), input.scope || "all", input.userId || "");
   return owned.filter((record) => {
     if (!recordInRddMonth(record, input.year, input.month)) return false;
     if (!recordMatchesRddSearch(record, input.query || "")) return false;
@@ -104,21 +110,22 @@ export function filterRddWorkspaceRecords(
 }
 
 export function deriveRddHomeKpis(records: BookingDeliveryRecord[], year: number, month: number): RddHomeKpis {
+  const metricRecords = records.filter((record) => record.excludeFromMetrics !== true);
   const range = getBangkokMonthRange(year, month);
-  const relevant = records.filter((record) => recordInRddMonth(record, year, month));
+  const relevant = metricRecords.filter((record) => recordInRddMonth(record, year, month));
   return {
-    newBookings: records.filter((record) => {
+    newBookings: metricRecords.filter((record) => {
       const value = parseBusinessDate(record.bookingDate);
       return value !== null && value >= range.monthStart && value < range.nextMonthStart;
     }).length,
     waitingFinanceResult: relevant.filter((record) => legacyStatusForRecord(record) === "รอผลไฟแนนซ์").length,
     waitingDelivery: relevant.filter((record) => legacyStatusForRecord(record) === "รอส่งมอบ").length,
-    delivered: records.filter((record) => {
+    delivered: metricRecords.filter((record) => {
       if (legacyStatusForRecord(record) !== "ส่งมอบแล้ว") return false;
       const value = parseBusinessDate(record.deliveredAt || record.deliveryDate);
       return value !== null && value >= range.monthStart && value < range.nextMonthStart;
     }).length,
-    unknownBookingDate: records.filter((record) => parseBusinessDate(record.bookingDate) === null).length
+    unknownBookingDate: metricRecords.filter((record) => parseBusinessDate(record.bookingDate) === null).length
   };
 }
 
@@ -152,6 +159,7 @@ export function recordMatchesReminder(record: BookingDeliveryRecord, kind: RddRe
 }
 
 export function deriveRddReminders(records: BookingDeliveryRecord[], today = bangkokDateKey()): RddReminder[] {
+  const metricRecords = records.filter((record) => record.excludeFromMetrics !== true);
   const definitions: Array<Omit<RddReminder, "count">> = [
     { kind: "delivery_today", label: "ส่งมอบวันนี้", filterValue: "delivery_today" },
     { kind: "delivery_tomorrow", label: "ส่งมอบพรุ่งนี้", filterValue: "delivery_tomorrow" },
@@ -160,13 +168,14 @@ export function deriveRddReminders(records: BookingDeliveryRecord[], today = ban
   ];
   return definitions.map((definition) => ({
     ...definition,
-    count: records.filter((record) => recordMatchesReminder(record, definition.kind, today)).length
+    count: metricRecords.filter((record) => recordMatchesReminder(record, definition.kind, today)).length
   }));
 }
 
 export function upcomingRddDeliveries(records: BookingDeliveryRecord[], today = bangkokDateKey(), limit = 8) {
   const todayValue = dayStart(today) ?? 0;
   return records
+    .filter((record) => record.excludeFromMetrics !== true)
     .map((record) => ({ record, date: dayStart(record.deliveryDate) }))
     .filter(({ record, date }) => date !== null && date >= todayValue && !["ส่งมอบแล้ว", "ยกเลิก"].includes(legacyStatusForRecord(record)))
     .sort((a, b) => Number(a.date) - Number(b.date))

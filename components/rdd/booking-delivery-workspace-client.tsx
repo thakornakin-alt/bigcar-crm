@@ -10,6 +10,7 @@ import {
   filterRddWorkspaceRecords,
   bangkokDateKey,
   legacyStatusForRecord,
+  operationalRddRecords,
   purchaseTypeForRecord,
   type RddDisplayStatus,
   type RddPurchaseType,
@@ -80,13 +81,15 @@ export function BookingDeliveryWorkspaceClient({
   const [purchase, setPurchase] = useState<"all" | RddPurchaseType>("all");
   const [status, setStatus] = useState<"all" | RddDisplayStatus>(statusOptions.includes(initialStatus) ? initialStatus : "all");
   const [pending, setPending] = useState<"all" | RddReminderKind>(initialPending);
+  const [includeQa, setIncludeQa] = useState(false);
   const [selectedId, setSelectedId] = useState("");
 
+  const operationalRecords = useMemo(() => operationalRddRecords(records), [records]);
   const counts = useMemo(() => ({
-    all: records.length,
-    mine: filterByOwnership(records, "mine", user?.id || "").length,
-    unassigned: filterByOwnership(records, "unassigned", user?.id || "").length
-  }), [records, user?.id]);
+    all: operationalRecords.length,
+    mine: filterByOwnership(operationalRecords, "mine", user?.id || "").length,
+    unassigned: filterByOwnership(operationalRecords, "unassigned", user?.id || "").length
+  }), [operationalRecords, user?.id]);
 
   const visible = useMemo(() => filterRddWorkspaceRecords(records, {
     year,
@@ -96,8 +99,9 @@ export function BookingDeliveryWorkspaceClient({
     userId: user?.id || "",
     purchaseType: purchase,
     status,
-    pending
-  }).sort((a, b) => String(b.bookingDate || b.updatedAt).localeCompare(String(a.bookingDate || a.updatedAt))), [records, year, month, query, scope, user?.id, purchase, status, pending]);
+    pending,
+    includeQa
+  }).sort((a, b) => String(b.bookingDate || b.updatedAt).localeCompare(String(a.bookingDate || a.updatedAt))), [records, year, month, query, scope, user?.id, purchase, status, pending, includeQa]);
   const selected = useMemo(() => records.find((record) => record.id === selectedId) || null, [records, selectedId]);
   const scopeLabel = scope === "all" ? "ทั้งหมด" : scope === "mine" ? "ของฉัน" : "ยังไม่ระบุ";
 
@@ -109,6 +113,7 @@ export function BookingDeliveryWorkspaceClient({
     setPurchase("all");
     setStatus("all");
     setPending("all");
+    setIncludeQa(false);
   }
 
   return (
@@ -124,7 +129,7 @@ export function BookingDeliveryWorkspaceClient({
           <Link href="/rdd-home" aria-label="กลับ RDD Home" className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl border border-white/12 bg-white/5 text-white sm:min-w-0 sm:gap-2 sm:px-3 sm:text-sm sm:font-black"><ChevronLeft size={18} /><span className="hidden sm:inline">RDD Home</span></Link>
         </div>
 
-        <div className="mt-3 grid gap-2 sm:mt-4 xl:grid-cols-[minmax(260px,1fr)_auto_auto_auto_auto_auto]">
+        <div className="mt-3 grid gap-2 sm:mt-4 xl:grid-cols-[minmax(260px,1fr)_auto_auto_auto_auto_auto_auto]">
           <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-white/12 bg-black/25 px-3 focus-within:border-[#d6b66c]/70">
             <Search size={18} className="text-[#d6b66c]" />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ทะเบียนก่อน แล้วตามด้วยชื่อลูกค้า" className="w-full bg-transparent text-white outline-none placeholder:text-white/35" />
@@ -136,6 +141,7 @@ export function BookingDeliveryWorkspaceClient({
           <select aria-label="ประเภทซื้อ" value={purchase} onChange={(event) => setPurchase(event.target.value as typeof purchase)} className="workspace-select hidden sm:block"><option value="all">ทุกประเภทซื้อ</option><option value="เงินสด">เงินสด</option><option value="ไฟแนนซ์">ไฟแนนซ์</option><option value="ไม่ระบุ">ไม่ระบุ</option></select>
           <select aria-label="สถานะ" value={status} onChange={(event) => setStatus(event.target.value as typeof status)} className="workspace-select hidden sm:block">{statusOptions.map((item) => <option key={item} value={item}>{item === "all" ? "ทุกสถานะ" : item}</option>)}</select>
           <select aria-label="งานค้าง" value={pending} onChange={(event) => setPending(event.target.value as typeof pending)} className="workspace-select hidden sm:block"><option value="all">งานค้างทั้งหมด</option><option value="delivery_today">ส่งมอบวันนี้</option><option value="delivery_tomorrow">ส่งมอบพรุ่งนี้</option><option value="delivery_overdue">เลยกำหนดส่งมอบ</option><option value="garage_return_due">ถึงกำหนดรถกลับ</option></select>
+          <label className="hidden min-h-12 items-center gap-2 rounded-2xl border border-white/12 bg-black/20 px-3 text-xs font-black text-white/60 sm:flex"><input data-testid="include-qa-toggle-desktop" type="checkbox" checked={includeQa} onChange={(event) => setIncludeQa(event.target.checked)} className="h-4 w-4 accent-[#d6b66c]" />รวมข้อมูลทดสอบ</label>
           <button type="button" onClick={clearFilters} className="hidden min-h-12 items-center justify-center gap-2 rounded-2xl border border-white/12 bg-white/5 px-3 text-sm font-black text-white sm:inline-flex"><RotateCcw size={16} />ล้าง</button>
         </div>
 
@@ -148,6 +154,7 @@ export function BookingDeliveryWorkspaceClient({
             <div className="absolute right-0 z-40 mt-2 grid w-[min(320px,calc(100vw-24px))] gap-2 rounded-2xl border border-white/12 bg-[#151519] p-3 shadow-2xl">
               <select aria-label="ปีเพิ่มเติม" value={year} onChange={(event) => setYear(Number(event.target.value))} className="workspace-select">{Array.from({ length: 7 }, (_, index) => currentYear - 3 + index).map((item) => <option key={item} value={item}>{item + 543}</option>)}</select>
               <select aria-label="ประเภทซื้อเพิ่มเติม" value={purchase} onChange={(event) => setPurchase(event.target.value as typeof purchase)} className="workspace-select"><option value="all">ทุกประเภทซื้อ</option><option value="เงินสด">เงินสด</option><option value="ไฟแนนซ์">ไฟแนนซ์</option><option value="ไม่ระบุ">ไม่ระบุ</option></select>
+              <label className="flex min-h-11 items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-3 text-sm font-bold text-white/70"><input data-testid="include-qa-toggle" type="checkbox" checked={includeQa} onChange={(event) => setIncludeQa(event.target.checked)} className="h-4 w-4 accent-[#d6b66c]" />รวมข้อมูลทดสอบ</label>
               <button type="button" onClick={clearFilters} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/5 px-3 text-sm font-black text-white"><RotateCcw size={16} />ล้างตัวกรอง</button>
             </div>
           </details>
@@ -190,7 +197,7 @@ export function BookingDeliveryWorkspaceClient({
                         <td className="sticky left-12 z-20 border-b border-r border-white/8 bg-[#101014] px-3 py-3 font-black text-[#f6df9d]">{record.plate || "—"}</td>
                         <td className="sticky left-[168px] z-20 max-w-[180px] truncate border-b border-r border-white/8 bg-[#101014] px-3 py-3 font-bold">{record.customerName || "—"}</td>
                         <td className="sticky left-[348px] z-20 border-b border-r border-white/8 bg-[#101014] px-3 py-3">{purchaseTypeForRecord(record)}</td>
-                        <td className="sticky left-[458px] z-20 border-b border-r border-white/8 bg-[#101014] px-3 py-3"><RddStatusChip record={record} /></td>
+                        <td className="sticky left-[458px] z-20 border-b border-r border-white/8 bg-[#101014] px-3 py-3"><div className="flex items-center gap-1.5"><RddStatusChip record={record} />{record.qaTestRecord === true && <QaBadge />}</div></td>
                         <td className="border-b border-r border-white/8 px-3 py-3">{[record.brand, record.model].filter(Boolean).join(" ") || "—"}</td>
                         <td className="border-b border-r border-white/8 px-3 py-3">{record.year || "—"}</td><td className="border-b border-r border-white/8 px-3 py-3">{record.color || "—"}</td><td className="border-b border-r border-white/8 px-3 py-3">—</td>
                         <td className="border-b border-r border-white/8 px-3 py-3">{thaiDate(record.bookingDate)}</td><td className="border-b border-r border-white/8 px-3 py-3">{money(record.salePrice)}</td><td className="border-b border-r border-white/8 px-3 py-3">{money(record.finalPrice)}</td><td className="border-b border-r border-white/8 px-3 py-3">{money(record.centralDiscount)}</td>
@@ -206,7 +213,7 @@ export function BookingDeliveryWorkspaceClient({
               <div className="divide-y divide-white/10 lg:hidden">
                 {visible.map((record) => (
                   <button data-testid="workspace-mobile-card" key={record.id} type="button" onClick={() => setSelectedId(record.id)} className="block min-h-[108px] w-full px-3 py-2.5 text-left active:bg-white/[0.05]">
-                    <div className="flex items-center justify-between gap-2"><p className="min-w-0 truncate text-base font-black text-[#f6df9d]">{record.plate || "ไม่ระบุทะเบียน"}</p><RddStatusChip record={record} /></div>
+                    <div className="flex items-center justify-between gap-2"><p className="min-w-0 truncate text-base font-black text-[#f6df9d]">{record.plate || "ไม่ระบุทะเบียน"}</p><span className="flex items-center gap-1.5"><RddStatusChip record={record} />{record.qaTestRecord === true && <QaBadge />}</span></div>
                     <p className="mt-0.5 truncate text-sm font-bold text-white">{record.customerName || "ไม่ระบุลูกค้า"}</p>
                     <p className="mt-1 truncate text-xs text-white/52">{purchaseTypeForRecord(record)} · นัดส่ง {thaiDate(record.deliveryDate)} · งานค้าง {pendingSummary(record)}</p>
                     {(record.saleName || record.ownerName) && <p className="mt-1 truncate text-xs font-bold text-white/68">{record.saleName || record.ownerName}</p>}
@@ -237,7 +244,7 @@ function WorkspaceDetail({ record, onClose }: { record: BookingDeliveryRecord; o
           <div><p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#d6b66c]">Read-only detail</p><h2 className="mt-2 text-2xl font-black text-white">{record.plate || "ไม่ระบุทะเบียน"}</h2><p className="mt-1 text-sm text-white/48">{record.customerName || "ไม่ระบุลูกค้า"}</p></div>
           <button type="button" aria-label="ปิดรายละเอียด" onClick={onClose} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-white/12 bg-white/5 text-white"><X size={20} /></button>
         </div>
-        <div className="mt-5"><RddStatusChip record={record} /></div>
+        <div className="mt-5 flex items-center gap-2"><RddStatusChip record={record} />{record.qaTestRecord === true && <QaBadge />}</div>
         <DetailGroup title="ลูกค้าและการขาย" items={[["ลูกค้า", record.customerName], ["ประเภทซื้อ", purchaseTypeForRecord(record)], ["เซลล์", record.saleName], ["เจ้าของ", record.ownerName || "ยังไม่ระบุ"]]} />
         <DetailGroup title="รถ" items={[["รถ", [record.brand, record.model, record.year].filter(Boolean).join(" ")], ["สี", record.color], ["เลขเครื่อง", record.engineNo], ["เลขตัวถัง", record.chassisNo]]} />
         <DetailGroup title="Booking" items={[["Booking ID", record.bookingId], ["วันที่จอง", thaiDate(record.bookingDate)], ["ราคาตั้ง", money(record.salePrice)], ["ราคาขาย", money(record.finalPrice)], ["ส่วนลด", money(record.centralDiscount)]]} />
@@ -255,6 +262,10 @@ function WorkspaceDetail({ record, onClose }: { record: BookingDeliveryRecord; o
       </aside>
     </div>
   );
+}
+
+function QaBadge() {
+  return <span data-testid="qa-record-badge" className="rounded-full border border-fuchsia-300/35 bg-fuchsia-300/10 px-2 py-0.5 text-[10px] font-black tracking-wide text-fuchsia-200">TEST/QA</span>;
 }
 
 function DetailGroup({ title, items }: { title: string; items: Array<[string, unknown]> }) {

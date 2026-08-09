@@ -19,6 +19,14 @@ const records = [
     paymentType: "ซื้อสด", workflowStatus: "รอส่งมอบ", status: "ยอดจอง", saleName: "เซลล์เดิม", deliveryDate: "2026-08-21",
     financeAttachmentIds: [], spaFullSystemDone: false, oilChangeDone: false, decalRemovalDone: false, insuranceDone: false,
     createdAt: "2026-08-02T00:00:00.000Z", updatedAt: "2026-08-04T00:00:00.000Z"
+  },
+  {
+    id: "rdd-e2e-qa", bookingId: "BK-RDD-QA", bookingReportId: "BR-QA", salesReportId: "", bookingDate: "2026-08-04",
+    plate: "QA 9999", customerName: "QA FIXTURE", brand: "TEST", model: "QA", year: "2026", color: "แดง",
+    paymentType: "ซื้อสด", workflowStatus: "รอส่งมอบ", status: "ยอดจอง", saleName: "QA", deliveryDate: "2026-08-22",
+    financeAttachmentIds: [], spaFullSystemDone: false, oilChangeDone: false, decalRemovalDone: false, insuranceDone: false,
+    qaTestRecord: true, excludeFromMetrics: true,
+    createdAt: "2026-08-04T00:00:00.000Z", updatedAt: "2026-08-04T00:00:00.000Z"
   }
 ];
 
@@ -159,6 +167,24 @@ test("Workspace desktop overlay click closes detail", { skip: !baseUrl }, async 
     await page.getByRole("row", { name: /กข 1234/ }).click();
     await page.getByTestId("workspace-detail-overlay").click({ position: { x: 4, y: 4 } });
     assert.equal(await page.getByTestId("workspace-detail-overlay").count(), 0);
+  } finally {
+    await context.close();
+    await browser.close();
+  }
+});
+
+test("Workspace hides QA by default and shows a TEST/QA badge only when explicitly enabled", { skip: !baseUrl }, async () => {
+  const browser = await chromium.launch({ headless: true });
+  const context = await contextFor(browser, 1440);
+  const page = await context.newPage();
+  try {
+    await page.goto(`${baseUrl}/booking-delivery-workspace`, { waitUntil: "networkidle" });
+    assert.equal(await page.getByText("QA 9999", { exact: true }).count(), 0);
+    assert.ok((await page.getByTestId("workspace-scope-controls").getByRole("button", { name: /^ทั้งหมด/ }).textContent()).includes("2"));
+    await page.getByTestId("include-qa-toggle-desktop").check();
+    const qaRow = page.getByRole("row", { name: /QA 9999/ });
+    assert.equal(await qaRow.count(), 1);
+    assert.equal(await qaRow.getByTestId("qa-record-badge").count(), 1);
   } finally {
     await context.close();
     await browser.close();

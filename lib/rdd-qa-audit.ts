@@ -1,4 +1,5 @@
 import type { BookingDeliveryRecord } from "@/lib/types";
+import { deriveRddHomeKpis, deriveRddReminders, operationalRddRecords, upcomingRddDeliveries } from "@/lib/rdd-phase2";
 
 export type QaAuditConfidence = "confirmed" | "likely" | "needs_human_confirmation";
 
@@ -42,4 +43,24 @@ export function classifyQaRecord(record: BookingDeliveryRecord): QaAuditMatch | 
 
 export function auditQaRecords(records: readonly BookingDeliveryRecord[]) {
   return records.map(classifyQaRecord).filter((item): item is QaAuditMatch => item !== null);
+}
+
+export function dryRunQaMetadata(
+  records: readonly BookingDeliveryRecord[],
+  confirmedIds: readonly string[],
+  year: number,
+  month: number,
+  today: string
+) {
+  const confirmed = new Set(confirmedIds);
+  const simulated = records.map((record) => confirmed.has(record.id)
+    ? { ...record, qaTestRecord: true, excludeFromMetrics: true }
+    : { ...record });
+  const summarize = (items: BookingDeliveryRecord[]) => ({
+    totalOperationalRecords: operationalRddRecords(items).length,
+    ...deriveRddHomeKpis(items, year, month),
+    reminders: deriveRddReminders(items, today).map((item) => ({ kind: item.kind, count: item.count })),
+    upcomingDelivery: upcomingRddDeliveries(items, today).length
+  });
+  return { current: summarize([...records]), expected: summarize(simulated), simulated };
 }
