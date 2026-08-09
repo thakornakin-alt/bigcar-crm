@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ChevronLeft, FileText, RotateCcw, Search, SlidersHorizontal, X } from "lucide-react";
+import { Check, ChevronLeft, RotateCcw, Search, SlidersHorizontal, X } from "lucide-react";
 import { useBookingDeliveryRead } from "@/components/rdd/use-booking-delivery-read";
 import { RddEmpty, RddError, RddSkeleton, RddStatusChip } from "@/components/rdd/rdd-ui";
 import { parseBusinessDate } from "@/lib/booking-delivery-v2";
@@ -18,6 +18,7 @@ import {
 import { filterByOwnership, type OwnershipScope } from "@/lib/rdd-ownership";
 import type { BookingDeliveryRecord } from "@/lib/types";
 import { useSalesProfile } from "@/lib/use-sales-profile";
+import { resolveCaseDocumentManifest } from "@/lib/rdd-case-documents";
 
 const monthNames = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
 const statusOptions: Array<"all" | RddDisplayStatus> = ["all", "ยอดจองทั้งหมด", "รอผลไฟแนนซ์", "รอส่งมอบ", "ส่งมอบแล้ว", "ยกเลิก", "ไม่ระบุ"];
@@ -228,6 +229,7 @@ export function BookingDeliveryWorkspaceClient({
 }
 
 function WorkspaceDetail({ record, onClose }: { record: BookingDeliveryRecord; onClose: () => void }) {
+  const documents = resolveCaseDocumentManifest(record);
   return (
     <div data-testid="workspace-detail-overlay" className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <aside data-testid="workspace-detail-panel" className="absolute inset-y-0 right-0 w-full overflow-y-auto border-l border-white/10 bg-[#0c0c0f] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl sm:max-w-xl sm:p-6">
@@ -241,7 +243,14 @@ function WorkspaceDetail({ record, onClose }: { record: BookingDeliveryRecord; o
         <DetailGroup title="Booking" items={[["Booking ID", record.bookingId], ["วันที่จอง", thaiDate(record.bookingDate)], ["ราคาตั้ง", money(record.salePrice)], ["ราคาขาย", money(record.finalPrice)], ["ส่วนลด", money(record.centralDiscount)]]} />
         <DetailGroup title="ไฟแนนซ์" items={[["ส่งเคสแล้ว", record.financeCaseSubmitted ? "ใช่" : "—"], ["เวลาส่งเคส", thaiDate(record.financeCaseSubmittedAt, true)], ["หมายเหตุ", record.financeCaseNote || "—"]]} />
         <DetailGroup title="ส่งมอบและเตรียมรถ" items={[["วันนัดส่ง", thaiDate(record.deliveryDate, true)], ["สถานที่", record.deliveryLocation], ["วันรถกลับ", thaiDate(record.garageReturnDate)], ["งานที่ทำแล้ว", prepSummary(record)]]} />
-        <section className="mt-5 rounded-2xl border border-white/10 bg-white/[0.035] p-4"><h3 className="font-black text-white">เอกสาร / ประวัติ</h3><div className="mt-3 flex flex-wrap gap-2">{record.bookingReportId && <Link href="/booking-reports" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/12 px-3 text-sm font-black text-white"><FileText size={16} />รายงานจอง</Link>}{record.salesReportId && <Link href="/sales-reports" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/12 px-3 text-sm font-black text-white"><FileText size={16} />รายงานขาย</Link>}<Link href="/documents" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/12 px-3 text-sm font-black text-white"><FileText size={16} />เอกสาร</Link></div><p className="mt-3 text-xs text-white/42">อัปเดตล่าสุด {thaiDate(record.updatedAt, true)} · Activity รายรายการยังไม่เปิดใน Phase 2</p></section>
+        <section data-testid="case-document-manifest" className="mt-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3 sm:mt-5 sm:p-4">
+          <div className="flex items-center justify-between gap-3"><h3 className="font-black text-white">เอกสารของเคส</h3><span className="text-xs font-black text-[#f6df9d]">{documents.availableCount}/{documents.totalCount}</span></div>
+          <div className="mt-2 divide-y divide-white/8">
+            {documents.items.map((item) => <div key={item.kind} className="flex min-h-10 items-center justify-between gap-3 py-1.5 text-sm"><span className={`flex min-w-0 items-center gap-2 font-bold ${item.available ? "text-white" : "text-white/42"}`}>{item.available ? <Check size={15} className="shrink-0 text-emerald-300" /> : <span className="w-[15px] shrink-0 text-center">—</span>}<span className="truncate">{item.label}</span></span><span className="shrink-0 text-xs text-white/42">{item.available ? item.fileCount ? `${item.fileCount} ไฟล์` : "มีแล้ว" : "ยังไม่มี"}</span></div>)}
+          </div>
+          <p className="mt-2 text-xs leading-5 text-white/38">แสดงเฉพาะข้อมูลอ้างอิงที่ผูกกับเคสได้จากระบบปัจจุบัน</p>
+        </section>
+        <section className="mt-3 rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2.5 text-sm"><span className="font-black text-white">Activity</span><span className="text-white/45"> · อัปเดตล่าสุด {thaiDate(record.updatedAt, true)} · รายการกิจกรรมรายเคสยังไม่เปิดใน Phase 2</span></section>
         <button type="button" onClick={onClose} className="mt-5 min-h-12 w-full rounded-xl border border-white/12 bg-white/5 font-black text-white sm:hidden">ปิด</button>
       </aside>
     </div>

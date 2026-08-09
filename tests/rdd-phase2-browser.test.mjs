@@ -98,6 +98,12 @@ for (const width of [360, 390, 430]) {
       assert.ok((await page.getByTestId("workspace-mobile-card").first().boundingBox()).height <= 120);
       await page.getByRole("button", { name: /TEST 0002/ }).click();
       assert.ok(await page.getByTestId("workspace-empty-detail-group").count() >= 1);
+      const documents = page.getByTestId("case-document-manifest");
+      assert.equal(await documents.getByText("เอกสารของเคส", { exact: true }).count(), 1);
+      assert.equal(await documents.getByText("รายงานขาย", { exact: true }).count(), 1);
+      assert.equal(await documents.getByText("รายงานจอง", { exact: true }).count(), 1);
+      assert.equal(await page.getByTestId("workspace-detail-panel").getByRole("link", { name: "เอกสาร", exact: true }).count(), 0);
+      assert.ok((await documents.boundingBox()).width <= width - 24);
     } finally {
       await context.close();
       await browser.close();
