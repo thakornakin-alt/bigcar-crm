@@ -1,3 +1,5 @@
+import type { RddCanonicalPurchaseType, RddCaseStatus } from "@/lib/rdd-phase3b";
+
 export const RDD_DELIVERY_LOCATIONS = [
   "โกดังบางนา",
   "โกดังเทพารักษ์",
@@ -5,5 +7,21 @@ export const RDD_DELIVERY_LOCATIONS = [
   "นอกสถานที่"
 ] as const;
 
-export type RddWorkspaceEditableField = "deliveryLocation" | "financeCaseNote";
-export type RddWorkspaceChanges = Partial<Record<RddWorkspaceEditableField, string>>;
+export type RddWorkspaceEditableField =
+  | "purchaseType"
+  | "caseStatus"
+  | "deliveryDate"
+  | "deliveryTime"
+  | "deliveryLocation"
+  | "deliveryLocationNote"
+  | "financeCaseNote";
+
+export type RddWorkspaceChanges = {
+  purchaseType?: RddCanonicalPurchaseType;
+  caseStatus?: RddCaseStatus;
+  deliveryDate?: string;
+  deliveryTime?: string;
+  deliveryLocation?: string;
+  deliveryLocationNote?: string;
+  financeCaseNote?: string;
+};

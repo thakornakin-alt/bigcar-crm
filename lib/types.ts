@@ -416,6 +416,18 @@ export type BookingDeliveryRecord = {
   deliveredAt?: string;
   cancelledAt?: string;
   isCounted?: boolean;
+  purchaseType?: "cash" | "finance";
+  caseStatus?:
+    | "waiting_delivery"
+    | "waiting_finance_submission"
+    | "waiting_finance_result"
+    | "approved_waiting_delivery"
+    | "settled_waiting_delivery"
+    | "customer_paused"
+    | "delivered"
+    | "cancelled";
+  deliveryTime?: string;
+  deliveryLocationNote?: string;
   ownerUserId?: string;
   ownerName?: string;
   collaboratorUserIds?: string[];

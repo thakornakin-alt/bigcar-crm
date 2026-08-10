@@ -2,6 +2,7 @@ import { compareAndSwapJsonStore, readJsonStoreSnapshot } from "@/lib/json-store
 import { incrementRecordVersion, normalizeWorkspaceRecord } from "@/lib/rdd-workspace-adapter";
 import type { BookingDeliveryRecord } from "@/lib/types";
 import { RDD_DELIVERY_LOCATIONS, type RddWorkspaceChanges, type RddWorkspaceEditableField } from "@/lib/rdd-workspace-fields";
+import { isRddCaseStatus, isRddPurchaseType, isStatusValidForPurchaseType } from "@/lib/rdd-phase3b";
 
 const storeFile = "booking-delivery.json";
 
@@ -22,6 +23,17 @@ function normalizeText(value: string) {
   return value.replace(/\r\n?/g, "\n").trim();
 }
 
+const editableFields = new Set<RddWorkspaceEditableField>([
+  "purchaseType", "caseStatus", "deliveryDate", "deliveryTime", "deliveryLocation", "deliveryLocationNote", "financeCaseNote"
+]);
+
+function validDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
 export function validateRddWorkspaceChanges(input: unknown): RddWorkspaceChanges {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new RddWorkspaceWriteError(400, "รูปแบบข้อมูลที่แก้ไขไม่ถูกต้อง");
@@ -29,20 +41,25 @@ export function validateRddWorkspaceChanges(input: unknown): RddWorkspaceChanges
   const object = input as Record<string, unknown>;
   const keys = Object.keys(object);
   if (!keys.length) throw new RddWorkspaceWriteError(400, "ไม่มีข้อมูลที่เปลี่ยนแปลง");
-  const unknown = keys.filter((key) => key !== "deliveryLocation" && key !== "financeCaseNote");
+  const unknown = keys.filter((key) => !editableFields.has(key as RddWorkspaceEditableField));
   if (unknown.length) throw new RddWorkspaceWriteError(400, `ไม่อนุญาตให้แก้ไขฟิลด์: ${unknown.join(", ")}`);
 
   const changes: RddWorkspaceChanges = {};
   for (const key of keys as RddWorkspaceEditableField[]) {
     if (typeof object[key] !== "string") throw new RddWorkspaceWriteError(400, `${key} ต้องเป็นข้อความ`);
     const value = normalizeText(object[key] as string);
+    if (key === "purchaseType" && !isRddPurchaseType(value)) throw new RddWorkspaceWriteError(400, "ประเภทการซื้อต้องเป็น cash หรือ finance");
+    if (key === "caseStatus" && !isRddCaseStatus(value)) throw new RddWorkspaceWriteError(400, "สถานะเคสไม่ถูกต้อง");
+    if (key === "deliveryDate" && value && !validDate(value)) throw new RddWorkspaceWriteError(400, "วันนัดส่งมอบต้องเป็นวันที่รูปแบบ YYYY-MM-DD ที่ถูกต้อง");
+    if (key === "deliveryTime" && value && !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) throw new RddWorkspaceWriteError(400, "เวลานัดส่งมอบต้องเป็นรูปแบบ HH:mm");
     if (key === "deliveryLocation" && value && !RDD_DELIVERY_LOCATIONS.includes(value as typeof RDD_DELIVERY_LOCATIONS[number])) {
       throw new RddWorkspaceWriteError(400, "สถานที่ส่งมอบไม่อยู่ในรายการที่อนุญาต");
     }
     if (key === "financeCaseNote" && value.length > 1000) {
       throw new RddWorkspaceWriteError(400, "หมายเหตุไฟแนนซ์ต้องไม่เกิน 1,000 ตัวอักษร");
     }
-    changes[key] = value;
+    if (key === "deliveryLocationNote" && value.length > 300) throw new RddWorkspaceWriteError(400, "รายละเอียดนอกสถานที่ต้องไม่เกิน 300 ตัวอักษร");
+    Object.assign(changes, { [key]: value });
   }
   return changes;
 }
@@ -78,6 +95,18 @@ export async function updateRddWorkspaceRecord(input: {
     });
   }
   if (current.qaTestRecord === true) throw new RddWorkspaceWriteError(403, "ข้อมูล TEST/QA เป็นแบบอ่านอย่างเดียว");
+
+  if (input.changes.purchaseType !== undefined || input.changes.caseStatus !== undefined) {
+    const purchaseType = input.changes.purchaseType ?? current.purchaseType;
+    const caseStatus = input.changes.caseStatus ?? current.caseStatus;
+    if (!isStatusValidForPurchaseType(purchaseType, caseStatus)) {
+      throw new RddWorkspaceWriteError(400, "กรุณาเลือกสถานะใหม่ให้ตรงกับประเภทการซื้อ");
+    }
+  }
+  const effectiveLocation = input.changes.deliveryLocation ?? current.deliveryLocation;
+  if (input.changes.deliveryLocationNote !== undefined && effectiveLocation !== "นอกสถานที่") {
+    throw new RddWorkspaceWriteError(400, "รายละเอียดสถานที่ใช้ได้เมื่อเลือกนอกสถานที่เท่านั้น");
+  }
 
   const changedFields = (Object.keys(input.changes) as RddWorkspaceEditableField[])
     .filter((key) => String(current[key] || "") !== input.changes[key]);

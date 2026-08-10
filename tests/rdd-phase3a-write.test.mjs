@@ -114,6 +114,36 @@ test("Phase 3A narrow write contract, roles, CAS, QA safety and activity", { tim
       assert.deepEqual(activity.events[0].metadata.changedFields, ["financeCaseNote"]);
       assert.equal(JSON.stringify(activity.events).includes("ลูกค้า"), false);
     });
+
+    await t.test("Phase 3B validates workflow combinations and atomically preserves prep data", async () => {
+      for (const changes of [
+        { purchaseType: "cash", caseStatus: "waiting_finance_result" },
+        { purchaseType: "finance", caseStatus: "waiting_delivery" },
+        { purchaseType: "finance", caseStatus: "unknown" },
+        { deliveryDate: "2026-02-30" },
+        { deliveryTime: "24:15" },
+        { deliveryLocation: "สถานที่อื่น" },
+        { deliveryLocationNote: "บ้านลูกค้า" }
+      ]) {
+        assert.equal((await patch(server.baseUrl, { id: "CASE-1", expectedRevision: currentRevision, changes }, "sales")).status, 400);
+      }
+      const response = await patch(server.baseUrl, { id: "CASE-1", expectedRevision: currentRevision, changes: { purchaseType: "finance", caseStatus: "approved_waiting_delivery", deliveryDate: "2026-08-17", deliveryTime: "14:30", deliveryLocation: "นอกสถานที่", deliveryLocationNote: "บ้านลูกค้า" } }, "sales");
+      const body = await response.json();
+      assert.equal(response.status, 200);
+      assert.equal(body.record.purchaseType, "finance");
+      assert.equal(body.record.caseStatus, "approved_waiting_delivery");
+      assert.equal(body.record.deliveryTime, "14:30");
+      assert.equal(body.record.deliveryLocationNote, "บ้านลูกค้า");
+      assert.equal(body.record.deliveredAt, undefined);
+      assert.equal(body.record.plate, original.plate);
+      currentRevision = body.revision;
+
+      const delivered = await patch(server.baseUrl, { id: "CASE-1", expectedRevision: currentRevision, changes: { caseStatus: "delivered" } }, "sales");
+      const deliveredBody = await delivered.json();
+      assert.equal(delivered.status, 200);
+      assert.equal(deliveredBody.record.caseStatus, "delivered");
+      assert.equal(deliveredBody.record.deliveredAt, undefined);
+    });
   } finally {
     await stop(server.child);
     await rm(dataDir, { recursive: true, force: true });
