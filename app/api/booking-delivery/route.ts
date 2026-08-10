@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   getLastBookingDeliveryTiming,
   listBookingDeliveryRecords,
+  listBookingDeliveryRecordsWithRevision,
   syncBookingDeliveryFromReportHistory,
   updateBookingDeliveryRecord
 } from "@/lib/booking-delivery";
@@ -67,7 +68,8 @@ export async function GET(request: Request) {
     timingLog("parse query", { sync: querySync || "", shouldSync });
 
     const listStart = Date.now();
-    const allRecords = shouldSync ? await syncBookingDeliveryFromReportHistory() : await listBookingDeliveryRecords();
+    const snapshot = shouldSync ? null : await listBookingDeliveryRecordsWithRevision();
+    const allRecords = shouldSync ? await syncBookingDeliveryFromReportHistory() : snapshot!.records;
     const scope = ownershipScope(url.searchParams.get("scope"));
     const records = scope === "mine" && !actor
       ? []
@@ -82,7 +84,7 @@ export async function GET(request: Request) {
       count: Array.isArray(records) ? records.length : 0
     });
     return NextResponse.json(
-      { records },
+      { records, revision: snapshot?.revision },
       {
         headers: timingHeaders(Array.isArray(records) ? records.length : 0, totalStart)
       }

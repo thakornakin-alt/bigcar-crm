@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 
@@ -10,6 +11,16 @@ type SupabaseStoreRow = {
 type JsonStoreTiming = {
   provider: string;
   readMs: number;
+};
+
+export type JsonStoreSnapshot<T> = {
+  data: T;
+  revision: string;
+};
+
+export type JsonStoreCompareAndSwapResult = {
+  updated: boolean;
+  revision: string;
 };
 
 const SUPABASE_READ_TIMEOUT_MS = 9000;
@@ -125,6 +136,23 @@ async function readSupabaseStore<T>(fileName: string, fallback: T): Promise<T> {
   return rows[0]?.data === undefined ? fallback : rows[0].data as T;
 }
 
+async function readSupabaseStoreSnapshot<T>(fileName: string, fallback: T): Promise<JsonStoreSnapshot<T>> {
+  const { table } = supabaseConfig();
+  const key = encodeURIComponent(fileName);
+  const rows = await supabaseRequest<SupabaseStoreRow[]>(
+    `${table}?store_key=eq.${key}&select=store_key,data,updated_at&limit=1`
+  );
+  const row = rows[0];
+  return {
+    data: row?.data === undefined ? fallback : row.data as T,
+    revision: String(row?.updated_at || "missing")
+  };
+}
+
+function contentRevision(raw: string) {
+  return createHash("sha256").update(raw).digest("hex");
+}
+
 async function writeSupabaseStore<T>(fileName: string, data: T) {
   const { table } = supabaseConfig();
   await supabaseRequest(
@@ -192,6 +220,47 @@ export async function writeJsonStore<T>(fileName: string, data: T) {
   const dir = dataDirectory();
   await mkdir(dir, { recursive: true });
   await writeFile(storePath(fileName), JSON.stringify(data, null, 2), "utf8");
+}
+
+export async function readJsonStoreSnapshot<T>(fileName: string, fallback: T): Promise<JsonStoreSnapshot<T>> {
+  if (storeProvider() === "supabase") return readSupabaseStoreSnapshot(fileName, fallback);
+  try {
+    const raw = await readFile(storePath(fileName), "utf8");
+    return { data: JSON.parse(raw) as T, revision: contentRevision(raw) };
+  } catch {
+    return { data: fallback, revision: "missing" };
+  }
+}
+
+export async function compareAndSwapJsonStore<T>(
+  fileName: string,
+  data: T,
+  expectedRevision: string
+): Promise<JsonStoreCompareAndSwapResult> {
+  if (storeProvider() === "supabase") {
+    const { table } = supabaseConfig();
+    const key = encodeURIComponent(fileName);
+    const revision = new Date().toISOString();
+    const rows = await supabaseRequest<SupabaseStoreRow[]>(
+      `${table}?store_key=eq.${key}&updated_at=eq.${encodeURIComponent(expectedRevision)}&select=store_key,updated_at`,
+      {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({ data, updated_at: revision })
+      }
+    );
+    return rows.length === 1
+      ? { updated: true, revision: String(rows[0].updated_at || revision) }
+      : { updated: false, revision: expectedRevision };
+  }
+
+  const current = await readJsonStoreSnapshot<T>(fileName, data);
+  if (current.revision !== expectedRevision) return { updated: false, revision: current.revision };
+  const serialized = JSON.stringify(data, null, 2);
+  const dir = dataDirectory();
+  await mkdir(dir, { recursive: true });
+  await writeFile(storePath(fileName), serialized, "utf8");
+  return { updated: true, revision: contentRevision(serialized) };
 }
 
 export function jsonStoreInfo() {

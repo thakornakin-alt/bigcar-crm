@@ -7,7 +7,7 @@ import {
   resolveBookingLifecycleTimestamps
 } from "@/lib/booking-delivery-foundation";
 import { mergeStockExtraFields } from "@/lib/stock-extra-fields";
-import { getLastJsonStoreTiming, readJsonStore, writeJsonStore } from "@/lib/json-store";
+import { getLastJsonStoreTiming, readJsonStore, readJsonStoreSnapshot, writeJsonStore } from "@/lib/json-store";
 import type { BookingDeliveryRecord, BookingDeliveryStatus, BookingReport, ReportHistoryItem } from "@/lib/types";
 import type { BookingDeliveryActor } from "@/lib/rdd-workspace-adapter";
 import { attachOwnerToNewRecord, incrementRecordVersion, normalizeWorkspaceRecord } from "@/lib/rdd-workspace-adapter";
@@ -248,6 +248,33 @@ async function readStore(): Promise<BookingDeliveryStore> {
     count: normalized.records.length
   };
   return normalized;
+}
+
+export async function listBookingDeliveryRecordsWithRevision() {
+  const snapshot = await readJsonStoreSnapshot<Partial<BookingDeliveryStore>>(storeFile, blankStore());
+  const records = Array.isArray(snapshot.data.records) ? snapshot.data.records : [];
+  return {
+    records: records.map((record) => normalizeWorkspaceRecord({
+      ...record,
+      bookingDate: text((record as BookingDeliveryRecord).bookingDate) || undefined,
+      deliveredAt: text((record as BookingDeliveryRecord).deliveredAt) || undefined,
+      cancelledAt: text((record as BookingDeliveryRecord).cancelledAt) || undefined,
+      isCounted: typeof (record as BookingDeliveryRecord).isCounted === "boolean" ? (record as BookingDeliveryRecord).isCounted : undefined,
+      status: normalizeLifecycleStatus(record.status),
+      workflowStatus: normalizeWorkflowStatus(record.status, (record as BookingDeliveryRecord).workflowStatus),
+      garageOutDate: text((record as BookingDeliveryRecord).garageOutDate || ""),
+      garageReturnDate: text((record as BookingDeliveryRecord).garageReturnDate || ""),
+      spaFullSystemDone: boolValue((record as BookingDeliveryRecord).spaFullSystemDone),
+      oilChangeDone: boolValue((record as BookingDeliveryRecord).oilChangeDone),
+      decalRemovalDone: boolValue((record as BookingDeliveryRecord).decalRemovalDone),
+      insuranceDone: boolValue((record as BookingDeliveryRecord).insuranceDone),
+      financeCaseSubmitted: boolValue((record as BookingDeliveryRecord).financeCaseSubmitted),
+      financeCaseSubmittedAt: text((record as BookingDeliveryRecord).financeCaseSubmittedAt || ""),
+      financeCaseNote: text((record as BookingDeliveryRecord).financeCaseNote || ""),
+      financeAttachmentIds: stringArrayValue((record as BookingDeliveryRecord).financeAttachmentIds)
+    } as BookingDeliveryRecord)),
+    revision: snapshot.revision
+  };
 }
 
 async function writeStore(store: BookingDeliveryStore) {
