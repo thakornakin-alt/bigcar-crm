@@ -64,8 +64,8 @@ function record(input: Partial<BookingDeliveryRecord> & Pick<BookingDeliveryReco
 }
 
 const fixtures = [
-  record({ id: "mine", ownerUserId: "u1", bookingDate: "2026-08-02", plate: "กข 1234", customerName: "สมชาย", paymentType: "ไฟแนนซ์", workflowStatus: "รอผลไฟแนนซ์" }),
-  record({ id: "unassigned", bookingDate: "2026-08-03", plate: "AB-9999", customerName: "Jane", paymentType: "เงินสด", workflowStatus: "รอส่งมอบ", deliveryDate: "2026-08-10" }),
+  record({ id: "mine", ownerUserId: "u1", bookingDate: "2026-08-02", plate: "กข 1234", customerName: "สมชาย", purchaseType: "finance", paymentType: "ไฟแนนซ์", workflowStatus: "รอผลไฟแนนซ์" }),
+  record({ id: "unassigned", bookingDate: "2026-08-03", plate: "AB-9999", customerName: "Jane", purchaseType: "cash", paymentType: "เงินสด", workflowStatus: "รอส่งมอบ", deliveryDate: "2026-08-10" }),
   record({ id: "delivered", ownerUserId: "u2", bookingDate: "2026-07-20", status: "ยอดส่งมอบ", workflowStatus: "ยอดส่งมอบ", deliveredAt: "2026-08-04" }),
   record({ id: "unknown-date", ownerUserId: "u1", bookingDate: undefined, plate: "UNKNOWN" })
 ];
@@ -75,6 +75,7 @@ test("legacy status mapping is display-only and conservative", () => {
   assert.equal(legacyStatusForRecord(fixtures[2]), "ส่งมอบแล้ว");
   assert.equal(legacyStatusForRecord(record({ id: "legacy" })), "ยอดจองทั้งหมด");
   assert.equal(purchaseTypeForRecord(fixtures[0]), "ไฟแนนซ์");
+  assert.equal(purchaseTypeForRecord(record({ id: "legacy-payment", paymentType: "ไฟแนนซ์" })), "ไม่ระบุ");
   assert.equal(purchaseTypeForRecord(record({ id: "missing" })), "ไม่ระบุ");
 });
 
@@ -97,7 +98,7 @@ test("search prioritizes normalized registration and also matches customer", () 
 });
 
 test("month status and purchase filters are deterministic", () => {
-  assert.deepEqual(filterRddWorkspaceRecords(fixtures, { year: 2026, month: 8, purchaseType: "เงินสด" }).map((item) => item.id), ["unassigned"]);
+  assert.deepEqual(filterRddWorkspaceRecords(fixtures, { year: 2026, month: 8, purchaseType: "ซื้อสด" }).map((item) => item.id), ["unassigned"]);
   assert.deepEqual(filterRddWorkspaceRecords(fixtures, { year: 2026, month: 8, status: "ส่งมอบแล้ว" }).map((item) => item.id), ["delivered"]);
   assert.deepEqual(filterRddWorkspaceRecords(fixtures, { year: 2026, month: 6 }).map((item) => item.id), ["unknown-date"]);
 });
@@ -105,9 +106,11 @@ test("month status and purchase filters are deterministic", () => {
 test("Home KPI uses reliable business dates only", () => {
   assert.deepEqual(deriveRddHomeKpis(fixtures, 2026, 8), {
     newBookings: 2,
+    waitingFinanceSubmission: 0,
     waitingFinanceResult: 1,
     waitingDelivery: 1,
     delivered: 1,
+    customerPaused: 0,
     unknownBookingDate: 1
   });
 });

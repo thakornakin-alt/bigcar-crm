@@ -1,12 +1,17 @@
 import { getBangkokMonthRange, parseBusinessDate } from "@/lib/booking-delivery-v2";
 import { filterByOwnership, type OwnershipScope } from "@/lib/rdd-ownership";
 import type { BookingDeliveryRecord, BookingDeliveryStatus } from "@/lib/types";
+import { canonicalCaseStatus, canonicalPurchaseType, RDD_CASE_STATUS_LABELS, RDD_PURCHASE_TYPE_LABELS, reminderEligibleForRecord } from "@/lib/rdd-phase3b";
 
-export type RddPurchaseType = "เงินสด" | "ไฟแนนซ์" | "ไม่ระบุ";
+export type RddPurchaseType = "ซื้อสด" | "ไฟแนนซ์" | "ไม่ระบุ";
 export type RddDisplayStatus =
   | "ยอดจองทั้งหมด"
+  | "รอจัดไฟแนนซ์"
   | "รอผลไฟแนนซ์"
   | "รอส่งมอบ"
+  | "อนุมัติ / รอส่งมอบ"
+  | "ตัดยอดแล้ว / รอส่งมอบ"
+  | "ลูกค้าชะลอการดำเนินการ"
   | "ส่งมอบแล้ว"
   | "ยกเลิก"
   | "ไม่ระบุ";
@@ -22,9 +27,11 @@ export type RddReminder = {
 
 export type RddHomeKpis = {
   newBookings: number;
+  waitingFinanceSubmission: number;
   waitingFinanceResult: number;
   waitingDelivery: number;
   delivered: number;
+  customerPaused: number;
   unknownBookingDate: number;
 };
 
@@ -37,13 +44,14 @@ export function normalizeRddSearch(value: unknown) {
 }
 
 export function purchaseTypeForRecord(record: BookingDeliveryRecord): RddPurchaseType {
-  const value = text(record.paymentType).toLocaleLowerCase("th-TH");
-  if (/เงินสด|cash/.test(value)) return "เงินสด";
-  if (/ไฟแนนซ์|finance|จัด/.test(value)) return "ไฟแนนซ์";
+  const value = canonicalPurchaseType(record);
+  if (value) return RDD_PURCHASE_TYPE_LABELS[value] as RddPurchaseType;
   return "ไม่ระบุ";
 }
 
 export function legacyStatusForRecord(record: BookingDeliveryRecord): RddDisplayStatus {
+  const canonical = canonicalCaseStatus(record);
+  if (canonical) return RDD_CASE_STATUS_LABELS[canonical] as RddDisplayStatus;
   const status = text(record.status) as BookingDeliveryStatus;
   const workflow = text(record.workflowStatus) as BookingDeliveryStatus;
   const value = status === "ยกเลิก" ? status : workflow || status;
@@ -118,13 +126,15 @@ export function deriveRddHomeKpis(records: BookingDeliveryRecord[], year: number
       const value = parseBusinessDate(record.bookingDate);
       return value !== null && value >= range.monthStart && value < range.nextMonthStart;
     }).length,
+    waitingFinanceSubmission: relevant.filter((record) => legacyStatusForRecord(record) === "รอจัดไฟแนนซ์").length,
     waitingFinanceResult: relevant.filter((record) => legacyStatusForRecord(record) === "รอผลไฟแนนซ์").length,
-    waitingDelivery: relevant.filter((record) => legacyStatusForRecord(record) === "รอส่งมอบ").length,
+    waitingDelivery: relevant.filter((record) => ["รอส่งมอบ", "อนุมัติ / รอส่งมอบ", "ตัดยอดแล้ว / รอส่งมอบ"].includes(legacyStatusForRecord(record))).length,
     delivered: metricRecords.filter((record) => {
       if (legacyStatusForRecord(record) !== "ส่งมอบแล้ว") return false;
       const value = parseBusinessDate(record.deliveredAt || record.deliveryDate);
       return value !== null && value >= range.monthStart && value < range.nextMonthStart;
     }).length,
+    customerPaused: relevant.filter((record) => legacyStatusForRecord(record) === "ลูกค้าชะลอการดำเนินการ").length,
     unknownBookingDate: metricRecords.filter((record) => parseBusinessDate(record.bookingDate) === null).length
   };
 }
@@ -145,8 +155,7 @@ function dayStart(value: string) {
 }
 
 export function recordMatchesReminder(record: BookingDeliveryRecord, kind: RddReminderKind, today: string) {
-  const status = legacyStatusForRecord(record);
-  if (status === "ส่งมอบแล้ว" || status === "ยกเลิก") return false;
+  if (!reminderEligibleForRecord(record)) return false;
   const todayValue = dayStart(today);
   if (todayValue === null) return false;
   const delivery = dayStart(record.deliveryDate);
@@ -177,7 +186,7 @@ export function upcomingRddDeliveries(records: BookingDeliveryRecord[], today = 
   return records
     .filter((record) => record.excludeFromMetrics !== true)
     .map((record) => ({ record, date: dayStart(record.deliveryDate) }))
-    .filter(({ record, date }) => date !== null && date >= todayValue && !["ส่งมอบแล้ว", "ยกเลิก"].includes(legacyStatusForRecord(record)))
+    .filter(({ record, date }) => date !== null && date >= todayValue && reminderEligibleForRecord(record))
     .sort((a, b) => Number(a.date) - Number(b.date))
     .slice(0, limit)
     .map(({ record }) => record);
@@ -187,5 +196,5 @@ export const RDD_REMINDER_CAPABILITIES = [
   { capability: "ส่งมอบวันนี้ / พรุ่งนี้ / เลยกำหนด", phase: "supported" as const, source: "deliveryDate" },
   { capability: "รถถึงกำหนดกลับจากอู่", phase: "supported" as const, source: "garageReturnDate" },
   { capability: "งานเตรียมรถค้างแบบ workflow", phase: "phase3" as const, source: "ต้องมีสถานะงานและผู้รับผิดชอบที่ชัดเจน" },
-  { capability: "รอจัดไฟแนนซ์ / ลูกค้าชะลอ", phase: "phase3" as const, source: "ต้องมี detailed status ที่ยืนยันได้" }
+  { capability: "รอจัดไฟแนนซ์ / ลูกค้าชะลอ", phase: "supported" as const, source: "purchaseType + caseStatus" }
 ];

@@ -47,9 +47,11 @@ export function RddHomeClient({ initialYear, initialMonth }: { initialYear: numb
 
   const cards = [
     { label: "ยอดจองเดือนนี้", value: kpis.newBookings, filter: "ยอดจองทั้งหมด", icon: CarFront, tone: "text-[#f6df9d]" },
+    { label: "รอจัดไฟแนนซ์", value: kpis.waitingFinanceSubmission, filter: "รอจัดไฟแนนซ์", icon: CalendarClock, tone: "text-orange-200" },
     { label: "รอผลไฟแนนซ์", value: kpis.waitingFinanceResult, filter: "รอผลไฟแนนซ์", icon: CalendarClock, tone: "text-amber-200" },
     { label: "รอส่งมอบ", value: kpis.waitingDelivery, filter: "รอส่งมอบ", icon: Truck, tone: "text-sky-200" },
-    { label: "ส่งมอบแล้ว", value: kpis.delivered, filter: "ส่งมอบแล้ว", icon: CarFront, tone: "text-emerald-200" }
+    { label: "ส่งมอบแล้ว", value: kpis.delivered, filter: "ส่งมอบแล้ว", icon: CarFront, tone: "text-emerald-200" },
+    { label: "ลูกค้าชะลอ", value: kpis.customerPaused, filter: "ลูกค้าชะลอการดำเนินการ", icon: CalendarClock, tone: "text-violet-200" }
   ];
 
   return (
@@ -101,7 +103,7 @@ export function RddHomeClient({ initialYear, initialMonth }: { initialYear: numb
             </div>
           </RddSection>
 
-          <section className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+          <section className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3 xl:grid-cols-6">
             {cards.map((card) => {
               const Icon = card.icon;
               return (
