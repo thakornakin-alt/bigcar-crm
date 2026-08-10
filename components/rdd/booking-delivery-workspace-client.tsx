@@ -124,10 +124,10 @@ export function BookingDeliveryWorkspaceClient({
       <header data-testid="workspace-header" className="mb-3 rounded-[22px] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(116,31,44,0.42),transparent_34%),linear-gradient(145deg,#1b1b1f,#09090b)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.28)] sm:mb-4 sm:rounded-[28px] sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="hidden text-[10px] font-black uppercase tracking-[0.24em] text-[#d6b66c] sm:block">RDD Workspace · Read only</p>
+            <p className="hidden text-[10px] font-black uppercase tracking-[0.24em] text-[#d6b66c] sm:block">RDD Workspace · {editEnabled ? "Controlled edit" : "Read only"}</p>
             <h1 className="truncate text-xl font-black text-white sm:mt-2 sm:text-3xl">Booking Delivery<span className="hidden sm:inline"> Workspace</span></h1>
             <p data-testid="workspace-mobile-summary" className="mt-0.5 text-xs font-bold text-white/55 sm:hidden">{monthNames[month - 1]} {year + 543} · {scopeLabel} {visible.length.toLocaleString("th-TH")} คัน</p>
-            <p className="mt-1 hidden text-sm text-white/52 sm:block">มุมมองทำงานแบบตาราง โดยไม่แก้ข้อมูลต้นทาง</p>
+            <p className="mt-1 hidden text-sm text-white/52 sm:block">{editEnabled ? "แก้ไขเฉพาะข้อมูลที่อนุญาต พร้อมป้องกันข้อมูลทับกัน" : "มุมมองทำงานแบบตาราง โดยไม่แก้ข้อมูลต้นทาง"}</p>
           </div>
           <Link href="/rdd-home" aria-label="กลับ RDD Home" className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl border border-white/12 bg-white/5 text-white sm:min-w-0 sm:gap-2 sm:px-3 sm:text-sm sm:font-black"><ChevronLeft size={18} /><span className="hidden sm:inline">RDD Home</span></Link>
         </div>
