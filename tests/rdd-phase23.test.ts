@@ -34,7 +34,7 @@ test("excludeFromMetrics removes KPI reminders and upcoming delivery without cha
   const unassigned = record({ id: "UNASSIGNED", deliveryDate: "2026-08-11" });
   const records = [normalMine, excludedMine, unassigned];
   assert.equal(deriveRddHomeKpis(records, 2026, 8).waitingDelivery, 2);
-  assert.deepEqual(deriveRddReminders(records, "2026-08-10").map((item) => item.count), [1, 1, 0, 0]);
+  assert.deepEqual(deriveRddReminders(records, "2026-08-10").map((item) => item.count), [1, 1, 0, 0, 2]);
   assert.deepEqual(upcomingRddDeliveries(records, "2026-08-09").map((item) => item.id), ["MINE", "UNASSIGNED"]);
   assert.deepEqual(filterRddWorkspaceRecords(records, { year: 2026, month: 8, scope: "mine", userId: "u1" }).map((item) => item.id), ["MINE"]);
   assert.deepEqual(filterRddWorkspaceRecords(records, { year: 2026, month: 8, scope: "unassigned", userId: "u1" }).map((item) => item.id), ["UNASSIGNED"]);

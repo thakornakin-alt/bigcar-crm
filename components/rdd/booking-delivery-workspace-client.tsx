@@ -22,6 +22,7 @@ import { useSalesProfile } from "@/lib/use-sales-profile";
 import { resolveCaseDocumentManifest } from "@/lib/rdd-case-documents";
 import { RDD_DELIVERY_LOCATIONS, type RddWorkspaceChanges } from "@/lib/rdd-workspace-fields";
 import { RDD_CASE_STATUS_LABELS, RDD_PURCHASE_TYPE_LABELS, isStatusValidForPurchaseType, statusesForPurchaseType, type RddCanonicalPurchaseType, type RddCaseStatus } from "@/lib/rdd-phase3b";
+import { derivePrepReminder, prepStatusForRecord, RDD_PREP_LABELS, RDD_WASH_STATUSES, RDD_STICKER_STATUSES, RDD_OIL_STATUSES, RDD_BATTERY_STATUSES, RDD_TAX_STATUSES, RDD_INSURANCE_STATUSES } from "@/lib/rdd-phase3c";
 
 const monthNames = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
 const statusOptions: Array<"all" | RddDisplayStatus> = ["all", "ยอดจองทั้งหมด", "รอจัดไฟแนนซ์", "รอผลไฟแนนซ์", "รอส่งมอบ", "อนุมัติ / รอส่งมอบ", "ตัดยอดแล้ว / รอส่งมอบ", "ลูกค้าชะลอการดำเนินการ", "ส่งมอบแล้ว", "ยกเลิก", "ไม่ระบุ"];
@@ -44,16 +45,16 @@ function money(value: unknown) {
 }
 
 function prepSummary(record: BookingDeliveryRecord) {
-  const done = [record.spaFullSystemDone && "สปา", record.oilChangeDone && "น้ำมันเครื่อง", record.decalRemovalDone && "ลอกลาย", record.insuranceDone && "ประกัน"].filter(Boolean);
-  return done.length ? done.join(" · ") : "—";
+  const prep = derivePrepReminder(record, bangkokDateKey());
+  return prep.pendingPrepCount ? `งานค้าง ${prep.pendingPrepCount}` : "ไม่มีงานค้าง";
 }
 
 function pendingSummary(record: BookingDeliveryRecord) {
   const delivery = parseBusinessDate(record.deliveryDate);
   const now = parseBusinessDate(bangkokDateKey());
   if (delivery !== null && now !== null && delivery < now && !["ส่งมอบแล้ว", "ยกเลิก"].includes(legacyStatusForRecord(record))) return "เลยกำหนดส่งมอบ";
-  if (record.garageReturnDate) return `รถกลับ ${thaiDate(record.garageReturnDate)}`;
-  return "—";
+  const prep = derivePrepReminder(record, bangkokDateKey());
+  return prep.pendingPrepCount ? `${prep.pendingPrepCount}` : "—";
 }
 
 export function BookingDeliveryWorkspaceClient({
@@ -144,7 +145,7 @@ export function BookingDeliveryWorkspaceClient({
           </div>
           <select aria-label="ประเภทซื้อ" value={purchase} onChange={(event) => setPurchase(event.target.value as typeof purchase)} className="workspace-select hidden sm:block"><option value="all">ทุกประเภทซื้อ</option><option value="ซื้อสด">ซื้อสด</option><option value="ไฟแนนซ์">ไฟแนนซ์</option><option value="ไม่ระบุ">ไม่ระบุ</option></select>
           <select aria-label="สถานะ" value={status} onChange={(event) => setStatus(event.target.value as typeof status)} className="workspace-select hidden sm:block">{statusOptions.map((item) => <option key={item} value={item}>{item === "all" ? "ทุกสถานะ" : item}</option>)}</select>
-          <select aria-label="งานค้าง" value={pending} onChange={(event) => setPending(event.target.value as typeof pending)} className="workspace-select hidden sm:block"><option value="all">งานค้างทั้งหมด</option><option value="delivery_today">ส่งมอบวันนี้</option><option value="delivery_tomorrow">ส่งมอบพรุ่งนี้</option><option value="delivery_overdue">เลยกำหนดส่งมอบ</option><option value="garage_return_due">ถึงกำหนดรถกลับ</option></select>
+          <PrepFilter value={pending} onChange={setPending} className="workspace-select hidden sm:block" />
           <label className="hidden min-h-12 items-center gap-2 rounded-2xl border border-white/12 bg-black/20 px-3 text-xs font-black text-white/60 sm:flex"><input data-testid="include-qa-toggle-desktop" type="checkbox" checked={includeQa} onChange={(event) => setIncludeQa(event.target.checked)} className="h-4 w-4 accent-[#d6b66c]" />รวมข้อมูลทดสอบ</label>
           <button type="button" onClick={clearFilters} className="hidden min-h-12 items-center justify-center gap-2 rounded-2xl border border-white/12 bg-white/5 px-3 text-sm font-black text-white sm:inline-flex"><RotateCcw size={16} />ล้าง</button>
         </div>
@@ -152,7 +153,7 @@ export function BookingDeliveryWorkspaceClient({
         <div data-testid="workspace-mobile-filters" className="mt-2 grid grid-cols-4 gap-1.5 sm:hidden">
           <select aria-label="เดือนแบบย่อ" value={month} onChange={(event) => setMonth(Number(event.target.value))} className="workspace-select compact">{monthNames.map((name, index) => <option key={name} value={index + 1}>{name.slice(0, 3)}</option>)}</select>
           <select aria-label="สถานะแบบย่อ" value={status} onChange={(event) => setStatus(event.target.value as typeof status)} className="workspace-select compact">{statusOptions.map((item) => <option key={item} value={item}>{item === "all" ? "สถานะ" : item}</option>)}</select>
-          <select aria-label="งานค้างแบบย่อ" value={pending} onChange={(event) => setPending(event.target.value as typeof pending)} className="workspace-select compact"><option value="all">งานค้าง</option><option value="delivery_today">วันนี้</option><option value="delivery_tomorrow">พรุ่งนี้</option><option value="delivery_overdue">เลยกำหนด</option><option value="garage_return_due">รถกลับ</option></select>
+          <PrepFilter value={pending} onChange={setPending} className="workspace-select compact" short />
           <details className="group relative">
             <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-1 rounded-xl border border-white/12 bg-white/5 px-1 text-[11px] font-black text-white"><SlidersHorizontal size={14} />ตัวกรอง</summary>
             <div className="absolute right-0 z-40 mt-2 grid w-[min(320px,calc(100vw-24px))] gap-2 rounded-2xl border border-white/12 bg-[#151519] p-3 shadow-2xl">
@@ -247,9 +248,13 @@ type WorkspaceDraft = {
   deliveryLocation: string;
   deliveryLocationNote: string;
   financeCaseNote: string;
+  garageRequired: boolean; garageName: string; garageSentAt: string; garageExpectedReturnDate: string; garageReturned: boolean;
+  washStatus: NonNullable<BookingDeliveryRecord["washStatus"]>; stickerStatus: NonNullable<BookingDeliveryRecord["stickerStatus"]>; oilStatus: NonNullable<BookingDeliveryRecord["oilStatus"]>;
+  batteryStatus: NonNullable<BookingDeliveryRecord["batteryStatus"]>; taxStatus: NonNullable<BookingDeliveryRecord["taxStatus"]>; insuranceStatus: NonNullable<BookingDeliveryRecord["insuranceStatus"]>;
 };
 
 function draftForRecord(record: BookingDeliveryRecord): WorkspaceDraft {
+  const prep = prepStatusForRecord(record);
   return {
     purchaseType: record.purchaseType || "",
     caseStatus: record.caseStatus || "",
@@ -257,7 +262,9 @@ function draftForRecord(record: BookingDeliveryRecord): WorkspaceDraft {
     deliveryTime: record.deliveryTime || "",
     deliveryLocation: record.deliveryLocation || "",
     deliveryLocationNote: record.deliveryLocationNote || "",
-    financeCaseNote: record.financeCaseNote || ""
+    financeCaseNote: record.financeCaseNote || "",
+    garageRequired: record.garageRequired ?? Boolean(record.garageOutDate || record.garageReturnDate), garageName: record.garageName || "", garageSentAt: record.garageSentAt || record.garageOutDate || "", garageExpectedReturnDate: record.garageExpectedReturnDate || record.garageReturnDate || "", garageReturned: record.garageReturned === true,
+    ...prep
   };
 }
 
@@ -309,8 +316,8 @@ function WorkspaceDetail({ record, revision, editEnabled, onClose, onSaved }: {
     const changes: RddWorkspaceChanges = {};
     if (draft.purchaseType !== original.purchaseType && draft.purchaseType) changes.purchaseType = draft.purchaseType;
     if (draft.caseStatus !== original.caseStatus && draft.caseStatus) changes.caseStatus = draft.caseStatus;
-    for (const key of ["deliveryDate", "deliveryTime", "deliveryLocation", "deliveryLocationNote", "financeCaseNote"] as const) {
-      if (draft[key] !== original[key]) changes[key] = draft[key];
+    for (const key of ["deliveryDate", "deliveryTime", "deliveryLocation", "deliveryLocationNote", "financeCaseNote", "garageRequired", "garageName", "garageSentAt", "garageExpectedReturnDate", "garageReturned", "washStatus", "stickerStatus", "oilStatus", "batteryStatus", "taxStatus", "insuranceStatus"] as const) {
+      if (draft[key] !== original[key]) Object.assign(changes, { [key]: draft[key] });
     }
     try {
       const response = await fetch("/api/booking-delivery-workspace", {
@@ -388,10 +395,21 @@ function WorkspaceDetail({ record, revision, editEnabled, onClose, onSaved }: {
               </select>
             </label>
             {draft.deliveryLocation === "นอกสถานที่" && <label className="mt-3 block text-xs font-black text-[#d6b66c]">รายละเอียดนอกสถานที่<textarea aria-label="รายละเอียดนอกสถานที่" maxLength={300} value={draft.deliveryLocationNote} onChange={(event) => setDraft((current) => ({ ...current, deliveryLocationNote: event.target.value }))} rows={3} className="mt-1 w-full rounded-xl border border-white/12 bg-[#111114] p-3 text-sm leading-5 text-white outline-none focus:border-[#d6b66c]" /></label>}
+            <h4 className="mt-4 border-t border-white/10 pt-3 text-sm font-black text-white">เตรียมรถ</h4>
+            <label className="mt-2 flex min-h-11 items-center gap-3 text-sm font-bold text-white"><input type="checkbox" checked={draft.garageRequired} onChange={(event) => setDraft((current) => ({ ...current, garageRequired: event.target.checked }))} className="h-5 w-5 accent-[#d6b66c]" />ส่งอู่</label>
+            {draft.garageRequired && <div data-testid="garage-controls" className="grid grid-cols-2 gap-2.5"><label className="col-span-2 text-xs font-black text-[#d6b66c]">ชื่ออู่/สถานที่<input value={draft.garageName} maxLength={200} onChange={(event) => setDraft((current) => ({ ...current, garageName: event.target.value }))} className="mt-1 min-h-11 w-full rounded-xl border border-white/12 bg-[#111114] px-3 text-white" /></label><label className="text-xs font-black text-[#d6b66c]">วันที่ส่งจริง<input type="date" value={draft.garageSentAt} onChange={(event) => setDraft((current) => ({ ...current, garageSentAt: event.target.value }))} className="mt-1 min-h-11 w-full rounded-xl border border-white/12 bg-[#111114] px-2 text-white" /></label><label className="text-xs font-black text-[#d6b66c]">คาดว่าจะกลับ<input type="date" value={draft.garageExpectedReturnDate} onChange={(event) => setDraft((current) => ({ ...current, garageExpectedReturnDate: event.target.value }))} className="mt-1 min-h-11 w-full rounded-xl border border-white/12 bg-[#111114] px-2 text-white" /></label><label className="col-span-2 flex min-h-11 items-center gap-3 text-sm font-bold text-white"><input type="checkbox" checked={draft.garageReturned} onChange={(event) => setDraft((current) => ({ ...current, garageReturned: event.target.checked }))} className="h-5 w-5 accent-emerald-400" />รถกลับแล้ว</label></div>}
+            <div data-testid="prep-status-controls" className="mt-2 grid grid-cols-2 gap-2.5">
+              <PrepSelect label="ล้างรถ" field="washStatus" value={draft.washStatus} values={RDD_WASH_STATUSES} labels={RDD_PREP_LABELS.washStatus} onChange={(value) => setDraft((current) => ({ ...current, washStatus: value as WorkspaceDraft["washStatus"] }))} />
+              <PrepSelect label="ลอกสติ๊กเกอร์" field="stickerStatus" value={draft.stickerStatus} values={RDD_STICKER_STATUSES} labels={RDD_PREP_LABELS.stickerStatus} onChange={(value) => setDraft((current) => ({ ...current, stickerStatus: value as WorkspaceDraft["stickerStatus"] }))} />
+              <PrepSelect label="น้ำมันเครื่อง" field="oilStatus" value={draft.oilStatus} values={RDD_OIL_STATUSES} labels={RDD_PREP_LABELS.oilStatus} onChange={(value) => setDraft((current) => ({ ...current, oilStatus: value as WorkspaceDraft["oilStatus"] }))} />
+              <PrepSelect label="แบตเตอรี่" field="batteryStatus" value={draft.batteryStatus} values={RDD_BATTERY_STATUSES} labels={RDD_PREP_LABELS.batteryStatus} onChange={(value) => setDraft((current) => ({ ...current, batteryStatus: value as WorkspaceDraft["batteryStatus"] }))} />
+              <PrepSelect label="ภาษี" field="taxStatus" value={draft.taxStatus} values={RDD_TAX_STATUSES} labels={RDD_PREP_LABELS.taxStatus} onChange={(value) => setDraft((current) => ({ ...current, taxStatus: value as WorkspaceDraft["taxStatus"] }))} />
+              <PrepSelect label="ประกัน" field="insuranceStatus" value={draft.insuranceStatus} values={RDD_INSURANCE_STATUSES} labels={RDD_PREP_LABELS.insuranceStatus} onChange={(value) => setDraft((current) => ({ ...current, insuranceStatus: value as WorkspaceDraft["insuranceStatus"] }))} />
+            </div>
             <label className="mt-3 block text-xs font-black text-[#d6b66c]">หมายเหตุไฟแนนซ์<textarea maxLength={1000} value={draft.financeCaseNote} onChange={(event) => setDraft((current) => ({ ...current, financeCaseNote: event.target.value }))} rows={3} className="mt-1 w-full rounded-xl border border-white/12 bg-[#111114] p-3 text-sm leading-5 text-white outline-none focus:border-[#d6b66c]" /></label>
             <p className="mt-1 text-right text-[11px] text-white/35">{draft.financeCaseNote.length}/1,000</p>
           </section>
-        ) : <><DetailGroup title="ไฟแนนซ์" items={[["ส่งเคสแล้ว", record.financeCaseSubmitted ? "ใช่" : "—"], ["เวลาส่งเคส", thaiDate(record.financeCaseSubmittedAt, true)], ["หมายเหตุ", record.financeCaseNote || "—"]]} /><DetailGroup title="ส่งมอบและเตรียมรถ" items={[["วันนัดส่ง", thaiDate(record.deliveryDate)], ["เวลานัด", record.deliveryTime], ["สถานที่", record.deliveryLocation], ["รายละเอียดสถานที่", record.deliveryLocation === "นอกสถานที่" ? record.deliveryLocationNote : ""], ["วันรถกลับ", thaiDate(record.garageReturnDate)], ["งานที่ทำแล้ว", prepSummary(record)]]} /></>}
+        ) : <><DetailGroup title="ไฟแนนซ์" items={[["ส่งเคสแล้ว", record.financeCaseSubmitted ? "ใช่" : "—"], ["เวลาส่งเคส", thaiDate(record.financeCaseSubmittedAt, true)], ["หมายเหตุ", record.financeCaseNote || "—"]]} /><DetailGroup title="ส่งมอบ" items={[["วันนัดส่ง", thaiDate(record.deliveryDate)], ["เวลานัด", record.deliveryTime], ["สถานที่", record.deliveryLocation], ["รายละเอียดสถานที่", record.deliveryLocation === "นอกสถานที่" ? record.deliveryLocationNote : ""]]} /><PrepReadSection record={record} /></>}
         <section data-testid="case-document-manifest" className="mt-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3 sm:mt-5 sm:p-4">
           <div className="flex items-center justify-between gap-3"><h3 className="font-black text-white">เอกสารของเคส</h3><span className="text-xs font-black text-[#f6df9d]">{documents.availableCount}/{documents.totalCount}</span></div>
           <div className="mt-2 divide-y divide-white/8">
@@ -409,6 +427,24 @@ function WorkspaceDetail({ record, revision, editEnabled, onClose, onSaved }: {
 
 function QaBadge() {
   return <span data-testid="qa-record-badge" className="rounded-full border border-fuchsia-300/35 bg-fuchsia-300/10 px-2 py-0.5 text-[10px] font-black tracking-wide text-fuchsia-200">TEST/QA</span>;
+}
+
+function PrepFilter({ value, onChange, className, short = false }: { value: "all" | RddReminderKind; onChange: (value: "all" | RddReminderKind) => void; className: string; short?: boolean }) {
+  const options: Array<["all" | RddReminderKind, string]> = [["all", short ? "งานค้าง" : "งานค้างทั้งหมด"], ["prep_pending", "มีงานค้าง"], ["prep_none", "ไม่มีงานค้าง"], ["garage", "อู่"], ["wash", "ล้างรถ"], ["sticker", "สติ๊กเกอร์"], ["oil", "น้ำมันเครื่อง"], ["battery", "แบตเตอรี่"], ["tax", "ภาษี"], ["insurance", "ประกัน"], ["delivery_today", "ส่งวันนี้"], ["delivery_tomorrow", "ส่งพรุ่งนี้"], ["delivery_overdue", "เลยกำหนด"]];
+  return <select aria-label={short ? "งานค้างแบบย่อ" : "งานค้าง"} value={value} onChange={(event) => onChange(event.target.value as "all" | RddReminderKind)} className={className}>{options.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>;
+}
+
+function PrepSelect({ label, field, value, values, labels, onChange }: { label: string; field: string; value: string; values: readonly string[]; labels: Record<string, string>; onChange: (value: string) => void }) {
+  return <label className="text-xs font-black text-[#d6b66c]">{label}<select data-testid={`prep-${field}`} value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-white/12 bg-[#111114] px-2 text-sm text-white">{values.map((item) => <option key={item} value={item}>{labels[item]}</option>)}</select></label>;
+}
+
+function PrepReadSection({ record }: { record: BookingDeliveryRecord }) {
+  const status = prepStatusForRecord(record);
+  const reminder = derivePrepReminder(record, bangkokDateKey());
+  return <section data-testid="case-preparation-section" className="mt-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3 sm:mt-5 sm:p-4"><div className="flex items-center justify-between"><h3 className="font-black text-white">เตรียมรถ</h3><span className="text-xs font-black text-[#f6df9d]">งานค้าง {reminder.pendingPrepCount}</span></div><div className="mt-2 divide-y divide-white/8 text-sm">{[
+    ["อู่", record.garageRequired === true || (record.garageRequired === undefined && record.garageOutDate) ? `${record.garageReturned ? "รถกลับแล้ว" : "ส่งอู่"}${record.garageExpectedReturnDate || record.garageReturnDate ? ` · คาดกลับ ${thaiDate(record.garageExpectedReturnDate || record.garageReturnDate)}` : ""}` : "ไม่ส่งอู่"],
+    ["ล้างรถ", RDD_PREP_LABELS.washStatus[status.washStatus]], ["ลอกสติ๊กเกอร์", RDD_PREP_LABELS.stickerStatus[status.stickerStatus]], ["น้ำมันเครื่อง", RDD_PREP_LABELS.oilStatus[status.oilStatus]], ["แบตเตอรี่", RDD_PREP_LABELS.batteryStatus[status.batteryStatus]], ["ภาษี", RDD_PREP_LABELS.taxStatus[status.taxStatus]], ["ประกัน", RDD_PREP_LABELS.insuranceStatus[status.insuranceStatus]]
+  ].map(([label, value]) => <div key={label} className="flex min-h-10 items-center justify-between gap-3 py-1.5"><span className="font-bold text-white/55">{label}</span><span className="text-right font-bold text-white">{value}</span></div>)}</div></section>;
 }
 
 function DetailGroup({ title, items }: { title: string; items: Array<[string, unknown]> }) {
