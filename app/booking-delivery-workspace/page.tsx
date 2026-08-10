@@ -18,5 +18,5 @@ export default function BookingDeliveryWorkspacePage({ searchParams }: { searchP
   const status = typeof searchParams?.status === "string" ? searchParams.status as RddDisplayStatus : "all";
   const search = typeof searchParams?.search === "string" ? searchParams.search : "";
   const month = typeof searchParams?.month === "string" ? searchParams.month : "";
-  return <BookingDeliveryWorkspaceClient currentYear={current.year} currentMonth={current.month} initialPending={pending} initialScope={scope} initialStatus={status} initialSearch={search} initialMonth={month} />;
+  return <BookingDeliveryWorkspaceClient editEnabled={getRddFeatureFlags().workspaceEdit} currentYear={current.year} currentMonth={current.month} initialPending={pending} initialScope={scope} initialStatus={status} initialSearch={search} initialMonth={month} />;
 }

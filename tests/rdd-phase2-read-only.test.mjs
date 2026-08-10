@@ -4,8 +4,7 @@ import test from "node:test";
 
 const businessUiFiles = [
   "components/rdd/use-booking-delivery-read.ts",
-  "components/rdd/rdd-home-client.tsx",
-  "components/rdd/booking-delivery-workspace-client.tsx"
+  "components/rdd/rdd-home-client.tsx"
 ];
 
 test("Phase 2 Home and Workspace business UI only use authenticated GET reads", async () => {
@@ -20,8 +19,15 @@ test("both Phase 2 routes fail closed behind the read-only feature flag", async 
     const source = await readFile(file, "utf8");
     assert.match(source, /workspaceReadOnly/);
     assert.match(source, /notFound\(\)/);
-    assert.doesNotMatch(source, /workspaceEdit/);
   }
+});
+
+test("Phase 3A mutation uses only the narrow workspace endpoint", async () => {
+  const source = await readFile("components/rdd/booking-delivery-workspace-client.tsx", "utf8");
+  assert.match(source, /fetch\("\/api\/booking-delivery-workspace"/);
+  assert.match(source, /method:\s*"PATCH"/);
+  assert.doesNotMatch(source, /method:\s*["'](?:POST|PUT|DELETE)["']/i);
+  assert.doesNotMatch(source, /fetch\("\/api\/booking-delivery"[^]*method:\s*"PATCH"/);
 });
 
 test("existing Booking Delivery routes remain present and are not redirected", async () => {

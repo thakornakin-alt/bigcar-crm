@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Check, ChevronLeft, RotateCcw, Search, SlidersHorizontal, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, Loader2, Pencil, RotateCcw, Search, SlidersHorizontal, X } from "lucide-react";
 import { useBookingDeliveryRead } from "@/components/rdd/use-booking-delivery-read";
 import { RddEmpty, RddError, RddSkeleton, RddStatusChip } from "@/components/rdd/rdd-ui";
 import { parseBusinessDate } from "@/lib/booking-delivery-v2";
@@ -20,6 +20,7 @@ import { filterByOwnership, type OwnershipScope } from "@/lib/rdd-ownership";
 import type { BookingDeliveryRecord } from "@/lib/types";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import { resolveCaseDocumentManifest } from "@/lib/rdd-case-documents";
+import { RDD_DELIVERY_LOCATIONS, type RddWorkspaceChanges } from "@/lib/rdd-workspace-fields";
 
 const monthNames = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
 const statusOptions: Array<"all" | RddDisplayStatus> = ["all", "ยอดจองทั้งหมด", "รอผลไฟแนนซ์", "รอส่งมอบ", "ส่งมอบแล้ว", "ยกเลิก", "ไม่ระบุ"];
@@ -55,6 +56,7 @@ function pendingSummary(record: BookingDeliveryRecord) {
 }
 
 export function BookingDeliveryWorkspaceClient({
+  editEnabled = false,
   initialPending = "all",
   initialScope = "all",
   initialStatus = "all",
@@ -63,6 +65,7 @@ export function BookingDeliveryWorkspaceClient({
   currentYear,
   currentMonth
 }: {
+  editEnabled?: boolean;
   initialPending?: "all" | RddReminderKind;
   initialScope?: OwnershipScope;
   initialStatus?: "all" | RddDisplayStatus;
@@ -72,7 +75,7 @@ export function BookingDeliveryWorkspaceClient({
   currentMonth: number;
 }) {
   const parsedMonth = initialMonth.match(/^(\d{4})-(\d{2})$/);
-  const { records, loading, error, retry } = useBookingDeliveryRead();
+  const { records, revision, loading, error, retry, replaceRecord } = useBookingDeliveryRead();
   const { user } = useSalesProfile();
   const [year, setYear] = useState(parsedMonth ? Number(parsedMonth[1]) : currentYear);
   const [month, setMonth] = useState(parsedMonth ? Number(parsedMonth[2]) : currentMonth);
@@ -179,7 +182,7 @@ export function BookingDeliveryWorkspaceClient({
             <section className="overflow-hidden rounded-[24px] border border-white/10 bg-[#0b0b0e] shadow-[0_20px_60px_rgba(0,0,0,0.26)]">
               <div className="flex items-center justify-between border-b border-white/10 px-3 py-2.5 sm:px-4 sm:py-3">
                 <div><p className="font-black text-white">รายการติดตาม</p><p className="text-xs text-white/45">{visible.length.toLocaleString("th-TH")} รายการ · คลิกเพื่อดูรายละเอียด</p></div>
-                <span className="rounded-full border border-[#d6b66c]/30 bg-[#d6b66c]/10 px-3 py-1 text-xs font-black text-[#f6df9d]">READ ONLY</span>
+                <span className="rounded-full border border-[#d6b66c]/30 bg-[#d6b66c]/10 px-3 py-1 text-xs font-black text-[#f6df9d]">{editEnabled ? "EDIT ENABLED" : "READ ONLY"}</span>
               </div>
 
               <div className="hidden max-w-full overflow-x-auto lg:block">
@@ -225,7 +228,7 @@ export function BookingDeliveryWorkspaceClient({
         </>
       )}
 
-      {selected && <WorkspaceDetail record={selected} onClose={() => setSelectedId("")} />}
+      {selected && <WorkspaceDetail record={selected} revision={revision} editEnabled={editEnabled && user?.role !== "viewer"} onClose={() => setSelectedId("")} onSaved={replaceRecord} />}
 
       <style jsx>{`
         .workspace-select { min-height: 48px; border-radius: 16px; border: 1px solid rgba(255,255,255,.12); background: #111114; padding: 0 12px; color: white; font-size: 13px; font-weight: 800; min-width: 0; width: 100%; }
@@ -235,21 +238,90 @@ export function BookingDeliveryWorkspaceClient({
   );
 }
 
-function WorkspaceDetail({ record, onClose }: { record: BookingDeliveryRecord; onClose: () => void }) {
+function WorkspaceDetail({ record, revision, editEnabled, onClose, onSaved }: {
+  record: BookingDeliveryRecord;
+  revision: string;
+  editEnabled: boolean;
+  onClose: () => void;
+  onSaved: (record: BookingDeliveryRecord, revision: string) => void;
+}) {
   const documents = resolveCaseDocumentManifest(record);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<RddWorkspaceChanges>({ deliveryLocation: record.deliveryLocation || "", financeCaseNote: record.financeCaseNote || "" });
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [conflict, setConflict] = useState<{ record: BookingDeliveryRecord; revision: string } | null>(null);
+  const dirty = (draft.deliveryLocation || "") !== (record.deliveryLocation || "") || (draft.financeCaseNote || "") !== (record.financeCaseNote || "");
+  const canEdit = editEnabled && record.qaTestRecord !== true;
+
+  function startEdit() {
+    setDraft({ deliveryLocation: record.deliveryLocation || "", financeCaseNote: record.financeCaseNote || "" });
+    setMessage("");
+    setConflict(null);
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setDraft({ deliveryLocation: record.deliveryLocation || "", financeCaseNote: record.financeCaseNote || "" });
+    setMessage("");
+    setConflict(null);
+    setEditing(false);
+  }
+
+  function requestClose() {
+    if (editing && dirty) setConfirmClose(true);
+    else onClose();
+  }
+
+  async function save() {
+    if (!dirty || saving) return;
+    setSaving(true);
+    setMessage("");
+    setConflict(null);
+    const changes: RddWorkspaceChanges = {};
+    if ((draft.deliveryLocation || "") !== (record.deliveryLocation || "")) changes.deliveryLocation = draft.deliveryLocation || "";
+    if ((draft.financeCaseNote || "") !== (record.financeCaseNote || "")) changes.financeCaseNote = draft.financeCaseNote || "";
+    try {
+      const response = await fetch("/api/booking-delivery-workspace", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: record.id, expectedRevision: revision, changes })
+      });
+      const data = await response.json() as { record?: BookingDeliveryRecord; revision?: string; error?: string; warning?: string; current?: { record: BookingDeliveryRecord; revision: string } };
+      if (response.status === 409) {
+        setConflict(data.current || null);
+        setMessage(data.error || "ข้อมูลเคสนี้มีการเปลี่ยนแปลงจากผู้ใช้อื่น");
+        return;
+      }
+      if (!response.ok && response.status !== 207) throw new Error(data.error || "บันทึกไม่สำเร็จ");
+      if (!data.record || !data.revision) throw new Error("เซิร์ฟเวอร์ส่งข้อมูลกลับไม่ครบ");
+      onSaved(data.record, data.revision);
+      setDraft({ deliveryLocation: data.record.deliveryLocation || "", financeCaseNote: data.record.financeCaseNote || "" });
+      setEditing(false);
+      setMessage(data.warning || "บันทึกแล้ว");
+    } catch (saveError) {
+      setMessage(saveError instanceof Error ? saveError.message : "บันทึกไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <div data-testid="workspace-detail-overlay" className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div data-testid="workspace-detail-overlay" className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) requestClose(); }}>
       <aside data-testid="workspace-detail-panel" className="absolute inset-y-0 right-0 w-full overflow-y-auto border-l border-white/10 bg-[#0c0c0f] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl sm:max-w-xl sm:p-6">
         <div className="flex items-start justify-between gap-3">
-          <div><p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#d6b66c]">Read-only detail</p><h2 className="mt-2 text-2xl font-black text-white">{record.plate || "ไม่ระบุทะเบียน"}</h2><p className="mt-1 text-sm text-white/48">{record.customerName || "ไม่ระบุลูกค้า"}</p></div>
-          <button type="button" aria-label="ปิดรายละเอียด" onClick={onClose} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-white/12 bg-white/5 text-white"><X size={20} /></button>
+          <div><p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#d6b66c]">{editing ? "Edit case" : "Case detail"}</p><h2 className="mt-2 text-2xl font-black text-white">{record.plate || "ไม่ระบุทะเบียน"}</h2><p className="mt-1 text-sm text-white/48">{record.customerName || "ไม่ระบุลูกค้า"}</p></div>
+          <div className="flex gap-2">{canEdit && !editing && <button data-testid="workspace-edit-button" type="button" onClick={startEdit} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#d6b66c]/35 bg-[#d6b66c]/10 px-3 text-sm font-black text-[#f6df9d]"><Pencil size={16} />แก้ไข</button>}<button type="button" aria-label="ปิดรายละเอียด" onClick={requestClose} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-white/12 bg-white/5 text-white"><X size={20} /></button></div>
         </div>
         <div className="mt-5 flex items-center gap-2"><RddStatusChip record={record} />{record.qaTestRecord === true && <QaBadge />}</div>
+        {record.qaTestRecord === true && <p data-testid="workspace-qa-read-only" className="mt-3 rounded-xl border border-fuchsia-300/20 bg-fuchsia-300/8 px-3 py-2 text-sm font-bold text-fuchsia-100">ข้อมูล TEST/QA เป็นแบบอ่านอย่างเดียว</p>}
+        {message && <p role="status" className={`mt-3 rounded-xl border px-3 py-2 text-sm font-bold ${conflict ? "border-amber-300/25 bg-amber-300/10 text-amber-100" : "border-white/10 bg-white/5 text-white/75"}`}>{message}</p>}
+        {conflict && <button data-testid="workspace-load-latest" type="button" onClick={() => { onSaved(conflict.record, conflict.revision); setDraft({ deliveryLocation: conflict.record.deliveryLocation || "", financeCaseNote: conflict.record.financeCaseNote || "" }); setConflict(null); setMessage(""); setEditing(false); }} className="mt-2 min-h-11 rounded-xl border border-amber-300/30 px-3 text-sm font-black text-amber-100">โหลดข้อมูลล่าสุด</button>}
         <DetailGroup title="ลูกค้าและการขาย" items={[["ลูกค้า", record.customerName], ["ประเภทซื้อ", purchaseTypeForRecord(record)], ["เซลล์", record.saleName], ["เจ้าของ", record.ownerName || "ยังไม่ระบุ"]]} />
         <DetailGroup title="รถ" items={[["รถ", [record.brand, record.model, record.year].filter(Boolean).join(" ")], ["สี", record.color], ["เลขเครื่อง", record.engineNo], ["เลขตัวถัง", record.chassisNo]]} />
         <DetailGroup title="Booking" items={[["Booking ID", record.bookingId], ["วันที่จอง", thaiDate(record.bookingDate)], ["ราคาตั้ง", money(record.salePrice)], ["ราคาขาย", money(record.finalPrice)], ["ส่วนลด", money(record.centralDiscount)]]} />
-        <DetailGroup title="ไฟแนนซ์" items={[["ส่งเคสแล้ว", record.financeCaseSubmitted ? "ใช่" : "—"], ["เวลาส่งเคส", thaiDate(record.financeCaseSubmittedAt, true)], ["หมายเหตุ", record.financeCaseNote || "—"]]} />
-        <DetailGroup title="ส่งมอบและเตรียมรถ" items={[["วันนัดส่ง", thaiDate(record.deliveryDate, true)], ["สถานที่", record.deliveryLocation], ["วันรถกลับ", thaiDate(record.garageReturnDate)], ["งานที่ทำแล้ว", prepSummary(record)]]} />
+        {editing ? <section data-testid="workspace-edit-fields" className="mt-3 rounded-2xl border border-[#d6b66c]/25 bg-[#d6b66c]/[0.05] p-3 sm:mt-5 sm:p-4"><h3 className="font-black text-white">ข้อมูลที่แก้ไขได้</h3><label className="mt-3 block text-xs font-black text-[#d6b66c]">สถานที่ส่งมอบ<select value={draft.deliveryLocation || ""} onChange={(event) => setDraft((current) => ({ ...current, deliveryLocation: event.target.value }))} className="mt-1 min-h-12 w-full rounded-xl border border-white/12 bg-[#111114] px-3 text-sm text-white"><option value="">ไม่ระบุ / ล้างค่า</option>{record.deliveryLocation && !RDD_DELIVERY_LOCATIONS.includes(record.deliveryLocation as typeof RDD_DELIVERY_LOCATIONS[number]) && <option value={record.deliveryLocation}>ค่าเดิม: {record.deliveryLocation}</option>}{RDD_DELIVERY_LOCATIONS.map((location) => <option key={location} value={location}>{location}</option>)}</select></label><label className="mt-3 block text-xs font-black text-[#d6b66c]">หมายเหตุไฟแนนซ์<textarea maxLength={1000} value={draft.financeCaseNote || ""} onChange={(event) => setDraft((current) => ({ ...current, financeCaseNote: event.target.value }))} rows={4} className="mt-1 w-full rounded-xl border border-white/12 bg-[#111114] p-3 text-sm leading-6 text-white outline-none focus:border-[#d6b66c]" /></label><p className="mt-1 text-right text-[11px] text-white/35">{(draft.financeCaseNote || "").length}/1,000</p></section> : <><DetailGroup title="ไฟแนนซ์" items={[["ส่งเคสแล้ว", record.financeCaseSubmitted ? "ใช่" : "—"], ["เวลาส่งเคส", thaiDate(record.financeCaseSubmittedAt, true)], ["หมายเหตุ", record.financeCaseNote || "—"]]} /><DetailGroup title="ส่งมอบและเตรียมรถ" items={[["วันนัดส่ง", thaiDate(record.deliveryDate, true)], ["สถานที่", record.deliveryLocation], ["วันรถกลับ", thaiDate(record.garageReturnDate)], ["งานที่ทำแล้ว", prepSummary(record)]]} /></>}
         <section data-testid="case-document-manifest" className="mt-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3 sm:mt-5 sm:p-4">
           <div className="flex items-center justify-between gap-3"><h3 className="font-black text-white">เอกสารของเคส</h3><span className="text-xs font-black text-[#f6df9d]">{documents.availableCount}/{documents.totalCount}</span></div>
           <div className="mt-2 divide-y divide-white/8">
@@ -258,7 +330,8 @@ function WorkspaceDetail({ record, onClose }: { record: BookingDeliveryRecord; o
           <p className="mt-2 text-xs leading-5 text-white/38">แสดงเฉพาะข้อมูลอ้างอิงที่ผูกกับเคสได้จากระบบปัจจุบัน</p>
         </section>
         <section className="mt-3 rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2.5 text-sm"><span className="font-black text-white">Activity</span><span className="text-white/45"> · อัปเดตล่าสุด {thaiDate(record.updatedAt, true)} · รายการกิจกรรมรายเคสยังไม่เปิดใน Phase 2</span></section>
-        <button type="button" onClick={onClose} className="mt-5 min-h-12 w-full rounded-xl border border-white/12 bg-white/5 font-black text-white sm:hidden">ปิด</button>
+        {editing ? <div data-testid="workspace-edit-actions" className="sticky bottom-0 mt-5 flex gap-2 border-t border-white/10 bg-[#0c0c0f]/95 py-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur"><button type="button" onClick={cancelEdit} disabled={saving} className="min-h-12 flex-1 rounded-xl border border-white/12 bg-white/5 font-black text-white">ยกเลิก</button><button type="button" onClick={save} disabled={!dirty || saving || Boolean(conflict)} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-[#d6b66c] font-black text-[#17120a] disabled:cursor-not-allowed disabled:opacity-40">{saving && <Loader2 size={17} className="animate-spin" />}บันทึก</button></div> : <button type="button" onClick={requestClose} className="mt-5 min-h-12 w-full rounded-xl border border-white/12 bg-white/5 font-black text-white sm:hidden">ปิด</button>}
+        {confirmClose && <div data-testid="workspace-dirty-confirmation" className="sticky bottom-2 mt-3 rounded-2xl border border-amber-300/25 bg-[#282014] p-3 shadow-2xl"><div className="flex gap-2"><AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-200" /><p className="text-sm font-bold text-amber-50">มีข้อมูลที่ยังไม่ได้บันทึก ต้องการทิ้งการเปลี่ยนแปลงหรือไม่</p></div><div className="mt-3 flex gap-2"><button type="button" onClick={() => setConfirmClose(false)} className="min-h-11 flex-1 rounded-xl border border-white/12 text-sm font-black text-white">กลับไปแก้</button><button type="button" onClick={onClose} className="min-h-11 flex-1 rounded-xl bg-amber-200 text-sm font-black text-[#211809]">ทิ้งการเปลี่ยนแปลง</button></div></div>}
       </aside>
     </div>
   );
