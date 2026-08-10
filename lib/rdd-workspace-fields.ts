@@ -1,4 +1,5 @@
 import type { RddCanonicalPurchaseType, RddCaseStatus } from "@/lib/rdd-phase3b";
+import type { BookingDeliveryRecord } from "@/lib/types";
 
 export const RDD_DELIVERY_LOCATIONS = [
   "โกดังบางนา",
@@ -14,7 +15,9 @@ export type RddWorkspaceEditableField =
   | "deliveryTime"
   | "deliveryLocation"
   | "deliveryLocationNote"
-  | "financeCaseNote";
+  | "financeCaseNote"
+  | "garageRequired" | "garageName" | "garageSentAt" | "garageExpectedReturnDate" | "garageReturned"
+  | "washStatus" | "stickerStatus" | "oilStatus" | "batteryStatus" | "taxStatus" | "insuranceStatus";
 
 export type RddWorkspaceChanges = {
   purchaseType?: RddCanonicalPurchaseType;
@@ -24,4 +27,15 @@ export type RddWorkspaceChanges = {
   deliveryLocation?: string;
   deliveryLocationNote?: string;
   financeCaseNote?: string;
+  garageRequired?: boolean;
+  garageName?: string;
+  garageSentAt?: string;
+  garageExpectedReturnDate?: string;
+  garageReturned?: boolean;
+  washStatus?: BookingDeliveryRecord["washStatus"];
+  stickerStatus?: BookingDeliveryRecord["stickerStatus"];
+  oilStatus?: BookingDeliveryRecord["oilStatus"];
+  batteryStatus?: BookingDeliveryRecord["batteryStatus"];
+  taxStatus?: BookingDeliveryRecord["taxStatus"];
+  insuranceStatus?: BookingDeliveryRecord["insuranceStatus"];
 };

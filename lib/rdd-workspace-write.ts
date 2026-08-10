@@ -3,6 +3,7 @@ import { incrementRecordVersion, normalizeWorkspaceRecord } from "@/lib/rdd-work
 import type { BookingDeliveryRecord } from "@/lib/types";
 import { RDD_DELIVERY_LOCATIONS, type RddWorkspaceChanges, type RddWorkspaceEditableField } from "@/lib/rdd-workspace-fields";
 import { isRddCaseStatus, isRddPurchaseType, isStatusValidForPurchaseType } from "@/lib/rdd-phase3b";
+import { isPrepEnum } from "@/lib/rdd-phase3c";
 
 const storeFile = "booking-delivery.json";
 
@@ -24,7 +25,9 @@ function normalizeText(value: string) {
 }
 
 const editableFields = new Set<RddWorkspaceEditableField>([
-  "purchaseType", "caseStatus", "deliveryDate", "deliveryTime", "deliveryLocation", "deliveryLocationNote", "financeCaseNote"
+  "purchaseType", "caseStatus", "deliveryDate", "deliveryTime", "deliveryLocation", "deliveryLocationNote", "financeCaseNote",
+  "garageRequired", "garageName", "garageSentAt", "garageExpectedReturnDate", "garageReturned",
+  "washStatus", "stickerStatus", "oilStatus", "batteryStatus", "taxStatus", "insuranceStatus"
 ]);
 
 function validDate(value: string) {
@@ -46,11 +49,17 @@ export function validateRddWorkspaceChanges(input: unknown): RddWorkspaceChanges
 
   const changes: RddWorkspaceChanges = {};
   for (const key of keys as RddWorkspaceEditableField[]) {
+    if (key === "garageRequired" || key === "garageReturned") {
+      if (typeof object[key] !== "boolean") throw new RddWorkspaceWriteError(400, `${key} ต้องเป็น boolean`);
+      Object.assign(changes, { [key]: object[key] });
+      continue;
+    }
     if (typeof object[key] !== "string") throw new RddWorkspaceWriteError(400, `${key} ต้องเป็นข้อความ`);
     const value = normalizeText(object[key] as string);
     if (key === "purchaseType" && !isRddPurchaseType(value)) throw new RddWorkspaceWriteError(400, "ประเภทการซื้อต้องเป็น cash หรือ finance");
     if (key === "caseStatus" && !isRddCaseStatus(value)) throw new RddWorkspaceWriteError(400, "สถานะเคสไม่ถูกต้อง");
     if (key === "deliveryDate" && value && !validDate(value)) throw new RddWorkspaceWriteError(400, "วันนัดส่งมอบต้องเป็นวันที่รูปแบบ YYYY-MM-DD ที่ถูกต้อง");
+    if ((key === "garageSentAt" || key === "garageExpectedReturnDate") && value && !validDate(value)) throw new RddWorkspaceWriteError(400, `${key} ต้องเป็นวันที่รูปแบบ YYYY-MM-DD ที่ถูกต้อง`);
     if (key === "deliveryTime" && value && !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) throw new RddWorkspaceWriteError(400, "เวลานัดส่งมอบต้องเป็นรูปแบบ HH:mm");
     if (key === "deliveryLocation" && value && !RDD_DELIVERY_LOCATIONS.includes(value as typeof RDD_DELIVERY_LOCATIONS[number])) {
       throw new RddWorkspaceWriteError(400, "สถานที่ส่งมอบไม่อยู่ในรายการที่อนุญาต");
@@ -59,6 +68,8 @@ export function validateRddWorkspaceChanges(input: unknown): RddWorkspaceChanges
       throw new RddWorkspaceWriteError(400, "หมายเหตุไฟแนนซ์ต้องไม่เกิน 1,000 ตัวอักษร");
     }
     if (key === "deliveryLocationNote" && value.length > 300) throw new RddWorkspaceWriteError(400, "รายละเอียดนอกสถานที่ต้องไม่เกิน 300 ตัวอักษร");
+    if (key === "garageName" && value.length > 200) throw new RddWorkspaceWriteError(400, "ชื่ออู่ต้องไม่เกิน 200 ตัวอักษร");
+    if (key !== "caseStatus" && key.endsWith("Status") && !isPrepEnum(key, value)) throw new RddWorkspaceWriteError(400, `${key} ไม่อยู่ในรายการที่อนุญาต`);
     Object.assign(changes, { [key]: value });
   }
   return changes;
@@ -115,6 +126,7 @@ export async function updateRddWorkspaceRecord(input: {
   const next = normalizeWorkspaceRecord({
     ...current,
     ...input.changes,
+    ...(input.changes.garageReturned === true && current.garageReturned !== true ? { garageReturnedAt: input.now || new Date().toISOString() } : {}),
     updatedAt: input.now || new Date().toISOString()
   });
   Object.assign(next, incrementRecordVersion(next));

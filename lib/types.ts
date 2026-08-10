@@ -428,6 +428,18 @@ export type BookingDeliveryRecord = {
     | "cancelled";
   deliveryTime?: string;
   deliveryLocationNote?: string;
+  garageRequired?: boolean;
+  garageName?: string;
+  garageSentAt?: string;
+  garageExpectedReturnDate?: string;
+  garageReturned?: boolean;
+  garageReturnedAt?: string;
+  washStatus?: "not_ordered" | "ordered_waiting" | "completed";
+  stickerStatus?: "not_checked" | "no_sticker" | "ordered_waiting" | "completed";
+  oilStatus?: "no_change" | "change_waiting" | "changed";
+  batteryStatus?: "not_checked" | "good" | "ordered_waiting" | "replaced";
+  taxStatus?: "not_checked" | "valid" | "renewal_ordered";
+  insuranceStatus?: "not_discussed" | "with_us" | "customer_self";
   ownerUserId?: string;
   ownerName?: string;
   collaboratorUserIds?: string[];

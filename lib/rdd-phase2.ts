@@ -2,6 +2,7 @@ import { getBangkokMonthRange, parseBusinessDate } from "@/lib/booking-delivery-
 import { filterByOwnership, type OwnershipScope } from "@/lib/rdd-ownership";
 import type { BookingDeliveryRecord, BookingDeliveryStatus } from "@/lib/types";
 import { canonicalCaseStatus, canonicalPurchaseType, RDD_CASE_STATUS_LABELS, RDD_PURCHASE_TYPE_LABELS, reminderEligibleForRecord } from "@/lib/rdd-phase3b";
+import { derivePrepReminder, type RddPrepArea } from "@/lib/rdd-phase3c";
 
 export type RddPurchaseType = "ซื้อสด" | "ไฟแนนซ์" | "ไม่ระบุ";
 export type RddDisplayStatus =
@@ -16,7 +17,7 @@ export type RddDisplayStatus =
   | "ยกเลิก"
   | "ไม่ระบุ";
 
-export type RddReminderKind = "delivery_today" | "delivery_tomorrow" | "delivery_overdue" | "garage_return_due";
+export type RddReminderKind = "delivery_today" | "delivery_tomorrow" | "delivery_overdue" | "garage_return_due" | "prep_pending" | "prep_none" | RddPrepArea;
 
 export type RddReminder = {
   kind: RddReminderKind;
@@ -159,12 +160,16 @@ export function recordMatchesReminder(record: BookingDeliveryRecord, kind: RddRe
   const todayValue = dayStart(today);
   if (todayValue === null) return false;
   const delivery = dayStart(record.deliveryDate);
-  const garageReturn = dayStart(record.garageReturnDate);
+  const garageReturn = dayStart(record.garageExpectedReturnDate || record.garageReturnDate);
   const tomorrow = todayValue + 86_400_000;
   if (kind === "delivery_today") return delivery === todayValue;
   if (kind === "delivery_tomorrow") return delivery === tomorrow;
   if (kind === "delivery_overdue") return delivery !== null && delivery < todayValue;
-  return garageReturn !== null && garageReturn <= todayValue;
+  if (kind === "garage_return_due") return record.garageReturned !== true && garageReturn !== null && garageReturn <= todayValue;
+  const prep = derivePrepReminder(record, today);
+  if (kind === "prep_pending") return prep.pendingPrepCount > 0;
+  if (kind === "prep_none") return prep.pendingPrepCount === 0;
+  return prep.reminderItems.some((item) => item.area === kind);
 }
 
 export function deriveRddReminders(records: BookingDeliveryRecord[], today = bangkokDateKey()): RddReminder[] {
@@ -174,6 +179,7 @@ export function deriveRddReminders(records: BookingDeliveryRecord[], today = ban
     { kind: "delivery_tomorrow", label: "ส่งมอบพรุ่งนี้", filterValue: "delivery_tomorrow" },
     { kind: "delivery_overdue", label: "เลยกำหนดส่งมอบ", filterValue: "delivery_overdue" },
     { kind: "garage_return_due", label: "รถถึงกำหนดกลับจากอู่", filterValue: "garage_return_due" }
+    ,{ kind: "prep_pending", label: "งานเตรียมรถค้าง", filterValue: "prep_pending" }
   ];
   return definitions.map((definition) => ({
     ...definition,
@@ -194,7 +200,7 @@ export function upcomingRddDeliveries(records: BookingDeliveryRecord[], today = 
 
 export const RDD_REMINDER_CAPABILITIES = [
   { capability: "ส่งมอบวันนี้ / พรุ่งนี้ / เลยกำหนด", phase: "supported" as const, source: "deliveryDate" },
-  { capability: "รถถึงกำหนดกลับจากอู่", phase: "supported" as const, source: "garageReturnDate" },
-  { capability: "งานเตรียมรถค้างแบบ workflow", phase: "phase3" as const, source: "ต้องมีสถานะงานและผู้รับผิดชอบที่ชัดเจน" },
+  { capability: "รถถึงกำหนดกลับจากอู่", phase: "supported" as const, source: "garageExpectedReturnDate (legacy: garageReturnDate) + garageReturned" },
+  { capability: "งานเตรียมรถค้างแบบ workflow", phase: "supported" as const, source: "Phase 3C canonical preparation statuses" },
   { capability: "รอจัดไฟแนนซ์ / ลูกค้าชะลอ", phase: "supported" as const, source: "purchaseType + caseStatus" }
 ];
