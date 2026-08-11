@@ -50,7 +50,8 @@ for (const width of [360, 390, 430, 768, 1440]) {
     page.on("pageerror", (error) => errors.push(error.message));
     try {
       await page.goto(`${baseUrl}/rdd-home`, { waitUntil: "networkidle" });
-      assert.equal(await page.getByText("วันนี้ต้องเร่งงานไหน", { exact: true }).count(), 1);
+      assert.equal(await page.getByText("วันนี้ต้องตามอะไร", { exact: true }).count(), 1);
+      assert.equal(await page.getByText("ภาพรวมงาน Booking Delivery วันนี้", { exact: true }).count(), 1);
       assert.equal(await page.getByText("ผู้ใช้งาน", { exact: true }).count(), 0);
       assert.equal(await page.getByTestId("authenticated-global-header").count(), 1);
       assert.equal(await page.getByTestId("global-user-profile").count(), 1);

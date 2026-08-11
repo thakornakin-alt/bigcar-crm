@@ -66,6 +66,7 @@ test("save, cancel, dirty guard and conflict UX are server-confirmed", { skip: !
     await page.getByTestId("workspace-edit-button").click();
     await note.fill("ข้อมูลชนกัน");
     await page.getByRole("button", { name: "บันทึก", exact: true }).click();
+    await page.getByTestId("workspace-load-latest").waitFor();
     assert.equal(await page.getByTestId("workspace-load-latest").count(), 1);
     await page.getByTestId("workspace-load-latest").click();
     await page.getByTestId("workspace-detail-panel").getByText("ผู้ใช้อื่นแก้แล้ว", { exact: true }).waitFor();
