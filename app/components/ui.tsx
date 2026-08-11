@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell, Calculator, CalendarDays, Car, CheckSquare, ClipboardCheck, FileText, Home, LayoutDashboard, Menu, Plus, Radio, Rows3, Settings, UploadCloud, Users, Wrench, X } from "lucide-react";
 import { useSalesProfile } from "@/lib/use-sales-profile";
+import { profileDisplayName } from "@/lib/user-profile";
 
 function classNames(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
@@ -86,7 +87,7 @@ export function TopMenuButton({
 
 export function ProfileIndicator() {
   const { user, loading } = useSalesProfile();
-  const name = loading ? "..." : user?.nickname || user?.firstName || "RDD";
+  const name = loading ? "..." : user ? profileDisplayName(user) : "ผู้ใช้งาน";
   const initials = loading ? "…" : name.trim().slice(0, 2).toUpperCase() || "U";
 
   return (

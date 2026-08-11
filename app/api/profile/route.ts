@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 import { updateSalesUser } from "@/lib/apps-script";
 import { recordActivity } from "@/lib/activity-log";
 import { salesProfileCookieName, setSalesProfileCookie, verifySalesProfileToken } from "@/lib/auth-session";
-import { preservePhoneInput } from "@/lib/phone";
 import { saveSalesProfile } from "@/lib/sales-profile-store";
+import { validateProfileIdentity } from "@/lib/user-profile";
 
 export const dynamic = "force-dynamic";
 
@@ -15,15 +15,26 @@ export async function PATCH(request: Request) {
     if (!currentUser) throw new Error("กรุณา Login ก่อน");
 
     const body = await request.json();
-    const nextUser = await updateSalesUser({
-      id: currentUser.id,
-      phone: body.phone === undefined ? preservePhoneInput(currentUser.phone) : preservePhoneInput(body.phone),
-      lineId: String(body.lineId ?? currentUser.lineId ?? "").trim(),
-      lineQrUrl: String(body.lineQrUrl ?? currentUser.lineQrUrl ?? "").trim(),
-      avatarUrl: String(body.avatarUrl ?? currentUser.avatarUrl ?? "").trim(),
-      position: String(body.position ?? currentUser.position ?? "").trim(),
-      branch: String(body.branch ?? currentUser.branch ?? "").trim()
+    const allowed = new Set(["firstName", "lastName", "nickname", "phone", "lineId", "avatarUrl"]);
+    for (const key of Object.keys(body)) {
+      if (!allowed.has(key)) throw new Error("ไม่รองรับข้อมูลที่ส่งมา");
+    }
+    for (const forbidden of ["role", "branch", "position", "locked", "active", "email"]) {
+      if (Object.prototype.hasOwnProperty.call(body, forbidden)) throw new Error("ไม่มีสิทธิ์แก้ไขข้อมูลที่ Admin ดูแล");
+    }
+    const identity = validateProfileIdentity({
+      firstName: body.firstName ?? currentUser.firstName,
+      lastName: body.lastName ?? currentUser.lastName,
+      nickname: body.nickname ?? currentUser.nickname,
+      phone: body.phone ?? currentUser.phone
     });
+    const sourceUser = await updateSalesUser({
+      id: currentUser.id,
+      phone: identity.phone,
+      lineId: String(body.lineId ?? currentUser.lineId ?? "").trim(),
+      avatarUrl: String(body.avatarUrl ?? currentUser.avatarUrl ?? "").trim()
+    });
+    const nextUser = { ...sourceUser, ...identity };
     await saveSalesProfile(nextUser);
 
     const response = NextResponse.json({ user: nextUser });
@@ -32,7 +43,8 @@ export async function PATCH(request: Request) {
       action: "profile.update",
       targetType: "salesUser",
       targetId: nextUser.id,
-      detail: "แก้ข้อมูลโปรไฟล์"
+      detail: "แก้ข้อมูลโปรไฟล์",
+      metadata: { changedFields: ["firstName", "lastName", "nickname", "phone", "lineId", "avatarUrl"].filter((field) => currentUser[field as keyof typeof currentUser] !== nextUser[field as keyof typeof nextUser]) }
     });
     return response;
   } catch (error) {

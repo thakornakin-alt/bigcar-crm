@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { NativeAppHeader, NativeAppShell, NativeButton, NativeCard } from "@/app/components/ui";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import type { InstallmentRow, InterestRate } from "@/lib/types";
+import { calculatorProfileContract } from "@/lib/user-profile";
 
 const vehicleTypes = ["รถเก๋ง/กระบะ 4 ประตู", "รถกระบะ/รถตู้"];
 const downRates = [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5];
@@ -172,6 +173,7 @@ export default function CalculatorPage() {
     setError("");
 
     try {
+      const contact = calculatorProfileContract(salesProfile);
         await exportInstallmentImage({
           carModel,
           actualYear,
@@ -183,11 +185,11 @@ export default function CalculatorPage() {
         selectedQuoteRow,
         selectedTermKey,
         quoteMode,
-        contactName: salesProfile?.nickname || salesProfile?.firstName || "บิ๊ก",
-        contactPhone: salesProfile?.phone || "091-778-5117",
-        contactLineId: salesProfile?.lineId || "@bigcars",
-        contactAvatarUrl: salesProfile?.avatarUrl || "",
-        contactLineQrUrl: salesProfile?.lineQrUrl || ""
+        contactName: contact.nickname || contact.fullName || "บิ๊ก",
+        contactPhone: contact.phone || "0917785117",
+        contactLineId: contact.lineId || "@bigcars",
+        contactAvatarUrl: contact.avatarUrl,
+        contactLineQrUrl: contact.lineQrUrl
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "บันทึกรูปไม่สำเร็จ");

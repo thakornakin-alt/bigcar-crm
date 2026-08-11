@@ -47,11 +47,12 @@ export async function POST(request: Request) {
     });
     const imageUrl = `/api/drive/line-image/${encodeURIComponent(uploaded.fileId)}`;
 
-    const nextUser = await updateSalesUser({
+    const sourceUser = await updateSalesUser({
       id: currentUser.id,
       avatarUrl: kind === "avatar" ? imageUrl : currentUser.avatarUrl,
       lineQrUrl: kind === "lineQr" ? imageUrl : currentUser.lineQrUrl
     });
+    const nextUser = { ...sourceUser, firstName: currentUser.firstName, lastName: currentUser.lastName, nickname: currentUser.nickname };
     await saveSalesProfile(nextUser);
 
     const response = NextResponse.json({ image: { ...uploaded, url: imageUrl }, user: nextUser }, { status: 201 });

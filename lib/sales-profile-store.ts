@@ -69,5 +69,15 @@ export async function getSalesProfileByEmail(email: string) {
 export async function mergeStoredSalesProfile(user: SalesUser | null) {
   if (!user) return null;
   const stored = await getSalesProfileById(user.id);
-  return stored ? { ...user, ...stored } : user;
+  if (!stored) return user;
+  return {
+    ...user,
+    firstName: stored.firstName || user.firstName,
+    lastName: stored.lastName || user.lastName,
+    nickname: stored.nickname || user.nickname,
+    phone: stored.phone || user.phone,
+    lineId: stored.lineId || user.lineId,
+    lineQrUrl: stored.lineQrUrl || user.lineQrUrl,
+    avatarUrl: stored.avatarUrl || user.avatarUrl
+  };
 }

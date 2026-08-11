@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { loginSalesUser } from "@/lib/apps-script";
 import { recordActivity } from "@/lib/activity-log";
 import { assertAuthConfigured, setSalesProfileCookie } from "@/lib/auth-session";
-import { saveSalesProfile } from "@/lib/sales-profile-store";
+import { mergeStoredSalesProfile, saveSalesProfile } from "@/lib/sales-profile-store";
 
 export const dynamic = "force-dynamic";
 
@@ -10,10 +10,11 @@ export async function POST(request: Request) {
   try {
     assertAuthConfigured();
     const body = await request.json();
-    const user = await loginSalesUser({
+    const sourceUser = await loginSalesUser({
       email: String(body.email || "").trim(),
       password: String(body.password || "")
     });
+    const user = await mergeStoredSalesProfile(sourceUser) || sourceUser;
     await saveSalesProfile(user);
     const response = NextResponse.json({ user });
     setSalesProfileCookie(response, user);

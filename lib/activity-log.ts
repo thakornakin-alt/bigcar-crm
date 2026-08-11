@@ -2,6 +2,7 @@ import { saveActivityLog } from "@/lib/apps-script";
 import type { ActivityLogInput, SalesUser } from "@/lib/types";
 import { appendRddActivity } from "@/lib/rdd-activity";
 import { getRddFeatureFlags } from "@/lib/feature-flags";
+import { profileActivityName } from "@/lib/user-profile";
 
 type ActivityDetails = Omit<ActivityLogInput, "userId" | "userName" | "role"> & {
   source?: "web" | "api" | "system";
@@ -13,7 +14,7 @@ type ActivityDetails = Omit<ActivityLogInput, "userId" | "userName" | "role"> & 
 
 export function activityUserName(user: SalesUser | null | undefined) {
   if (!user) return "";
-  return [user.nickname, user.firstName, user.lastName].filter(Boolean).join(" / ") || user.email;
+  return profileActivityName(user);
 }
 
 export async function recordActivity(user: SalesUser | null | undefined, input: ActivityDetails) {

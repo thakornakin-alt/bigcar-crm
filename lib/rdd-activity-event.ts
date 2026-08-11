@@ -1,9 +1,5 @@
 import type { RddActivityEvent, SalesUser } from "@/lib/types";
-
-function actorName(user: SalesUser | null | undefined) {
-  if (!user) return "";
-  return [user.nickname, user.firstName, user.lastName].filter(Boolean).join(" / ") || user.email;
-}
+import { profileActivityName } from "@/lib/user-profile";
 
 export function buildRddActivityEvent(
   user: SalesUser | null | undefined,
@@ -14,8 +10,7 @@ export function buildRddActivityEvent(
     id: `ACT-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     occurredAt: new Date().toISOString(),
     actorUserId: user?.id || "",
-    actorName: actorName(user),
+    actorName: user ? profileActivityName(user) : "",
     actorRole: user?.role || ""
   } satisfies RddActivityEvent;
 }
-

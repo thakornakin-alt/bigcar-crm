@@ -8,6 +8,7 @@ import { ImageUp, LineChart, Loader2, LogOut, Phone, QrCode, Save, UserRound } f
 import { CrmShell } from "@/app/components/crm-shell";
 import { SectionCard } from "@/app/components/ui";
 import { demoCurrentUser, fullName, roleLabels } from "@/lib/crm-core";
+import { profileDisplayName } from "@/lib/user-profile";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 
 export default function ProfilePage() {
@@ -16,10 +17,11 @@ export default function ProfilePage() {
   const user = salesProfile || demoCurrentUser;
   const isAdmin = user.role === "super_admin" || user.role === "admin";
   const [form, setForm] = useState({
+    firstName: "",
+    lastName: "",
+    nickname: "",
     phone: "",
-    lineId: "",
-    position: "",
-    branch: ""
+    lineId: ""
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<"" | "avatar" | "lineQr">("");
@@ -28,12 +30,13 @@ export default function ProfilePage() {
 
   useEffect(() => {
     setForm({
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      nickname: user.nickname || "",
       phone: user.phone || "",
-      lineId: user.lineId || "",
-      position: user.position || "",
-      branch: user.branch || ""
+      lineId: user.lineId || ""
     });
-  }, [user.branch, user.lineId, user.phone, user.position]);
+  }, [user.firstName, user.lastName, user.lineId, user.nickname, user.phone]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -104,11 +107,33 @@ export default function ProfilePage() {
     }
   }
 
+  async function removeAvatar() {
+    if (!salesProfile) return;
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, avatarUrl: "" })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "ลบรูปโปรไฟล์ไม่สำเร็จ");
+      setUser(data.user);
+      setMessage("ลบรูปโปรไฟล์แล้ว");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ลบรูปโปรไฟล์ไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <CrmShell
       user={user}
       title="โปรไฟล์เซลล์"
-      subtitle="ข้อมูลนี้ใช้เป็นโปรไฟล์ส่วนตัวของเซลล์ โดยไม่บังคับล็อกอินกับระบบเดิม"
+      subtitle="ข้อมูลประจำตัวที่ใช้ร่วมกันใน BIG CAR CRM"
       actions={
         salesProfile ? (
           <button onClick={logout} className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-panel px-4 text-sm font-bold text-white">
@@ -127,13 +152,13 @@ export default function ProfilePage() {
       <div className="grid gap-4">
         <SectionCard title="ข้อมูลเซลล์" icon={<UserRound size={18} />}>
           <div className="flex items-center gap-3">
-            <div
-              className={`flex h-20 shrink-0 items-center justify-center bg-center ring-1 ring-brand/30 ${
-                user.avatarUrl ? "w-20 rounded-full bg-brand bg-cover" : "w-28 rounded-lg bg-white bg-contain bg-no-repeat"
-              }`}
-              style={{ backgroundImage: `url(${user.avatarUrl || "/logo-rdd.png"})` }}
-              aria-label="รูปโปรไฟล์เซลล์"
-            />
+            {user.avatarUrl ? (
+              <div className="h-20 w-20 shrink-0 rounded-full bg-brand bg-cover bg-center ring-1 ring-brand/30" style={{ backgroundImage: `url(${user.avatarUrl})` }} aria-label="รูปโปรไฟล์เซลล์" />
+            ) : (
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-brand/15 text-xl font-black text-brand ring-1 ring-brand/30" aria-label="อักษรย่อผู้ใช้งาน">
+                {profileDisplayName(user).slice(0, 2).toUpperCase()}
+              </div>
+            )}
             <div>
               <p className="text-xl font-black text-white">{fullName(user)}</p>
               <p className="mt-1 text-sm text-soft">{user.nickname} · {roleLabels[user.role]}</p>
@@ -148,10 +173,11 @@ export default function ProfilePage() {
           <div className="rounded-lg border border-line bg-[#0b0d11] p-3">
             <p className="mb-3 text-sm font-black text-white">แก้ไขข้อมูลได้ทันที</p>
           <form onSubmit={saveProfile} className="grid gap-3 sm:grid-cols-2">
+            <ProfileField label="ชื่อ" value={form.firstName} onChange={(value) => setForm((current) => ({ ...current, firstName: value }))} autoComplete="given-name" />
+            <ProfileField label="นามสกุล" value={form.lastName} onChange={(value) => setForm((current) => ({ ...current, lastName: value }))} autoComplete="family-name" />
+            <ProfileField label="ชื่อเล่น" value={form.nickname} onChange={(value) => setForm((current) => ({ ...current, nickname: value }))} />
             <ProfileField label="เบอร์โทร" value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value }))} inputMode="tel" autoComplete="tel" />
             <ProfileField label="LINE ID" value={form.lineId} onChange={(value) => setForm((current) => ({ ...current, lineId: value }))} />
-            <ProfileField label="ตำแหน่ง / ทีม" value={form.position} onChange={(value) => setForm((current) => ({ ...current, position: value }))} placeholder="Sales / ทีมพี่ลีฟ" />
-            <ProfileField label="สาขา" value={form.branch} onChange={(value) => setForm((current) => ({ ...current, branch: value }))} placeholder="สาขาบางนา" />
             <button disabled={saving || !salesProfile} className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand px-4 font-black text-ink disabled:opacity-60 sm:col-span-2">
               {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
               บันทึกโปรไฟล์
@@ -183,9 +209,14 @@ export default function ProfilePage() {
               onSelect={(file) => uploadProfileImage("lineQr", file)}
             />
           </div>
+          {user.avatarUrl && salesProfile ? (
+            <button type="button" onClick={removeAvatar} disabled={saving || Boolean(uploading)} className="min-h-11 rounded-lg border border-red-300/30 bg-red-400/10 px-4 text-sm font-bold text-red-100 disabled:opacity-60">
+              ลบรูปโปรไฟล์
+            </button>
+          ) : null}
           <div className="grid gap-2 sm:grid-cols-2">
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft"><Phone size={16} className="mb-2 text-brand" /> ใช้ข้อมูลเซลล์อัตโนมัติใน CRM v2</p>
-            <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft"><LineChart size={16} className="mb-2 text-brand" /> ระบบเดิมยังไม่ถูกบังคับล็อกอิน</p>
+            <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm text-soft"><LineChart size={16} className="mb-2 text-brand" /> Role สาขา และตำแหน่งดูแลโดย Admin</p>
           </div>
           {isAdmin && (
             <Link href="/admin/users" className="flex min-h-12 items-center justify-center rounded-lg bg-brand px-4 font-black text-ink">
