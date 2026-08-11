@@ -32,3 +32,14 @@ test("password material is never returned by profile routes", () => {
 test("Admin user listing reads the same canonical compatibility profile", () => {
   assert.match(adminUsersRoute, /mergeStoredSalesProfile/);
 });
+
+test("Profile update sends canonical names to Apps Script before mirroring and session refresh", () => {
+  assert.match(profileSource, /firstName: identity\.firstName/);
+  assert.match(profileSource, /lastName: identity\.lastName/);
+  assert.match(profileSource, /nickname: identity\.nickname/);
+  assert.match(profileSource, /await saveSalesProfile\(nextUser, \{ throwOnError: true \}\)/);
+  assert.match(profileSource, /setSalesProfileCookie\(response, nextUser\)/);
+  assert.match(profileSource, /partialSuccess: true/);
+  assert.match(profileSource, /canonicalSaved: true/);
+  assert.match(profileSource, /mirrorSaved: false/);
+});

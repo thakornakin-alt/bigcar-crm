@@ -30,12 +30,30 @@ export async function PATCH(request: Request) {
     });
     const sourceUser = await updateSalesUser({
       id: currentUser.id,
+      firstName: identity.firstName,
+      lastName: identity.lastName,
+      nickname: identity.nickname,
       phone: identity.phone,
       lineId: String(body.lineId ?? currentUser.lineId ?? "").trim(),
       avatarUrl: String(body.avatarUrl ?? currentUser.avatarUrl ?? "").trim()
     });
     const nextUser = { ...sourceUser, ...identity };
-    await saveSalesProfile(nextUser);
+    try {
+      await saveSalesProfile(nextUser, { throwOnError: true });
+    } catch (mirrorError) {
+      const response = NextResponse.json(
+        {
+          user: nextUser,
+          partialSuccess: true,
+          canonicalSaved: true,
+          mirrorSaved: false,
+          error: mirrorError instanceof Error ? mirrorError.message : "บันทึกข้อมูลหลักสำเร็จ แต่ซิงก์ข้อมูลโปรไฟล์ไม่สำเร็จ"
+        },
+        { status: 207 }
+      );
+      setSalesProfileCookie(response, nextUser);
+      return response;
+    }
 
     const response = NextResponse.json({ user: nextUser });
     setSalesProfileCookie(response, nextUser);

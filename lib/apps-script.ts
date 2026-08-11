@@ -435,6 +435,9 @@ export async function listSalesUsers() {
 
 export async function updateSalesUser(input: {
   id: string;
+  firstName?: string;
+  lastName?: string;
+  nickname?: string;
   role?: SalesUser["role"];
   locked?: boolean;
   phone?: string;

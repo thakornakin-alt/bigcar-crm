@@ -24,7 +24,7 @@ async function readStore() {
   };
 }
 
-export async function saveSalesProfile(user: SalesUser) {
+export async function saveSalesProfile(user: SalesUser, options: { throwOnError?: boolean } = {}) {
   const now = new Date().toISOString();
   const clean: SalesUser = {
     ...user,
@@ -38,6 +38,7 @@ export async function saveSalesProfile(user: SalesUser) {
     await writeJsonStore(storeFile, store);
   } catch (error) {
     console.warn("Unable to mirror sales profile", error);
+    if (options.throwOnError) throw error;
   }
 
   return clean;
