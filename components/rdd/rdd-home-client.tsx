@@ -59,8 +59,8 @@ export function RddHomeClient({ initialYear, initialMonth }: { initialYear: numb
       <header className="mb-5 overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(116,31,44,0.45),transparent_36%),linear-gradient(145deg,#1b1b1f,#09090b)] p-4 shadow-[0_28px_80px_rgba(0,0,0,0.3)] sm:p-6">
         <div>
           <p className="text-[11px] font-black uppercase tracking-[0.28em] text-[#d6b66c]">RDD Command Center</p>
-          <h1 className="mt-2 text-2xl font-black text-white sm:text-3xl">วันนี้ต้องเร่งงานไหน</h1>
-          <p className="mt-2 text-sm text-white/58">ภาพรวม Booking Delivery ที่เชื่อถือได้จากข้อมูลปัจจุบัน</p>
+          <h1 className="mt-2 text-2xl font-black text-white sm:text-3xl">วันนี้ต้องตามอะไร</h1>
+          <p className="mt-2 text-sm text-white/58">ภาพรวมงาน Booking Delivery วันนี้</p>
         </div>
 
         <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(260px,1fr)_auto_auto]">
