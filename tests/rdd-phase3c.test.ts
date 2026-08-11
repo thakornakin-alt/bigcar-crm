@@ -39,8 +39,15 @@ test("case status and QA suppress reminders but preserve fields", () => {
 
 test("legacy completed booleans are display-compatible without mutation", () => {
   const legacy = record({ spaFullSystemDone: true, decalRemovalDone: true, insuranceDone: true });
-  assert.deepEqual(prepStatusForRecord(legacy), { washStatus: "completed", stickerStatus: "completed", oilStatus: "no_change", batteryStatus: "not_checked", taxStatus: "not_checked", insuranceStatus: "with_us" });
+  assert.deepEqual(prepStatusForRecord(legacy), { washStatus: "completed", stickerStatus: "completed", oilStatus: undefined, batteryStatus: undefined, taxStatus: undefined, insuranceStatus: "with_us" });
   assert.equal(legacy.washStatus, undefined);
+});
+
+test("missing Phase 3C data remains unknown and creates no inferred reminder decision", () => {
+  const historical = record();
+  assert.deepEqual(prepStatusForRecord(historical), { washStatus: undefined, stickerStatus: undefined, oilStatus: undefined, batteryStatus: undefined, taxStatus: undefined, insuranceStatus: undefined });
+  assert.equal(derivePrepReminder(historical, "2026-08-11").pendingPrepCount, 0);
+  assert.equal(historical.oilStatus, undefined);
 });
 
 test("server validates Phase 3C enums, booleans and dates", () => {

@@ -50,7 +50,7 @@ test("save, cancel, dirty guard and conflict UX are server-confirmed", { skip: !
     await page.goto(`${baseUrl}/booking-delivery-workspace`, { waitUntil: "networkidle" });
     await page.getByRole("button", { name: /กข 1234/ }).click();
     await page.getByTestId("workspace-edit-button").click();
-    const note = page.getByLabel("หมายเหตุไฟแนนซ์");
+    const note = page.getByLabel("หมายเหตุ", { exact: true });
     await note.fill("ยกเลิกก่อน");
     await page.getByRole("button", { name: "ยกเลิก", exact: true }).click();
     assert.equal(patchCount, 0);

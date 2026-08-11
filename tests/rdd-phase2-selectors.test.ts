@@ -123,5 +123,5 @@ test("reminders derive only from existing delivery and garage dates", () => {
     record({ id: "garage", garageReturnDate: "2026-08-09" }),
     record({ id: "done", status: "ยอดส่งมอบ", workflowStatus: "ยอดส่งมอบ", deliveryDate: "2026-08-09" })
   ], "2026-08-09");
-  assert.deepEqual(reminders.map((item) => item.count), [1, 1, 1, 1, 4]);
+  assert.deepEqual(reminders.map((item) => item.count), [1, 1, 1, 1, 1]);
 });

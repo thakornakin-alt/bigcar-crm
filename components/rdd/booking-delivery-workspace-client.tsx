@@ -248,13 +248,12 @@ type WorkspaceDraft = {
   deliveryLocation: string;
   deliveryLocationNote: string;
   financeCaseNote: string;
-  garageRequired: boolean; garageName: string; garageSentAt: string; garageExpectedReturnDate: string; garageReturned: boolean;
-  washStatus: NonNullable<BookingDeliveryRecord["washStatus"]>; stickerStatus: NonNullable<BookingDeliveryRecord["stickerStatus"]>; oilStatus: NonNullable<BookingDeliveryRecord["oilStatus"]>;
-  batteryStatus: NonNullable<BookingDeliveryRecord["batteryStatus"]>; taxStatus: NonNullable<BookingDeliveryRecord["taxStatus"]>; insuranceStatus: NonNullable<BookingDeliveryRecord["insuranceStatus"]>;
+  garageRequired?: boolean; garageName: string; garageSentAt: string; garageExpectedReturnDate: string; garageReturned?: boolean;
+  washStatus?: BookingDeliveryRecord["washStatus"]; stickerStatus?: BookingDeliveryRecord["stickerStatus"]; oilStatus?: BookingDeliveryRecord["oilStatus"];
+  batteryStatus?: BookingDeliveryRecord["batteryStatus"]; taxStatus?: BookingDeliveryRecord["taxStatus"]; insuranceStatus?: BookingDeliveryRecord["insuranceStatus"];
 };
 
 function draftForRecord(record: BookingDeliveryRecord): WorkspaceDraft {
-  const prep = prepStatusForRecord(record);
   return {
     purchaseType: record.purchaseType || "",
     caseStatus: record.caseStatus || "",
@@ -263,8 +262,8 @@ function draftForRecord(record: BookingDeliveryRecord): WorkspaceDraft {
     deliveryLocation: record.deliveryLocation || "",
     deliveryLocationNote: record.deliveryLocationNote || "",
     financeCaseNote: record.financeCaseNote || "",
-    garageRequired: record.garageRequired ?? Boolean(record.garageOutDate || record.garageReturnDate), garageName: record.garageName || "", garageSentAt: record.garageSentAt || record.garageOutDate || "", garageExpectedReturnDate: record.garageExpectedReturnDate || record.garageReturnDate || "", garageReturned: record.garageReturned === true,
-    ...prep
+    garageRequired: record.garageRequired, garageName: record.garageName || "", garageSentAt: record.garageSentAt || "", garageExpectedReturnDate: record.garageExpectedReturnDate || "", garageReturned: record.garageReturned,
+    washStatus: record.washStatus, stickerStatus: record.stickerStatus, oilStatus: record.oilStatus, batteryStatus: record.batteryStatus, taxStatus: record.taxStatus, insuranceStatus: record.insuranceStatus
   };
 }
 
@@ -361,7 +360,7 @@ function WorkspaceDetail({ record, revision, editEnabled, onClose, onSaved }: {
         {editing ? (
           <section data-testid="workspace-edit-fields" className="mt-3 rounded-2xl border border-[#d6b66c]/25 bg-[#d6b66c]/[0.05] p-3 sm:mt-5 sm:p-4">
             <h3 className="font-black text-white">ข้อมูลที่แก้ไขได้</h3>
-            <div className="mt-3 grid grid-cols-2 gap-2.5">
+            <div data-testid="delivery-date-time-controls" className="mt-3 grid grid-cols-2 gap-3">
               <label className="block text-xs font-black text-[#d6b66c]">ประเภทซื้อ
                 <select data-testid="purchase-type-select" value={draft.purchaseType} onChange={(event) => {
                   const purchaseType = event.target.value as "" | RddCanonicalPurchaseType;
@@ -396,8 +395,8 @@ function WorkspaceDetail({ record, revision, editEnabled, onClose, onSaved }: {
             </label>
             {draft.deliveryLocation === "นอกสถานที่" && <label className="mt-3 block text-xs font-black text-[#d6b66c]">รายละเอียดนอกสถานที่<textarea aria-label="รายละเอียดนอกสถานที่" maxLength={300} value={draft.deliveryLocationNote} onChange={(event) => setDraft((current) => ({ ...current, deliveryLocationNote: event.target.value }))} rows={3} className="mt-1 w-full rounded-xl border border-white/12 bg-[#111114] p-3 text-sm leading-5 text-white outline-none focus:border-[#d6b66c]" /></label>}
             <h4 className="mt-4 border-t border-white/10 pt-3 text-sm font-black text-white">เตรียมรถ</h4>
-            <label className="mt-2 flex min-h-11 items-center gap-3 text-sm font-bold text-white"><input type="checkbox" checked={draft.garageRequired} onChange={(event) => setDraft((current) => ({ ...current, garageRequired: event.target.checked }))} className="h-5 w-5 accent-[#d6b66c]" />ส่งอู่</label>
-            {draft.garageRequired && <div data-testid="garage-controls" className="grid grid-cols-2 gap-2.5"><label className="col-span-2 text-xs font-black text-[#d6b66c]">ชื่ออู่/สถานที่<input value={draft.garageName} maxLength={200} onChange={(event) => setDraft((current) => ({ ...current, garageName: event.target.value }))} className="mt-1 min-h-11 w-full rounded-xl border border-white/12 bg-[#111114] px-3 text-white" /></label><label className="text-xs font-black text-[#d6b66c]">วันที่ส่งจริง<input type="date" value={draft.garageSentAt} onChange={(event) => setDraft((current) => ({ ...current, garageSentAt: event.target.value }))} className="mt-1 min-h-11 w-full rounded-xl border border-white/12 bg-[#111114] px-2 text-white" /></label><label className="text-xs font-black text-[#d6b66c]">คาดว่าจะกลับ<input type="date" value={draft.garageExpectedReturnDate} onChange={(event) => setDraft((current) => ({ ...current, garageExpectedReturnDate: event.target.value }))} className="mt-1 min-h-11 w-full rounded-xl border border-white/12 bg-[#111114] px-2 text-white" /></label><label className="col-span-2 flex min-h-11 items-center gap-3 text-sm font-bold text-white"><input type="checkbox" checked={draft.garageReturned} onChange={(event) => setDraft((current) => ({ ...current, garageReturned: event.target.checked }))} className="h-5 w-5 accent-emerald-400" />รถกลับแล้ว</label></div>}
+            <label className="mt-2 flex min-h-11 items-center gap-3 text-sm font-bold text-white"><input type="checkbox" checked={draft.garageRequired === true} onChange={(event) => setDraft((current) => ({ ...current, garageRequired: event.target.checked }))} className="h-5 w-5 accent-[#d6b66c]" />ส่งอู่</label>
+            {draft.garageRequired === true && <div data-testid="garage-controls" className="grid grid-cols-2 gap-2.5"><label className="col-span-2 text-xs font-black text-[#d6b66c]">อู่/สถานที่<input value={draft.garageName} maxLength={200} onChange={(event) => setDraft((current) => ({ ...current, garageName: event.target.value }))} className="mt-1 min-h-11 w-full rounded-xl border border-white/12 bg-[#111114] px-3 text-white" /></label><label className="text-xs font-black text-[#d6b66c]">วันที่ส่งจริง<input type="date" value={draft.garageSentAt} onChange={(event) => setDraft((current) => ({ ...current, garageSentAt: event.target.value }))} className="mt-1 min-h-11 w-full rounded-xl border border-white/12 bg-[#111114] px-2 text-white" /></label><label className="text-xs font-black text-[#d6b66c]">วันที่คาดว่ารถกลับ<input type="date" value={draft.garageExpectedReturnDate} onChange={(event) => setDraft((current) => ({ ...current, garageExpectedReturnDate: event.target.value }))} className="mt-1 min-h-11 w-full rounded-xl border border-white/12 bg-[#111114] px-2 text-white" /></label><label className="col-span-2 flex min-h-11 items-center gap-3 text-sm font-bold text-white"><input type="checkbox" checked={draft.garageReturned === true} onChange={(event) => setDraft((current) => ({ ...current, garageReturned: event.target.checked }))} className="h-5 w-5 accent-emerald-400" />รถกลับแล้ว</label></div>}
             <div data-testid="prep-status-controls" className="mt-2 grid grid-cols-2 gap-2.5">
               <PrepSelect label="ล้างรถ" field="washStatus" value={draft.washStatus} values={RDD_WASH_STATUSES} labels={RDD_PREP_LABELS.washStatus} onChange={(value) => setDraft((current) => ({ ...current, washStatus: value as WorkspaceDraft["washStatus"] }))} />
               <PrepSelect label="ลอกสติ๊กเกอร์" field="stickerStatus" value={draft.stickerStatus} values={RDD_STICKER_STATUSES} labels={RDD_PREP_LABELS.stickerStatus} onChange={(value) => setDraft((current) => ({ ...current, stickerStatus: value as WorkspaceDraft["stickerStatus"] }))} />
@@ -406,7 +405,7 @@ function WorkspaceDetail({ record, revision, editEnabled, onClose, onSaved }: {
               <PrepSelect label="ภาษี" field="taxStatus" value={draft.taxStatus} values={RDD_TAX_STATUSES} labels={RDD_PREP_LABELS.taxStatus} onChange={(value) => setDraft((current) => ({ ...current, taxStatus: value as WorkspaceDraft["taxStatus"] }))} />
               <PrepSelect label="ประกัน" field="insuranceStatus" value={draft.insuranceStatus} values={RDD_INSURANCE_STATUSES} labels={RDD_PREP_LABELS.insuranceStatus} onChange={(value) => setDraft((current) => ({ ...current, insuranceStatus: value as WorkspaceDraft["insuranceStatus"] }))} />
             </div>
-            <label className="mt-3 block text-xs font-black text-[#d6b66c]">หมายเหตุไฟแนนซ์<textarea maxLength={1000} value={draft.financeCaseNote} onChange={(event) => setDraft((current) => ({ ...current, financeCaseNote: event.target.value }))} rows={3} className="mt-1 w-full rounded-xl border border-white/12 bg-[#111114] p-3 text-sm leading-5 text-white outline-none focus:border-[#d6b66c]" /></label>
+            <label className="mt-3 block text-xs font-black text-[#d6b66c]">หมายเหตุ<textarea data-testid="workspace-note-textarea" aria-label="หมายเหตุ" maxLength={1000} value={draft.financeCaseNote} onChange={(event) => setDraft((current) => ({ ...current, financeCaseNote: event.target.value }))} rows={3} className="mt-1 max-h-56 min-h-[4.75rem] w-full resize-y overflow-auto rounded-xl border border-white/12 bg-[#111114] p-3 text-sm leading-5 text-white outline-none focus:border-[#d6b66c]" /></label>
             <p className="mt-1 text-right text-[11px] text-white/35">{draft.financeCaseNote.length}/1,000</p>
           </section>
         ) : <><DetailGroup title="ไฟแนนซ์" items={[["ส่งเคสแล้ว", record.financeCaseSubmitted ? "ใช่" : "—"], ["เวลาส่งเคส", thaiDate(record.financeCaseSubmittedAt, true)], ["หมายเหตุ", record.financeCaseNote || "—"]]} /><DetailGroup title="ส่งมอบ" items={[["วันนัดส่ง", thaiDate(record.deliveryDate)], ["เวลานัด", record.deliveryTime], ["สถานที่", record.deliveryLocation], ["รายละเอียดสถานที่", record.deliveryLocation === "นอกสถานที่" ? record.deliveryLocationNote : ""]]} /><PrepReadSection record={record} /></>}
@@ -434,8 +433,8 @@ function PrepFilter({ value, onChange, className, short = false }: { value: "all
   return <select aria-label={short ? "งานค้างแบบย่อ" : "งานค้าง"} value={value} onChange={(event) => onChange(event.target.value as "all" | RddReminderKind)} className={className}>{options.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>;
 }
 
-function PrepSelect({ label, field, value, values, labels, onChange }: { label: string; field: string; value: string; values: readonly string[]; labels: Record<string, string>; onChange: (value: string) => void }) {
-  return <label className="text-xs font-black text-[#d6b66c]">{label}<select data-testid={`prep-${field}`} value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-white/12 bg-[#111114] px-2 text-sm text-white">{values.map((item) => <option key={item} value={item}>{labels[item]}</option>)}</select></label>;
+function PrepSelect({ label, field, value, values, labels, onChange }: { label: string; field: string; value?: string; values: readonly string[]; labels: Record<string, string>; onChange: (value: string) => void }) {
+  return <label className="text-xs font-black text-[#d6b66c]">{label}<select data-testid={`prep-${field}`} value={value || ""} onChange={(event) => onChange(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-white/12 bg-[#111114] px-2 text-sm text-white"><option value="" disabled>ยังไม่ระบุ</option>{values.map((item) => <option key={item} value={item}>{labels[item]}</option>)}</select></label>;
 }
 
 function PrepReadSection({ record }: { record: BookingDeliveryRecord }) {
@@ -443,7 +442,7 @@ function PrepReadSection({ record }: { record: BookingDeliveryRecord }) {
   const reminder = derivePrepReminder(record, bangkokDateKey());
   return <section data-testid="case-preparation-section" className="mt-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3 sm:mt-5 sm:p-4"><div className="flex items-center justify-between"><h3 className="font-black text-white">เตรียมรถ</h3><span className="text-xs font-black text-[#f6df9d]">งานค้าง {reminder.pendingPrepCount}</span></div><div className="mt-2 divide-y divide-white/8 text-sm">{[
     ["อู่", record.garageRequired === true || (record.garageRequired === undefined && record.garageOutDate) ? `${record.garageReturned ? "รถกลับแล้ว" : "ส่งอู่"}${record.garageExpectedReturnDate || record.garageReturnDate ? ` · คาดกลับ ${thaiDate(record.garageExpectedReturnDate || record.garageReturnDate)}` : ""}` : "ไม่ส่งอู่"],
-    ["ล้างรถ", RDD_PREP_LABELS.washStatus[status.washStatus]], ["ลอกสติ๊กเกอร์", RDD_PREP_LABELS.stickerStatus[status.stickerStatus]], ["น้ำมันเครื่อง", RDD_PREP_LABELS.oilStatus[status.oilStatus]], ["แบตเตอรี่", RDD_PREP_LABELS.batteryStatus[status.batteryStatus]], ["ภาษี", RDD_PREP_LABELS.taxStatus[status.taxStatus]], ["ประกัน", RDD_PREP_LABELS.insuranceStatus[status.insuranceStatus]]
+    ["ล้างรถ", status.washStatus ? RDD_PREP_LABELS.washStatus[status.washStatus] : "ยังไม่ระบุ"], ["ลอกสติ๊กเกอร์", status.stickerStatus ? RDD_PREP_LABELS.stickerStatus[status.stickerStatus] : "ยังไม่ระบุ"], ["น้ำมันเครื่อง", status.oilStatus ? RDD_PREP_LABELS.oilStatus[status.oilStatus] : "ยังไม่ระบุ"], ["แบตเตอรี่", status.batteryStatus ? RDD_PREP_LABELS.batteryStatus[status.batteryStatus] : "ยังไม่ระบุ"], ["ภาษี", status.taxStatus ? RDD_PREP_LABELS.taxStatus[status.taxStatus] : "ยังไม่ระบุ"], ["ประกัน", status.insuranceStatus ? RDD_PREP_LABELS.insuranceStatus[status.insuranceStatus] : "ยังไม่ระบุ"]
   ].map(([label, value]) => <div key={label} className="flex min-h-10 items-center justify-between gap-3 py-1.5"><span className="font-bold text-white/55">{label}</span><span className="text-right font-bold text-white">{value}</span></div>)}</div></section>;
 }
 

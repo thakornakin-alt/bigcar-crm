@@ -27,12 +27,12 @@ function priorityRank(value: RddReminderPriority) { return value === "urgent" ? 
 
 export function prepStatusForRecord(record: BookingDeliveryRecord) {
   return {
-    washStatus: record.washStatus || (record.spaFullSystemDone ? "completed" : "not_ordered"),
-    stickerStatus: record.stickerStatus || (record.decalRemovalDone ? "completed" : "not_checked"),
-    oilStatus: record.oilStatus || (record.oilChangeDone ? "changed" : "no_change"),
-    batteryStatus: record.batteryStatus || "not_checked",
-    taxStatus: record.taxStatus || "not_checked",
-    insuranceStatus: record.insuranceStatus || (record.insuranceDone ? "with_us" : "not_discussed")
+    washStatus: record.washStatus || (record.spaFullSystemDone ? "completed" : undefined),
+    stickerStatus: record.stickerStatus || (record.decalRemovalDone ? "completed" : undefined),
+    oilStatus: record.oilStatus || (record.oilChangeDone ? "changed" : undefined),
+    batteryStatus: record.batteryStatus,
+    taxStatus: record.taxStatus,
+    insuranceStatus: record.insuranceStatus || (record.insuranceDone ? "with_us" : undefined)
   } as const;
 }
 
@@ -54,12 +54,12 @@ export function derivePrepReminder(record: BookingDeliveryRecord, today: string)
     items.push({ area: "garage", label: "อู่ / รถกลับ", detail: expected ? `คาดรถกลับ ${record.garageExpectedReturnDate || record.garageReturnDate}` : "รถยังไม่กลับจากอู่", priority: garagePriority });
   }
   const pending: Array<[RddPrepArea, string, boolean, string]> = [
-    ["wash", "ล้างรถ", statuses.washStatus !== "completed", RDD_PREP_LABELS.washStatus[statuses.washStatus]],
-    ["sticker", "ลอกสติ๊กเกอร์", statuses.stickerStatus === "not_checked" || statuses.stickerStatus === "ordered_waiting", RDD_PREP_LABELS.stickerStatus[statuses.stickerStatus]],
-    ["oil", "น้ำมันเครื่อง", statuses.oilStatus === "change_waiting", RDD_PREP_LABELS.oilStatus[statuses.oilStatus]],
-    ["battery", "แบตเตอรี่", statuses.batteryStatus === "not_checked" || statuses.batteryStatus === "ordered_waiting", RDD_PREP_LABELS.batteryStatus[statuses.batteryStatus]],
-    ["tax", "ภาษี", statuses.taxStatus === "not_checked", RDD_PREP_LABELS.taxStatus[statuses.taxStatus]],
-    ["insurance", "ประกัน", statuses.insuranceStatus === "not_discussed", RDD_PREP_LABELS.insuranceStatus[statuses.insuranceStatus]]
+    ["wash", "ล้างรถ", statuses.washStatus === "not_ordered" || statuses.washStatus === "ordered_waiting", statuses.washStatus ? RDD_PREP_LABELS.washStatus[statuses.washStatus] : "ยังไม่ระบุ"],
+    ["sticker", "ลอกสติ๊กเกอร์", statuses.stickerStatus === "not_checked" || statuses.stickerStatus === "ordered_waiting", statuses.stickerStatus ? RDD_PREP_LABELS.stickerStatus[statuses.stickerStatus] : "ยังไม่ระบุ"],
+    ["oil", "น้ำมันเครื่อง", statuses.oilStatus === "change_waiting", statuses.oilStatus ? RDD_PREP_LABELS.oilStatus[statuses.oilStatus] : "ยังไม่ระบุ"],
+    ["battery", "แบตเตอรี่", statuses.batteryStatus === "not_checked" || statuses.batteryStatus === "ordered_waiting", statuses.batteryStatus ? RDD_PREP_LABELS.batteryStatus[statuses.batteryStatus] : "ยังไม่ระบุ"],
+    ["tax", "ภาษี", statuses.taxStatus === "not_checked", statuses.taxStatus ? RDD_PREP_LABELS.taxStatus[statuses.taxStatus] : "ยังไม่ระบุ"],
+    ["insurance", "ประกัน", statuses.insuranceStatus === "not_discussed", statuses.insuranceStatus ? RDD_PREP_LABELS.insuranceStatus[statuses.insuranceStatus] : "ยังไม่ระบุ"]
   ];
   for (const [area, label, isPending, detail] of pending) if (isPending) items.push({ area, label, detail, priority: deliveryPriority });
   const priority = items.reduce<RddReminderPriority>((best, item) => priorityRank(item.priority) > priorityRank(best) ? item.priority : best, "normal");

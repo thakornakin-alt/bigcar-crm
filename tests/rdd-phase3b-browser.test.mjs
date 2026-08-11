@@ -69,3 +69,68 @@ test("Phase 3B save is one atomic fixture request and preserves CAS", { skip: !b
     assert.deepEqual(requestBody.changes, { purchaseType: "finance", caseStatus: "waiting_finance_result" });
   } finally { await context.close(); await browser.close(); }
 });
+
+test("Phase 3C unknown prep stays unset and unrelated save sends only the dirty field", { skip: !baseUrl }, async () => {
+  const browser = await chromium.launch({ headless: true });
+  const context = await contextFor(browser, 390);
+  let requestBody;
+  let writeCount = 0;
+  await context.route("**/api/booking-delivery-workspace", async (route) => {
+    writeCount += 1;
+    requestBody = route.request().postDataJSON();
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ record: { ...cashRecord, ...requestBody.changes }, revision: "rev-next" }) });
+  });
+  const page = await context.newPage();
+  try {
+    await page.goto(`${baseUrl}/booking-delivery-workspace`, { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: /กข 5678/ }).click();
+    await page.getByTestId("workspace-edit-button").click();
+    for (const field of ["washStatus", "stickerStatus", "oilStatus", "batteryStatus", "taxStatus", "insuranceStatus"]) {
+      assert.equal(await page.getByTestId(`prep-${field}`).inputValue(), "");
+      assert.equal(await page.getByTestId(`prep-${field}`).locator("option:checked").textContent(), "ยังไม่ระบุ");
+    }
+    assert.equal(await page.getByText("หมายเหตุไฟแนนซ์", { exact: true }).count(), 0);
+    assert.equal(await page.getByLabel("หมายเหตุ", { exact: true }).count(), 1);
+    assert.ok((await page.getByTestId("workspace-note-textarea").boundingBox()).height <= 100);
+    const dateBox = await page.locator('input[aria-label="วันนัดส่งมอบ"]').boundingBox();
+    const timeBox = await page.locator('input[aria-label="เวลานัดส่งมอบ"]').boundingBox();
+    assert.ok(timeBox.x - (dateBox.x + dateBox.width) >= 8);
+    if (process.env.PHASE3C_REVIEW_SCREENSHOT) {
+      await page.getByTestId("prep-status-controls").scrollIntoViewIfNeeded();
+      await page.screenshot({ path: process.env.PHASE3C_REVIEW_SCREENSHOT });
+    }
+    await page.getByLabel("วันนัดส่งมอบ").fill("2026-08-19");
+    await page.getByRole("button", { name: "บันทึก", exact: true }).click();
+    await page.getByRole("status").filter({ hasText: "บันทึกแล้ว" }).waitFor();
+    assert.deepEqual(requestBody.changes, { deliveryDate: "2026-08-19" });
+    assert.equal(writeCount, 1);
+  } finally { await context.close(); await browser.close(); }
+});
+
+test("Phase 3C explicit prep decision persists while Cancel performs no write", { skip: !baseUrl }, async () => {
+  const browser = await chromium.launch({ headless: true });
+  const context = await contextFor(browser, 390);
+  let requestBody;
+  let writeCount = 0;
+  await context.route("**/api/booking-delivery-workspace", async (route) => {
+    writeCount += 1;
+    requestBody = route.request().postDataJSON();
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ record: { ...cashRecord, ...requestBody.changes }, revision: "rev-next" }) });
+  });
+  const page = await context.newPage();
+  try {
+    await page.goto(`${baseUrl}/booking-delivery-workspace`, { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: /กข 5678/ }).click();
+    await page.getByTestId("workspace-edit-button").click();
+    await page.getByTestId("prep-oilStatus").selectOption("no_change");
+    await page.getByTestId("prep-batteryStatus").selectOption("good");
+    await page.getByRole("button", { name: "ยกเลิก", exact: true }).click();
+    assert.equal(writeCount, 0);
+    await page.getByTestId("workspace-edit-button").click();
+    await page.getByTestId("prep-oilStatus").selectOption("no_change");
+    await page.getByTestId("prep-batteryStatus").selectOption("good");
+    await page.getByRole("button", { name: "บันทึก", exact: true }).click();
+    await page.getByRole("status").filter({ hasText: "บันทึกแล้ว" }).waitFor();
+    assert.deepEqual(requestBody.changes, { oilStatus: "no_change", batteryStatus: "good" });
+  } finally { await context.close(); await browser.close(); }
+});
