@@ -4,6 +4,7 @@ import { setSalesProfileCookie } from "@/lib/auth-session";
 import { recordActivity } from "@/lib/activity-log";
 import { RequestAuthError, requireAdmin } from "@/lib/request-user";
 import type { SalesUserRole } from "@/lib/types";
+import { mergeStoredSalesProfile } from "@/lib/sales-profile-store";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ const validRoles = new Set(["super_admin", "admin", "sales", "viewer"]);
 export async function GET() {
   try {
     requireAdmin();
-    const users = await listSalesUsers();
+    const users = await Promise.all((await listSalesUsers()).map(async (user) => await mergeStoredSalesProfile(user) || user));
     return NextResponse.json({ users });
   } catch (error) {
     if (error instanceof RequestAuthError) return NextResponse.json({ error: error.message }, { status: error.status });

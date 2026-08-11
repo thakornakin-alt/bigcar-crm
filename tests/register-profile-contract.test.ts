@@ -6,6 +6,7 @@ const registerSource = fs.readFileSync(new URL("../app/api/auth/register/route.t
 const profileSource = fs.readFileSync(new URL("../app/api/profile/route.ts", import.meta.url), "utf8");
 const profilePage = fs.readFileSync(new URL("../app/profile/page.tsx", import.meta.url), "utf8");
 const authPage = fs.readFileSync(new URL("../app/auth/page.tsx", import.meta.url), "utf8");
+const adminUsersRoute = fs.readFileSync(new URL("../app/api/admin/users/route.ts", import.meta.url), "utf8");
 
 test("registration is admin-controlled and rejects client privilege fields", () => {
   assert.match(registerSource, /requireAdmin\(\)/);
@@ -26,4 +27,8 @@ test("profile self-service exposes identity but protects admin fields and email"
 test("password material is never returned by profile routes", () => {
   assert.doesNotMatch(registerSource, /PasswordHash|passwordHash|salt/);
   assert.doesNotMatch(profileSource, /PasswordHash|passwordHash|salt/);
+});
+
+test("Admin user listing reads the same canonical compatibility profile", () => {
+  assert.match(adminUsersRoute, /mergeStoredSalesProfile/);
 });
