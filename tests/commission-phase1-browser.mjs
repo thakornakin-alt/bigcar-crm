@@ -33,7 +33,7 @@ try {
     assert.equal(await page.getByText("ปิดยอดเดือน กรกฎาคม 2569", { exact: true }).count(), 1);
     assert.equal(await page.getByText("สถานะ fixture", { exact: true }).count(), 1);
     assert.equal(await page.getByText("COMMISSION_REAL_WRITES_ENABLED=false", { exact: false }).count(), 1);
-    assert.equal(await page.getByText("Manual Adjustment · Admin fixture", { exact: true }).count(), 1);
+    await page.getByText("Manual Adjustment · Admin fixture", { exact: true }).waitFor();
     const dimensions = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
     assert.ok(dimensions.scrollWidth <= dimensions.clientWidth, `overflow at ${width}: ${dimensions.scrollWidth}/${dimensions.clientWidth}`);
     assert.deepEqual(errors.filter((message) => /hydration|did not match|server-rendered html/i.test(message)), []);
