@@ -416,6 +416,7 @@ export type BookingDeliveryRecord = {
   deliveredAt?: string;
   cancelledAt?: string;
   isCounted?: boolean;
+  commissionGroup?: "G1" | "G2" | "G3";
   purchaseType?: "cash" | "finance";
   caseStatus?:
     | "waiting_delivery"
