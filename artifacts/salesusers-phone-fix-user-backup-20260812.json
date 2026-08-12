@@ -1,0 +1,31 @@
+{
+  "spreadsheetId": "1EASeG92OYIneG6cILkU-yCdkB6krn_EX3QBDY-AN6Cc",
+  "sheet": "SalesUsers",
+  "range": "A3:Q3",
+  "capturedAt": "2026-08-12T09:06:35.6522363+07:00",
+  "row": {
+    "Id": "USER-20260525-104706-812",
+    "CreatedAt": 46167.449375,
+    "UpdatedAt": 46246.37457175926,
+    "Email": "thakornakin@gmail.com",
+    "PasswordHash": "e033e8bd753852b36a447d302b243c073c59b56af587747bd13a6144a96d5294",
+    "Salt": "a4fe9198-d0d8-47f2-a90c-d30106952aec",
+    "FirstName": "ฐากร",
+    "LastName": "กาญจนอังกูร",
+    "Nickname": "บิ๊ก",
+    "Phone": 917785117,
+    "LineId": "@bigcars",
+    "LineQrUrl": "/api/drive/line-image/1e7O7AtJpCgHSSCwo3b-JNQdjK-M-c2cw",
+    "AvatarUrl": "/api/drive/line-image/1UgIuh0yXsXjmn0PMWlU1R1r-kHIApko-",
+    "Position": "Sale",
+    "Branch": "สาขาบางนา",
+    "Role": "sales",
+    "Locked": false
+  },
+  "phoneCell": {
+    "address": "J3",
+    "userEnteredValue": { "numberValue": 917785117 },
+    "effectiveValue": { "numberValue": 917785117 },
+    "numberFormat": null
+  }
+}
