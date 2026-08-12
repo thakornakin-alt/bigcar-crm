@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { renderBookingReport } from "@/lib/booking-report";
-import { saveBookingReport } from "@/lib/apps-script";
+import { lookupBookingListCommissionGroup, saveBookingReport } from "@/lib/apps-script";
 import { upsertBookingDeliveryFromBookingReport } from "@/lib/booking-delivery";
 import { saveBookingReportAndMaster } from "@/lib/booking-report-persistence";
 import type { BookingReportInput, BuyerType } from "@/lib/types";
 import { recordActivity } from "@/lib/activity-log";
 import { RequestAuthError, requireWritableUser } from "@/lib/request-user";
 import { getRddFeatureFlags } from "@/lib/feature-flags";
-import { resolveAuthenticatedSalespersonCapture } from "@/lib/commission-canonical-capture";
+import { commissionGroupCaptureFromLookup, resolveAuthenticatedSalespersonCapture, type CommissionGroupLookupResult } from "@/lib/commission-canonical-capture";
 
 export const dynamic = "force-dynamic";
 
@@ -67,13 +67,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Booking date, customer name, plate and sale are required" }, { status: 400 });
     }
 
+    const commissionLookupState: { result: CommissionGroupLookupResult | null } = { result: null };
     const result = await saveBookingReportAndMaster(input, {
       saveReport: saveBookingReport,
-      upsertMaster: (report) => upsertBookingDeliveryFromBookingReport(
-        report,
-        getRddFeatureFlags().ownerMetadata ? actor : null,
-        { salesperson: salespersonCapture }
-      )
+      upsertMaster: async (report) => {
+        try {
+          commissionLookupState.result = await lookupBookingListCommissionGroup({
+            bookingReportId: report.id,
+            plate: report.plate
+          });
+        } catch (lookupError) {
+          console.warn("[booking-reports] Booking List Commission Group lookup failed", {
+            reportId: report.id,
+            error: lookupError instanceof Error ? lookupError.message : "lookup failed"
+          });
+        }
+        const group = commissionLookupState.result
+          ? commissionGroupCaptureFromLookup(commissionLookupState.result, new Date().toISOString())
+          : undefined;
+        return upsertBookingDeliveryFromBookingReport(
+          report,
+          getRddFeatureFlags().ownerMetadata ? actor : null,
+          { salesperson: salespersonCapture, group }
+        );
+      }
     });
     await recordActivity(actor, {
       action: "bookingReport.create",
@@ -91,6 +108,17 @@ export async function POST(request: Request) {
         source: "api",
         after: { changedFields: ["salespersonUserId", "salespersonDisplayName"] },
         metadata: { source: "authenticated_self_selection" }
+      });
+    }
+    const commissionGroupLookup = commissionLookupState.result;
+    if (result.bookingDelivery && commissionGroupLookup?.status === "resolved" && result.bookingDelivery.commissionGroupSource === commissionGroupLookup.sourceReference) {
+      await recordActivity(actor, {
+        action: "commission_group_captured",
+        targetType: "bookingDelivery",
+        targetId: result.bookingDelivery.id,
+        source: "api",
+        after: { changedFields: ["commissionGroup", "commissionGroupSource", "commissionGroupCapturedAt"] },
+        metadata: { sourceReference: commissionGroupLookup.sourceReference, source: "booking_list_read_only" }
       });
     }
     if (result.partialSuccess) {

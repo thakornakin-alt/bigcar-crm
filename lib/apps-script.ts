@@ -30,6 +30,7 @@ import type {
   StockImportStatus,
   StockVehicle
 } from "@/lib/types";
+import type { CommissionGroupLookupInput, CommissionGroupLookupResult } from "@/lib/commission-canonical-capture";
 
 type AppsScriptAction =
   | "list"
@@ -54,6 +55,7 @@ type AppsScriptAction =
   | "getStaffList"
   | "lookupByPlate"
   | "lookupBookingByPlate"
+  | "lookupBookingListCommissionGroup"
   | "saveApprovalLog"
   | "saveLineGroup"
   | "listLineGroups"
@@ -391,6 +393,11 @@ export async function lookupApprovalStockByPlate(plate: string) {
 export async function lookupApprovalBookingByPlate(plate: string) {
   const data = await callAppsScript<{ booking: ApprovalBooking }>("lookupBookingByPlate", { plate });
   return data.booking;
+}
+
+export async function lookupBookingListCommissionGroup(input: CommissionGroupLookupInput) {
+  const data = await callAppsScript<{ result: CommissionGroupLookupResult }>("lookupBookingListCommissionGroup", { input });
+  return data.result;
 }
 
 export async function saveApprovalLog(input: ApprovalLogInput) {

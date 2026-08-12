@@ -11,7 +11,7 @@ import { getLastJsonStoreTiming, readJsonStore, readJsonStoreSnapshot, writeJson
 import type { BookingDeliveryRecord, BookingDeliveryStatus, BookingReport, ReportHistoryItem } from "@/lib/types";
 import type { BookingDeliveryActor } from "@/lib/rdd-workspace-adapter";
 import { attachOwnerToNewRecord, incrementRecordVersion, normalizeWorkspaceRecord } from "@/lib/rdd-workspace-adapter";
-import { applyCanonicalCommissionCapture, type CanonicalSalespersonCapture } from "@/lib/commission-canonical-capture";
+import { applyCanonicalCommissionCapture, type CanonicalSalespersonCapture, type CommissionGroupCapture } from "@/lib/commission-canonical-capture";
 
 type BookingDeliveryStore = {
   records: BookingDeliveryRecord[];
@@ -331,7 +331,7 @@ export async function syncBookingDeliveryFromReportHistory() {
   return upsertBookingDeliveryFromReportHistory(reports);
 }
 
-export async function upsertBookingDeliveryFromBookingReport(report: BookingReport, actor?: BookingDeliveryActor | null, commissionCapture?: { salesperson?: CanonicalSalespersonCapture }) {
+export async function upsertBookingDeliveryFromBookingReport(report: BookingReport, actor?: BookingDeliveryActor | null, commissionCapture?: { salesperson?: CanonicalSalespersonCapture; group?: CommissionGroupCapture }) {
   const existingStore = await readStore();
   const normalizedPlate = normalizePlate(report.plate);
   const normalizedCustomer = text(report.customerName).toLowerCase();
@@ -380,7 +380,10 @@ export async function upsertBookingDeliveryFromBookingReport(report: BookingRepo
     existing || undefined,
     existing?.bookingId || nextBookingId(existingStore.records, report.createdAt || new Date().toISOString())
   );
-  next = applyCanonicalCommissionCapture(next, commissionCapture || {}).record;
+  next = applyCanonicalCommissionCapture(next, {
+    salesperson: commissionCapture?.salesperson,
+    group: existing ? undefined : commissionCapture?.group
+  }).record;
   if (!existing) next = attachOwnerToNewRecord(next, actor);
   if (!existing) {
     const payment = text(report.paymentType || "");

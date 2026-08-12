@@ -5,6 +5,16 @@ type CommissionGroup = "G1" | "G2" | "G3";
 export type CanonicalSalespersonCapture = { salespersonUserId: string; salespersonDisplayName: string };
 export type AuthoritativeCommissionGroupSource = { sourceRef: string; bookingCaseId?: string; bookingReportId?: string; salesReportId?: string; plate?: string; commissionGroup?: string };
 export type CommissionGroupCapture = { commissionGroup: CommissionGroup; commissionGroupSource: string; commissionGroupCapturedAt: string };
+export type CommissionGroupLookupInput = { bookingId?: string; bookingReportId?: string; salesReportId?: string; plate?: string };
+export type CommissionGroupLookupResult = {
+  status: "resolved" | "not_found" | "conflict" | "invalid_group";
+  commissionGroup?: CommissionGroup;
+  sourceReference?: string;
+  bookingId?: string;
+  bookingReportId?: string;
+  salesReportId?: string;
+  normalizedPlate?: string;
+};
 
 function clean(value: unknown) { return String(value ?? "").trim(); }
 function normalizePlate(value: unknown) { return clean(value).normalize("NFKC").toUpperCase().replace(/\s+/g, ""); }
@@ -37,6 +47,16 @@ export function resolveCommissionGroupCapture(record: Pick<BookingDeliveryRecord
   const row = matches[0];
   if (row.commissionGroup !== "G1" && row.commissionGroup !== "G2" && row.commissionGroup !== "G3") return undefined;
   return { commissionGroup: row.commissionGroup, commissionGroupSource: `booking_list:${clean(row.sourceRef)}`, commissionGroupCapturedAt: capturedAt };
+}
+
+export function commissionGroupCaptureFromLookup(result: CommissionGroupLookupResult, capturedAt: string): CommissionGroupCapture | undefined {
+  if (result.status !== "resolved" || !result.sourceReference) return undefined;
+  if (result.commissionGroup !== "G1" && result.commissionGroup !== "G2" && result.commissionGroup !== "G3") return undefined;
+  return {
+    commissionGroup: result.commissionGroup,
+    commissionGroupSource: clean(result.sourceReference),
+    commissionGroupCapturedAt: capturedAt
+  };
 }
 
 export function applyCanonicalCommissionCapture(record: BookingDeliveryRecord, input: { salesperson?: CanonicalSalespersonCapture; group?: CommissionGroupCapture; recognized?: boolean }) {
