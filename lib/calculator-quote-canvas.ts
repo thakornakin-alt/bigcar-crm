@@ -58,6 +58,7 @@ export function drawCalculatorQuote(
   const selectedRow = model.rows.find((row) => row.label === model.selectedDownLabel) || model.rows[0];
   const selectedTerm = terms.find((term) => term.key === model.selectedTermKey) || terms[2];
   const selectedPayment = selectedRow?.payments[model.selectedTermKey] || 0;
+  const hasVehicleTitle = Boolean(model.carModel.trim());
 
   const gradient = ctx.createLinearGradient(0, 0, CALCULATOR_EXPORT_WIDTH, CALCULATOR_EXPORT_HEIGHT);
   gradient.addColorStop(0, "#171719");
@@ -77,7 +78,7 @@ export function drawCalculatorQuote(
   ctx.textAlign = "right";
   ctx.fillStyle = "#aeb0b5";
   ctx.font = "600 18px Arial, sans-serif";
-  ctx.fillText("ข้อเสนอค่างวดสำหรับคุณ", 1016, 82);
+  ctx.fillText("ข้อเสนอค่างวด", 1016, 82);
   ctx.textAlign = "left";
 
   card(ctx, 48, 138, 984, 288, 26, "#faf8f5");
@@ -85,13 +86,13 @@ export function drawCalculatorQuote(
   ctx.font = "800 18px Arial, sans-serif";
   ctx.fillText("รถคันที่คุณสนใจ", 80, 184);
   ctx.fillStyle = "#171719";
-  ctx.font = "900 42px Arial, sans-serif";
-  fitText(ctx, model.carModel.trim() || "ยังไม่ระบุรุ่นรถ", 80, 238, 610);
+  const vehicleTitle = hasVehicleTitle ? model.carModel.trim() : "คำนวณค่างวดเบื้องต้น";
+  fitTextAtSize(ctx, vehicleTitle, 80, 238, 610, 42, 29);
   ctx.fillStyle = "#565158";
   ctx.font = "700 21px Arial, sans-serif";
-  const vehicleDetail = [model.actualYear && `ปี ${model.actualYear}`, model.carColor, model.mileage]
-    .filter(Boolean)
-    .join("  •  ");
+  const vehicleDetail = hasVehicleTitle
+    ? [model.actualYear && `ปี ${model.actualYear}`, model.carColor, model.mileage].filter(Boolean).join("  •  ")
+    : "อ้างอิงจากราคารถที่ระบุ";
   fitText(ctx, vehicleDetail || "รายละเอียดรถตามข้อมูลที่กรอก", 80, 278, 610);
   ctx.fillStyle = "#8f2637";
   ctx.font = "700 17px Arial, sans-serif";
@@ -105,19 +106,18 @@ export function drawCalculatorQuote(
   ctx.fill();
   ctx.fillStyle = "#741f2c";
   ctx.font = "800 17px Arial, sans-serif";
-  ctx.fillText("แผนที่เลือก", 756, 210);
-  ctx.fillStyle = "#171719";
-  ctx.font = "900 31px Arial, sans-serif";
-  ctx.fillText(`ดาวน์ ${selectedRow?.label || "-"}`, 756, 258);
-  ctx.fillStyle = "#5d5860";
-  ctx.font = "700 18px Arial, sans-serif";
-  ctx.fillText(`${wholeMoney(selectedRow?.downPayment || 0)} บาท`, 756, 291);
+  ctx.fillText("ผ่อนประมาณ", 756, 210);
   ctx.fillStyle = "#8f2637";
-  ctx.font = "900 36px Arial, sans-serif";
-  ctx.fillText(`${wholeMoney(selectedPayment)}`, 756, 344);
+  ctx.font = "900 43px Arial, sans-serif";
+  ctx.fillText(`${wholeMoney(selectedPayment)}`, 756, 270);
+  ctx.fillStyle = "#171719";
+  ctx.font = "900 21px Arial, sans-serif";
+  ctx.fillText("บาท/เดือน", 756, 303);
   ctx.fillStyle = "#5d5860";
   ctx.font = "700 17px Arial, sans-serif";
-  ctx.fillText(`บาท / เดือน • ${selectedTerm.months} งวด`, 756, 373);
+  ctx.fillText(`ดาวน์ ${selectedRow?.label || "-"} · ${selectedTerm.months} งวด`, 756, 350);
+  ctx.font = "600 15px Arial, sans-serif";
+  ctx.fillText(`เงินดาวน์ ${wholeMoney(selectedRow?.downPayment || 0)} บาท`, 756, 378);
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "900 25px Arial, sans-serif";
@@ -151,6 +151,16 @@ export function drawCalculatorQuote(
   ctx.font = "700 16px Arial, sans-serif";
   ctx.fillStyle = "#d8d8dc";
   columns.forEach((column) => cellText(ctx, column.label, column.x, tableY + 34, column.width, column.align));
+  const selectedColumnIndex = terms.findIndex((term) => term.key === model.selectedTermKey) + 3;
+  const selectedColumn = columns[selectedColumnIndex];
+  if (selectedColumn) {
+    ctx.fillStyle = "#c9a56a";
+    roundRect(ctx, selectedColumn.x - 8, tableY + 10, selectedColumn.width + 12, 34, 12);
+    ctx.fill();
+    ctx.fillStyle = "#171719";
+    ctx.font = "900 16px Arial, sans-serif";
+    cellText(ctx, selectedColumn.label, selectedColumn.x, tableY + 33, selectedColumn.width, selectedColumn.align);
+  }
 
   model.rows.forEach((row, index) => {
     const y = tableY + headerH + index * rowH;
@@ -169,6 +179,11 @@ export function drawCalculatorQuote(
     cellText(ctx, wholeMoney(row.financeAmount), columns[2].x, y + 34, columns[2].width, "right");
     terms.forEach((term, termIndex) => {
       const active = selected && term.key === model.selectedTermKey;
+      if (term.key === model.selectedTermKey) {
+        ctx.fillStyle = selected ? "#6f303e" : "#343035";
+        roundRect(ctx, columns[termIndex + 3].x - 8, y + 8, columns[termIndex + 3].width + 12, rowH - 16, 10);
+        ctx.fill();
+      }
       ctx.fillStyle = active ? "#f4cf8b" : "#ffffff";
       ctx.font = active ? "900 18px Arial, sans-serif" : "700 17px Arial, sans-serif";
       cellText(ctx, payment(row.payments[term.key]), columns[termIndex + 3].x, y + 34, columns[termIndex + 3].width, "right");
@@ -208,11 +223,9 @@ export function drawCalculatorQuote(
   ctx.fillStyle = "#969298";
   ctx.font = "600 14px Arial, sans-serif";
   ctx.fillText("ค่างวดเป็นการประมาณการ อัตราและผลอนุมัติขึ้นอยู่กับเงื่อนไขของสถาบันการเงิน", 56, 1536);
-  ctx.textAlign = "right";
   ctx.fillStyle = "#c9a56a";
   ctx.font = "800 15px Arial, sans-serif";
-  ctx.fillText("BIG CAR • รถมือสองที่คุณวางใจ", 1024, 1570);
-  ctx.textAlign = "left";
+  ctx.fillText("BIG CAR", 56, 1570);
 }
 
 function drawAvatar(ctx: CanvasRenderingContext2D, image: HTMLImageElement | null, profile: CalculatorQuoteProfile, x: number, y: number, size: number) {
@@ -278,6 +291,24 @@ function fitText(ctx: CanvasRenderingContext2D, text: string, x: number, y: numb
   let clipped = text;
   while (clipped.length > 1 && ctx.measureText(`${clipped}…`).width > maxWidth) clipped = clipped.slice(0, -1);
   ctx.fillText(`${clipped}…`, x, y);
+}
+
+function fitTextAtSize(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  preferredSize: number,
+  minimumSize: number,
+) {
+  let fontSize = preferredSize;
+  ctx.font = `900 ${fontSize}px Arial, sans-serif`;
+  while (fontSize > minimumSize && ctx.measureText(text).width > maxWidth) {
+    fontSize -= 1;
+    ctx.font = `900 ${fontSize}px Arial, sans-serif`;
+  }
+  fitText(ctx, text, x, y, maxWidth);
 }
 
 function drawImageContain(ctx: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number) {

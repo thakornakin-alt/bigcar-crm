@@ -29,8 +29,12 @@ try {
       scrollWidth: document.documentElement.scrollWidth
     }));
     results.push({ width, ...dimensions });
-    assert.ok(dimensions.scrollWidth <= dimensions.clientWidth, `horizontal overflow at ${width}px`);
+    assert.ok(
+      dimensions.scrollWidth <= dimensions.clientWidth,
+      `horizontal overflow at ${width}px (${dimensions.scrollWidth}/${dimensions.clientWidth})`
+    );
     if (width === 390) {
+      await page.getByTestId("calculator-quote-preview").screenshot({ path: path.join(artifactDir, "calculator-rough-quote-fallback.png") });
       await page.getByRole("textbox", { name: "รุ่นรถ" }).fill("TOYOTA HILUX REVO 2.4 MID AT");
       await page.getByRole("textbox", { name: "ปีรถ" }).fill("2020");
       await page.getByRole("textbox", { name: "สีรถ" }).fill("ขาว");

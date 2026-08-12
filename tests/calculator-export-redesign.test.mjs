@@ -34,10 +34,31 @@ test("Preview and PNG export use the same model and canvas renderer", () => {
 });
 
 test("commercial export hierarchy and required disclaimer remain", () => {
-  for (const copy of ["รถคันที่คุณสนใจ", "ราคารถ", "แผนที่เลือก", "เปรียบเทียบค่างวด", "สอบถามรายละเอียดและนัดดูรถ"]) {
+  for (const copy of ["รถคันที่คุณสนใจ", "ราคารถ", "ผ่อนประมาณ", "เปรียบเทียบค่างวด", "สอบถามรายละเอียดและนัดดูรถ"]) {
     assert.ok(renderer.includes(copy), `missing hierarchy copy: ${copy}`);
   }
   assert.match(renderer, /ค่างวดเป็นการประมาณการ อัตราและผลอนุมัติขึ้นอยู่กับเงื่อนไขของสถาบันการเงิน/);
+});
+
+test("actual vehicle title and professional rough-quote fallback are explicit", () => {
+  assert.match(renderer, /hasVehicleTitle \? model\.carModel\.trim\(\) : "คำนวณค่างวดเบื้องต้น"/);
+  assert.match(renderer, /"อ้างอิงจากราคารถที่ระบุ"/);
+  assert.doesNotMatch(renderer, /ยังไม่ระบุรุ่นรถ/);
+});
+
+test("selected payment hero and row-column emphasis preserve authoritative values", () => {
+  assert.match(renderer, /ผ่อนประมาณ/);
+  assert.match(renderer, /บาท\/เดือน/);
+  assert.match(renderer, /ดาวน์ \$\{selectedRow\?\.label \|\| "-"\} · \$\{selectedTerm\.months\} งวด/);
+  assert.match(renderer, /selectedColumnIndex/);
+  assert.match(renderer, /term\.key === model\.selectedTermKey/);
+});
+
+test("edge labels stay inside the 56px export safe area", () => {
+  assert.match(renderer, /ctx\.fillText\("ข้อเสนอค่างวด", 1016, 82\)/);
+  assert.match(renderer, /ctx\.fillText\("BIG CAR", 56, 1570\)/);
+  assert.doesNotMatch(renderer, /ข้อเสนอค่างวดสำหรับคุณ/);
+  assert.doesNotMatch(renderer, /BIG CAR • รถมือสองที่คุณวางใจ/);
 });
 
 test("canonical profile phone remains a string through render and export", () => {
