@@ -1,8 +1,9 @@
 "use client";
 
 import { Calculator, Car, ImageDown, Loader2, RefreshCw } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NativeAppHeader, NativeAppShell, NativeButton, NativeCard } from "@/app/components/ui";
+import { CalculatorQuotePreview, type CalculatorQuotePreviewHandle } from "@/app/calculator/CalculatorQuotePreview";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import type { InstallmentRow, InterestRate } from "@/lib/types";
 import { calculatorProfileContract } from "@/lib/user-profile";
@@ -37,8 +38,6 @@ const terms = [
   { key: "months72", months: 72, years: 6, label: "72" },
   { key: "months84", months: 84, years: 7, label: "84" }
 ] as const;
-
-type QuoteMode = "customer" | "internal" | "installment";
 
 async function api<T>(url: string): Promise<T> {
   const response = await fetch(url, { cache: "no-store" });
@@ -78,6 +77,7 @@ function calculatePayment(financeAmount: number, rate: number | null, months: nu
 }
 
 export default function CalculatorPage() {
+  const quotePreviewRef = useRef<CalculatorQuotePreviewHandle>(null);
   const { user: salesProfile } = useSalesProfile();
   const [rates, setRates] = useState<InterestRate[]>(defaultInterestRates);
   const [rateSource, setRateSource] = useState<"default" | "sheet">("default");
@@ -89,7 +89,6 @@ export default function CalculatorPage() {
   const [mileage, setMileage] = useState("");
   const [selectedDownLabel, setSelectedDownLabel] = useState("20%");
   const [selectedTermKey, setSelectedTermKey] = useState<(typeof terms)[number]["key"]>("months72");
-  const quoteMode: QuoteMode = "installment";
   const [carPrice, setCarPrice] = useState("684000");
   const [specialDownPayment, setSpecialDownPayment] = useState("");
   const [loading, setLoading] = useState(true);
@@ -159,6 +158,19 @@ export default function CalculatorPage() {
     return rows.find((row) => row.label === selectedDownLabel) || rows[0] || null;
   }, [rows, selectedDownLabel]);
 
+  const quoteModel = useMemo(() => ({
+    carModel,
+    actualYear,
+    carColor,
+    mileage,
+    carPrice: price,
+    rate: selectedRate || defaultInterestRates[0],
+    rows,
+    selectedDownLabel,
+    selectedTermKey,
+    profile: calculatorProfileContract(salesProfile)
+  }), [actualYear, carColor, carModel, mileage, price, rows, salesProfile, selectedDownLabel, selectedRate, selectedTermKey]);
+
   useEffect(() => {
     if (!rows.length) return;
     if (!rows.some((row) => row.label === selectedDownLabel)) {
@@ -173,24 +185,7 @@ export default function CalculatorPage() {
     setError("");
 
     try {
-      const contact = calculatorProfileContract(salesProfile);
-        await exportInstallmentImage({
-          carModel,
-          actualYear,
-          carColor,
-          mileage,
-          carPrice: price,
-          rate: selectedRate,
-          rows,
-        selectedQuoteRow,
-        selectedTermKey,
-        quoteMode,
-        contactName: contact.nickname || contact.fullName || "บิ๊ก",
-        contactPhone: contact.phone || "0917785117",
-        contactLineId: contact.lineId || "@bigcars",
-        contactAvatarUrl: contact.avatarUrl,
-        contactLineQrUrl: contact.lineQrUrl
-      });
+      await quotePreviewRef.current?.exportPng();
     } catch (err) {
       setError(err instanceof Error ? err.message : "บันทึกรูปไม่สำเร็จ");
     } finally {
@@ -227,7 +222,7 @@ export default function CalculatorPage() {
         </div>
       )}
 
-      <NativeCard className="p-0">
+      <NativeCard className="p-0 overflow-hidden">
         <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
           <div>
             <h2 className="text-lg font-black text-white">ตารางผ่อน</h2>
@@ -251,7 +246,7 @@ export default function CalculatorPage() {
         </div>
 
         {rows.length ? (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" data-testid="calculator-values-table">
             <table className="w-full min-w-[760px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-left text-soft">
@@ -266,8 +261,16 @@ export default function CalculatorPage() {
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr key={`${row.label}-${row.downPayment}`} className="border-b border-white/10 last:border-0">
-                    <td className="px-4 py-3 font-bold text-white">{row.label}</td>
+                  <tr
+                    key={`${row.label}-${row.downPayment}`}
+                    className={`cursor-pointer border-b border-white/10 last:border-0 ${row.label === selectedDownLabel ? "bg-brand/15" : ""}`}
+                    onClick={() => setSelectedDownLabel(row.label)}
+                  >
+                    <td className="px-4 py-3 font-bold text-white">
+                      <button type="button" className="rounded-full border border-white/10 px-2 py-1" aria-pressed={row.label === selectedDownLabel}>
+                        {row.label}
+                      </button>
+                    </td>
                     <td className="px-4 py-3 text-right text-[#dce2eb]">{formatMoney(row.downPayment)}</td>
                     <td className="px-4 py-3 text-right text-[#dce2eb]">{formatMoney(row.financeAmount)}</td>
                     <PaymentCell value={row.payments.months48} />
@@ -288,6 +291,38 @@ export default function CalculatorPage() {
           <div className="px-4 py-8 text-center text-soft">กรอกราคารถและเลือกตารางดอกเบี้ย</div>
         )}
       </NativeCard>
+
+      {rows.length > 0 && (
+        <NativeCard className="calculator-preview-card p-3 sm:p-5">
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-brand">Preview ก่อนส่งลูกค้า</p>
+              <h2 className="mt-1 text-xl font-black text-white">ภาพค่างวด BIG CAR</h2>
+              <p className="mt-1 text-sm text-soft">เลือกแถวดาวน์และจำนวนงวดจากตาราง ภาพที่เห็นคือภาพเดียวกับ PNG</p>
+            </div>
+            <div className="flex flex-wrap gap-2" aria-label="เลือกจำนวนงวด">
+              {terms.map((term) => (
+                <button
+                  key={term.key}
+                  type="button"
+                  onClick={() => setSelectedTermKey(term.key)}
+                  aria-pressed={selectedTermKey === term.key}
+                  className={`min-h-10 rounded-full border px-3 text-sm font-bold ${selectedTermKey === term.key ? "border-brand bg-brand text-white" : "border-white/10 text-white"}`}
+                >
+                  {term.label} งวด
+                </button>
+              ))}
+            </div>
+          </div>
+          <CalculatorQuotePreview ref={quotePreviewRef} model={quoteModel} />
+          <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:flex sm:items-center sm:justify-between">
+            <span className="rounded-xl bg-white/5 px-3 py-2 text-soft">ดาวน์ {selectedQuoteRow?.label || "-"}</span>
+            <span className="rounded-xl bg-white/5 px-3 py-2 text-right font-black text-brand">
+              {formatWholeMoney(selectedQuoteRow?.payments[selectedTermKey] || 0)} บาท/เดือน
+            </span>
+          </div>
+        </NativeCard>
+      )}
 
       <NativeCard className="mb-4">
         <div className="grid gap-3 md:grid-cols-2">
@@ -440,20 +475,6 @@ function TextField({
   );
 }
 
-function ModeButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`min-h-11 rounded-2xl border px-3 text-sm font-bold transition ${
-        active ? "border-brand bg-brand text-ink" : "border-white/10 bg-[#0b0f16] text-white"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
 function PaymentHeader({ label, rate }: { label: string; rate: number | null }) {
   return (
     <th className="px-4 py-3 text-right font-semibold">
@@ -471,285 +492,7 @@ function PaymentCell({ value }: { value: number }) {
   );
 }
 
-async function exportInstallmentImage({
-  carModel,
-  actualYear,
-  carColor,
-  mileage,
-  carPrice,
-  rate,
-  rows,
-  selectedQuoteRow,
-  selectedTermKey,
-  quoteMode,
-  contactName,
-  contactPhone,
-  contactLineId,
-  contactAvatarUrl,
-  contactLineQrUrl
-}: {
-  carModel: string;
-  actualYear: string;
-  carColor: string;
-  mileage: string;
-  carPrice: number;
-  rate: InterestRate;
-  rows: InstallmentRow[];
-  selectedQuoteRow: InstallmentRow | null;
-  selectedTermKey: (typeof terms)[number]["key"];
-  quoteMode: QuoteMode;
-  contactName: string;
-  contactPhone: string;
-  contactLineId: string;
-  contactAvatarUrl: string;
-  contactLineQrUrl: string;
-}) {
-  const profileImage = await loadCanvasImage(contactAvatarUrl || "/logo-rdd.png").catch(() => null);
-  const lineQrImage = contactLineQrUrl ? await loadCanvasImage(contactLineQrUrl).catch(() => null) : null;
-  const canvas = document.createElement("canvas");
-  const scale = Math.max(window.devicePixelRatio || 1, 2);
-  const width = 1280;
-  const rowHeight = 64;
-  const tableHeaderHeight = 82;
-  const headerHeight = 470;
-  const footerHeight = 86;
-  const height = headerHeight + tableHeaderHeight + rowHeight * rows.length + footerHeight;
-  canvas.width = width * scale;
-  canvas.height = height * scale;
-  canvas.style.width = `${width}px`;
-  canvas.style.height = `${height}px`;
-
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("ไม่สามารถสร้างรูปได้บนอุปกรณ์นี้");
-
-  ctx.scale(scale, scale);
-  ctx.fillStyle = "#07090d";
-  ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = "#111821";
-  roundRect(ctx, 28, 28, width - 56, height - 56, 26);
-  ctx.fill();
-
-  ctx.fillStyle = "#0b1118";
-  roundRect(ctx, width - 382, 56, 326, 312, 24);
-  ctx.fill();
-  ctx.strokeStyle = "#263241";
-  ctx.lineWidth = 2;
-  roundRect(ctx, width - 382, 56, 326, 312, 24);
-  ctx.stroke();
-
-  const avatarSize = 92;
-  ctx.fillStyle = "#ffffff";
-  roundRect(ctx, width - 356, 84, avatarSize, avatarSize, 20);
-  ctx.fill();
-  if (profileImage) drawImageContain(ctx, profileImage, width - 348, 92, avatarSize - 16, avatarSize - 16);
-
-  const qrSize = 128;
-  ctx.fillStyle = "#ffffff";
-  roundRect(ctx, width - 218, 84, qrSize + 18, qrSize + 18, 20);
-  ctx.fill();
-  if (lineQrImage) drawImageContain(ctx, lineQrImage, width - 209, 93, qrSize, qrSize);
-  else {
-    ctx.fillStyle = "#111821";
-    ctx.font = "700 18px Arial, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("LINE QR", width - 144, 160);
-    ctx.textAlign = "left";
-  }
-
-  ctx.fillStyle = "#dce2eb";
-  ctx.font = "700 18px Arial, sans-serif";
-  drawFitText(ctx, contactName || "เซลล์", width - 356, 205, 292);
-  ctx.fillStyle = "#22c55e";
-  ctx.font = "700 18px Arial, sans-serif";
-  drawFitText(ctx, contactPhone || "-", width - 356, 234, 292);
-  drawFitText(ctx, `Line: ${contactLineId || "-"}`, width - 356, 263, 292);
-  ctx.fillStyle = "#9ca3af";
-  ctx.font = "600 16px Arial, sans-serif";
-  drawFitText(ctx, quoteMode === "internal" ? "Internal Mode" : quoteMode === "customer" ? "Customer Mode" : "Installment Mode", width - 356, 291, 292);
-
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "700 52px Arial, sans-serif";
-  ctx.fillText("คำนวนค่างวด", 64, 92);
-
-  ctx.fillStyle = "#22c55e";
-  ctx.font = "700 26px Arial, sans-serif";
-  ctx.fillText("ตารางค่างวดรถมือสอง", 64, 138);
-
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "700 30px Arial, sans-serif";
-  drawCanvasPill(ctx, "รุ่นรถ", carModel.trim() || "-", 64, 182, 560);
-  drawCanvasPill(ctx, "ปีรถ", actualYear.trim() || "-", 64, 240, 180);
-  drawCanvasPill(ctx, "สี", carColor.trim() || "-", 262, 240, 170);
-  drawCanvasPill(ctx, "เลขไมล์", mileage.trim() || "-", 450, 240, 180);
-  drawCanvasPill(ctx, "ราคารถ", `${formatWholeMoney(carPrice)} บาท`, 648, 240, 240);
-  drawCanvasPill(ctx, "ประเภท", rate.vehicleType, 64, 298, 420);
-
-  const columns = [
-    { label: "เรทดาวน์", rate: "", x: 64, width: 128, align: "left" },
-    { label: "เงินดาวน์", rate: "", x: 210, width: 146, align: "right" },
-    { label: "ยอดจัด", rate: "", x: 382, width: 146, align: "right" },
-    { label: "48 งวด", rate: formatPercent(rate.months48), x: 560, width: 132, align: "right" },
-    { label: "60 งวด", rate: formatPercent(rate.months60), x: 712, width: 132, align: "right" },
-    { label: "72 งวด", rate: formatPercent(rate.months72), x: 864, width: 132, align: "right" },
-    { label: "84 งวด", rate: formatPercent(rate.months84), x: 1016, width: 120, align: "right" }
-  ] as const;
-
-  const tableTop = headerHeight;
-  ctx.fillStyle = "#17202b";
-  roundRect(ctx, 48, tableTop - 12, width - 96, tableHeaderHeight, 14);
-  ctx.fill();
-
-  ctx.font = "700 22px Arial, sans-serif";
-  ctx.fillStyle = "#dce2eb";
-  columns.forEach((column) => {
-    drawCellText(ctx, column.label, column.x, tableTop + 24, column.width, column.align);
-    if (column.rate) {
-      ctx.font = "700 18px Arial, sans-serif";
-      ctx.fillStyle = "#22c55e";
-      drawCellText(ctx, column.rate, column.x, tableTop + 50, column.width, column.align);
-      ctx.font = "700 22px Arial, sans-serif";
-      ctx.fillStyle = "#dce2eb";
-    }
-  });
-
-  rows.forEach((row, index) => {
-    const y = tableTop + tableHeaderHeight + rowHeight * index;
-    ctx.fillStyle = index % 2 === 0 ? "#111318" : "#0d0f13";
-    ctx.fillRect(48, y - 10, width - 96, rowHeight);
-    ctx.fillStyle = "#252932";
-    ctx.fillRect(48, y + rowHeight - 11, width - 96, 1);
-
-    ctx.font = "700 22px Arial, sans-serif";
-    ctx.fillStyle = "#ffffff";
-    drawCellText(ctx, row.label, columns[0].x, y + 26, columns[0].width, "left");
-
-    ctx.font = "22px Arial, sans-serif";
-    ctx.fillStyle = "#dce2eb";
-    drawCellText(ctx, formatWholeMoney(row.downPayment), columns[1].x, y + 26, columns[1].width, "right");
-    drawCellText(ctx, formatWholeMoney(row.financeAmount), columns[2].x, y + 26, columns[2].width, "right");
-
-    ctx.font = "700 22px Arial, sans-serif";
-    ctx.fillStyle = "#22c55e";
-    drawCellText(ctx, formatPayment(row.payments.months48), columns[3].x, y + 26, columns[3].width, "right");
-    drawCellText(ctx, formatPayment(row.payments.months60), columns[4].x, y + 26, columns[4].width, "right");
-    drawCellText(ctx, formatPayment(row.payments.months72), columns[5].x, y + 26, columns[5].width, "right");
-    drawCellText(ctx, formatPayment(row.payments.months84), columns[6].x, y + 26, columns[6].width, "right");
-  });
-
-  ctx.fillStyle = "#6f7785";
-  ctx.font = "18px Arial, sans-serif";
-  ctx.fillText("คำนวณด้วยสูตร Flat Rate รวม VAT 7%", 64, height - 64);
-  ctx.fillStyle = "#22c55e";
-  ctx.font = "700 18px Arial, sans-serif";
-  ctx.textAlign = "right";
-  ctx.fillText("คำนวนค่างวดสำหรับลูกค้า", width - 64, height - 64);
-  ctx.textAlign = "left";
-
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
-  if (!blob) throw new Error("ไม่สามารถสร้างไฟล์รูปได้");
-
-  const fileName = `installment-${Date.now()}.png`;
-  const file = new File([blob], fileName, { type: "image/png" });
-  const shareData = {
-    title: "คำนวนค่างวด",
-    text: "ตารางค่างวดรถมือสอง",
-    files: [file]
-  };
-
-  if (navigator.canShare?.(shareData)) {
-    await navigator.share(shareData);
-    return;
-  }
-
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
-
-function drawCellText(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  x: number,
-  y: number,
-  width: number,
-  align: "left" | "right"
-) {
-  ctx.textAlign = align;
-  ctx.fillText(text, align === "right" ? x + width : x, y);
-  ctx.textAlign = "left";
-}
-
-function drawCanvasPill(ctx: CanvasRenderingContext2D, label: string, value: string, x: number, y: number, width: number) {
-  ctx.fillStyle = "#0b1118";
-  roundRect(ctx, x, y, width, 44, 12);
-  ctx.fill();
-  ctx.strokeStyle = "#263241";
-  ctx.lineWidth = 1;
-  roundRect(ctx, x, y, width, 44, 12);
-  ctx.stroke();
-  ctx.fillStyle = "#7d8796";
-  ctx.font = "700 13px Arial, sans-serif";
-  ctx.fillText(label, x + 14, y + 17);
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "700 18px Arial, sans-serif";
-  drawFitText(ctx, value, x + 14, y + 34, width - 28);
-}
-
-function drawFitText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number) {
-  const value = String(text || "-");
-  if (ctx.measureText(value).width <= maxWidth) {
-    ctx.fillText(value, x, y);
-    return;
-  }
-
-  let clipped = value;
-  while (clipped.length > 1 && ctx.measureText(`${clipped}...`).width > maxWidth) {
-    clipped = clipped.slice(0, -1);
-  }
-  ctx.fillText(`${clipped}...`, x, y);
-}
-
-function drawImageContain(ctx: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number) {
-  const ratio = Math.min(width / image.width, height / image.height);
-  const drawWidth = image.width * ratio;
-  const drawHeight = image.height * ratio;
-  ctx.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
-}
-
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + width - radius, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-  ctx.lineTo(x + width, y + height - radius);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-  ctx.lineTo(x + radius, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
-  ctx.closePath();
-}
-
 function formatPercent(value: number | null) {
   if (!value) return "-";
   return `${(value * 100).toFixed(2)}%`;
-}
-
-function formatPayment(value: number) {
-  return value ? formatWholeMoney(value) : "-";
-}
-
-function loadCanvasImage(src: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.crossOrigin = "anonymous";
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("โหลดรูปโปรไฟล์ไม่สำเร็จ"));
-    image.src = src;
-  });
 }

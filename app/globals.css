@@ -69,6 +69,41 @@ button:disabled {
   margin-inline: auto;
 }
 
+.calculator-preview-card {
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--rdd-maroon-600) 40%, transparent);
+  background: linear-gradient(145deg, rgba(143, 38, 55, 0.13), rgba(20, 20, 22, 0.96) 38%);
+}
+
+.calculator-quote-frame {
+  position: relative;
+  width: min(100%, 780px);
+  margin-inline: auto;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 1.25rem;
+  background: #171719;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
+}
+
+.calculator-quote-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1080 / 1600;
+}
+
+.calculator-quote-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  background: #171719;
+  color: #f1ece6;
+  font-weight: 700;
+}
+
 @media (max-width: 640px) {
   .rdd-crm-shell > nav {
     border-radius: 0 0 1rem 1rem;
