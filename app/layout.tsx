@@ -21,7 +21,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="th">
       <body>
-        <RouteAwareShell rddShellEnabled={flags.shell} workspaceEnabled={flags.workspaceReadOnly}>{children}</RouteAwareShell>
+        <RouteAwareShell rddShellEnabled={flags.shell} workspaceEnabled={flags.workspaceReadOnly} commissionEnabled={flags.commissionPreview}>{children}</RouteAwareShell>
       </body>
     </html>
   );

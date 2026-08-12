@@ -138,13 +138,14 @@ const globalNavItems = [
   { href: "/settings", label: "ตั้งค่า", icon: Settings }
 ];
 
-export function GlobalNav({ workspaceEnabled = false }: { workspaceEnabled?: boolean }) {
+export function GlobalNav({ workspaceEnabled = false, commissionEnabled = false }: { workspaceEnabled?: boolean; commissionEnabled?: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const items = workspaceEnabled
     ? [
         { href: "/rdd-home", label: "RDD Home", icon: LayoutDashboard },
         { href: "/booking-delivery-workspace", label: "Workspace", icon: Rows3 },
+        ...(commissionEnabled ? [{ href: "/commission", label: "ค่าคอม", icon: Calculator }] : []),
         ...globalNavItems
       ]
     : globalNavItems;
