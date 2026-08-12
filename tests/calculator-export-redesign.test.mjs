@@ -46,12 +46,13 @@ test("actual vehicle title and professional rough-quote fallback are explicit", 
   assert.doesNotMatch(renderer, /ยังไม่ระบุรุ่นรถ/);
 });
 
-test("selected payment hero and row-column emphasis preserve authoritative values", () => {
+test("selected payment hero and selected row-cell emphasis preserve authoritative values", () => {
   assert.match(renderer, /ผ่อนประมาณ/);
   assert.match(renderer, /บาท\/เดือน/);
   assert.match(renderer, /ดาวน์ \$\{selectedRow\?\.label \|\| "-"\} · \$\{selectedTerm\.months\} งวด/);
-  assert.match(renderer, /selectedColumnIndex/);
   assert.match(renderer, /term\.key === model\.selectedTermKey/);
+  assert.doesNotMatch(renderer, /selectedColumnIndex/);
+  assert.doesNotMatch(renderer, /selectedColumn\.label/);
 });
 
 test("edge labels stay inside the 56px export safe area", () => {

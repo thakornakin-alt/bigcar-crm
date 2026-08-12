@@ -151,16 +151,6 @@ export function drawCalculatorQuote(
   ctx.font = "700 16px Arial, sans-serif";
   ctx.fillStyle = "#d8d8dc";
   columns.forEach((column) => cellText(ctx, column.label, column.x, tableY + 34, column.width, column.align));
-  const selectedColumnIndex = terms.findIndex((term) => term.key === model.selectedTermKey) + 3;
-  const selectedColumn = columns[selectedColumnIndex];
-  if (selectedColumn) {
-    ctx.fillStyle = "#c9a56a";
-    roundRect(ctx, selectedColumn.x - 8, tableY + 10, selectedColumn.width + 12, 34, 12);
-    ctx.fill();
-    ctx.fillStyle = "#171719";
-    ctx.font = "900 16px Arial, sans-serif";
-    cellText(ctx, selectedColumn.label, selectedColumn.x, tableY + 33, selectedColumn.width, selectedColumn.align);
-  }
 
   model.rows.forEach((row, index) => {
     const y = tableY + headerH + index * rowH;
