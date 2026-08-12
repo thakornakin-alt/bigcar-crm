@@ -416,6 +416,9 @@ export type BookingDeliveryRecord = {
   deliveredAt?: string;
   cancelledAt?: string;
   isCounted?: boolean;
+  /** Additive future commission recipient identity; not populated/backfilled by Phase 2B. */
+  salespersonUserId?: string;
+  salespersonDisplayName?: string;
   commissionGroup?: "G1" | "G2" | "G3";
   purchaseType?: "cash" | "finance";
   caseStatus?:

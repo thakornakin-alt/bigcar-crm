@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertTriangle, ArrowLeft, BadgeCheck, Calculator, CarFront, ChevronRight, Fuel, RefreshCw, WalletCards } from "lucide-react";
 import { calculateMonthlyStatement } from "@/lib/commission";
 import { COMMISSION_CLOSING_FIXTURES, COMMISSION_PREVIEW_RULES, COMMISSION_PREVIEW_SNAPSHOTS } from "@/lib/commission-fixtures";
+import { COMMISSION_ISSUE_LABELS, type CanonicalCommissionCandidate, type CommissionCandidateIssue, type CommissionCandidateQuality } from "@/lib/commission-candidate";
 
 type IsolatedView = {
   mode: "isolated_fixture";
@@ -13,6 +14,8 @@ type IsolatedView = {
   cases: Array<{ bookingCaseId: string; sourceMonth: string; vehiclePlate: string; vehicleModel?: string; caseStatus: string; discountAmount: number; commissionGroup?: string; assessment: { state: string; reasons: string[] }; disposition?: { action: string } }>;
   snapshots: Array<{ id: string; bookingCaseId: string }>;
   activity: Array<{ id: string; action: string }>;
+  canonicalDataVerified?: boolean;
+  candidateReadiness?: { candidates: CanonicalCommissionCandidate[]; counts: { ready: number; needsReview: number; excluded: number; blocked: number } };
 };
 
 function baht(value: number) {
@@ -34,6 +37,8 @@ export function CommissionPreviewClient() {
   const [reasons, setReasons] = useState<Record<string, "cancelled" | "customer_paused" | "other">>({});
   const [adjustmentAmount, setAdjustmentAmount] = useState("");
   const [adjustmentReason, setAdjustmentReason] = useState("");
+  const [qualityFilter, setQualityFilter] = useState<"all" | CommissionCandidateQuality>("all");
+  const [issueFilter, setIssueFilter] = useState<"all" | "group" | "salesperson" | "price" | "recognition" | "cancelled">("all");
 
   async function loadReadiness() {
     setLoading(true);
@@ -57,6 +62,15 @@ export function CommissionPreviewClient() {
     blocked: view?.cases.filter((item) => item.assessment.state === "recognition_blocked").length || 0,
     working: view?.cases.filter((item) => item.assessment.state === "working").length || 0
   }), [view]);
+  const readinessCandidates = useMemo(() => (view?.candidateReadiness?.candidates || []).filter((candidate) => {
+    if (qualityFilter !== "all" && candidate.quality !== qualityFilter) return false;
+    if (issueFilter === "group") return candidate.needsReviewReasons.some((item) => item === "missing_commission_group" || item === "invalid_commission_group");
+    if (issueFilter === "salesperson") return candidate.needsReviewReasons.includes("missing_salesperson_identity");
+    if (issueFilter === "price") return candidate.needsReviewReasons.some((item) => item === "missing_standard_price" || item === "missing_sale_price" || item === "invalid_discount");
+    if (issueFilter === "recognition") return candidate.needsReviewReasons.includes("missing_recognition_date");
+    if (issueFilter === "cancelled") return candidate.needsReviewReasons.includes("cancelled_but_counted");
+    return true;
+  }), [view, qualityFilter, issueFilter]);
 
   async function persistClosing(item: typeof COMMISSION_CLOSING_FIXTURES[number], action: "carry_forward" | "do_not_carry") {
     setError("");
@@ -128,6 +142,17 @@ export function CommissionPreviewClient() {
         </div>
       </section>
 
+      <section data-testid="commission-readiness" className="mt-4 rounded-[24px] border border-white/10 bg-[#111317] p-3 sm:p-5">
+        <div className="flex flex-wrap items-end justify-between gap-2"><div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#d6b66c]">Canonical adapter · fixture mapped</p><h2 className="mt-1 text-xl font-black text-white">ความพร้อมข้อมูลค่าคอม</h2></div><span className="rounded-full border border-amber-300/20 bg-amber-300/8 px-3 py-1 text-xs font-bold text-amber-100">CODE READY · REAL DATA PENDING</span></div>
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4"><Metric label="พร้อมคำนวณ" value={view?.candidateReadiness?.counts.ready || 0} tone="green" /><Metric label="ต้องตรวจสอบ" value={view?.candidateReadiness?.counts.needsReview || 0} tone="amber" /><Metric label="ไม่รวม" value={view?.candidateReadiness?.counts.excluded || 0} tone="muted" /><Metric label="ถูกบล็อก" value={view?.candidateReadiness?.counts.blocked || 0} tone="muted" /></div>
+        <div className="mt-4 flex gap-2 overflow-x-auto pb-1">{([[
+          "all", "ทั้งหมด"], ["READY", "พร้อม"], ["NEEDS_REVIEW", "ต้องตรวจสอบ"], ["EXCLUDED", "ไม่รวม"], ["BLOCKED", "ถูกบล็อก"]] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setQualityFilter(value)} className={`min-h-10 shrink-0 rounded-xl border px-3 text-xs font-black ${qualityFilter === value ? "border-[#d6b66c] bg-[#d6b66c] text-[#17120a]" : "border-white/10 text-white/65"}`}>{label}</button>)}</div>
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1">{([[
+          "all", "ทุกประเด็น"], ["group", "ไม่มี Group"], ["salesperson", "ไม่มี Salesperson ID"], ["price", "ราคาไม่ครบ"], ["recognition", "Recognition ไม่ชัด"], ["cancelled", "ยกเลิกแต่ยังนับ"]] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setIssueFilter(value)} className={`min-h-10 shrink-0 rounded-xl border px-3 text-xs font-bold ${issueFilter === value ? "border-amber-300/40 bg-amber-300/10 text-amber-100" : "border-white/10 text-white/55"}`}>{label}</button>)}</div>
+        <div className="mt-4 grid gap-2 lg:grid-cols-2">{readinessCandidates.map((candidate) => <CandidateCard key={candidate.bookingCaseId} candidate={candidate} />)}</div>
+        {!readinessCandidates.length && <p className="mt-4 rounded-xl border border-white/8 bg-black/20 p-4 text-center text-sm text-white/45">ไม่มีรายการในตัวกรองนี้</p>}
+      </section>
+
       <section className="mt-4 rounded-[24px] border border-white/10 bg-[#111317] p-3 sm:p-5">
         <div className="flex flex-wrap items-end justify-between gap-2"><div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#d6b66c]">Working queue · isolated</p><h2 className="mt-1 text-xl font-black text-white">สถานะรายการค่าคอม</h2></div><span className="text-xs text-white/45">ทุก action ด้านล่างเป็น fixture เท่านั้น</span></div>
         <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{view?.cases.map((item) => <article key={item.bookingCaseId} className="rounded-2xl border border-white/8 bg-black/20 p-3">
@@ -174,4 +199,14 @@ function Metric({ label, value, tone }: { label: string; value: number; tone: "g
 
 function Reason({ label, value }: { label: string; value: number }) {
   return <div className="flex items-center justify-between gap-3"><span>{label}</span><strong className="text-white">{value}</strong></div>;
+}
+
+function CandidateCard({ candidate }: { candidate: CanonicalCommissionCandidate }) {
+  const tone = candidate.quality === "READY" ? "text-emerald-200" : candidate.quality === "NEEDS_REVIEW" ? "text-amber-100" : candidate.quality === "BLOCKED" ? "text-rose-100" : "text-white/55";
+  const source = candidate.sourceTrace;
+  return <article className="min-w-0 rounded-2xl border border-white/8 bg-black/20 p-3">
+    <div className="flex items-start justify-between gap-2"><div className="min-w-0"><strong className="block truncate text-white">{candidate.vehiclePlate || "ไม่ระบุทะเบียน"}</strong><span className="block truncate text-xs text-white/45">{candidate.salespersonDisplayName || "ไม่ระบุพนักงานขาย"} · {candidate.caseStatus || "ไม่ระบุสถานะ"}</span></div><span className={`shrink-0 text-[10px] font-black ${tone}`}>{candidate.quality}</span></div>
+    {candidate.needsReviewReasons.length ? <div className="mt-2 flex flex-wrap gap-1">{candidate.needsReviewReasons.map((issue: CommissionCandidateIssue) => <span key={issue} className="rounded-lg bg-white/[0.06] px-2 py-1 text-[10px] text-white/70">{COMMISSION_ISSUE_LABELS[issue]}</span>)}</div> : <p className="mt-2 text-xs text-emerald-200">ข้อมูลสำคัญครบ · {candidate.recognitionState}</p>}
+    <details className="mt-2 text-xs text-white/45"><summary className="min-h-9 cursor-pointer py-2 font-bold text-white/55">แหล่งข้อมูล</summary><div className="space-y-1 border-t border-white/8 pt-2"><p>Salesperson: {source.salespersonUserIdSource.kind} {source.salespersonUserIdSource.reference || "—"}</p><p>Group: {source.commissionGroupSource.kind} {source.commissionGroupSource.reference || "—"}</p><p>ราคาตั้ง: {source.standardPriceSource.kind} {source.standardPriceSource.reference || "—"}</p><p>ราคาขาย: {source.salePriceSource.kind} {source.salePriceSource.reference || "—"}</p><p>ส่วนลด: {source.discountSource.kind} {source.discountSource.reference || "—"}</p></div></details>
+  </article>;
 }
