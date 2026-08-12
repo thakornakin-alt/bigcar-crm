@@ -579,6 +579,10 @@ export default function SalesReportsPage() {
           attachments: uploadResult.attachments,
           driveFolderUrl: uploadResult.folderUrl,
           paymentDetail: buildSalesPaymentDetail(form),
+          salespersonUserId: salesProfile && form.saleName === salesProfile.firstName ? salesProfile.id : undefined,
+          salespersonDisplayName: salesProfile && form.saleName === salesProfile.firstName
+            ? [salesProfile.firstName, salesProfile.lastName].filter(Boolean).join(" ")
+            : undefined,
           reportText
         })
       });

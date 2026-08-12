@@ -7,6 +7,7 @@ import type { BookingReportInput, BuyerType } from "@/lib/types";
 import { recordActivity } from "@/lib/activity-log";
 import { RequestAuthError, requireWritableUser } from "@/lib/request-user";
 import { getRddFeatureFlags } from "@/lib/feature-flags";
+import { resolveAuthenticatedSalespersonCapture } from "@/lib/commission-canonical-capture";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,13 @@ function cleanReport(body: Partial<BookingReportInput>): BookingReportInput {
 export async function POST(request: Request) {
   try {
     const actor = requireWritableUser();
-    const input = cleanReport(await request.json());
+    const body = await request.json() as Partial<BookingReportInput>;
+    const input = cleanReport(body);
+    const salespersonCapture = resolveAuthenticatedSalespersonCapture({
+      submittedSalespersonUserId: body.salespersonUserId,
+      submittedSaleName: input.saleName,
+      actor
+    });
 
     if (!input.bookingDate || !input.customerName || !input.plate || !input.saleName) {
       return NextResponse.json({ error: "Booking date, customer name, plate and sale are required" }, { status: 400 });
@@ -64,7 +71,8 @@ export async function POST(request: Request) {
       saveReport: saveBookingReport,
       upsertMaster: (report) => upsertBookingDeliveryFromBookingReport(
         report,
-        getRddFeatureFlags().ownerMetadata ? actor : null
+        getRddFeatureFlags().ownerMetadata ? actor : null,
+        { salesperson: salespersonCapture }
       )
     });
     await recordActivity(actor, {
@@ -75,6 +83,16 @@ export async function POST(request: Request) {
       after: { status: result.report.status, bookingDate: result.report.bookingDate },
       metadata: { partialSuccess: result.partialSuccess }
     });
+    if (salespersonCapture && result.bookingDelivery) {
+      await recordActivity(actor, {
+        action: "commission_salesperson_captured",
+        targetType: "bookingDelivery",
+        targetId: result.bookingDelivery.id,
+        source: "api",
+        after: { changedFields: ["salespersonUserId", "salespersonDisplayName"] },
+        metadata: { source: "authenticated_self_selection" }
+      });
+    }
     if (result.partialSuccess) {
       console.error("[booking-reports] report saved but Booking Delivery Master failed", {
         reportId: result.report.id,

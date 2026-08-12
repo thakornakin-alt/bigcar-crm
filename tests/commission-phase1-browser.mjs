@@ -42,6 +42,7 @@ try {
     assert.equal(await page.getByText("สถานะ fixture", { exact: true }).count(), 1);
     assert.equal(await page.getByRole("heading", { name: "ความพร้อมข้อมูลค่าคอม" }).count(), 1);
     assert.equal(await page.getByText("CODE READY · REAL DATA PENDING", { exact: true }).count(), 1);
+    assert.equal(await page.getByText("New records supported", { exact: true }).count(), 1);
     await page.getByRole("button", { name: "ต้องตรวจสอบ", exact: true }).click();
     assert.equal(await page.getByText("PREVIEW 2002", { exact: true }).count(), 1);
     assert.equal(await page.getByText("PREVIEW 2001", { exact: true }).count(), 0);

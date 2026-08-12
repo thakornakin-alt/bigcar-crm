@@ -11,6 +11,7 @@ import { getLastJsonStoreTiming, readJsonStore, readJsonStoreSnapshot, writeJson
 import type { BookingDeliveryRecord, BookingDeliveryStatus, BookingReport, ReportHistoryItem } from "@/lib/types";
 import type { BookingDeliveryActor } from "@/lib/rdd-workspace-adapter";
 import { attachOwnerToNewRecord, incrementRecordVersion, normalizeWorkspaceRecord } from "@/lib/rdd-workspace-adapter";
+import { applyCanonicalCommissionCapture, type CanonicalSalespersonCapture } from "@/lib/commission-canonical-capture";
 
 type BookingDeliveryStore = {
   records: BookingDeliveryRecord[];
@@ -330,7 +331,7 @@ export async function syncBookingDeliveryFromReportHistory() {
   return upsertBookingDeliveryFromReportHistory(reports);
 }
 
-export async function upsertBookingDeliveryFromBookingReport(report: BookingReport, actor?: BookingDeliveryActor | null) {
+export async function upsertBookingDeliveryFromBookingReport(report: BookingReport, actor?: BookingDeliveryActor | null, commissionCapture?: { salesperson?: CanonicalSalespersonCapture }) {
   const existingStore = await readStore();
   const normalizedPlate = normalizePlate(report.plate);
   const normalizedCustomer = text(report.customerName).toLowerCase();
@@ -379,6 +380,7 @@ export async function upsertBookingDeliveryFromBookingReport(report: BookingRepo
     existing || undefined,
     existing?.bookingId || nextBookingId(existingStore.records, report.createdAt || new Date().toISOString())
   );
+  next = applyCanonicalCommissionCapture(next, commissionCapture || {}).record;
   if (!existing) next = attachOwnerToNewRecord(next, actor);
   if (!existing) {
     const payment = text(report.paymentType || "");
@@ -441,6 +443,11 @@ function buildRecordFromReports(
     engineNo: text(booking.engineNo || sales?.engineNo || current?.engineNo),
     chassisNo: text(booking.chassisNo || sales?.chassisNo || current?.chassisNo),
     saleName: text(booking.saleName || sales?.saleName),
+    salespersonUserId: current?.salespersonUserId,
+    salespersonDisplayName: current?.salespersonDisplayName,
+    commissionGroup: current?.commissionGroup,
+    commissionGroupSource: current?.commissionGroupSource,
+    commissionGroupCapturedAt: current?.commissionGroupCapturedAt,
     teamName: text(booking.teamName || sales?.teamName),
     teamId,
     source: text(
@@ -502,6 +509,21 @@ export async function listBookingDeliveryRecords() {
 export async function getBookingDeliveryRecord(id: string) {
   const safeId = text(id);
   return (await readStore()).records.find((record) => record.id === safeId || record.bookingId === safeId) || null;
+}
+
+/** Capture only on the exact Booking Report relationship; never joins by owner/name/actor. */
+export async function captureBookingDeliverySalespersonFromSalesReport(input: { bookingReportId: string; salesperson: CanonicalSalespersonCapture }) {
+  const bookingReportId = text(input.bookingReportId);
+  if (!bookingReportId) return null;
+  const store = await readStore();
+  const matches = store.records.filter((record) => record.bookingReportId === bookingReportId);
+  if (matches.length !== 1) return null;
+  const index = store.records.findIndex((record) => record.id === matches[0].id);
+  const captured = applyCanonicalCommissionCapture(store.records[index], { salesperson: input.salesperson });
+  if (!captured.changedFields.length) return { record: store.records[index], changedFields: [] as string[] };
+  store.records[index] = { ...captured.record, updatedAt: new Date().toISOString() };
+  await writeStore(store);
+  return { record: store.records[index], changedFields: captured.changedFields };
 }
 
 export async function upsertBookingDeliveryFromReportHistory(reports: ReportHistoryItem[]) {

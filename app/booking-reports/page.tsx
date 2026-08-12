@@ -445,6 +445,10 @@ export default function BookingReportsPage() {
             .map((attachment) => ({ ...attachment, category: attachment.category as BookingAttachmentCategory }))
         : buildAttachments(),
       reportText,
+      salespersonUserId: salesProfile && form.saleName === salesProfile.firstName ? salesProfile.id : undefined,
+      salespersonDisplayName: salesProfile && form.saleName === salesProfile.firstName
+        ? [salesProfile.firstName, salesProfile.lastName].filter(Boolean).join(" ")
+        : undefined,
       status: "draft"
     };
 

@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { saveSalesReport } from "@/lib/apps-script";
-import { syncBookingDeliveryFromReportHistory } from "@/lib/booking-delivery";
+import { captureBookingDeliverySalespersonFromSalesReport, syncBookingDeliveryFromReportHistory } from "@/lib/booking-delivery";
 import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
 import type { SalesReportInput } from "@/lib/types";
 import { recordActivity } from "@/lib/activity-log";
 import { RequestAuthError, requireWritableUser } from "@/lib/request-user";
+import { resolveAuthenticatedSalespersonCapture } from "@/lib/commission-canonical-capture";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +63,9 @@ function clean(body: Partial<SalesReportInput>): SalesReportInput {
 export async function POST(request: Request) {
   try {
     const actor = requireWritableUser();
-    const report = clean(await request.json());
+    const body = await request.json() as Partial<SalesReportInput>;
+    const report = clean(body);
+    const salespersonCapture = resolveAuthenticatedSalespersonCapture({ submittedSalespersonUserId: body.salespersonUserId, submittedSaleName: report.saleName, actor });
     if (!report.customerName || !report.plate || !report.saleName) {
       return NextResponse.json({ error: "Customer name, plate and sale are required" }, { status: 400 });
     }
@@ -76,6 +79,19 @@ export async function POST(request: Request) {
       after: { status: saved.status, bookingReportId: saved.bookingReportId }
     });
     await syncBookingDeliveryFromReportHistory().catch(() => null);
+    const identityResult = salespersonCapture && report.bookingReportId
+      ? await captureBookingDeliverySalespersonFromSalesReport({ bookingReportId: report.bookingReportId, salesperson: salespersonCapture })
+      : null;
+    if (identityResult?.changedFields.length) {
+      await recordActivity(actor, {
+        action: "commission_salesperson_captured",
+        targetType: "bookingDelivery",
+        targetId: identityResult.record.id,
+        source: "api",
+        after: { changedFields: identityResult.changedFields },
+        metadata: { source: "sales_report_authenticated_self_selection" }
+      });
+    }
     return NextResponse.json({ report: saved }, { status: 201 });
   } catch (error) {
     if (error instanceof RequestAuthError) return NextResponse.json({ error: error.message }, { status: error.status });

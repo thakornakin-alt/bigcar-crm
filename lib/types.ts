@@ -45,6 +45,9 @@ export type InstallmentRow = {
 export type BuyerType = "individual" | "company";
 
 export type BookingReportInput = {
+  /** CRM-only identity hint; not a new Google Sheet column. */
+  salespersonUserId?: string;
+  salespersonDisplayName?: string;
   bookingDate: string;
   customerName: string;
   idCard: string;
@@ -86,6 +89,9 @@ export type BookingReport = BookingReportInput & {
 };
 
 export type SalesReportInput = {
+  /** CRM-only identity hint; not a new Google Sheet column. */
+  salespersonUserId?: string;
+  salespersonDisplayName?: string;
   bookingReportId: string;
   customerName: string;
   phone: string;
@@ -420,6 +426,8 @@ export type BookingDeliveryRecord = {
   salespersonUserId?: string;
   salespersonDisplayName?: string;
   commissionGroup?: "G1" | "G2" | "G3";
+  commissionGroupSource?: string;
+  commissionGroupCapturedAt?: string;
   purchaseType?: "cash" | "finance";
   caseStatus?:
     | "waiting_delivery"
