@@ -33,7 +33,9 @@ test("canonical candidate adapter is pure and never reaches a write service", ()
 
 test("closing controls persist only through isolated fixture API", () => {
   assert.match(client, /COMMISSION_CLOSING_FIXTURES/);
-  assert.match(client, /isolated fixture API/);
+  assert.match(client, /persistClosing/);
+  assert.match(client, /ข้อมูลตรวจสอบระบบ/);
+  assert.match(client, /สำหรับทดสอบ Preview เท่านั้น/);
   assert.match(client, /COMMISSION_REAL_WRITES_ENABLED=false/);
   assert.match(client, /setClosingChoices/);
 });

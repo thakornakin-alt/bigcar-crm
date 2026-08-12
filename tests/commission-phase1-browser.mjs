@@ -8,6 +8,7 @@ const artifactDir = path.resolve("artifacts/commission-phase1");
 await mkdir(artifactDir, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const results = [];
+let latestIsolatedView;
 
 try {
   for (const width of [360, 390, 430, 768, 1440]) {
@@ -26,6 +27,7 @@ try {
       { bookingCaseId: "ISO-2", sourceMonth: "2026-07", vehiclePlate: "PREVIEW 1002", caseStatus: "waiting_delivery", discountAmount: 8000, commissionGroup: "G2", assessment: { state: "working", reasons: ["not_delivered_or_cutoff"] } },
       { bookingCaseId: "ISO-3", sourceMonth: "2026-07", vehiclePlate: "PREVIEW 1003", caseStatus: "cancelled", discountAmount: 0, commissionGroup: "G1", assessment: { state: "recognition_blocked", reasons: ["cancelled"] } }
     ] };
+    latestIsolatedView = isolatedView;
     await context.route("**/api/commission-preview", (route) => {
       assert.ok(["GET", "POST"].includes(route.request().method()));
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(route.request().method() === "GET" ? isolatedView : { result: {}, view: isolatedView }) });
@@ -35,20 +37,17 @@ try {
     page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(`${baseUrl}/commission`, { waitUntil: "networkidle" });
-    await page.getByRole("heading", { name: "ค่าคอมเดือนนี้" }).waitFor();
-    assert.equal(await page.getByText("PREVIEW · ไม่บันทึกข้อมูลจริง", { exact: true }).count(), 1);
-    assert.equal(await page.getByText("รายการค่าคอมรายคัน", { exact: true }).count(), 1);
+    await page.getByRole("heading", { name: "สรุปค่าคอมเดือนนี้" }).waitFor();
+    await page.getByText("มี 2 รายการต้องตรวจสอบข้อมูล", { exact: true }).waitFor();
+    assert.equal(await page.getByText("รายการรถของฉัน", { exact: true }).count(), 1);
     assert.equal(await page.getByText("ปิดยอดเดือน กรกฎาคม 2569", { exact: true }).count(), 1);
-    assert.equal(await page.getByText("สถานะ fixture", { exact: true }).count(), 1);
-    assert.equal(await page.getByRole("heading", { name: "ความพร้อมข้อมูลค่าคอม" }).count(), 1);
-    assert.equal(await page.getByText("CODE READY · REAL DATA PENDING", { exact: true }).count(), 1);
-    assert.equal(await page.getByText("New records supported", { exact: true }).count(), 1);
-    await page.getByRole("button", { name: "ต้องตรวจสอบ", exact: true }).click();
-    assert.equal(await page.getByText("PREVIEW 2002", { exact: true }).count(), 1);
-    assert.equal(await page.getByText("PREVIEW 2001", { exact: true }).count(), 0);
-    await page.getByRole("button", { name: "ทั้งหมด", exact: true }).click();
-    assert.equal(await page.getByText("COMMISSION_REAL_WRITES_ENABLED=false", { exact: false }).count(), 1);
-    await page.getByText("Manual Adjustment · Admin fixture", { exact: true }).waitFor();
+    assert.equal(await page.getByTestId("sales-readiness").count(), 1);
+    for (const hidden of ["CODE READY · REAL DATA PENDING", "CANONICAL ADAPTER · FIXTURE MAPPED", "WORKING QUEUE · ISOLATED", "สถานะ fixture", "COMMISSION_REAL_WRITES_ENABLED=false", "PREVIEW 1001", "eligible_for_recognition", "recognition_blocked", "NEEDS_REVIEW", "EXCLUDED"]) {
+      assert.equal(await page.getByText(hidden, { exact: false }).count(), 0, `sales must not see ${hidden}`);
+    }
+    assert.equal(await page.getByTestId("admin-diagnostics").count(), 0);
+    assert.equal(await page.getByText("ปรับค่าคอมเพิ่มเติม", { exact: true }).count(), 0);
+    assert.ok(await page.getByText("รับรู้ค่าคอมแล้ว", { exact: true }).count() >= 5);
     const dimensions = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
     assert.ok(dimensions.scrollWidth <= dimensions.clientWidth, `overflow at ${width}: ${dimensions.scrollWidth}/${dimensions.clientWidth}`);
     assert.deepEqual(errors.filter((message) => /hydration|did not match|server-rendered html/i.test(message)), []);
@@ -57,6 +56,20 @@ try {
     if (width === 1440) await page.screenshot({ path: path.join(artifactDir, "commission-desktop-1440.png"), fullPage: true });
     await context.close();
   }
+
+  const adminContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  await adminContext.route("**/api/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ user: { id: "ADMIN-1", nickname: "แอดมิน", role: "admin", locked: false } }) }));
+  await adminContext.route("**/api/commission-preview", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(latestIsolatedView) }));
+  const adminPage = await adminContext.newPage();
+  await adminPage.goto(`${baseUrl}/commission`, { waitUntil: "networkidle" });
+  const diagnostics = adminPage.getByTestId("admin-diagnostics");
+  assert.equal(await diagnostics.count(), 1);
+  assert.equal(await diagnostics.getAttribute("open"), null);
+  await diagnostics.locator(":scope > summary").click();
+  await diagnostics.getByText("เครื่องมือทดสอบ Preview", { exact: true }).waitFor();
+  assert.equal(await diagnostics.getByText("CODE READY · REAL DATA PENDING", { exact: true }).count(), 1);
+  assert.equal(await diagnostics.getByText("ปรับค่าคอมเพิ่มเติม", { exact: true }).count(), 1);
+  await adminContext.close();
   process.stdout.write(`${JSON.stringify(results)}\n`);
 } finally {
   await browser.close();
