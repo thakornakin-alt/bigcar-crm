@@ -54,6 +54,7 @@ export type MonthlyCommissionStatement = {
   salespersonUserId: string;
   month: string;
   recognizedSnapshots: CommissionSnapshot[];
+  recognizedSnapshotIds: string[];
   totalPhysicalCars: number;
   totalWeightedCars: number;
   grossVehicleCommission: number;
@@ -70,6 +71,7 @@ export type MonthlyCommissionStatement = {
 };
 
 export type CommissionMonthlyDisposition = {
+  id?: string;
   bookingCaseId: string;
   sourceMonth: string;
   action: "carry_forward" | "do_not_carry";
@@ -77,6 +79,16 @@ export type CommissionMonthlyDisposition = {
   targetMonth?: string;
   actorUserId: string;
   actedAt: string;
+};
+
+export type CommissionCorrection = {
+  id: string;
+  originalSnapshotId: string;
+  type: "adjustment" | "reversal";
+  amount: number;
+  reason: string;
+  actorUserId: string;
+  createdAt: string;
 };
 
 export type VehicleCommissionInput = {
@@ -177,6 +189,7 @@ export function calculateMonthlyStatement(snapshots: CommissionSnapshot[], rules
     salespersonUserId,
     month: rules.month,
     recognizedSnapshots: active,
+    recognizedSnapshotIds: active.map((item) => item.id),
     totalPhysicalCars: active.length,
     totalWeightedCars: weighted,
     grossVehicleCommission: gross,

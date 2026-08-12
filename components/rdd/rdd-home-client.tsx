@@ -25,7 +25,7 @@ function thaiDate(value: string) {
   return new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", year: "2-digit" }).format(new Date(parsed));
 }
 
-export function RddHomeClient({ initialYear, initialMonth }: { initialYear: number; initialMonth: number }) {
+export function RddHomeClient({ initialYear, initialMonth, commissionPreview = false }: { initialYear: number; initialMonth: number; commissionPreview?: boolean }) {
   const { records, loading, error, retry } = useBookingDeliveryRead();
   const { user } = useSalesProfile();
   const [scope, setScope] = useState<OwnershipScope>("all");
@@ -102,6 +102,11 @@ export function RddHomeClient({ initialYear, initialMonth }: { initialYear: numb
               ))}
             </div>
           </RddSection>
+
+          {commissionPreview && <Link href="/commission#monthly-closing" className="flex min-h-14 items-center justify-between gap-3 rounded-2xl border border-amber-300/25 bg-amber-300/[0.08] px-4 text-amber-50">
+            <span><strong className="block">ปิดยอดค่าคอมเดือนที่แล้ว</strong><span className="text-xs text-amber-100/65">มีรายการ fixture ที่ยังต้องเลือกยกไปหรือไม่ยกไป</span></span>
+            <span className="shrink-0 rounded-full bg-amber-200 px-2.5 py-1 text-xs font-black text-amber-950">2 รายการ</span>
+          </Link>}
 
           <section className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3 xl:grid-cols-6">
             {cards.map((card) => {

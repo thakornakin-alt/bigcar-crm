@@ -8,5 +8,5 @@ export const dynamic = "force-dynamic";
 export default function RddHomePage() {
   if (!getRddFeatureFlags().workspaceReadOnly) notFound();
   const month = currentBangkokMonth();
-  return <RddHomeClient initialYear={month.year} initialMonth={month.month} />;
+  return <RddHomeClient initialYear={month.year} initialMonth={month.month} commissionPreview={getRddFeatureFlags().commissionPreview} />;
 }

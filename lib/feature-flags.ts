@@ -6,6 +6,7 @@ export type RddFeatureFlags = {
   workspaceReadOnly: boolean;
   workspaceEdit: boolean;
   commissionPreview: boolean;
+  commissionRealWrites: boolean;
 };
 
 function enabled(value: string | undefined) {
@@ -20,6 +21,7 @@ export function getRddFeatureFlags(env: NodeJS.ProcessEnv = process.env): RddFea
     activityV2: enabled(env.RDD_ACTIVITY_V2_ENABLED),
     workspaceReadOnly: enabled(env.RDD_WORKSPACE_READ_ONLY_ENABLED),
     workspaceEdit: enabled(env.RDD_WORKSPACE_EDIT_ENABLED),
-    commissionPreview: enabled(env.RDD_COMMISSION_PREVIEW_ENABLED)
+    commissionPreview: enabled(env.RDD_COMMISSION_PREVIEW_ENABLED),
+    commissionRealWrites: enabled(env.COMMISSION_REAL_WRITES_ENABLED)
   };
 }

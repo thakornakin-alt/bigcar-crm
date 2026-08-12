@@ -3,9 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft, BadgeCheck, Calculator, CarFront, ChevronRight, Fuel, RefreshCw, WalletCards } from "lucide-react";
-import { calculateMonthlyStatement, commissionReadinessReport } from "@/lib/commission";
+import { calculateMonthlyStatement } from "@/lib/commission";
 import { COMMISSION_CLOSING_FIXTURES, COMMISSION_PREVIEW_RULES, COMMISSION_PREVIEW_SNAPSHOTS } from "@/lib/commission-fixtures";
-import type { BookingDeliveryRecord } from "@/lib/types";
+
+type IsolatedView = {
+  mode: "isolated_fixture";
+  realWritesEnabled: false;
+  pendingClosingCount: number;
+  cases: Array<{ bookingCaseId: string; sourceMonth: string; vehiclePlate: string; vehicleModel?: string; caseStatus: string; discountAmount: number; commissionGroup?: string; assessment: { state: string; reasons: string[] }; disposition?: { action: string } }>;
+  snapshots: Array<{ id: string; bookingCaseId: string }>;
+  activity: Array<{ id: string; action: string }>;
+};
 
 function baht(value: number) {
   return new Intl.NumberFormat("th-TH", { maximumFractionDigits: 0 }).format(value);
@@ -19,19 +27,20 @@ function monthLabel(month: string) {
 const statement = calculateMonthlyStatement(COMMISSION_PREVIEW_SNAPSHOTS, COMMISSION_PREVIEW_RULES, "USER-PREVIEW-BIG");
 
 export function CommissionPreviewClient() {
-  const [records, setRecords] = useState<BookingDeliveryRecord[]>([]);
+  const [view, setView] = useState<IsolatedView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [closingChoices, setClosingChoices] = useState<Record<string, string>>({});
+  const [reasons, setReasons] = useState<Record<string, "cancelled" | "customer_paused" | "other">>({});
 
   async function loadReadiness() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/booking-delivery?scope=all", { method: "GET", cache: "no-store" });
-      const data = await response.json() as { records?: BookingDeliveryRecord[]; error?: string };
+      const response = await fetch("/api/commission-preview", { method: "GET", cache: "no-store" });
+      const data = await response.json() as IsolatedView & { error?: string };
       if (!response.ok) throw new Error(data.error || "อ่านข้อมูลไม่สำเร็จ");
-      setRecords(Array.isArray(data.records) ? data.records : []);
+      setView(data);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "อ่านข้อมูลไม่สำเร็จ");
     } finally {
@@ -40,7 +49,29 @@ export function CommissionPreviewClient() {
   }
 
   useEffect(() => { void loadReadiness(); }, []);
-  const readiness = useMemo(() => commissionReadinessReport(records), [records]);
+  const readiness = useMemo(() => ({
+    eligible: view?.cases.filter((item) => item.assessment.state === "eligible_for_recognition").length || 0,
+    needsReview: view?.cases.filter((item) => item.assessment.state === "needs_review").length || 0,
+    blocked: view?.cases.filter((item) => item.assessment.state === "recognition_blocked").length || 0,
+    working: view?.cases.filter((item) => item.assessment.state === "working").length || 0
+  }), [view]);
+
+  async function persistClosing(item: typeof COMMISSION_CLOSING_FIXTURES[number], action: "carry_forward" | "do_not_carry") {
+    setError("");
+    const response = await fetch("/api/commission-preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, bookingCaseId: item.bookingCaseId === "pending-1" ? "ISO-WAITING-G2" : "ISO-PAUSED-G3", sourceMonth: "2026-07", reason: action === "do_not_carry" ? (reasons[item.bookingCaseId] || "other") : undefined }) });
+    const data = await response.json() as { error?: string; view?: IsolatedView };
+    if (!response.ok) { setError(data.error || "บันทึก fixture ไม่สำเร็จ"); return; }
+    if (data.view) setView(data.view);
+    setClosingChoices((value) => ({ ...value, [item.bookingCaseId]: action }));
+  }
+
+  async function recognize(bookingCaseId: string, method: "delivered" | "manual_cutoff") {
+    setError("");
+    const response = await fetch("/api/commission-preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "recognize", bookingCaseId, method, recognizedMonth: "2026-08" }) });
+    const data = await response.json() as { error?: string; view?: IsolatedView };
+    if (!response.ok) { setError(data.error || "รับรู้ fixture ไม่สำเร็จ"); return; }
+    if (data.view) setView(data.view);
+  }
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-[1440px] overflow-x-hidden px-3 pb-16 sm:px-5 lg:px-8">
@@ -84,22 +115,35 @@ export function CommissionPreviewClient() {
         </div>
       </section>
 
+      <section className="mt-4 rounded-[24px] border border-white/10 bg-[#111317] p-3 sm:p-5">
+        <div className="flex flex-wrap items-end justify-between gap-2"><div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#d6b66c]">Working queue · isolated</p><h2 className="mt-1 text-xl font-black text-white">สถานะรายการค่าคอม</h2></div><span className="text-xs text-white/45">ทุก action ด้านล่างเป็น fixture เท่านั้น</span></div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{view?.cases.map((item) => <article key={item.bookingCaseId} className="rounded-2xl border border-white/8 bg-black/20 p-3">
+          <div className="flex items-start justify-between gap-2"><div className="min-w-0"><strong className="block truncate text-white">{item.vehiclePlate}</strong><span className="block truncate text-xs text-white/45">{item.vehicleModel || "ยังไม่ระบุรุ่น"}</span></div><span className="shrink-0 rounded-full border border-white/10 px-2 py-1 text-[10px] font-black text-amber-100">{item.assessment.state}</span></div>
+          <p className="mt-2 text-xs text-white/55">{item.commissionGroup || "Group —"} · ลด {baht(item.discountAmount)} · {item.caseStatus}</p>
+          {item.assessment.state === "eligible_for_recognition" && <button type="button" onClick={() => void recognize(item.bookingCaseId, "delivered")} className="mt-3 min-h-11 w-full rounded-xl bg-[#d6b66c] text-sm font-black text-[#17120a]">รับรู้จากการส่งมอบ</button>}
+          {item.assessment.state === "working" && <button type="button" onClick={() => void recognize(item.bookingCaseId, "manual_cutoff")} className="mt-3 min-h-11 w-full rounded-xl border border-[#d6b66c]/40 text-sm font-black text-amber-100">ตัดยอดค่าคอม (fixture)</button>}
+          {item.assessment.state === "recognition_blocked" && <p className="mt-3 rounded-lg bg-rose-300/10 px-2 py-2 text-xs text-rose-100">Recognition blocked · {item.assessment.reasons.join(", ")}</p>}
+          {item.assessment.state === "needs_review" && <p className="mt-3 rounded-lg bg-amber-300/10 px-2 py-2 text-xs text-amber-100">Needs review · {item.assessment.reasons.join(", ")}</p>}
+        </article>)}</div>
+      </section>
+
       <section className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
-        <div className="rounded-[24px] border border-white/10 bg-[#111317] p-4 sm:p-5">
+        <div id="monthly-closing" className="rounded-[24px] border border-white/10 bg-[#111317] p-4 sm:p-5">
           <div className="flex items-center justify-between gap-2"><div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#d6b66c]">Monthly closing · fixture</p><h2 className="mt-1 text-xl font-black text-white">ปิดยอดเดือน กรกฎาคม 2569</h2></div><span className="rounded-full bg-rose-300/10 px-3 py-1 text-xs font-bold text-rose-100">รอดำเนินการ</span></div>
-          <p className="mt-2 text-sm text-white/50">ตัวเลือกด้านล่างเป็น Demo ในเครื่องเท่านั้น ไม่มี API mutation</p>
+          <p className="mt-2 text-sm text-white/50">บันทึกผ่าน isolated fixture API เท่านั้น · ไม่เชื่อม Supabase/Booking Delivery</p>
           <div className="mt-4 grid gap-3">{COMMISSION_CLOSING_FIXTURES.map((item) => <article key={item.bookingCaseId} className="rounded-2xl border border-white/8 bg-black/20 p-3">
             <div className="flex items-start justify-between gap-3"><div><strong className="text-white">{item.plate}</strong><p className="text-xs text-white/45">{item.model} · {item.status}</p></div><strong className="text-amber-100">~{baht(item.estimated)} ฿</strong></div>
-            <div className="mt-3 grid grid-cols-2 gap-2"><button type="button" onClick={() => setClosingChoices((value) => ({ ...value, [item.bookingCaseId]: "carry" }))} className={`min-h-11 rounded-xl border px-2 text-sm font-black ${closingChoices[item.bookingCaseId] === "carry" ? "border-[#d6b66c] bg-[#d6b66c] text-[#17120a]" : "border-white/12 text-white"}`}>ยกไปเดือนหน้า</button><button type="button" onClick={() => setClosingChoices((value) => ({ ...value, [item.bookingCaseId]: "drop" }))} className={`min-h-11 rounded-xl border px-2 text-sm font-black ${closingChoices[item.bookingCaseId] === "drop" ? "border-rose-300/50 bg-rose-300/15 text-rose-100" : "border-white/12 text-white"}`}>ไม่ยกไป</button></div>
+            <div className="mt-3 grid grid-cols-2 gap-2"><button type="button" onClick={() => void persistClosing(item, "carry_forward")} className={`min-h-11 rounded-xl border px-2 text-sm font-black ${closingChoices[item.bookingCaseId] === "carry_forward" ? "border-[#d6b66c] bg-[#d6b66c] text-[#17120a]" : "border-white/12 text-white"}`}>ยกไปเดือนหน้า</button><button type="button" onClick={() => void persistClosing(item, "do_not_carry")} className={`min-h-11 rounded-xl border px-2 text-sm font-black ${closingChoices[item.bookingCaseId] === "do_not_carry" ? "border-rose-300/50 bg-rose-300/15 text-rose-100" : "border-white/12 text-white"}`}>ไม่ยกไป</button></div>
+            <select aria-label={`เหตุผลไม่ยก ${item.plate}`} value={reasons[item.bookingCaseId] || "other"} onChange={(event) => setReasons((value) => ({ ...value, [item.bookingCaseId]: event.target.value as "cancelled" | "customer_paused" | "other" }))} className="mt-2 min-h-11 w-full rounded-xl border border-white/12 bg-[#17191d] px-3 text-sm text-white"><option value="cancelled">ยกเลิก</option><option value="customer_paused">ลูกค้าชะลอ</option><option value="other">อื่นๆ</option></select>
           </article>)}</div>
         </div>
 
         <div className="rounded-[24px] border border-white/10 bg-[#111317] p-4 sm:p-5">
-          <div className="flex items-center justify-between"><div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#d6b66c]">Real data · read only</p><h2 className="mt-1 text-xl font-black text-white">ความพร้อมข้อมูลจริง</h2></div>{loading && <RefreshCw size={18} className="animate-spin text-[#d6b66c]" />}</div>
+          <div className="flex items-center justify-between"><div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#d6b66c]">Isolated persistence</p><h2 className="mt-1 text-xl font-black text-white">สถานะ fixture</h2></div>{loading && <RefreshCw size={18} className="animate-spin text-[#d6b66c]" />}</div>
           {error ? <div className="mt-4 rounded-xl border border-rose-300/25 bg-rose-300/10 p-3 text-sm text-rose-100"><p>{error}</p><button type="button" onClick={() => void loadReadiness()} className="mt-2 min-h-10 font-black">ลองใหม่</button></div> : <>
-            <div className="mt-4 grid grid-cols-3 gap-2"><Metric label="พร้อม" value={readiness.eligible} tone="green" /><Metric label="ต้องตรวจ" value={readiness.needsReview} tone="amber" /><Metric label="ตัดออก" value={readiness.excluded} tone="muted" /></div>
-            <div className="mt-4 space-y-2 text-sm text-white/65"><Reason label="ไม่มี Commission Group" value={readiness.reasons.missingCommissionGroup} /><Reason label="ไม่มี stable salesperson ID" value={readiness.reasons.missingSalespersonUserId} /><Reason label="ยังไม่รับรู้ยอด" value={readiness.reasons.unrecognized} /><Reason label="ไม่นับ" value={readiness.reasons.notCounted} /><Reason label="QA / excludeFromMetrics" value={readiness.reasons.qaExcluded} /></div>
-            <div className="mt-4 flex gap-2 rounded-xl border border-amber-300/20 bg-amber-300/8 p-3 text-xs leading-5 text-amber-100"><AlertTriangle size={17} className="mt-0.5 shrink-0" /><p>ระบบไม่ map FinalGrade เป็น Commission Group และไม่จับคู่ชื่อเซลส์แบบเดา รายการไม่ครบจึงอยู่ needs_review</p></div>
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4"><Metric label="พร้อมรับรู้" value={readiness.eligible} tone="green" /><Metric label="Working" value={readiness.working} tone="muted" /><Metric label="ต้องตรวจ" value={readiness.needsReview} tone="amber" /><Metric label="Blocked" value={readiness.blocked} tone="muted" /></div>
+            <div className="mt-4 space-y-2 text-sm text-white/65"><Reason label="Closing ค้าง" value={view?.pendingClosingCount || 0} /><Reason label="Snapshots" value={view?.snapshots.length || 0} /><Reason label="Activity" value={view?.activity.length || 0} /></div>
+            <div className="mt-4 flex gap-2 rounded-xl border border-amber-300/20 bg-amber-300/8 p-3 text-xs leading-5 text-amber-100"><AlertTriangle size={17} className="mt-0.5 shrink-0" /><p>COMMISSION_REAL_WRITES_ENABLED=false · endpoint จริงปฏิเสธ write และ fixture store ไม่ใช้ canonical Booking Delivery</p></div>
           </>}
         </div>
       </section>
