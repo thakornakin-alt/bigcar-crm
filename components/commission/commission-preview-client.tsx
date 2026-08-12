@@ -32,6 +32,8 @@ export function CommissionPreviewClient() {
   const [error, setError] = useState("");
   const [closingChoices, setClosingChoices] = useState<Record<string, string>>({});
   const [reasons, setReasons] = useState<Record<string, "cancelled" | "customer_paused" | "other">>({});
+  const [adjustmentAmount, setAdjustmentAmount] = useState("");
+  const [adjustmentReason, setAdjustmentReason] = useState("");
 
   async function loadReadiness() {
     setLoading(true);
@@ -71,6 +73,17 @@ export function CommissionPreviewClient() {
     const data = await response.json() as { error?: string; view?: IsolatedView };
     if (!response.ok) { setError(data.error || "รับรู้ fixture ไม่สำเร็จ"); return; }
     if (data.view) setView(data.view);
+  }
+
+  async function saveAdjustment() {
+    const snapshotId = view?.snapshots[0]?.id;
+    if (!snapshotId) return;
+    setError("");
+    const response = await fetch("/api/commission-preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "adjust", snapshotId, amount: Number(adjustmentAmount), reason: adjustmentReason }) });
+    const data = await response.json() as { error?: string; view?: IsolatedView };
+    if (!response.ok) { setError(data.error || "บันทึก Adjustment fixture ไม่สำเร็จ"); return; }
+    if (data.view) setView(data.view);
+    setAdjustmentAmount(""); setAdjustmentReason("");
   }
 
   return (
@@ -143,6 +156,7 @@ export function CommissionPreviewClient() {
           {error ? <div className="mt-4 rounded-xl border border-rose-300/25 bg-rose-300/10 p-3 text-sm text-rose-100"><p>{error}</p><button type="button" onClick={() => void loadReadiness()} className="mt-2 min-h-10 font-black">ลองใหม่</button></div> : <>
             <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4"><Metric label="พร้อมรับรู้" value={readiness.eligible} tone="green" /><Metric label="Working" value={readiness.working} tone="muted" /><Metric label="ต้องตรวจ" value={readiness.needsReview} tone="amber" /><Metric label="Blocked" value={readiness.blocked} tone="muted" /></div>
             <div className="mt-4 space-y-2 text-sm text-white/65"><Reason label="Closing ค้าง" value={view?.pendingClosingCount || 0} /><Reason label="Snapshots" value={view?.snapshots.length || 0} /><Reason label="Activity" value={view?.activity.length || 0} /></div>
+            {Boolean(view?.snapshots.length) && <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3"><p className="text-xs font-black text-white">Manual Adjustment · Admin fixture</p><div className="mt-2 grid gap-2 sm:grid-cols-[120px_1fr_auto]"><input aria-label="ยอด Adjustment" inputMode="numeric" value={adjustmentAmount} onChange={(event) => setAdjustmentAmount(event.target.value)} placeholder="-1500" className="min-h-11 rounded-xl border border-white/12 bg-[#17191d] px-3 text-white" /><input aria-label="เหตุผล Adjustment" value={adjustmentReason} onChange={(event) => setAdjustmentReason(event.target.value)} placeholder="เหตุผล (บังคับ)" className="min-h-11 rounded-xl border border-white/12 bg-[#17191d] px-3 text-white" /><button type="button" disabled={!adjustmentAmount || !adjustmentReason.trim()} onClick={() => void saveAdjustment()} className="min-h-11 rounded-xl bg-[#d6b66c] px-4 font-black text-[#17120a] disabled:opacity-40">บันทึก</button></div></div>}
             <div className="mt-4 flex gap-2 rounded-xl border border-amber-300/20 bg-amber-300/8 p-3 text-xs leading-5 text-amber-100"><AlertTriangle size={17} className="mt-0.5 shrink-0" /><p>COMMISSION_REAL_WRITES_ENABLED=false · endpoint จริงปฏิเสธ write และ fixture store ไม่ใช้ canonical Booking Delivery</p></div>
           </>}
         </div>

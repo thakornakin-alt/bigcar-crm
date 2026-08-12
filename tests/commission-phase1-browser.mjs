@@ -13,7 +13,7 @@ try {
   for (const width of [360, 390, 430, 768, 1440]) {
     const context = await browser.newContext({ viewport: { width, height: width < 768 ? 844 : 1000 } });
     await context.route("**/api/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ user: { id: "USER-PREVIEW-BIG", nickname: "บิ๊ก", role: "sales", locked: false } }) }));
-    const isolatedView = { mode: "isolated_fixture", realWritesEnabled: false, pendingClosingCount: 2, snapshots: [], activity: [], cases: [
+    const isolatedView = { mode: "isolated_fixture", realWritesEnabled: false, pendingClosingCount: 2, snapshots: [{ id: "ISO-SNAP-1", bookingCaseId: "ISO-1" }], activity: [], cases: [
       { bookingCaseId: "ISO-1", sourceMonth: "2026-07", vehiclePlate: "PREVIEW 1001", caseStatus: "delivered", discountAmount: 0, commissionGroup: "G1", assessment: { state: "eligible_for_recognition", reasons: [] } },
       { bookingCaseId: "ISO-2", sourceMonth: "2026-07", vehiclePlate: "PREVIEW 1002", caseStatus: "waiting_delivery", discountAmount: 8000, commissionGroup: "G2", assessment: { state: "working", reasons: ["not_delivered_or_cutoff"] } },
       { bookingCaseId: "ISO-3", sourceMonth: "2026-07", vehiclePlate: "PREVIEW 1003", caseStatus: "cancelled", discountAmount: 0, commissionGroup: "G1", assessment: { state: "recognition_blocked", reasons: ["cancelled"] } }
@@ -33,6 +33,7 @@ try {
     assert.equal(await page.getByText("ปิดยอดเดือน กรกฎาคม 2569", { exact: true }).count(), 1);
     assert.equal(await page.getByText("สถานะ fixture", { exact: true }).count(), 1);
     assert.equal(await page.getByText("COMMISSION_REAL_WRITES_ENABLED=false", { exact: false }).count(), 1);
+    assert.equal(await page.getByText("Manual Adjustment · Admin fixture", { exact: true }).count(), 1);
     const dimensions = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
     assert.ok(dimensions.scrollWidth <= dimensions.clientWidth, `overflow at ${width}: ${dimensions.scrollWidth}/${dimensions.clientWidth}`);
     assert.deepEqual(errors.filter((message) => /hydration|did not match|server-rendered html/i.test(message)), []);
