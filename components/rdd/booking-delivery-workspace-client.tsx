@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Check, ChevronLeft, Loader2, Pencil, RotateCcw, Search, SlidersHorizontal, X } from "lucide-react";
 import { useBookingDeliveryRead } from "@/components/rdd/use-booking-delivery-read";
 import { RddEmpty, RddError, RddSkeleton, RddStatusChip } from "@/components/rdd/rdd-ui";
@@ -63,6 +63,7 @@ export function BookingDeliveryWorkspaceClient({
   initialScope = "all",
   initialStatus = "all",
   initialSearch = "",
+  initialCaseId = "",
   initialMonth = "",
   currentYear,
   currentMonth
@@ -72,6 +73,7 @@ export function BookingDeliveryWorkspaceClient({
   initialScope?: OwnershipScope;
   initialStatus?: "all" | RddDisplayStatus;
   initialSearch?: string;
+  initialCaseId?: string;
   initialMonth?: string;
   currentYear: number;
   currentMonth: number;
@@ -108,6 +110,9 @@ export function BookingDeliveryWorkspaceClient({
     includeQa
   }).sort((a, b) => String(b.bookingDate || b.updatedAt).localeCompare(String(a.bookingDate || a.updatedAt))), [records, year, month, query, scope, user?.id, purchase, status, pending, includeQa]);
   const selected = useMemo(() => records.find((record) => record.id === selectedId) || null, [records, selectedId]);
+  useEffect(() => {
+    if (initialCaseId && records.some((record) => record.id === initialCaseId)) setSelectedId(initialCaseId);
+  }, [initialCaseId, records]);
   const scopeLabel = scope === "all" ? "ทั้งหมด" : scope === "mine" ? "ของฉัน" : "ยังไม่ระบุ";
 
   function clearFilters() {

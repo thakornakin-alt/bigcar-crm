@@ -8,14 +8,18 @@ import { RddEmpty, RddError, RddSection, RddSkeleton, RddStatusChip } from "@/co
 import { parseBusinessDate } from "@/lib/booking-delivery-v2";
 import {
   deriveRddHomeKpis,
+  deriveRddFollowUpCards,
+  followUpCardPreviewItems,
   deriveRddReminders,
   filterRddWorkspaceRecords,
   legacyStatusForRecord,
   purchaseTypeForRecord,
+  rddCaseHref,
   upcomingRddDeliveries
 } from "@/lib/rdd-phase2";
 import type { OwnershipScope } from "@/lib/rdd-ownership";
 import { useSalesProfile } from "@/lib/use-sales-profile";
+import type { RddReminderPriority } from "@/lib/rdd-phase3c";
 
 const monthNames = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
 
@@ -25,6 +29,14 @@ function thaiDate(value: string) {
   return new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", year: "2-digit" }).format(new Date(parsed));
 }
 
+const priorityLabels: Record<RddReminderPriority, string> = { urgent: "ด่วน", high: "ใกล้ถึงกำหนด", normal: "ต้องติดตาม" };
+const priorityClasses: Record<RddReminderPriority, string> = {
+  urgent: "border-rose-300/35 bg-rose-300/[0.08] text-rose-100",
+  high: "border-amber-300/30 bg-amber-300/[0.07] text-amber-100",
+  normal: "border-sky-300/25 bg-sky-300/[0.06] text-sky-100"
+};
+type FollowUpFilter = "all" | "urgent" | "delivery" | "garage" | "prep";
+
 export function RddHomeClient({ initialYear, initialMonth, commissionPreview = false }: { initialYear: number; initialMonth: number; commissionPreview?: boolean }) {
   const { records, loading, error, retry } = useBookingDeliveryRead();
   const { user } = useSalesProfile();
@@ -32,6 +44,7 @@ export function RddHomeClient({ initialYear, initialMonth, commissionPreview = f
   const [query, setQuery] = useState("");
   const [month, setMonth] = useState(initialMonth);
   const [year, setYear] = useState(initialYear);
+  const [followUpFilter, setFollowUpFilter] = useState<FollowUpFilter>("all");
 
   const scoped = useMemo(() => filterRddWorkspaceRecords(records, {
     year,
@@ -42,7 +55,12 @@ export function RddHomeClient({ initialYear, initialMonth, commissionPreview = f
   }), [records, year, month, scope, user?.id, query]);
   const kpis = useMemo(() => deriveRddHomeKpis(scoped, year, month), [scoped, year, month]);
   const reminders = useMemo(() => deriveRddReminders(scoped), [scoped]);
-  const upcoming = useMemo(() => upcomingRddDeliveries(scoped), [scoped]);
+  const followUps = useMemo(() => deriveRddFollowUpCards(scoped), [scoped]);
+  const visibleFollowUps = useMemo(() => followUps.filter((card) => followUpFilter === "all"
+    || (followUpFilter === "urgent" && card.priority === "urgent")
+    || card.items.some((item) => item.kind === followUpFilter)), [followUps, followUpFilter]);
+  const followUpIds = useMemo(() => new Set(followUps.map((card) => card.record.id)), [followUps]);
+  const upcoming = useMemo(() => upcomingRddDeliveries(scoped).filter((record) => !followUpIds.has(record.id)).slice(0, 3), [scoped, followUpIds]);
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
 
   const cards = [
@@ -92,7 +110,43 @@ export function RddHomeClient({ initialYear, initialMonth, commissionPreview = f
             <RddEmpty title="ยังไม่มีรายการที่ผูกกับบัญชีนี้" detail="ข้อมูลเก่ายังอยู่ใน ‘ทั้งหมด’" />
           )}
 
-          <RddSection eyebrow="Today / Urgent" title="งานที่ต้องตาม">
+          <RddSection eyebrow="Today / Follow-up" title="งานที่ต้องตามวันนี้" action={<Link href={`/booking-delivery-workspace?scope=${scope}`} className="text-xs font-black text-[#f6df9d]">ดูทั้งหมด</Link>}>
+            <div className="mb-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+              {([
+                ["all", "ทั้งหมด"], ["urgent", "ด่วน"], ["delivery", "ส่งมอบ"], ["garage", "อู่"], ["prep", "งานเตรียมรถ"]
+              ] as Array<[FollowUpFilter, string]>).map(([value, label]) => (
+                <button key={value} type="button" onClick={() => setFollowUpFilter(value)} className={`min-h-9 shrink-0 rounded-full border px-3 text-xs font-black ${followUpFilter === value ? "border-[#d6b66c] bg-[#d6b66c] text-[#17120a]" : "border-white/12 bg-black/20 text-white/60"}`}>{label}</button>
+              ))}
+            </div>
+            {visibleFollowUps.length ? <div data-testid="follow-up-cards" className="grid gap-2.5 lg:grid-cols-2">
+              {visibleFollowUps.map((card) => {
+                const record = card.record;
+                const { items: shownItems, remaining } = followUpCardPreviewItems(card);
+                const model = [record.brand, record.model, record.year].filter(Boolean).join(" · ");
+                return <article key={record.id} className="rounded-[20px] border border-white/10 bg-black/25 p-3.5 sm:p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="truncate text-lg font-black text-white">{record.plate || "ไม่ระบุทะเบียน"}</h3>
+                      <p className="truncate text-xs text-white/50">{model || "ยังไม่ระบุรุ่นรถ"}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-black ${priorityClasses[card.priority]}`}>{priorityLabels[card.priority]}</span>
+                  </div>
+                  <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/58">
+                    {record.deliveryDate ? <span>ส่งมอบ {thaiDate(record.deliveryDate)}{record.deliveryTime ? ` · ${record.deliveryTime}` : ""}</span> : null}
+                    <span>{legacyStatusForRecord(record)}</span>
+                    {(record.salespersonDisplayName || record.saleName || record.ownerName) ? <span>{record.salespersonDisplayName || record.saleName || record.ownerName}</span> : null}
+                  </div>
+                  <div className="mt-3 grid gap-1.5">
+                    {shownItems.map((item, index) => <p key={`${item.kind}-${item.label}-${index}`} className="text-sm text-white/82"><span className="mr-1.5 text-[#d6b66c]">•</span><strong>{item.label}</strong>{item.detail ? ` — ${item.detail}` : ""}</p>)}
+                    {remaining > 0 ? <p className="text-xs font-bold text-white/45">+อีก {remaining.toLocaleString("th-TH")} งาน</p> : null}
+                  </div>
+                  <Link data-testid="open-follow-up-case" href={rddCaseHref(record.id, scope)} className="mt-3 flex min-h-10 items-center justify-center gap-1 rounded-xl border border-[#d6b66c]/40 text-sm font-black text-[#f6df9d] hover:bg-[#d6b66c]/10">เปิดเคส <ChevronRight size={16} /></Link>
+                </article>;
+              })}
+            </div> : <RddEmpty title="วันนี้ยังไม่มีงานเร่งด่วน" detail="ดูงานทั้งหมดใน Booking Delivery" />}
+          </RddSection>
+
+          <RddSection eyebrow="Summary" title="งานที่ต้องตาม">
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               {reminders.map((item) => (
                 <Link key={item.kind} href={`/booking-delivery-workspace?pending=${item.filterValue}&scope=${scope}`} className="flex min-h-12 items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 transition hover:border-[#d6b66c]/45 sm:min-h-14 sm:rounded-2xl sm:px-4">
@@ -123,7 +177,7 @@ export function RddHomeClient({ initialYear, initialMonth, commissionPreview = f
             })}
           </section>
 
-          <RddSection eyebrow="Upcoming" title="นัดส่งมอบถัดไป" action={<span className="text-xs text-white/42">ใกล้ที่สุดก่อน</span>}>
+          {upcoming.length ? <RddSection eyebrow="Upcoming" title="นัดส่งมอบถัดไป" action={<span className="text-xs text-white/42">ที่ยังไม่แสดงด้านบน</span>}>
               {upcoming.length ? (
                 <div className="grid gap-2">
                   {upcoming.map((record) => (
@@ -137,8 +191,8 @@ export function RddHomeClient({ initialYear, initialMonth, commissionPreview = f
                     </Link>
                   ))}
                 </div>
-              ) : <RddEmpty title="ยังไม่มีนัดส่งมอบข้างหน้า" detail="แสดงเฉพาะรายการที่มีวันนัดส่งมอบชัดเจน" />}
-          </RddSection>
+              ) : null}
+          </RddSection> : null}
 
           {kpis.unknownBookingDate > 0 && (
             <details data-testid="historical-data-notice" className="group rounded-xl border border-amber-300/20 bg-amber-300/[0.055] text-sm text-amber-100">

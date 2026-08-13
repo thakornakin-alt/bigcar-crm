@@ -2,7 +2,7 @@ import { getBangkokMonthRange, parseBusinessDate } from "@/lib/booking-delivery-
 import { filterByOwnership, type OwnershipScope } from "@/lib/rdd-ownership";
 import type { BookingDeliveryRecord, BookingDeliveryStatus } from "@/lib/types";
 import { canonicalCaseStatus, canonicalPurchaseType, RDD_CASE_STATUS_LABELS, RDD_PURCHASE_TYPE_LABELS, reminderEligibleForRecord } from "@/lib/rdd-phase3b";
-import { derivePrepReminder, type RddPrepArea } from "@/lib/rdd-phase3c";
+import { derivePrepReminder, type RddPrepArea, type RddReminderPriority } from "@/lib/rdd-phase3c";
 
 export type RddPurchaseType = "ซื้อสด" | "ไฟแนนซ์" | "ไม่ระบุ";
 export type RddDisplayStatus =
@@ -25,6 +25,30 @@ export type RddReminder = {
   count: number;
   filterValue: string;
 };
+
+export type RddFollowUpKind = "delivery" | "garage" | "prep";
+export type RddFollowUpItem = {
+  kind: RddFollowUpKind;
+  label: string;
+  detail: string;
+  priority: RddReminderPriority;
+  actionableAt: number | null;
+};
+export type RddFollowUpCard = {
+  record: BookingDeliveryRecord;
+  priority: RddReminderPriority;
+  actionableAt: number | null;
+  items: RddFollowUpItem[];
+};
+
+export function followUpCardPreviewItems(card: RddFollowUpCard, limit = 2) {
+  const items = card.items.slice(0, limit);
+  return { items, remaining: Math.max(0, card.items.length - items.length) };
+}
+
+export function rddCaseHref(caseId: string, scope: OwnershipScope = "all") {
+  return `/booking-delivery-workspace?caseId=${encodeURIComponent(caseId)}&scope=${scope}`;
+}
 
 export type RddHomeKpis = {
   newBookings: number;
@@ -155,16 +179,53 @@ function dayStart(value: string) {
   return parseBusinessDate(value);
 }
 
+function reminderPriorityRank(value: RddReminderPriority) {
+  return value === "urgent" ? 0 : value === "high" ? 1 : 2;
+}
+
+export function deriveDeliveryReminder(record: BookingDeliveryRecord, today: string) {
+  const todayValue = dayStart(today);
+  const delivery = dayStart(record.deliveryDate);
+  if (todayValue === null || delivery === null) return null;
+  if (delivery < todayValue) return { kind: "delivery_overdue" as const, label: "เลยกำหนดส่งมอบ", priority: "urgent" as const, actionableAt: delivery };
+  if (delivery === todayValue) return { kind: "delivery_today" as const, label: "ส่งมอบวันนี้", priority: "urgent" as const, actionableAt: delivery };
+  if (delivery === todayValue + 86_400_000) return { kind: "delivery_tomorrow" as const, label: "ส่งมอบพรุ่งนี้", priority: "high" as const, actionableAt: delivery };
+  return null;
+}
+
+/** Case-level Home presentation composed from the canonical Phase 3B/3C reminder selectors. */
+export function deriveRddFollowUpCards(records: BookingDeliveryRecord[], today = bangkokDateKey()): RddFollowUpCard[] {
+  const todayValue = dayStart(today);
+  if (todayValue === null) return [];
+  return records
+    .filter((record) => record.qaTestRecord !== true && record.excludeFromMetrics !== true && reminderEligibleForRecord(record))
+    .map((record) => {
+      const delivery = dayStart(record.deliveryDate);
+      const prep = derivePrepReminder(record, today);
+      const items: RddFollowUpItem[] = [];
+      const deliveryReminder = deriveDeliveryReminder(record, today);
+      if (deliveryReminder) items.push({ kind: "delivery", label: deliveryReminder.label, detail: deliveryReminder.kind === "delivery_overdue" ? record.deliveryDate || "" : record.deliveryTime || "ตรวจสอบเวลานัด", priority: deliveryReminder.priority, actionableAt: deliveryReminder.actionableAt });
+      for (const item of prep.reminderItems) {
+        const actionableAt = item.area === "garage" ? dayStart(record.garageExpectedReturnDate || record.garageReturnDate) : delivery;
+        items.push({ kind: item.area === "garage" ? "garage" : "prep", label: item.label, detail: item.detail, priority: item.priority, actionableAt });
+      }
+      const priority = items.reduce<RddReminderPriority>((best, item) => reminderPriorityRank(item.priority) < reminderPriorityRank(best) ? item.priority : best, "normal");
+      const actionableAt = items.reduce<number | null>((nearest, item) => item.actionableAt === null ? nearest : nearest === null || item.actionableAt < nearest ? item.actionableAt : nearest, null);
+      return { record, priority, actionableAt, items };
+    })
+    .filter((card) => card.items.length > 0)
+    .sort((a, b) => reminderPriorityRank(a.priority) - reminderPriorityRank(b.priority)
+      || (a.actionableAt ?? Number.MAX_SAFE_INTEGER) - (b.actionableAt ?? Number.MAX_SAFE_INTEGER)
+      || String(a.record.id).localeCompare(String(b.record.id), "th"));
+}
+
 export function recordMatchesReminder(record: BookingDeliveryRecord, kind: RddReminderKind, today: string) {
   if (!reminderEligibleForRecord(record)) return false;
   const todayValue = dayStart(today);
   if (todayValue === null) return false;
-  const delivery = dayStart(record.deliveryDate);
+  const deliveryReminder = deriveDeliveryReminder(record, today);
   const garageReturn = dayStart(record.garageExpectedReturnDate || record.garageReturnDate);
-  const tomorrow = todayValue + 86_400_000;
-  if (kind === "delivery_today") return delivery === todayValue;
-  if (kind === "delivery_tomorrow") return delivery === tomorrow;
-  if (kind === "delivery_overdue") return delivery !== null && delivery < todayValue;
+  if (kind === "delivery_today" || kind === "delivery_tomorrow" || kind === "delivery_overdue") return deliveryReminder?.kind === kind;
   if (kind === "garage_return_due") return record.garageReturned !== true && garageReturn !== null && garageReturn <= todayValue;
   const prep = derivePrepReminder(record, today);
   if (kind === "prep_pending") return prep.pendingPrepCount > 0;
