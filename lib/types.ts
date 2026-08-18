@@ -459,6 +459,8 @@ export type BookingDeliveryRecord = {
   metadataVersion?: number;
   qaTestRecord?: boolean;
   excludeFromMetrics?: boolean;
+  /** Server-issued marker for an explicitly authorized synthetic QA create. */
+  qaTestMarker?: string;
   archivedAt?: string;
   archiveReason?: string;
   bookingReportId: string;

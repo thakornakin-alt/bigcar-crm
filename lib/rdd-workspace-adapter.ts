@@ -22,6 +22,7 @@ export function normalizeWorkspaceRecord(record: BookingDeliveryRecord): Booking
     metadataVersion: Number.isInteger(record.metadataVersion) ? record.metadataVersion : 0,
     qaTestRecord: typeof record.qaTestRecord === "boolean" ? record.qaTestRecord : undefined,
     excludeFromMetrics: typeof record.excludeFromMetrics === "boolean" ? record.excludeFromMetrics : undefined,
+    qaTestMarker: String(record.qaTestMarker || "").trim() || undefined,
     archivedAt: String(record.archivedAt || "").trim() || undefined,
     archiveReason: String(record.archiveReason || "").trim() || undefined
   };

@@ -12,6 +12,7 @@ import type { BookingDeliveryRecord, BookingDeliveryStatus, BookingReport, Repor
 import type { BookingDeliveryActor } from "@/lib/rdd-workspace-adapter";
 import { attachOwnerToNewRecord, incrementRecordVersion, normalizeWorkspaceRecord } from "@/lib/rdd-workspace-adapter";
 import { applyCanonicalCommissionCapture, type CanonicalSalespersonCapture, type CommissionGroupCapture } from "@/lib/commission-canonical-capture";
+import { applyQaSyntheticCreateMetadata, type QaSyntheticCreateMetadata } from "@/lib/qa-synthetic-create";
 
 type BookingDeliveryStore = {
   records: BookingDeliveryRecord[];
@@ -331,7 +332,15 @@ export async function syncBookingDeliveryFromReportHistory() {
   return upsertBookingDeliveryFromReportHistory(reports);
 }
 
-export async function upsertBookingDeliveryFromBookingReport(report: BookingReport, actor?: BookingDeliveryActor | null, commissionCapture?: { salesperson?: CanonicalSalespersonCapture; group?: CommissionGroupCapture }) {
+export async function upsertBookingDeliveryFromBookingReport(
+  report: BookingReport,
+  actor?: BookingDeliveryActor | null,
+  commissionCapture?: {
+    salesperson?: CanonicalSalespersonCapture;
+    group?: CommissionGroupCapture;
+    qaSynthetic?: QaSyntheticCreateMetadata;
+  }
+) {
   const existingStore = await readStore();
   const normalizedPlate = normalizePlate(report.plate);
   const normalizedCustomer = text(report.customerName).toLowerCase();
@@ -384,6 +393,7 @@ export async function upsertBookingDeliveryFromBookingReport(report: BookingRepo
     salesperson: commissionCapture?.salesperson,
     group: existing ? undefined : commissionCapture?.group
   }).record;
+  if (!existing) next = applyQaSyntheticCreateMetadata(next, commissionCapture?.qaSynthetic);
   if (!existing) next = attachOwnerToNewRecord(next, actor);
   if (!existing) {
     const payment = text(report.paymentType || "");
@@ -451,6 +461,11 @@ function buildRecordFromReports(
     commissionGroup: current?.commissionGroup,
     commissionGroupSource: current?.commissionGroupSource,
     commissionGroupCapturedAt: current?.commissionGroupCapturedAt,
+    qaTestRecord: current?.qaTestRecord === true ? true : undefined,
+    excludeFromMetrics: current?.excludeFromMetrics === true ? true : undefined,
+    qaTestMarker: text(current?.qaTestMarker) || undefined,
+    archivedAt: text(current?.archivedAt) || undefined,
+    archiveReason: text(current?.archiveReason) || undefined,
     teamName: text(booking.teamName || sales?.teamName),
     teamId,
     source: text(

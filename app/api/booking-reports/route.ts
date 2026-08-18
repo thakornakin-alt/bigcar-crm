@@ -8,6 +8,7 @@ import { recordActivity } from "@/lib/activity-log";
 import { RequestAuthError, requireWritableUser } from "@/lib/request-user";
 import { getRddFeatureFlags } from "@/lib/feature-flags";
 import { commissionGroupCaptureFromLookup, resolveAuthenticatedSalespersonCapture, type CommissionGroupLookupResult } from "@/lib/commission-canonical-capture";
+import { QaSyntheticCreateError, resolveQaSyntheticCreateMetadata } from "@/lib/qa-synthetic-create";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,14 @@ function cleanReport(body: Partial<BookingReportInput>): BookingReportInput {
 export async function POST(request: Request) {
   try {
     const actor = requireWritableUser();
-    const body = await request.json() as Partial<BookingReportInput>;
+    const body = await request.json() as Partial<BookingReportInput> & {
+      qaCreateMode?: unknown;
+      qaTestMarker?: unknown;
+      qaTestRecord?: unknown;
+      excludeFromMetrics?: unknown;
+      isCounted?: unknown;
+    };
+    const qaSynthetic = resolveQaSyntheticCreateMetadata(actor, body);
     const input = cleanReport(body);
     const salespersonCapture = resolveAuthenticatedSalespersonCapture({
       submittedSalespersonUserId: body.salespersonUserId,
@@ -88,7 +96,7 @@ export async function POST(request: Request) {
         return upsertBookingDeliveryFromBookingReport(
           report,
           getRddFeatureFlags().ownerMetadata ? actor : null,
-          { salesperson: salespersonCapture, group }
+          { salesperson: salespersonCapture, group, qaSynthetic }
         );
       }
     });
@@ -130,7 +138,9 @@ export async function POST(request: Request) {
     }
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
-    if (error instanceof RequestAuthError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof RequestAuthError || error instanceof QaSyntheticCreateError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to save booking report" },
       { status: 500 }
