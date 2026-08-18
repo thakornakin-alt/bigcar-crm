@@ -1,5 +1,5 @@
 import { readJsonStore, writeJsonStore } from "@/lib/json-store";
-import { identifierText, normalizeDocumentValueRecord, normalizeOtherExpenses, type DocumentOtherExpense } from "@/lib/documents/value-integrity";
+import { identifierText, normalizeDocumentValueRecord } from "@/lib/documents/value-integrity";
 
 const STORE_FILE = "document-overrides-v2.json";
 
@@ -8,7 +8,6 @@ export type DocumentV2Override = {
   reportId: string;
   data: Record<string, string>;
   templateData: Record<string, unknown>;
-  otherExpenses: DocumentOtherExpense[];
   updatedAt: string;
   updatedByUserId: string;
 };
@@ -44,7 +43,6 @@ export async function writeDocumentV2Override(input: {
   reportId: string;
   data: unknown;
   templateData: unknown;
-  otherExpenses: unknown;
   actorUserId: string;
 }) {
   const templateId = identifierText(input.templateId);
@@ -56,7 +54,6 @@ export async function writeDocumentV2Override(input: {
     reportId,
     data: cleanRecord(input.data),
     templateData: cleanTemplateData(input.templateData),
-    otherExpenses: normalizeOtherExpenses(input.otherExpenses),
     updatedAt: new Date().toISOString(),
     updatedByUserId: identifierText(input.actorUserId)
   };

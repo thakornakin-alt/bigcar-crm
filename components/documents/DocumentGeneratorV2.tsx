@@ -16,7 +16,7 @@ import {
   type PowerOfAttorneySuggestion
 } from "@/lib/documents-v2/power-of-attorney";
 import type { VehicleDeliveryOcrFields } from "@/lib/documents-v2/vehicle-delivery-ocr";
-import { formatDocumentMoney, identifierText, parseDocumentMoney, type DocumentOtherExpense } from "@/lib/documents/value-integrity";
+import { formatDocumentMoney, identifierText, parseDocumentMoney } from "@/lib/documents/value-integrity";
 
 type FieldItem = { name: string; type: string };
 type FieldsDebug = {
@@ -27,7 +27,6 @@ type FieldsDebug = {
 };
 
 type TemporaryReceiptExtraStatus = "none" | "gift" | "charge";
-type OtherExpenseDraft = Omit<DocumentOtherExpense, "amount"> & { amount: string };
 type TemporaryReceiptExtraData = {
   row3NetPriceNote: string;
   row1Note: string;
@@ -46,6 +45,7 @@ type TemporaryReceiptExtraData = {
   line12Amount: string;
   line13Amount: string;
   line14Amount: string;
+  line14Label: string;
   line6Status: TemporaryReceiptExtraStatus;
   line7Status: TemporaryReceiptExtraStatus;
   line8Status: TemporaryReceiptExtraStatus;
@@ -129,6 +129,7 @@ const DEFAULT_TEMPORARY_RECEIPT_EXTRAS: TemporaryReceiptExtraData = {
   line12Amount: "",
   line13Amount: "",
   line14Amount: "",
+  line14Label: "",
   line6Status: "none",
   line7Status: "none",
   line8Status: "none",
@@ -473,7 +474,6 @@ export function DocumentGeneratorV2() {
   const [powerOfAttorneyExtras, setPowerOfAttorneyExtras] = useState<PowerOfAttorneyExtraData>(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
   const [transportTransferExtras, setTransportTransferExtras] = useState<TransportTransferRequestExtraData>(DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS);
   const [vehicleDeliveryExtras, setVehicleDeliveryExtras] = useState<VehicleDeliveryDocumentExtraData>(DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS);
-  const [otherExpenses, setOtherExpenses] = useState<OtherExpenseDraft[]>([]);
   const [overrideState, setOverrideState] = useState<"idle" | "loading" | "clean" | "dirty" | "saving" | "error">("idle");
   const savedOverrideRef = useRef<{
     data: ResolvedDocumentV2Data | null;
@@ -481,7 +481,6 @@ export function DocumentGeneratorV2() {
     powerOfAttorneyExtras: PowerOfAttorneyExtraData;
     transportTransferExtras: TransportTransferRequestExtraData;
     vehicleDeliveryExtras: VehicleDeliveryDocumentExtraData;
-    otherExpenses: OtherExpenseDraft[];
   } | null>(null);
   const vehicleDeliveryIdCardCameraInputRef = useRef<HTMLInputElement | null>(null);
   const vehicleDeliveryIdCardPickerInputRef = useRef<HTMLInputElement | null>(null);
@@ -593,7 +592,6 @@ export function DocumentGeneratorV2() {
     setPowerOfAttorneyExtras(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
     setTransportTransferExtras(DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS);
     setVehicleDeliveryExtras(DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS);
-    setOtherExpenses([]);
     powerOfAttorneyTouchedRef.current = {};
     transportTransferTouchedRef.current = {};
     vehicleDeliveryTouchedRef.current = {};
@@ -785,12 +783,6 @@ export function DocumentGeneratorV2() {
     payload.customer_id_no = identifierText(payload.customer_id_no);
     payload.customer_postal_code = identifierText(payload.customer_postal_code);
     payload.transferee_phone = identifierText(payload.transferee_phone);
-    payload.otherExpensesJson = JSON.stringify(otherExpenses.map((expense, index) => {
-      const parsed = parseDocumentMoney(expense.amount);
-      if (!parsed.ok || parsed.value === undefined) throw new Error(`จำนวนเงินค่าใช้จ่ายลำดับ ${index + 1} ไม่ถูกต้อง`);
-      if (!identifierText(expense.label)) throw new Error(`กรุณาระบุชื่อค่าใช้จ่ายลำดับ ${index + 1}`);
-      return { ...expense, label: identifierText(expense.label), note: identifierText(expense.note), amount: parsed.value };
-    }));
     payload.remainingAmountThaiText = computeRemainingAmountThaiText();
     if (templateId === "power-of-attorney") {
       const documentDate = powerOfAttorneyExtras.documentDate || formatThaiBuddhistDate();
@@ -1036,7 +1028,7 @@ export function DocumentGeneratorV2() {
     }
     let cancelled = false;
     setOverrideState("loading");
-    api<{ ok: boolean; override: null | { data?: ResolvedDocumentV2Data; templateData?: Record<string, unknown>; otherExpenses?: DocumentOtherExpense[] } }>(
+    api<{ ok: boolean; override: null | { data?: ResolvedDocumentV2Data; templateData?: Record<string, unknown> } }>(
       `/api/documents-v2/override?templateId=${encodeURIComponent(templateId)}&reportId=${encodeURIComponent(selectedReportId)}`
     ).then((response) => {
       if (cancelled) return;
@@ -1047,8 +1039,7 @@ export function DocumentGeneratorV2() {
         temporaryReceiptExtras: { ...DEFAULT_TEMPORARY_RECEIPT_EXTRAS, ...(templateData.temporaryReceiptExtras as Partial<TemporaryReceiptExtraData> || {}) },
         powerOfAttorneyExtras: { ...DEFAULT_POWER_OF_ATTORNEY_EXTRAS, ...(templateData.powerOfAttorneyExtras as Partial<PowerOfAttorneyExtraData> || {}) },
         transportTransferExtras: { ...DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS, ...(templateData.transportTransferExtras as Partial<TransportTransferRequestExtraData> || {}) },
-        vehicleDeliveryExtras: { ...DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS, ...(templateData.vehicleDeliveryExtras as Partial<VehicleDeliveryDocumentExtraData> || {}) },
-        otherExpenses: (saved?.otherExpenses || []).map((expense) => ({ ...expense, amount: formatDocumentMoney(expense.amount) }))
+        vehicleDeliveryExtras: { ...DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS, ...(templateData.vehicleDeliveryExtras as Partial<VehicleDeliveryDocumentExtraData> || {}) }
       };
       savedOverrideRef.current = snapshot;
       if (snapshot.data) {
@@ -1059,7 +1050,6 @@ export function DocumentGeneratorV2() {
       setPowerOfAttorneyExtras(snapshot.powerOfAttorneyExtras);
       setTransportTransferExtras(snapshot.transportTransferExtras);
       setVehicleDeliveryExtras(snapshot.vehicleDeliveryExtras);
-      setOtherExpenses(snapshot.otherExpenses);
       setOverrideState("clean");
     }).catch((reason) => {
       if (cancelled) return;
@@ -1187,12 +1177,6 @@ export function DocumentGeneratorV2() {
     try {
       setOverrideState("saving");
       setError("");
-      const normalizedExpenses = otherExpenses.map((expense, index) => {
-        const parsed = parseDocumentMoney(expense.amount);
-        if (!parsed.ok || parsed.value === undefined) throw new Error(`จำนวนเงินค่าใช้จ่ายลำดับ ${index + 1} ไม่ถูกต้อง`);
-        if (!identifierText(expense.label)) throw new Error(`กรุณาระบุชื่อค่าใช้จ่ายลำดับ ${index + 1}`);
-        return { ...expense, label: identifierText(expense.label), note: identifierText(expense.note), amount: parsed.value };
-      });
       const response = await api<{ ok: true; override: { data: ResolvedDocumentV2Data } }>("/api/documents-v2/override", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1200,8 +1184,7 @@ export function DocumentGeneratorV2() {
           templateId,
           reportId: selectedReportId,
           data: editableData || sampleData,
-          templateData: { temporaryReceiptExtras, powerOfAttorneyExtras, transportTransferExtras, vehicleDeliveryExtras },
-          otherExpenses: normalizedExpenses
+          templateData: { temporaryReceiptExtras, powerOfAttorneyExtras, transportTransferExtras, vehicleDeliveryExtras }
         })
       });
       savedOverrideRef.current = {
@@ -1209,10 +1192,8 @@ export function DocumentGeneratorV2() {
         temporaryReceiptExtras: { ...temporaryReceiptExtras },
         powerOfAttorneyExtras: { ...powerOfAttorneyExtras },
         transportTransferExtras: { ...transportTransferExtras },
-        vehicleDeliveryExtras: { ...vehicleDeliveryExtras },
-        otherExpenses: normalizedExpenses.map((expense) => ({ ...expense, amount: formatDocumentMoney(expense.amount) }))
+        vehicleDeliveryExtras: { ...vehicleDeliveryExtras }
       };
-      setOtherExpenses(savedOverrideRef.current.otherExpenses);
       setOverrideState("clean");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "บันทึกข้อมูลแก้ไขเอกสารไม่สำเร็จ");
@@ -1230,7 +1211,6 @@ export function DocumentGeneratorV2() {
       setPowerOfAttorneyExtras({ ...saved.powerOfAttorneyExtras });
       setTransportTransferExtras({ ...saved.transportTransferExtras });
       setVehicleDeliveryExtras({ ...saved.vehicleDeliveryExtras });
-      setOtherExpenses(saved.otherExpenses.map((expense) => ({ ...expense })));
     }
     setOverrideState("clean");
   }
@@ -2037,25 +2017,6 @@ export function DocumentGeneratorV2() {
                   className="w-full rounded bg-black/40 p-2 text-sm"
                 />
               </label>
-              <label className="block space-y-1">
-                <span className="block text-xs text-gray-300">ลำดับ 15 เงินมัดจำ</span>
-                <input
-                  value={String((editableData || sampleData || {}).deposit || "")}
-                  onChange={(e) => updateEditableField("deposit", e.target.value)}
-                  inputMode="numeric"
-                  className="w-full rounded bg-black/40 p-2 text-sm"
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="block text-xs text-gray-300">ยอดชำระเงินรวมทั้งสิ้น</span>
-                <input
-                  value={String((editableData || sampleData || {}).remainingAmount || "")}
-                  onChange={(e) => updateEditableField("remainingAmount", e.target.value)}
-                  inputMode="numeric"
-                  className="w-full rounded bg-black/40 p-2 text-sm"
-                />
-              </label>
-
               {[ 
                 { idx: 6, title: "ลำดับ 6 ค่าประกันภัยรถยนต์", amountKey: "line6Amount", statusKey: "line6Status" },
                 { idx: 7, title: "ลำดับ 7 ค่าประกันชีวิต / ประกันสินเชื่อ", amountKey: "line7Amount", statusKey: "line7Status" },
@@ -2067,10 +2028,20 @@ export function DocumentGeneratorV2() {
                 { idx: 13, title: "ลำดับ 13 ค่าขนส่งรถสไลด์", amountKey: "line13Amount", statusKey: "line13Status" },
                 { idx: 14, title: "ลำดับ 14 ค่าอื่น ๆ ถ้ามี", amountKey: "line14Amount", statusKey: "line14Status" }
               ].map(({ idx, amountKey, statusKey }) => (
-                <div key={idx} className="rounded border border-white/10 bg-black/20 p-3">
+                <div key={idx} data-document-row={idx} className="rounded border border-white/10 bg-black/20 p-3">
+                  {idx === 14 ? (
+                    <label className="mb-3 block space-y-1">
+                      <span className="block text-xs text-gray-300">ชื่อค่าใช้จ่ายอื่น ๆ</span>
+                      <input
+                        value={temporaryReceiptExtras.line14Label}
+                        onChange={(e) => updateTemporaryReceiptExtra("line14Label", e.target.value)}
+                        className="w-full rounded bg-black/40 p-2 text-sm"
+                      />
+                    </label>
+                  ) : null}
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-[1.2fr_1fr]">
                     <label className="block space-y-1">
-                      <span className="block text-xs text-gray-300">{[
+                      <span className="block text-xs text-gray-300">{idx === 14 ? "จำนวนเงิน" : [
                         "ลำดับ 6 ค่าประกันภัยรถยนต์",
                         "ลำดับ 7 ค่าประกันชีวิต / ประกันสินเชื่อ",
                         "ลำดับ 8 ค่าประกันเครื่องเกียร์ (EW) ไฟแนนซ์",
@@ -2084,7 +2055,7 @@ export function DocumentGeneratorV2() {
                       <input
                         value={temporaryReceiptExtras[amountKey as keyof TemporaryReceiptExtraData] as string}
                         onChange={(e) => updateTemporaryReceiptExtra(amountKey as keyof TemporaryReceiptExtraData, e.target.value)}
-                        inputMode="numeric"
+                        inputMode="decimal"
                         className="w-full rounded bg-black/40 p-2 text-sm"
                       />
                     </label>
@@ -2111,23 +2082,24 @@ export function DocumentGeneratorV2() {
                   </div>
                 </div>
               ))}
-              <div className="rounded border border-emerald-400/20 bg-emerald-500/5 p-3 md:col-span-2">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <div><h3 className="text-sm font-semibold">ค่าใช้จ่ายอื่น ๆ</h3><p className="text-xs text-gray-400">แสดงแยกในเอกสารแนบท้าย ไม่เปลี่ยนยอดชำระเงินรวม</p></div>
-                  <button type="button" onClick={() => { setOtherExpenses((prev) => [...prev, { id: `expense-${Date.now()}-${prev.length}`, label: "", amount: "", note: "" }]); setOverrideState("dirty"); }} className="shrink-0 rounded border border-emerald-300/40 px-3 py-2 text-xs text-emerald-200">+ เพิ่มค่าใช้จ่าย</button>
-                </div>
-                <div className="space-y-3">
-                  {otherExpenses.map((expense, index) => (
-                    <div key={expense.id} className="grid grid-cols-1 gap-2 rounded border border-white/10 bg-black/20 p-3 md:grid-cols-[1.2fr_.8fr_1fr_auto] md:items-end">
-                      <label className="text-xs text-gray-300">ชื่อรายการ<input value={expense.label} onChange={(event) => { setOtherExpenses((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item)); setOverrideState("dirty"); }} className="mt-1 w-full rounded bg-black/40 p-2 text-sm text-white" /></label>
-                      <label className="text-xs text-gray-300">จำนวนเงิน<input inputMode="decimal" value={expense.amount} onChange={(event) => { setOtherExpenses((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, amount: event.target.value } : item)); setOverrideState("dirty"); }} onBlur={() => { const parsed = parseDocumentMoney(expense.amount); if (parsed.ok && parsed.value !== undefined) setOtherExpenses((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, amount: formatDocumentMoney(parsed.value) } : item)); }} className="mt-1 w-full rounded bg-black/40 p-2 text-sm text-white" /></label>
-                      <label className="text-xs text-gray-300">หมายเหตุ (ถ้ามี)<input value={expense.note || ""} onChange={(event) => { setOtherExpenses((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, note: event.target.value } : item)); setOverrideState("dirty"); }} className="mt-1 w-full rounded bg-black/40 p-2 text-sm text-white" /></label>
-                      <button type="button" onClick={() => { setOtherExpenses((prev) => prev.filter((_, itemIndex) => itemIndex !== index)); setOverrideState("dirty"); }} className="rounded border border-red-300/30 px-3 py-2 text-xs text-red-200">ลบ</button>
-                    </div>
-                  ))}
-                  {!otherExpenses.length ? <p className="text-xs text-gray-500">ยังไม่มีค่าใช้จ่ายเพิ่มเติม</p> : null}
-                </div>
-              </div>
+              <label data-document-row="15" className="block space-y-1 rounded border border-white/10 bg-black/20 p-3">
+                <span className="block text-xs text-gray-300">ลำดับ 15 เงินมัดจำ</span>
+                <input
+                  value={String((editableData || sampleData || {}).deposit || "")}
+                  onChange={(e) => updateEditableField("deposit", e.target.value)}
+                  inputMode="decimal"
+                  className="w-full rounded bg-black/40 p-2 text-sm"
+                />
+              </label>
+              <label className="block space-y-1 rounded border border-white/10 bg-black/20 p-3">
+                <span className="block text-xs text-gray-300">ยอดชำระเงินรวมทั้งสิ้น</span>
+                <input
+                  value={String((editableData || sampleData || {}).remainingAmount || "")}
+                  onChange={(e) => updateEditableField("remainingAmount", e.target.value)}
+                  inputMode="decimal"
+                  className="w-full rounded bg-black/40 p-2 text-sm"
+                />
+              </label>
             </div>
           </div>
           ) : null}
@@ -2135,7 +2107,7 @@ export function DocumentGeneratorV2() {
         </div>
       ) : null}
 
-      <div className="rounded border border-white/10 p-3">
+      {isDev ? <div className="rounded border border-white/10 p-3">
         <p className="mb-2 text-xs text-gray-300">โหลดไฟล์จริง: {loadedTemplateFile || "-"}</p>
         {isDev && debug ? (
           <pre className="mb-2 max-h-40 overflow-auto text-xs text-emerald-200">
@@ -2160,7 +2132,7 @@ export function DocumentGeneratorV2() {
             <pre className="mt-2 max-h-56 overflow-auto text-xs text-gray-400">{JSON.stringify(unnamedFields, null, 2)}</pre>
           </details>
         ) : null}
-      </div>
+      </div> : null}
 
     </div>
   );

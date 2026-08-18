@@ -85,6 +85,8 @@ const TEMPORARY_RECEIPT_DEFAULT_MAPPING: DocumentV2FieldMapping = {
   fill_7: "raw:bookingDate",
   fill_9: "raw:depositDate",
   Underline1: "raw:row1Note",
+  undefined_19: "raw:line14Label",
+  fill_46: "raw:line14Amount",
   Sale_Name: "saleName",
   MANAGER_NAME: "approverName"
 };

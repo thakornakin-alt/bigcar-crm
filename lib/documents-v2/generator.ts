@@ -2,7 +2,7 @@ import { readFile } from "fs/promises";
 import path from "path";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, TextAlignment, rgb } from "pdf-lib";
-import { formatDocumentMoney, normalizeOtherExpenses, parseDocumentMoney } from "@/lib/documents/value-integrity";
+import { parseDocumentMoney } from "@/lib/documents/value-integrity";
 import type { DocumentV2Data, DocumentV2FieldDebug } from "@/lib/documents-v2/types";
 import { getTemplateById, type DocumentV2TemplateId } from "@/lib/documents-v2/template-config";
 import type { DocumentV2FieldMapping, DocumentV2FieldKey, DocumentV2MappedValue } from "@/lib/documents-v2/mapping-store";
@@ -281,7 +281,8 @@ function applyTemporaryReceiptExtras(
     ["line11Amount", ["fill_43"]],
     ["line12Amount", ["fill_44"]],
     ["line13Amount", ["fill_45"]],
-    ["line14Amount", ["fill_46"]]
+    ["line14Amount", ["fill_46"]],
+    ["line14Label", ["undefined_19"]]
   ];
 
   textFieldMap.forEach(([dataKey, fieldNames]) => {
@@ -311,40 +312,6 @@ function applyTemporaryReceiptExtras(
       setCheckboxIfExists(form, yes, false);
       setCheckboxIfExists(form, no, false);
     }
-  });
-}
-
-function appendOtherExpensesPage(
-  pdf: PDFDocument,
-  data: Record<string, string>,
-  thaiFont: Awaited<ReturnType<PDFDocument["embedFont"]>>
-) {
-  const raw = String(data.otherExpensesJson || "").trim();
-  if (!raw) return;
-  let expenses;
-  try {
-    expenses = normalizeOtherExpenses(JSON.parse(raw));
-  } catch {
-    throw new Error("ข้อมูลค่าใช้จ่ายอื่น ๆ ไม่ถูกต้อง");
-  }
-  if (!expenses.length) return;
-  const addPage = () => {
-    const page = pdf.addPage([595.28, 841.89]);
-    page.drawText("รายการค่าใช้จ่ายอื่น ๆ", { x: 48, y: 790, size: 18, font: thaiFont, color: rgb(0.08, 0.08, 0.08) });
-    page.drawText("เอกสารแนบท้าย — ไม่รวมในยอดชำระเงินรวมทั้งสิ้นโดยอัตโนมัติ", { x: 48, y: 765, size: 10, font: thaiFont, color: rgb(0.35, 0.35, 0.35) });
-    return page;
-  };
-  let page = addPage();
-  let y = 725;
-  expenses.forEach((expense, index) => {
-    if (y < 85) {
-      page = addPage();
-      y = 725;
-    }
-    page.drawText(`${index + 1}. ${expense.label}`, { x: 52, y, size: 13, font: thaiFont });
-    page.drawText(`${formatDocumentMoney(expense.amount)} บาท`, { x: 410, y, size: 13, font: thaiFont });
-    if (expense.note) page.drawText(`หมายเหตุ: ${expense.note}`, { x: 70, y: y - 19, size: 10, font: thaiFont, color: rgb(0.35, 0.35, 0.35) });
-    y -= expense.note ? 55 : 38;
   });
 }
 
@@ -474,6 +441,5 @@ export async function generateDocumentV2WithBytes(
 
   form.flatten();
   drawVehicleDeliveryIdCardImage(vehicleDeliveryIdCardImage);
-  if (templateId === "temporary-receipt") appendOtherExpensesPage(pdf, allData, thaiFont);
   return pdf.save();
 }

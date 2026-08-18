@@ -32,7 +32,6 @@ export async function PUT(request: Request) {
       reportId: body.reportId,
       data: body.data,
       templateData: body.templateData,
-      otherExpenses: body.otherExpenses,
       actorUserId: actor.id
     });
     return NextResponse.json({ ok: true, override: saved });

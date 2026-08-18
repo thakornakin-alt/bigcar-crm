@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
-import { formatDocumentMoney, identifierText, normalizeOtherExpenses, parseDocumentMoney } from "../lib/documents/value-integrity.ts";
+import { formatDocumentMoney, identifierText, parseDocumentMoney } from "../lib/documents/value-integrity.ts";
 
 test("identifier strings preserve leading zero exactly", () => {
   for (const value of ["0917785117", "0812345678", "0990000001", "0123456789012", "01010"]) {
@@ -31,16 +31,6 @@ test("money formatter keeps meaningful decimals", () => {
   assert.equal(formatDocumentMoney(1250.75), "1,250.75");
 });
 
-test("multiple document-local expenses normalize independently", () => {
-  assert.deepEqual(normalizeOtherExpenses([
-    { id: "a", label: "ค่าโอน", amount: "500" },
-    { id: "b", label: "ค่าขนส่ง", amount: "1,500.50", note: "ส่งต่างจังหวัด" }
-  ]), [
-    { id: "a", label: "ค่าโอน", amount: 500 },
-    { id: "b", label: "ค่าขนส่ง", amount: 1500.5, note: "ส่งต่างจังหวัด" }
-  ]);
-});
-
 test("override persistence is keyed by template and report", async () => {
   const source = await readFile(new URL("../lib/documents-v2/override-store.ts", import.meta.url), "utf8");
   assert.match(source, /`\$\{identifierText\(templateId\)\}::\$\{identifierText\(reportId\)\}`/);
@@ -50,15 +40,28 @@ test("document override route and UI do not mutate business modules", async () =
   const route = await readFile(new URL("../app/api/documents-v2/override/route.ts", import.meta.url), "utf8");
   const ui = await readFile(new URL("../components/documents/DocumentGeneratorV2.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(route, /booking-delivery|sales-report|commission|stock/i);
-  assert.match(ui, /otherExpensesJson/);
-  assert.match(ui, /ไม่เปลี่ยนยอดชำระเงินรวม/);
+  assert.match(ui, /line14Label/);
+  assert.doesNotMatch(ui, /\+ เพิ่มค่าใช้จ่าย/);
+  assert.doesNotMatch(ui, /แสดงแยกในเอกสารแนบท้าย/);
 });
 
-test("PDF generator appends every custom expense and retains legacy line14", async () => {
+test("temporary receipt maps the custom expense into existing PDF row 14", async () => {
   const source = await readFile(new URL("../lib/documents-v2/generator.ts", import.meta.url), "utf8");
-  assert.match(source, /expenses\.forEach/);
+  assert.match(source, /\["line14Label", \["undefined_19"\]\]/);
+  assert.match(source, /\["line14Amount", \["fill_46"\]\]/);
   assert.match(source, /line14Amount/);
-  assert.match(source, /appendOtherExpensesPage/);
+  assert.match(source, /yes: "undefined_20", no: "undefined_21"/);
+  assert.doesNotMatch(source, /appendOtherExpensesPage/);
+});
+
+test("row 14 is rendered before unchanged row 15 and total", async () => {
+  const ui = await readFile(new URL("../components/documents/DocumentGeneratorV2.tsx", import.meta.url), "utf8");
+  const row14 = ui.indexOf('data-document-row={idx}');
+  const row15 = ui.indexOf('data-document-row="15"');
+  const total = ui.indexOf("ยอดชำระเงินรวมทั้งสิ้น", row15);
+  assert.ok(row14 >= 0 && row15 > row14 && total > row15);
+  assert.match(ui, /\.deposit \|\| ""/);
+  assert.match(ui, /\.remainingAmount \|\| ""/);
 });
 
 test("identifier paths do not use numeric coercion", async () => {
