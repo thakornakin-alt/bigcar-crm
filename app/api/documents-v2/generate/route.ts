@@ -5,6 +5,7 @@ import { getTemplateById } from "@/lib/documents-v2/template-config";
 import { readDocumentV2Mapping } from "@/lib/documents-v2/mapping-store";
 import { resolveDocumentV2Data } from "@/lib/documents-v2/resolve-data";
 import { loadDocumentTemplateBytes } from "@/lib/documents-v2/template-bytes";
+import { normalizeDocumentValueRecord, normalizeOtherExpenses } from "@/lib/documents/value-integrity";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -13,7 +14,11 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const report = (body.report || null) as ReportHistoryItem | null;
-    const override = (body.data || {}) as Record<string, string>;
+    const override = normalizeDocumentValueRecord(body.data || {});
+    if (override.otherExpensesJson) {
+      const expenses = normalizeOtherExpenses(JSON.parse(override.otherExpensesJson));
+      override.otherExpensesJson = JSON.stringify(expenses);
+    }
     const templateId = String(body.templateId || "").trim() || undefined;
     const template = getTemplateById(templateId);
     const templateBytes = await loadDocumentTemplateBytes(template.path, request.url);

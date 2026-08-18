@@ -1,4 +1,5 @@
 import type { ReportHistoryItem } from "@/lib/types";
+import { formatDocumentMoney, identifierText, parseDocumentMoney } from "@/lib/documents/value-integrity";
 
 export const DOC_V2_TEMPLATE_ID = "contract-field" as const;
 
@@ -42,14 +43,14 @@ function pick(obj: Record<string, any>, ...keys: string[]) {
   const extra = obj?.extraFields && typeof obj.extraFields === "object" ? obj.extraFields : {};
   for (const key of keys) {
     const value = obj?.[key] ?? extra?.[key];
-    if (value !== undefined && value !== null && String(value).trim() !== "") return String(value);
+    if (value !== undefined && value !== null && identifierText(value) !== "") return identifierText(value);
   }
   const extraEntries = Object.entries(extra || {});
   for (const key of keys) {
     const normalizedKey = normalize(key);
     const matched = extraEntries.find(([extraKey]) => normalize(String(extraKey || "")) === normalizedKey);
     if (matched && matched[1] !== undefined && matched[1] !== null && String(matched[1]).trim() !== "") {
-      return String(matched[1]);
+      return identifierText(matched[1]);
     }
   }
   return "";
@@ -65,11 +66,8 @@ function extractFromReportText(text: string, patterns: RegExp[]) {
 }
 
 function normalizeMoney(rawValue: string) {
-  const only = String(rawValue || "").replace(/[^0-9.\-]/g, "");
-  if (!only) return "";
-  const num = Number(only);
-  if (!Number.isFinite(num)) return "";
-  return num.toLocaleString("th-TH");
+  const parsed = parseDocumentMoney(rawValue);
+  return parsed.ok && parsed.value !== undefined ? formatDocumentMoney(parsed.value) : "";
 }
 
 function thaiNumberToWords(input: number) {
@@ -176,9 +174,11 @@ export function mapBookingToDocumentV2(report?: ReportHistoryItem | null): Docum
       /จองรถยนต์\s*[:：]\s*([0-9,]+)/i,
       /มัดจำ\s*[:：]\s*([0-9,]+)/i
     ]);
-  const finalPrice = Number(String(rawFinal || "").replace(/,/g, ""));
-  const depositPrice = Number(String(rawDeposit || "").replace(/,/g, ""));
-  const remaining = Number.isFinite(finalPrice) && Number.isFinite(depositPrice) ? Math.max(finalPrice - depositPrice, 0) : 0;
+  const finalPriceResult = parseDocumentMoney(rawFinal);
+  const depositPriceResult = parseDocumentMoney(rawDeposit);
+  const finalPrice = finalPriceResult.ok ? finalPriceResult.value : undefined;
+  const depositPrice = depositPriceResult.ok ? depositPriceResult.value : undefined;
+  const remaining = finalPrice !== undefined && depositPrice !== undefined ? Math.max(finalPrice - depositPrice, 0) : 0;
   const now = new Date();
   const currentDate = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
   return {
@@ -217,7 +217,7 @@ export function mapBookingToDocumentV2(report?: ReportHistoryItem | null): Docum
       || extractFromReportText(reportText, [/เลขที่ใบจอง\s*[:：]\s*([^\r\n]+)/i, /booking\s*no\.?\s*[:：]\s*([^\r\n]+)/i]),
     sellPrice: normalizeMoney(pick(raw, "salePrice", "finalPrice", "netPayment", "carPrice") || rawFinal),
     deposit: normalizeMoney(String(rawDeposit || "")),
-    remainingAmount: remaining > 0 ? remaining.toLocaleString("th-TH") : "",
+    remainingAmount: remaining > 0 ? formatDocumentMoney(remaining) : "",
     remainingAmountThaiText: remaining > 0 ? thaiNumberToWords(remaining) : "",
     financeCompany: pick(raw, "financeCompany", "finance", "bank", "ไฟแนนซ์"),
     saleName: pick(raw, "saleName", "salesName", "ownerName")

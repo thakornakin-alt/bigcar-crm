@@ -4,6 +4,7 @@ import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb } from "pdf-lib";
 import { formatThaiDate, getDocumentTemplate } from "@/lib/documents/template-config";
 import type { DocumentData, DocumentFieldConfig, DocumentTemplateId } from "@/lib/documents/document-types";
+import { identifierText } from "@/lib/documents/value-integrity";
 
 function absoluteAssetPath(assetPath: string) {
   return path.isAbsolute(assetPath) ? assetPath : path.join(process.cwd(), assetPath);
@@ -48,8 +49,7 @@ function normalizeFieldName(value: string) {
 }
 
 function textValue(value: unknown) {
-  if (value === null || value === undefined) return "";
-  return String(value).trim();
+  return identifierText(value);
 }
 
 function fieldValue(fieldKey: string, field: DocumentFieldConfig, data: DocumentData) {

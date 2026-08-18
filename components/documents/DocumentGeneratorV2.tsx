@@ -16,6 +16,7 @@ import {
   type PowerOfAttorneySuggestion
 } from "@/lib/documents-v2/power-of-attorney";
 import type { VehicleDeliveryOcrFields } from "@/lib/documents-v2/vehicle-delivery-ocr";
+import { formatDocumentMoney, identifierText, parseDocumentMoney, type DocumentOtherExpense } from "@/lib/documents/value-integrity";
 
 type FieldItem = { name: string; type: string };
 type FieldsDebug = {
@@ -26,6 +27,7 @@ type FieldsDebug = {
 };
 
 type TemporaryReceiptExtraStatus = "none" | "gift" | "charge";
+type OtherExpenseDraft = Omit<DocumentOtherExpense, "amount"> & { amount: string };
 type TemporaryReceiptExtraData = {
   row3NetPriceNote: string;
   row1Note: string;
@@ -471,6 +473,16 @@ export function DocumentGeneratorV2() {
   const [powerOfAttorneyExtras, setPowerOfAttorneyExtras] = useState<PowerOfAttorneyExtraData>(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
   const [transportTransferExtras, setTransportTransferExtras] = useState<TransportTransferRequestExtraData>(DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS);
   const [vehicleDeliveryExtras, setVehicleDeliveryExtras] = useState<VehicleDeliveryDocumentExtraData>(DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS);
+  const [otherExpenses, setOtherExpenses] = useState<OtherExpenseDraft[]>([]);
+  const [overrideState, setOverrideState] = useState<"idle" | "loading" | "clean" | "dirty" | "saving" | "error">("idle");
+  const savedOverrideRef = useRef<{
+    data: ResolvedDocumentV2Data | null;
+    temporaryReceiptExtras: TemporaryReceiptExtraData;
+    powerOfAttorneyExtras: PowerOfAttorneyExtraData;
+    transportTransferExtras: TransportTransferRequestExtraData;
+    vehicleDeliveryExtras: VehicleDeliveryDocumentExtraData;
+    otherExpenses: OtherExpenseDraft[];
+  } | null>(null);
   const vehicleDeliveryIdCardCameraInputRef = useRef<HTMLInputElement | null>(null);
   const vehicleDeliveryIdCardPickerInputRef = useRef<HTMLInputElement | null>(null);
   const powerOfAttorneyTouchedRef = useRef<Record<string, boolean>>({});
@@ -581,6 +593,7 @@ export function DocumentGeneratorV2() {
     setPowerOfAttorneyExtras(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
     setTransportTransferExtras(DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS);
     setVehicleDeliveryExtras(DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS);
+    setOtherExpenses([]);
     powerOfAttorneyTouchedRef.current = {};
     transportTransferTouchedRef.current = {};
     vehicleDeliveryTouchedRef.current = {};
@@ -588,21 +601,25 @@ export function DocumentGeneratorV2() {
 
   function updateTemporaryReceiptExtra<K extends keyof TemporaryReceiptExtraData>(key: K, value: TemporaryReceiptExtraData[K]) {
     setTemporaryReceiptExtras((prev) => ({ ...prev, [key]: value }));
+    setOverrideState("dirty");
   }
 
   function updatePowerOfAttorneyExtra<K extends keyof PowerOfAttorneyExtraData>(key: K, value: PowerOfAttorneyExtraData[K]) {
     powerOfAttorneyTouchedRef.current[String(key)] = true;
     setPowerOfAttorneyExtras((prev) => ({ ...prev, [key]: value }));
+    setOverrideState("dirty");
   }
 
   function updateTransportTransferExtra<K extends keyof TransportTransferRequestExtraData>(key: K, value: TransportTransferRequestExtraData[K]) {
     transportTransferTouchedRef.current[String(key)] = true;
     setTransportTransferExtras((prev) => ({ ...prev, [key]: value }));
+    setOverrideState("dirty");
   }
 
   function updateVehicleDeliveryExtra<K extends keyof VehicleDeliveryDocumentExtraData>(key: K, value: VehicleDeliveryDocumentExtraData[K]) {
     vehicleDeliveryTouchedRef.current[String(key)] = true;
     setVehicleDeliveryExtras((prev) => ({ ...prev, [key]: value }));
+    setOverrideState("dirty");
   }
 
   function normalizePowerOfAttorneySuggestion(suggestion: PowerOfAttorneySuggestion) {
@@ -735,20 +752,20 @@ export function DocumentGeneratorV2() {
 
   function computeNetSellPrice() {
     const sellPriceText = String((editableData || sampleData || {}).sellPrice || "");
-    const base = Number(sellPriceText.replace(/,/g, "").replace(/[^\d.-]/g, ""));
-    const discount = Number(String(temporaryReceiptExtras.line2Discount || "").replace(/,/g, "").replace(/[^\d.-]/g, ""));
-    if (!Number.isFinite(base)) return "";
-    const net = Number.isFinite(discount) ? Math.max(base - discount, 0) : base;
-    return net > 0 ? net.toLocaleString("th-TH") : "";
+    const base = parseDocumentMoney(sellPriceText);
+    const discount = parseDocumentMoney(temporaryReceiptExtras.line2Discount);
+    if (!base.ok || base.value === undefined) return "";
+    if (!discount.ok) throw new Error("รูปแบบส่วนลดไม่ถูกต้อง");
+    const net = Math.max(base.value - (discount.value || 0), 0);
+    return net > 0 ? formatDocumentMoney(net) : "";
   }
 
   function computeRemainingAmountThaiText() {
     const currentTotal = String((editableData || sampleData || {}).remainingAmount || "");
-    const normalized = currentTotal.replace(/,/g, "").replace(/[^\d.-]/g, "");
-    if (!normalized) return String((sampleData || {}).remainingAmountThaiText || "");
-    const parsed = Number(normalized);
-    if (!Number.isFinite(parsed)) return String((sampleData || {}).remainingAmountThaiText || "");
-    return parsed > 0 ? thaiNumberToWords(parsed) : "";
+    const parsed = parseDocumentMoney(currentTotal);
+    if (!parsed.ok) throw new Error("รูปแบบยอดชำระเงินรวมไม่ถูกต้อง");
+    if (parsed.value === undefined) return String((sampleData || {}).remainingAmountThaiText || "");
+    return parsed.value > 0 ? thaiNumberToWords(parsed.value) : "";
   }
 
   function buildGeneratePayload() {
@@ -756,6 +773,24 @@ export function DocumentGeneratorV2() {
       ...(editableData || sampleData || {}),
       ...temporaryReceiptExtras
     } as Record<string, string>;
+    const moneyKeys = ["sellPrice", "deposit", "remainingAmount", "line2Discount", "line4Installment", "line5DownPayment", "line6Amount", "line7Amount", "line8Amount", "line9Amount", "line10Amount", "line11Amount", "line12Amount", "line13Amount", "line14Amount"];
+    for (const key of moneyKeys) {
+      const parsed = parseDocumentMoney(payload[key]);
+      if (!parsed.ok) throw new Error(`รูปแบบจำนวนเงินใน ${key} ไม่ถูกต้อง`);
+      if (parsed.value !== undefined) payload[key] = formatDocumentMoney(parsed.value);
+    }
+    payload.phone = identifierText(payload.phone);
+    payload.idCard = identifierText(payload.idCard);
+    payload.customer_phone = identifierText(payload.customer_phone);
+    payload.customer_id_no = identifierText(payload.customer_id_no);
+    payload.customer_postal_code = identifierText(payload.customer_postal_code);
+    payload.transferee_phone = identifierText(payload.transferee_phone);
+    payload.otherExpensesJson = JSON.stringify(otherExpenses.map((expense, index) => {
+      const parsed = parseDocumentMoney(expense.amount);
+      if (!parsed.ok || parsed.value === undefined) throw new Error(`จำนวนเงินค่าใช้จ่ายลำดับ ${index + 1} ไม่ถูกต้อง`);
+      if (!identifierText(expense.label)) throw new Error(`กรุณาระบุชื่อค่าใช้จ่ายลำดับ ${index + 1}`);
+      return { ...expense, label: identifierText(expense.label), note: identifierText(expense.note), amount: parsed.value };
+    }));
     payload.remainingAmountThaiText = computeRemainingAmountThaiText();
     if (templateId === "power-of-attorney") {
       const documentDate = powerOfAttorneyExtras.documentDate || formatThaiBuddhistDate();
@@ -994,6 +1029,57 @@ export function DocumentGeneratorV2() {
   }, [templateId, selectedReportId, selectedReport]);
 
   useEffect(() => {
+    if (!selectedReportId) {
+      savedOverrideRef.current = null;
+      setOverrideState("idle");
+      return;
+    }
+    let cancelled = false;
+    setOverrideState("loading");
+    api<{ ok: boolean; override: null | { data?: ResolvedDocumentV2Data; templateData?: Record<string, unknown>; otherExpenses?: DocumentOtherExpense[] } }>(
+      `/api/documents-v2/override?templateId=${encodeURIComponent(templateId)}&reportId=${encodeURIComponent(selectedReportId)}`
+    ).then((response) => {
+      if (cancelled) return;
+      const saved = response.override;
+      const templateData = saved?.templateData || {};
+      const snapshot = {
+        data: saved?.data || null,
+        temporaryReceiptExtras: { ...DEFAULT_TEMPORARY_RECEIPT_EXTRAS, ...(templateData.temporaryReceiptExtras as Partial<TemporaryReceiptExtraData> || {}) },
+        powerOfAttorneyExtras: { ...DEFAULT_POWER_OF_ATTORNEY_EXTRAS, ...(templateData.powerOfAttorneyExtras as Partial<PowerOfAttorneyExtraData> || {}) },
+        transportTransferExtras: { ...DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS, ...(templateData.transportTransferExtras as Partial<TransportTransferRequestExtraData> || {}) },
+        vehicleDeliveryExtras: { ...DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS, ...(templateData.vehicleDeliveryExtras as Partial<VehicleDeliveryDocumentExtraData> || {}) },
+        otherExpenses: (saved?.otherExpenses || []).map((expense) => ({ ...expense, amount: formatDocumentMoney(expense.amount) }))
+      };
+      savedOverrideRef.current = snapshot;
+      if (snapshot.data) {
+        setEditableData(snapshot.data);
+        setEditableTouched(true);
+      }
+      setTemporaryReceiptExtras(snapshot.temporaryReceiptExtras);
+      setPowerOfAttorneyExtras(snapshot.powerOfAttorneyExtras);
+      setTransportTransferExtras(snapshot.transportTransferExtras);
+      setVehicleDeliveryExtras(snapshot.vehicleDeliveryExtras);
+      setOtherExpenses(snapshot.otherExpenses);
+      setOverrideState("clean");
+    }).catch((reason) => {
+      if (cancelled) return;
+      setError(reason instanceof Error ? reason.message : "โหลดข้อมูลแก้ไขเอกสารไม่สำเร็จ");
+      setOverrideState("error");
+    });
+    return () => { cancelled = true; };
+  }, [selectedReportId, templateId]);
+
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (overrideState !== "dirty") return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [overrideState]);
+
+  useEffect(() => {
     if (templateId !== "power-of-attorney") return;
     const reportAddress = String((resolvedData || sampleData || editableData || {}).customerAddress || "").trim();
     if (!reportAddress) return;
@@ -1093,6 +1179,73 @@ export function DocumentGeneratorV2() {
       return null;
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function saveDocumentOverride() {
+    if (!selectedReportId) return;
+    try {
+      setOverrideState("saving");
+      setError("");
+      const normalizedExpenses = otherExpenses.map((expense, index) => {
+        const parsed = parseDocumentMoney(expense.amount);
+        if (!parsed.ok || parsed.value === undefined) throw new Error(`จำนวนเงินค่าใช้จ่ายลำดับ ${index + 1} ไม่ถูกต้อง`);
+        if (!identifierText(expense.label)) throw new Error(`กรุณาระบุชื่อค่าใช้จ่ายลำดับ ${index + 1}`);
+        return { ...expense, label: identifierText(expense.label), note: identifierText(expense.note), amount: parsed.value };
+      });
+      const response = await api<{ ok: true; override: { data: ResolvedDocumentV2Data } }>("/api/documents-v2/override", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          templateId,
+          reportId: selectedReportId,
+          data: editableData || sampleData,
+          templateData: { temporaryReceiptExtras, powerOfAttorneyExtras, transportTransferExtras, vehicleDeliveryExtras },
+          otherExpenses: normalizedExpenses
+        })
+      });
+      savedOverrideRef.current = {
+        data: response.override.data,
+        temporaryReceiptExtras: { ...temporaryReceiptExtras },
+        powerOfAttorneyExtras: { ...powerOfAttorneyExtras },
+        transportTransferExtras: { ...transportTransferExtras },
+        vehicleDeliveryExtras: { ...vehicleDeliveryExtras },
+        otherExpenses: normalizedExpenses.map((expense) => ({ ...expense, amount: formatDocumentMoney(expense.amount) }))
+      };
+      setOtherExpenses(savedOverrideRef.current.otherExpenses);
+      setOverrideState("clean");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "บันทึกข้อมูลแก้ไขเอกสารไม่สำเร็จ");
+      setOverrideState("error");
+    }
+  }
+
+  function cancelDocumentEdits() {
+    const saved = savedOverrideRef.current;
+    if (!saved) {
+      resetEditableData();
+    } else {
+      setEditableData(saved.data || resolvedData || mapBookingToDocumentV2(selectedReport));
+      setTemporaryReceiptExtras({ ...saved.temporaryReceiptExtras });
+      setPowerOfAttorneyExtras({ ...saved.powerOfAttorneyExtras });
+      setTransportTransferExtras({ ...saved.transportTransferExtras });
+      setVehicleDeliveryExtras({ ...saved.vehicleDeliveryExtras });
+      setOtherExpenses(saved.otherExpenses.map((expense) => ({ ...expense })));
+    }
+    setOverrideState("clean");
+  }
+
+  async function resetDocumentOverride() {
+    if (!selectedReportId) return;
+    if (!window.confirm("รีเซ็ตค่าที่แก้ไขและกลับไปใช้ข้อมูลต้นทางหรือไม่")) return;
+    try {
+      await api(`/api/documents-v2/override?templateId=${encodeURIComponent(templateId)}&reportId=${encodeURIComponent(selectedReportId)}`, { method: "DELETE" });
+      savedOverrideRef.current = null;
+      resetEditableData(resolvedData || mapBookingToDocumentV2(selectedReport));
+      setOverrideState("clean");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "รีเซ็ตข้อมูลแก้ไขเอกสารไม่สำเร็จ");
+      setOverrideState("error");
     }
   }
 
@@ -1212,6 +1365,7 @@ export function DocumentGeneratorV2() {
       ...(prev || sampleData || {}),
       [key]: value
     } as ResolvedDocumentV2Data));
+    setOverrideState("dirty");
   }
 
   async function handleVehicleDeliveryIdCardImage(file: File | null) {
@@ -1288,6 +1442,7 @@ export function DocumentGeneratorV2() {
         <select
           value={templateId}
           onChange={(e) => {
+            if (overrideState === "dirty" && !window.confirm("มีการแก้ไขที่ยังไม่บันทึก ต้องการเปลี่ยนเอกสารและละทิ้งการแก้ไขหรือไม่")) return;
             setTemplateId(e.target.value as DocumentV2TemplateId);
             setFields([]);
             setDebug(null);
@@ -1310,7 +1465,10 @@ export function DocumentGeneratorV2() {
 
       <div className="rounded border border-white/10 p-3">
         <label className="mb-2 block text-sm">เลือกรายงานขาย</label>
-        <select value={selectedReportId} onChange={(e) => setSelectedReportId(e.target.value)} className="w-full rounded bg-black/40 p-2">
+        <select value={selectedReportId} onChange={(e) => {
+          if (overrideState === "dirty" && !window.confirm("มีการแก้ไขที่ยังไม่บันทึก ต้องการเปลี่ยนรายงานและละทิ้งการแก้ไขหรือไม่")) return;
+          setSelectedReportId(e.target.value);
+        }} className="w-full rounded bg-black/40 p-2">
           <option value="">-- เลือก --</option>
           {reports.map((r) => (
             <option key={r.id} value={r.id}>
@@ -1484,17 +1642,16 @@ export function DocumentGeneratorV2() {
 
       {(isTemporaryReceipt || isPowerOfAttorney || isTransportTransferRequest || isVehicleDeliveryDocument) ? (
         <div className="rounded border border-white/10 p-3">
-          <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-semibold">แก้ข้อมูลก่อน Preview</h2>
-            <button
-              type="button"
-              onClick={() => resetEditableData()}
-              className="rounded border border-white/20 px-3 py-1 text-sm"
-            >
-              รีเซ็ตข้อมูล
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={cancelDocumentEdits} disabled={overrideState !== "dirty"} className="rounded border border-white/20 px-3 py-1.5 text-xs disabled:opacity-40">ยกเลิก</button>
+              <button type="button" onClick={saveDocumentOverride} disabled={!selectedReportId || overrideState === "saving" || overrideState === "loading"} className="rounded bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-40">{overrideState === "saving" ? "กำลังบันทึก..." : "บันทึก"}</button>
+              <button type="button" onClick={resetDocumentOverride} disabled={!selectedReportId} className="rounded border border-amber-300/40 px-3 py-1.5 text-xs text-amber-200 disabled:opacity-40">รีเซ็ต / ใช้ค่าต้นทาง</button>
+            </div>
           </div>
-          <p className="mb-3 text-xs text-gray-300">แตะช่องด้านล่างเพื่อแก้ค่าก่อนสร้าง Preview / PNG ได้เลย</p>
+          <p className="mb-1 text-xs text-gray-300">แตะช่องด้านล่างเพื่อแก้ค่าก่อนสร้าง Preview / PNG ได้เลย</p>
+          <p className="mb-3 text-xs text-gray-400">สถานะ: {overrideState === "dirty" ? "มีการแก้ไขที่ยังไม่บันทึก" : overrideState === "loading" ? "กำลังโหลด" : overrideState === "error" ? "เกิดข้อผิดพลาด" : "บันทึกแล้ว"}</p>
           {isTemporaryReceipt ? (
             <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-2">
               <label className="block space-y-1 md:col-span-2">
@@ -1954,6 +2111,23 @@ export function DocumentGeneratorV2() {
                   </div>
                 </div>
               ))}
+              <div className="rounded border border-emerald-400/20 bg-emerald-500/5 p-3 md:col-span-2">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div><h3 className="text-sm font-semibold">ค่าใช้จ่ายอื่น ๆ</h3><p className="text-xs text-gray-400">แสดงแยกในเอกสารแนบท้าย ไม่เปลี่ยนยอดชำระเงินรวม</p></div>
+                  <button type="button" onClick={() => { setOtherExpenses((prev) => [...prev, { id: `expense-${Date.now()}-${prev.length}`, label: "", amount: "", note: "" }]); setOverrideState("dirty"); }} className="shrink-0 rounded border border-emerald-300/40 px-3 py-2 text-xs text-emerald-200">+ เพิ่มค่าใช้จ่าย</button>
+                </div>
+                <div className="space-y-3">
+                  {otherExpenses.map((expense, index) => (
+                    <div key={expense.id} className="grid grid-cols-1 gap-2 rounded border border-white/10 bg-black/20 p-3 md:grid-cols-[1.2fr_.8fr_1fr_auto] md:items-end">
+                      <label className="text-xs text-gray-300">ชื่อรายการ<input value={expense.label} onChange={(event) => { setOtherExpenses((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item)); setOverrideState("dirty"); }} className="mt-1 w-full rounded bg-black/40 p-2 text-sm text-white" /></label>
+                      <label className="text-xs text-gray-300">จำนวนเงิน<input inputMode="decimal" value={expense.amount} onChange={(event) => { setOtherExpenses((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, amount: event.target.value } : item)); setOverrideState("dirty"); }} onBlur={() => { const parsed = parseDocumentMoney(expense.amount); if (parsed.ok && parsed.value !== undefined) setOtherExpenses((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, amount: formatDocumentMoney(parsed.value) } : item)); }} className="mt-1 w-full rounded bg-black/40 p-2 text-sm text-white" /></label>
+                      <label className="text-xs text-gray-300">หมายเหตุ (ถ้ามี)<input value={expense.note || ""} onChange={(event) => { setOtherExpenses((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, note: event.target.value } : item)); setOverrideState("dirty"); }} className="mt-1 w-full rounded bg-black/40 p-2 text-sm text-white" /></label>
+                      <button type="button" onClick={() => { setOtherExpenses((prev) => prev.filter((_, itemIndex) => itemIndex !== index)); setOverrideState("dirty"); }} className="rounded border border-red-300/30 px-3 py-2 text-xs text-red-200">ลบ</button>
+                    </div>
+                  ))}
+                  {!otherExpenses.length ? <p className="text-xs text-gray-500">ยังไม่มีค่าใช้จ่ายเพิ่มเติม</p> : null}
+                </div>
+              </div>
             </div>
           </div>
           ) : null}

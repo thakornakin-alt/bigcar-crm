@@ -5,6 +5,7 @@ import { Download, Eye, Loader2, Search } from "lucide-react";
 import { PageContainer, PageTitle, SearchField, SectionCard } from "@/app/components/ui";
 import type { DocumentTemplateConfig, DocumentTemplateId } from "@/lib/documents/document-types";
 import { documentFileToOcrPayloads, mergeOcrRecords } from "@/lib/ocr/client-document-ocr";
+import { formatDocumentMoney, identifierText, parseDocumentMoney } from "@/lib/documents/value-integrity";
 
 type ReportRecord = Record<string, unknown> & {
   id?: string;
@@ -123,7 +124,7 @@ function templateKind(template: DocumentTemplateConfig) {
 }
 
 function text(value: unknown) {
-  return String(value ?? "").trim();
+  return identifierText(value);
 }
 
 function firstText(row: Record<string, unknown>, keys: string[]) {
@@ -136,9 +137,8 @@ function firstText(row: Record<string, unknown>, keys: string[]) {
 
 function money(value: unknown) {
   const raw = text(value);
-  const n = Number(raw.replace(/[^\d.]/g, ""));
-  if (!Number.isFinite(n) || n <= 0) return raw;
-  return n.toLocaleString("th-TH", { maximumFractionDigits: 0 });
+  const parsed = parseDocumentMoney(raw);
+  return parsed.ok && parsed.value !== undefined ? formatDocumentMoney(parsed.value) : raw;
 }
 
 function normalizePaymentType(value: unknown) {

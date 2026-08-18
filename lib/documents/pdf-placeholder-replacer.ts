@@ -2,6 +2,7 @@ import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mj
 import type { PDFDocument, PDFFont } from "pdf-lib";
 import { rgb } from "pdf-lib";
 import type { DocumentData } from "@/lib/documents/document-types";
+import { identifierText } from "@/lib/documents/value-integrity";
 
 GlobalWorkerOptions.workerSrc = "";
 
@@ -17,8 +18,7 @@ function normalizePlaceholder(value: string) {
 }
 
 function textValue(value: unknown) {
-  if (value === null || value === undefined) return "";
-  return String(value).trim();
+  return identifierText(value);
 }
 
 const placeholderAliases: Record<string, string[]> = {

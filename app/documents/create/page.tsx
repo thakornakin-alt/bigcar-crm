@@ -5,6 +5,7 @@ import { Download, Eye, FileImage, FileText, Loader2, Printer, Save, Search } fr
 import { FilterChip, PageContainer, PageTitle, SearchField, SectionCard } from "@/app/components/ui";
 import type { DocumentTemplateConfig, DocumentTemplateId } from "@/lib/documents/document-types";
 import type { ReportHistoryItem } from "@/lib/types";
+import { formatDocumentMoney, parseDocumentMoney } from "@/lib/documents/value-integrity";
 
 type Customer = {
   no?: string;
@@ -163,9 +164,8 @@ function todayInput() {
 }
 
 function money(value?: string) {
-  const n = Number(String(value || "").replace(/[^\d.]/g, ""));
-  if (!Number.isFinite(n) || n <= 0) return value || "";
-  return new Intl.NumberFormat("th-TH", { maximumFractionDigits: 0 }).format(n);
+  const parsed = parseDocumentMoney(value);
+  return parsed.ok && parsed.value !== undefined ? formatDocumentMoney(parsed.value) : value || "";
 }
 
 function vehicleLabel(vehicle: Vehicle) {
