@@ -18,6 +18,7 @@ const resolvedData = {
   discount: "-", rawUiOnly: "must-not-be-persisted"
 };
 let storedOverride = null;
+const requestSequence = [];
 async function buildContractPdf(data) {
   const pdf = await PDFDocument.load(await readFile("public/document-templates/contract-field.pdf"));
   pdf.registerFontkit(fontkit);
@@ -55,6 +56,7 @@ await page.route("**/api/documents-v2/mapping*", (route) => route.fulfill({ json
 await page.route("**/api/documents-v2/resolve-data", (route) => route.fulfill({ json: { ok: true, data: resolvedData, debug: {} } }));
 await page.route("**/api/documents-v2/override*", async (route) => {
   if (route.request().method() === "PUT") {
+    requestSequence.push("PUT override 200");
     const body = route.request().postDataJSON();
     const expectedKeys = ["brand", "chassisNo", "contractDate", "customerAddress", "customerName", "deposit", "engineNo", "idCard", "model", "paymentDate", "plateNo", "remainingAmount", "sellPrice"];
     if (JSON.stringify(Object.keys(body.data).sort()) !== JSON.stringify(expectedKeys)) {
@@ -64,12 +66,14 @@ await page.route("**/api/documents-v2/override*", async (route) => {
     return route.fulfill({ json: { ok: true, override: storedOverride } });
   }
   if (route.request().method() === "DELETE") {
+    requestSequence.push("DELETE override 200");
     storedOverride = null;
     return route.fulfill({ json: { ok: true } });
   }
   return route.fulfill({ json: { ok: true, override: storedOverride } });
 });
 await page.route("**/api/documents-v2/generate", async (route) => {
+  requestSequence.push("POST generate 200");
   const data = route.request().postDataJSON().data;
   const path = data.customerName === "ผู้ซื้อทดสอบสัญญา" ? editedFixturePath : initialFixturePath;
   return route.fulfill({ status: 200, contentType: "application/pdf", path });
@@ -89,8 +93,19 @@ await page.getByLabel("ชื่อผู้ซื้อ / นิติบุค
 await page.getByLabel("เลขบัตรประชาชน / เลขผู้เสียภาษี").fill("0123456789012");
 await page.getByLabel("ราคาขาย").fill("504,000.50");
 await page.getByLabel("ราคาขาย").blur();
+const previewBeforeSave = await page.locator("iframe").getAttribute("src").catch(() => "");
+const sequenceBeforeSave = requestSequence.length;
 await page.getByRole("button", { name: "บันทึก", exact: true }).click();
 await page.getByRole("button", { name: "แก้ไขข้อมูลสัญญา" }).waitFor();
+await page.waitForFunction((oldValue) => {
+  const current = document.querySelector("iframe")?.getAttribute("src") || "";
+  return Boolean(current && current !== oldValue);
+}, previewBeforeSave);
+const saveSequence = requestSequence.slice(sequenceBeforeSave);
+if (saveSequence[0] !== "PUT override 200" || saveSequence[1] !== "POST generate 200") {
+  throw new Error(`Save did not regenerate after PUT: ${JSON.stringify(saveSequence)}`);
+}
+await page.screenshot({ path: `${outputDir}/sales-contract-after-one-save-390.png`, fullPage: true });
 
 await page.reload({ waitUntil: "networkidle" });
 await selectContractFixture();
@@ -111,13 +126,6 @@ for (const width of [360, 390, 430, 768, 1440]) {
 }
 await page.screenshot({ path: `${outputDir}/sales-contract-edit-desktop-1440.png`, fullPage: true });
 
-const oldPreview = await page.locator("iframe").getAttribute("src").catch(() => "");
-const updateButton = page.getByRole("button", { name: "อัปเดตเอกสาร" });
-await updateButton.click();
-await page.waitForFunction((oldValue) => {
-  const current = document.querySelector("iframe")?.getAttribute("src") || "";
-  return Boolean(current && current !== oldValue);
-}, oldPreview);
 const downloadPromise = page.waitForEvent("download");
 await page.getByRole("link", { name: /Download PDF/ }).click();
 const download = await downloadPromise;
@@ -137,9 +145,19 @@ await page.getByRole("button", { name: "ยกเลิก", exact: true }).clic
 await page.getByRole("button", { name: "แก้ไขข้อมูลสัญญา" }).click();
 if (await page.getByLabel("ชื่อผู้ซื้อ / นิติบุคคล").inputValue() !== "ผู้ซื้อทดสอบสัญญา") throw new Error("Cancel did not discard unsaved changes");
 page.once("dialog", (dialog) => dialog.accept());
+const previewBeforeReset = await page.locator("iframe").getAttribute("src").catch(() => "");
+const sequenceBeforeReset = requestSequence.length;
 await page.getByRole("button", { name: "ใช้ข้อมูลเดิมจากระบบ" }).click();
+await page.waitForFunction((oldValue) => {
+  const current = document.querySelector("iframe")?.getAttribute("src") || "";
+  return Boolean(current && current !== oldValue);
+}, previewBeforeReset);
+const resetSequence = requestSequence.slice(sequenceBeforeReset);
+if (resetSequence[0] !== "DELETE override 200" || resetSequence[1] !== "POST generate 200") {
+  throw new Error(`Reset did not regenerate after DELETE: ${JSON.stringify(resetSequence)}`);
+}
 await page.getByRole("button", { name: "แก้ไขข้อมูลสัญญา" }).click();
 if (await page.getByLabel("ชื่อผู้ซื้อ / นิติบุคคล").inputValue() !== "ผู้ซื้อเดิม") throw new Error("Reset did not restore source data");
 
-console.log(JSON.stringify({ responsive, persisted: { customerName: "ผู้ซื้อทดสอบสัญญา", idCard: "0123456789012", sellPrice: "504,000.50" }, saveReload: true, cancel: true, reset: true, pdfVerified: true, consoleErrors }));
+console.log(JSON.stringify({ responsive, persisted: { customerName: "ผู้ซื้อทดสอบสัญญา", idCard: "0123456789012", sellPrice: "504,000.50" }, saveSequence, resetSequence, saveReload: true, cancel: true, reset: true, pdfVerified: true, consoleErrors }));
 await browser.close();

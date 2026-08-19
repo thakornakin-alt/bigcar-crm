@@ -520,7 +520,7 @@ export function DocumentGeneratorV2() {
   const [powerOfAttorneyExtras, setPowerOfAttorneyExtras] = useState<PowerOfAttorneyExtraData>(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
   const [transportTransferExtras, setTransportTransferExtras] = useState<TransportTransferRequestExtraData>(DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS);
   const [vehicleDeliveryExtras, setVehicleDeliveryExtras] = useState<VehicleDeliveryDocumentExtraData>(DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS);
-  const [overrideState, setOverrideState] = useState<"idle" | "loading" | "clean" | "dirty" | "saving" | "error">("idle");
+  const [overrideState, setOverrideState] = useState<"idle" | "loading" | "clean" | "dirty" | "saving" | "refreshing" | "error">("idle");
   const [contractEditMode, setContractEditMode] = useState(false);
   const savedOverrideRef = useRef<{
     data: ResolvedDocumentV2Data | null;
@@ -806,17 +806,18 @@ export function DocumentGeneratorV2() {
     return net > 0 ? formatDocumentMoney(net) : "";
   }
 
-  function computeRemainingAmountThaiText() {
-    const currentTotal = String((editableData || sampleData || {}).remainingAmount || "");
+  function computeRemainingAmountThaiText(sourceData: Record<string, string> = editableData || sampleData || {}) {
+    const currentTotal = String(sourceData.remainingAmount || "");
     const parsed = parseDocumentMoney(currentTotal);
     if (!parsed.ok) throw new Error("รูปแบบยอดชำระเงินรวมไม่ถูกต้อง");
     if (parsed.value === undefined) return String((sampleData || {}).remainingAmountThaiText || "");
     return parsed.value > 0 ? thaiNumberToWords(parsed.value) : "";
   }
 
-  function buildGeneratePayload() {
+  function buildGeneratePayload(sourceDataOverride?: Record<string, string>) {
+    const sourceData = sourceDataOverride || editableData || sampleData || {};
     const payload = {
-      ...(editableData || sampleData || {}),
+      ...sourceData,
       ...temporaryReceiptExtras
     } as Record<string, string>;
     const moneyKeys = ["sellPrice", "deposit", "remainingAmount", "line2Discount", "line4Installment", "line5DownPayment", "line6Amount", "line7Amount", "line8Amount", "line9Amount", "line10Amount", "line11Amount", "line12Amount", "line13Amount", "line14Amount"];
@@ -831,7 +832,7 @@ export function DocumentGeneratorV2() {
     payload.customer_id_no = identifierText(payload.customer_id_no);
     payload.customer_postal_code = identifierText(payload.customer_postal_code);
     payload.transferee_phone = identifierText(payload.transferee_phone);
-    payload.remainingAmountThaiText = computeRemainingAmountThaiText();
+    payload.remainingAmountThaiText = computeRemainingAmountThaiText(sourceData);
     if (templateId === "power-of-attorney") {
       const documentDate = powerOfAttorneyExtras.documentDate || formatThaiBuddhistDate();
       const documentDateParts = splitThaiBuddhistDateParts(documentDate);
@@ -1190,7 +1191,7 @@ export function DocumentGeneratorV2() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMappingLocked, mapping, templateId]);
 
-  async function generatePdfBlob() {
+  async function generatePdfBlob(sourceDataOverride?: Record<string, string>) {
     if (!isTemplateReady) {
       setError("ไม่พบ AcroForm fields ในไฟล์นี้");
       return null;
@@ -1206,7 +1207,7 @@ export function DocumentGeneratorV2() {
     try {
       setLoading(true);
       setError("");
-      const payloadData = buildGeneratePayload();
+      const payloadData = buildGeneratePayload(sourceDataOverride);
       return await api<Blob>("/api/documents-v2/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1244,6 +1245,12 @@ export function DocumentGeneratorV2() {
         transportTransferExtras: { ...transportTransferExtras },
         vehicleDeliveryExtras: { ...vehicleDeliveryExtras }
       };
+      setEditableData(response.override.data);
+      setOverrideState("refreshing");
+      const refreshed = await refreshDocumentPreviews(false, response.override.data);
+      if (!refreshed) {
+        setError("บันทึกแล้ว แต่แสดงตัวอย่างเอกสารไม่สำเร็จ กรุณากดอัปเดตเอกสาร");
+      }
       setOverrideState("clean");
       return true;
     } catch (reason) {
@@ -1277,7 +1284,13 @@ export function DocumentGeneratorV2() {
     try {
       await api(`/api/documents-v2/override?templateId=${encodeURIComponent(templateId)}&reportId=${encodeURIComponent(selectedReportId)}`, { method: "DELETE" });
       savedOverrideRef.current = null;
-      resetEditableData(resolvedData || mapBookingToDocumentV2(selectedReport));
+      const sourceData = resolvedData || mapBookingToDocumentV2(selectedReport);
+      resetEditableData(sourceData);
+      setOverrideState("refreshing");
+      const refreshed = await refreshDocumentPreviews(false, sourceData);
+      if (!refreshed) {
+        setError("รีเซ็ตแล้ว แต่แสดงตัวอย่างเอกสารไม่สำเร็จ กรุณากดอัปเดตเอกสาร");
+      }
       setOverrideState("clean");
       return true;
     } catch (reason) {
@@ -1287,8 +1300,8 @@ export function DocumentGeneratorV2() {
     }
   }
 
-  async function refreshDocumentPreviews(renderPng = true) {
-    const blob = await generatePdfBlob();
+  async function refreshDocumentPreviews(renderPng = true, sourceDataOverride?: Record<string, string>) {
+    const blob = await generatePdfBlob(sourceDataOverride);
     if (!blob) return null;
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     const pdfUrl = URL.createObjectURL(blob);
@@ -1704,15 +1717,15 @@ export function DocumentGeneratorV2() {
                   </div>
                 </fieldset>
               ))}
-              <p className="text-xs text-gray-400">สถานะ: {overrideState === "dirty" ? "มีการแก้ไขที่ยังไม่บันทึก" : overrideState === "saving" ? "กำลังบันทึก" : overrideState === "error" ? "เกิดข้อผิดพลาด" : "บันทึกแล้ว"}</p>
+              <p className="text-xs text-gray-400">สถานะ: {overrideState === "dirty" ? "มีการแก้ไขที่ยังไม่บันทึก" : overrideState === "saving" ? "กำลังบันทึก" : overrideState === "refreshing" ? "กำลังอัปเดตเอกสาร..." : overrideState === "error" ? "เกิดข้อผิดพลาด" : "บันทึกแล้ว"}</p>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={async () => { if (await saveDocumentOverride()) setContractEditMode(false); }}
-                  disabled={!selectedReportId || overrideState === "saving" || overrideState === "loading"}
+                  disabled={!selectedReportId || overrideState === "saving" || overrideState === "refreshing" || overrideState === "loading"}
                   className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
                 >
-                  {overrideState === "saving" ? "กำลังบันทึก..." : "บันทึก"}
+                  {overrideState === "saving" ? "กำลังบันทึก..." : overrideState === "refreshing" ? "กำลังอัปเดตเอกสาร..." : "บันทึก"}
                 </button>
                 <button type="button" onClick={() => { cancelDocumentEdits(); setContractEditMode(false); }} className="rounded border border-white/20 px-4 py-2 text-sm">ยกเลิก</button>
                 <button
