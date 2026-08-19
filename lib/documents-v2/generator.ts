@@ -323,6 +323,28 @@ function getPowerOfAttorneyFontSize(pdfField: string) {
   return undefined;
 }
 
+function drawPowerOfAttorneyMoo(
+  pdf: PDFDocument,
+  form: ReturnType<PDFDocument["getForm"]>,
+  value: unknown,
+  thaiFont: Awaited<ReturnType<PDFDocument["embedFont"]>>
+) {
+  const text = String(value || "").trim();
+  if (!text) return;
+  try {
+    form.getTextField("customer_moo");
+    return;
+  } catch {
+    // The audited template prints a Moo label and blank line but has no AcroForm field.
+  }
+  pdf.getPage(0).drawText(text, {
+    x: 389,
+    y: 661,
+    size: 11,
+    font: thaiFont
+  });
+}
+
 function decodeDataUrlImage(value: unknown) {
   const raw = String(value || "").trim();
   const match = raw.match(/^data:(image\/(?:png|jpeg|jpg));base64,(.+)$/i);
@@ -433,6 +455,9 @@ export async function generateDocumentV2WithBytes(
   setTextIfExists(form, ["manager_name", "MANAGER_NAME", "approverName"], fixedManagerName, thaiFont);
   if (templateId === "temporary-receipt") {
     applyTemporaryReceiptExtras(form, allData, thaiFont);
+  }
+  if (templateId === "power-of-attorney") {
+    drawPowerOfAttorneyMoo(pdf, form, allData.customer_moo, thaiFont);
   }
   const vehicleDeliveryIdCardImage = templateId === "vehicle-delivery-document"
     ? await prepareVehicleDeliveryIdCardImage(pdf, form, allData)

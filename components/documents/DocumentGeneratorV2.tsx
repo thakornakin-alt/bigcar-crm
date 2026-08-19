@@ -9,6 +9,7 @@ import type { DocumentV2FieldKey, DocumentV2FieldMapping, DocumentV2MappedValue 
 import { mapBookingToDocumentV2 } from "@/lib/documents-v2/types";
 import type { DocumentV2ResolveDebug, ResolvedDocumentV2Data } from "@/lib/documents-v2/resolve-data";
 import { PowerOfAttorneyOcrScanner } from "@/components/documents/PowerOfAttorneyOcrScanner";
+import { ThaiAddressSelector } from "@/components/documents/ThaiAddressSelector";
 import { VehicleDeliveryOcrScanner } from "@/components/documents/VehicleDeliveryOcrScanner";
 import {
   composePowerOfAttorneyVehiclePlate,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/documents-v2/power-of-attorney";
 import type { VehicleDeliveryOcrFields } from "@/lib/documents-v2/vehicle-delivery-ocr";
 import { formatDocumentMoney, identifierText, parseDocumentMoney, salesContractOverrideData } from "@/lib/documents/value-integrity";
+import { loadThaiAddressDataset, validateThaiAddressSelection, type ThaiAddressMode } from "@/lib/documents-v2/thai-address";
 
 type FieldItem = { name: string; type: string };
 type FieldsDebug = {
@@ -59,6 +61,7 @@ type TemporaryReceiptExtraData = {
 
 type PowerOfAttorneyPurpose = "มอบอำนาจรับรถแทน" | "สำหรับโอนรถยนต์";
 type PowerOfAttorneyExtraData = {
+  addressMode: ThaiAddressMode;
   purpose: PowerOfAttorneyPurpose;
   documentDate: string;
   customerName: string;
@@ -77,6 +80,7 @@ type PowerOfAttorneyExtraData = {
 type PowerOfAttorneyTouchKey = "customerName" | "plateNo" | keyof PowerOfAttorneyExtraData;
 
 type TransportTransferRequestExtraData = {
+  addressMode: ThaiAddressMode;
   transferDate: string;
   transferee_name: string;
   transferee_age: string;
@@ -142,6 +146,7 @@ const DEFAULT_TEMPORARY_RECEIPT_EXTRAS: TemporaryReceiptExtraData = {
 };
 
 const DEFAULT_POWER_OF_ATTORNEY_EXTRAS: PowerOfAttorneyExtraData = {
+  addressMode: "canonical",
   purpose: "มอบอำนาจรับรถแทน",
   documentDate: "",
   customerName: "",
@@ -158,6 +163,7 @@ const DEFAULT_POWER_OF_ATTORNEY_EXTRAS: PowerOfAttorneyExtraData = {
 };
 
 const DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS: TransportTransferRequestExtraData = {
+  addressMode: "canonical",
   transferDate: "",
   transferee_name: "",
   transferee_age: "",
@@ -528,6 +534,7 @@ export function DocumentGeneratorV2() {
   const [vehicleDeliveryExtras, setVehicleDeliveryExtras] = useState<VehicleDeliveryDocumentExtraData>(DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS);
   const [overrideState, setOverrideState] = useState<"idle" | "loading" | "clean" | "dirty" | "saving" | "refreshing" | "error">("idle");
   const [contractEditMode, setContractEditMode] = useState(false);
+  const [powerOfAttorneyEditMode, setPowerOfAttorneyEditMode] = useState(false);
   const savedOverrideRef = useRef<{
     data: ResolvedDocumentV2Data | null;
     temporaryReceiptExtras: TemporaryReceiptExtraData;
@@ -673,6 +680,30 @@ export function DocumentGeneratorV2() {
     setOverrideState("dirty");
   }
 
+  function updatePowerOfAttorneyAddress(value: { province: string; district: string; subdistrict: string; mode: ThaiAddressMode }) {
+    for (const key of ["customer_province", "customer_district", "cusyomer_subdistrict", "addressMode"]) powerOfAttorneyTouchedRef.current[key] = true;
+    setPowerOfAttorneyExtras((prev) => ({
+      ...prev,
+      addressMode: value.mode,
+      customer_province: value.province,
+      customer_district: value.district,
+      cusyomer_subdistrict: value.subdistrict
+    }));
+    setOverrideState("dirty");
+  }
+
+  function updateTransportTransferAddress(value: { province: string; district: string; subdistrict: string; mode: ThaiAddressMode }) {
+    for (const key of ["transferee_province", "transferee_district", "transferee_subdistrict", "addressMode"]) transportTransferTouchedRef.current[key] = true;
+    setTransportTransferExtras((prev) => ({
+      ...prev,
+      addressMode: value.mode,
+      transferee_province: value.province,
+      transferee_district: value.district,
+      transferee_subdistrict: value.subdistrict
+    }));
+    setOverrideState("dirty");
+  }
+
   function updateVehicleDeliveryExtra<K extends keyof VehicleDeliveryDocumentExtraData>(key: K, value: VehicleDeliveryDocumentExtraData[K]) {
     vehicleDeliveryTouchedRef.current[String(key)] = true;
     setVehicleDeliveryExtras((prev) => ({ ...prev, [key]: value }));
@@ -770,7 +801,7 @@ export function DocumentGeneratorV2() {
     setTransportTransferExtras((prev) => {
       const next = { ...prev };
       let changed = false;
-      for (const [key, value] of Object.entries(defaults) as Array<[keyof TransportTransferRequestExtraData, string]>) {
+      for (const [key, value] of Object.entries(defaults) as Array<[Exclude<keyof TransportTransferRequestExtraData, "addressMode">, string]>) {
         if (!value || transportTransferTouchedRef.current[String(key)] || String(next[key] || "").trim()) continue;
         next[key] = value;
         changed = true;
@@ -1016,6 +1047,7 @@ export function DocumentGeneratorV2() {
     setResolvingData(true);
     setOverrideState("loading");
     setContractEditMode(false);
+    setPowerOfAttorneyEditMode(false);
     setError("");
     setEditableTouched(false);
     setEditableData(null);
@@ -1214,6 +1246,19 @@ export function DocumentGeneratorV2() {
   async function saveDocumentOverride() {
     if (!selectedReportId) return false;
     try {
+      const addressValue = isPowerOfAttorney
+        ? { mode: powerOfAttorneyExtras.addressMode, province: powerOfAttorneyExtras.customer_province, district: powerOfAttorneyExtras.customer_district, subdistrict: powerOfAttorneyExtras.cusyomer_subdistrict }
+        : isTransportTransferRequest
+          ? { mode: transportTransferExtras.addressMode, province: transportTransferExtras.transferee_province, district: transportTransferExtras.transferee_district, subdistrict: transportTransferExtras.transferee_subdistrict }
+          : null;
+      if (addressValue?.mode === "canonical" && (addressValue.province || addressValue.district || addressValue.subdistrict)) {
+        const dataset = await loadThaiAddressDataset();
+        if (!validateThaiAddressSelection(dataset, addressValue).valid) {
+          setError("บันทึกไม่สำเร็จ กรุณาเลือกจังหวัด อำเภอ/เขต และตำบล/แขวงให้สัมพันธ์กัน หรือเลือกกรอกเอง");
+          setOverrideState("dirty");
+          return false;
+        }
+      }
       setOverrideState("saving");
       setError("");
       const response = await api<{ ok: true; override: { data: ResolvedDocumentV2Data } }>("/api/documents-v2/override", {
@@ -1530,7 +1575,7 @@ export function DocumentGeneratorV2() {
   return (
     <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 text-white">
       <h1 className="text-2xl font-bold">DocumentGeneratorV2</h1>
-      <p className="text-sm text-gray-300">AcroForm only · ใช้ไฟล์เดียวกันทั้ง Load Fields + Preview/Export</p>
+      <p className="text-sm text-gray-300">ข้อมูลเดียวกันสำหรับ Preview, Download PDF และแชร์รูป</p>
       {error ? <div className="rounded border border-red-500/40 bg-red-900/30 p-3 text-red-100">{error}</div> : null}
 
       <div className="rounded border border-white/10 p-3">
@@ -1544,6 +1589,7 @@ export function DocumentGeneratorV2() {
             setDebug(null);
             setError("");
             setContractEditMode(false);
+            setPowerOfAttorneyEditMode(false);
             setIsTemplateReady(false);
             setPreviewUrl("");
             if (pngUrl) URL.revokeObjectURL(pngUrl);
@@ -1569,6 +1615,7 @@ export function DocumentGeneratorV2() {
           setError("");
           setSelectedReportId(e.target.value);
           setContractEditMode(false);
+          setPowerOfAttorneyEditMode(false);
         }} className="w-full rounded bg-black/40 p-2">
           <option value="">-- เลือก --</option>
           {reports.map((r) => (
@@ -1804,6 +1851,27 @@ export function DocumentGeneratorV2() {
         </section>
       ) : null}
 
+      {isPowerOfAttorney ? (
+        <section className="rounded border border-white/10 bg-white/[0.02] p-3" aria-labelledby="power-of-attorney-edit-heading">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 id="power-of-attorney-edit-heading" className="font-semibold">ข้อมูลหนังสือมอบอำนาจ</h2>
+              <p className="mt-1 text-xs text-gray-400">แก้เฉพาะเอกสารฉบับนี้ ไม่เปลี่ยนรายงานขาย Booking หรือข้อมูลลูกค้า</p>
+            </div>
+            {!powerOfAttorneyEditMode ? (
+              <button
+                type="button"
+                onClick={() => setPowerOfAttorneyEditMode(true)}
+                disabled={!selectedReportId || reportSwitchBusy || !editableData}
+                className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
+              >
+                แก้ไขข้อมูลหนังสือมอบอำนาจ
+              </button>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
       {previewUrl || reportSwitchBusy ? (
         <div className={`relative rounded border border-white/10 p-3 ${reportSwitchBusy ? "opacity-70" : ""}`} aria-busy={reportSwitchBusy}>
           <h2 className="mb-2 font-semibold">Preview เอกสาร</h2>
@@ -1851,14 +1919,14 @@ export function DocumentGeneratorV2() {
         </>
       ) : null}
 
-      {(isTemporaryReceipt || isPowerOfAttorney || isTransportTransferRequest || isVehicleDeliveryDocument) ? (
+      {(isTemporaryReceipt || (isPowerOfAttorney && powerOfAttorneyEditMode) || isTransportTransferRequest || isVehicleDeliveryDocument) ? (
         <div className="rounded border border-white/10 p-3">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-semibold">แก้ข้อมูลก่อน Preview</h2>
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={cancelDocumentEdits} disabled={overrideState !== "dirty"} className="rounded border border-white/20 px-3 py-1.5 text-xs disabled:opacity-40">ยกเลิก</button>
-              <button type="button" onClick={saveDocumentOverride} disabled={!selectedReportId || reportSwitchBusy || overrideState === "saving" || overrideState === "loading"} className="rounded bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-40">{overrideState === "saving" ? "กำลังบันทึก..." : "บันทึก"}</button>
-              <button type="button" onClick={resetDocumentOverride} disabled={!selectedReportId || reportSwitchBusy} className="rounded border border-amber-300/40 px-3 py-1.5 text-xs text-amber-200 disabled:opacity-40">รีเซ็ต / ใช้ค่าต้นทาง</button>
+              <button type="button" onClick={() => { cancelDocumentEdits(); if (isPowerOfAttorney) setPowerOfAttorneyEditMode(false); }} disabled={overrideState === "saving" || overrideState === "refreshing"} className="rounded border border-white/20 px-3 py-1.5 text-xs disabled:opacity-40">ยกเลิก</button>
+              <button type="button" onClick={async () => { if (await saveDocumentOverride()) { if (isPowerOfAttorney) setPowerOfAttorneyEditMode(false); } }} disabled={!selectedReportId || reportSwitchBusy || overrideState === "saving" || overrideState === "loading"} className="rounded bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-40">{overrideState === "saving" ? "กำลังบันทึก..." : "บันทึก"}</button>
+              <button type="button" onClick={async () => { if (await resetDocumentOverride()) { if (isPowerOfAttorney) setPowerOfAttorneyEditMode(false); } }} disabled={!selectedReportId || reportSwitchBusy} className="rounded border border-amber-300/40 px-3 py-1.5 text-xs text-amber-200 disabled:opacity-40">ใช้ข้อมูลเดิมจากระบบ</button>
             </div>
           </div>
           <p className="mb-1 text-xs text-gray-300">แตะช่องด้านล่างเพื่อแก้ค่าก่อนสร้าง Preview / PNG ได้เลย</p>
@@ -2080,9 +2148,6 @@ export function DocumentGeneratorV2() {
                   ["transferee_moo", "หมู่ที่"],
                   ["transferee_soi", "ซอย"],
                   ["transferee_road", "ถนน"],
-                  ["transferee_subdistrict", "ตำบล/แขวง"],
-                  ["transferee_district", "อำเภอ/เขต"],
-                  ["transferee_province", "จังหวัด"],
                   ["transferee_phone", "โทรศัพท์"],
                   ["vehicle_plate_no", "ทะเบียนรถ"],
                   ["vehicle_chassis_no", "เลขตัวรถ"],
@@ -2097,6 +2162,17 @@ export function DocumentGeneratorV2() {
                     />
                   </label>
                 ))}
+                <div className="md:col-span-2">
+                  <ThaiAddressSelector
+                    value={{
+                      mode: transportTransferExtras.addressMode,
+                      province: transportTransferExtras.transferee_province,
+                      district: transportTransferExtras.transferee_district,
+                      subdistrict: transportTransferExtras.transferee_subdistrict
+                    }}
+                    onChange={updateTransportTransferAddress}
+                  />
+                </div>
               </div>
             </div>
           ) : null}
@@ -2125,7 +2201,7 @@ export function DocumentGeneratorV2() {
                     placeholder="นายสมชาย ใจดี"
                     className="w-full rounded bg-black/40 p-2 text-sm"
                   />
-                  <p className="text-[11px] text-gray-500">จะถูกส่งไปที่ field Customer_name ตอนสร้าง PDF</p>
+                  <p className="text-[11px] text-gray-500">ชื่อนี้จะแสดงในเอกสารหนังสือมอบอำนาจ</p>
                 </label>
                 <label className="block space-y-1 md:col-span-2">
                   <span className="block text-xs text-gray-300">วันที่</span>
@@ -2156,7 +2232,7 @@ export function DocumentGeneratorV2() {
                     placeholder="1ขอ 7063"
                     className="w-full rounded bg-black/40 p-2 text-sm"
                   />
-                  <p className="text-[11px] text-gray-500">จะถูกเติมเป็น “{composePowerOfAttorneyVehiclePlate((editableData || sampleData || {}).plateNo, powerOfAttorneyExtras.purpose) || "มอบอำนาจรับรถแทน ทะเบียน ..."}” ใน field vehicle_plate</p>
+                  <p className="text-[11px] text-gray-500">ข้อความในเอกสาร: “{composePowerOfAttorneyVehiclePlate((editableData || sampleData || {}).plateNo, powerOfAttorneyExtras.purpose) || "มอบอำนาจรับรถแทน ทะเบียน ..."}”</p>
                 </label>
                 {[
                   ["customer_age", "อายุ"],
@@ -2165,10 +2241,7 @@ export function DocumentGeneratorV2() {
                   ["customer_house_no", "บ้านเลขที่"],
                   ["customer_moo", "หมู่ที่"],
                   ["customer_soi", "ซอย"],
-                  ["customer_road", "ถนน"],
-                  ["cusyomer_subdistrict", "ตำบล/แขวง"],
-                  ["customer_district", "อำเภอ/เขต"],
-                  ["customer_province", "จังหวัด"]
+                  ["customer_road", "ถนน"]
                 ].map(([key, label]) => (
                   <label key={key} className="block space-y-1">
                     <span className="block text-xs text-gray-300">{label}</span>
@@ -2179,6 +2252,17 @@ export function DocumentGeneratorV2() {
                     />
                   </label>
                 ))}
+                <div className="md:col-span-2">
+                  <ThaiAddressSelector
+                    value={{
+                      mode: powerOfAttorneyExtras.addressMode,
+                      province: powerOfAttorneyExtras.customer_province,
+                      district: powerOfAttorneyExtras.customer_district,
+                      subdistrict: powerOfAttorneyExtras.cusyomer_subdistrict
+                    }}
+                    onChange={updatePowerOfAttorneyAddress}
+                  />
+                </div>
               </div>
             </div>
           ) : null}
@@ -2338,8 +2422,9 @@ export function DocumentGeneratorV2() {
         </div>
       ) : null}
 
-      {isDev ? <div className="rounded border border-white/10 p-3">
-        <p className="mb-2 text-xs text-gray-300">โหลดไฟล์จริง: {loadedTemplateFile || "-"}</p>
+      {isDev && settingsMode ? <details className="rounded border border-white/10 p-3">
+        <summary className="cursor-pointer text-xs text-gray-400">ข้อมูลตรวจสอบเอกสาร (Development)</summary>
+        <p className="mb-2 mt-3 text-xs text-gray-300">โหลดไฟล์จริง: {loadedTemplateFile || "-"}</p>
         {isDev && debug ? (
           <pre className="mb-2 max-h-40 overflow-auto text-xs text-emerald-200">
             {JSON.stringify(debug, null, 2)}
@@ -2363,7 +2448,7 @@ export function DocumentGeneratorV2() {
             <pre className="mt-2 max-h-56 overflow-auto text-xs text-gray-400">{JSON.stringify(unnamedFields, null, 2)}</pre>
           </details>
         ) : null}
-      </div> : null}
+      </details> : null}
 
     </div>
   );
