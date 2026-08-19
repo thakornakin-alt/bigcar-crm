@@ -6,6 +6,7 @@ import { CalendarDays, Car, CheckCircle2, Download, Loader2, RefreshCw, Wrench }
 import { FilterChip, PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
 import type { ReportHistoryItem } from "@/lib/types";
 import type { PrepChecklistKey, VehiclePrepRecord } from "@/lib/vehicle-prep";
+import { resolveSaleForBookingReadOnly } from "@/lib/report-transaction-identity";
 
 type PrepFilter = "ready" | "finance_waiting" | "all";
 type PaymentMode = "cash" | "finance" | "unknown";
@@ -49,10 +50,6 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
   return data;
 }
 
-function normalizePlate(value: string) {
-  return String(value || "").replace(/\s+/g, "").toUpperCase();
-}
-
 function extractLineValue(text: string, labels: string[]) {
   const lines = String(text || "").split(/\r?\n/);
   for (const line of lines) {
@@ -80,29 +77,16 @@ function paymentLabel(mode: PaymentMode) {
   return "ยังไม่ระบุ";
 }
 
-function latestByPlate(reports: ReportHistoryItem[]) {
-  const map = new Map<string, ReportHistoryItem>();
-  for (const report of reports) {
-    const key = normalizePlate(report.plate);
-    if (!key) continue;
-    const current = map.get(key);
-    if (!current || String(report.createdAt).localeCompare(String(current.createdAt)) > 0) {
-      map.set(key, report);
-    }
-  }
-  return map;
-}
-
 function buildPrepCases(reports: ReportHistoryItem[], prepRecords: VehiclePrepRecord[]): VehiclePrepCase[] {
   const activeReports = reports.filter((report) => report.status !== "deleted");
-  const latestSalesByPlate = latestByPlate(activeReports.filter((report) => report.type === "sales"));
+  const bookings = activeReports.filter((report) => report.type === "booking");
+  const salesReports = activeReports.filter((report) => report.type === "sales");
   const prepByBookingId = new Map(prepRecords.map((record) => [record.bookingId, record]));
 
-  return activeReports
-    .filter((report) => report.type === "booking")
+  return bookings
     .map((booking) => {
-      const plateKey = normalizePlate(booking.plate);
-      const sales = latestSalesByPlate.get(plateKey);
+      const salesResolution = resolveSaleForBookingReadOnly(booking, bookings, salesReports);
+      const sales = salesResolution.status === "resolved" ? salesResolution.sale : undefined;
       const paymentMode = detectPaymentMode(booking);
       const prep = prepByBookingId.get(booking.id);
       const deliveryDate = prep?.deliveryDate || (sales ? extractLineValue(sales.reportText, ["วันรับรถ"]) : "");

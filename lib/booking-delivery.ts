@@ -79,17 +79,33 @@ export function getLastBookingDeliveryTiming() {
   return { ...lastBookingDeliveryTiming };
 }
 
-export async function upsertBookingDeliveryRecordByPlate(input: BookingDeliveryRecord) {
-  const store = await readStore();
-  const normalizedPlate = normalizePlate(input.plate);
-  if (!normalizedPlate) throw new Error("ไม่พบทะเบียนสำหรับบันทึก Booking Delivery");
+export type BookingDeliveryMutationIdentity = Pick<BookingDeliveryRecord, "id" | "bookingReportId" | "bookingId" | "salesReportId">;
 
-  const index = store.records.findIndex(
-    (record) =>
-      normalizePlate(record.plate) === normalizedPlate ||
-      record.id === input.id ||
-      record.bookingId === input.bookingId
-  );
+export function findBookingDeliveryMutationIndex(records: BookingDeliveryRecord[], input: BookingDeliveryMutationIdentity) {
+  const identities: Array<[keyof BookingDeliveryMutationIdentity, string]> = [
+    ["id", text(input.id)],
+    ["bookingReportId", text(input.bookingReportId)],
+    ["bookingId", text(input.bookingId)],
+    ["salesReportId", text(input.salesReportId)]
+  ];
+  const resolvedIndexes = new Set<number>();
+  for (const [key, value] of identities) {
+    if (!value) continue;
+    const matches = records.reduce<number[]>((indexes, record, index) => {
+      if (text(record[key]) === value) indexes.push(index);
+      return indexes;
+    }, []);
+    if (matches.length > 1) throw new Error(`พบ transaction identity ซ้ำ: ${String(key)}`);
+    if (matches.length === 1) resolvedIndexes.add(matches[0]);
+  }
+  if (resolvedIndexes.size > 1) throw new Error("transaction identity ไม่ตรงกัน");
+  return resolvedIndexes.size === 1 ? [...resolvedIndexes][0] : -1;
+}
+
+export async function upsertBookingDeliveryRecordByTransaction(input: BookingDeliveryRecord) {
+  const store = await readStore();
+  if (!normalizePlate(input.plate)) throw new Error("ไม่พบทะเบียนสำหรับบันทึก Booking Delivery");
+  const index = findBookingDeliveryMutationIndex(store.records, input);
 
   const existing = index >= 0 ? store.records[index] : null;
   const next: BookingDeliveryRecord = {
@@ -342,16 +358,6 @@ export async function upsertBookingDeliveryFromBookingReport(
   }
 ) {
   const existingStore = await readStore();
-  const normalizedPlate = normalizePlate(report.plate);
-  const normalizedCustomer = text(report.customerName).toLowerCase();
-  const duplicate = existingStore.records.find((record) => {
-    if (record.status === "ยกเลิก") return false;
-    return normalizePlate(record.plate) === normalizedPlate && text(record.customerName).toLowerCase() === normalizedCustomer;
-  });
-  if (duplicate) {
-    throw new Error("ลูกค้าและทะเบียนนี้มีรายการจองอยู่แล้ว");
-  }
-
   const reportHistoryItem: ReportHistoryItem = {
     id: report.id,
     type: "booking",
@@ -382,7 +388,9 @@ export async function upsertBookingDeliveryFromBookingReport(
     reportText: report.reportText
   };
 
-  const existing = existingStore.records.find((record) => record.bookingReportId === report.id || normalizePlate(record.plate) === normalizedPlate) || null;
+  const existingMatches = existingStore.records.filter((record) => record.bookingReportId === report.id);
+  if (existingMatches.length > 1) throw new Error("พบ Booking Report relationship ซ้ำ");
+  const existing = existingMatches[0] || null;
   let next = buildRecordFromReports(
     reportHistoryItem,
     null,
@@ -424,7 +432,7 @@ export async function upsertBookingDeliveryFromBookingReport(
     next.summary = deriveSummary(getDisplayStatus(next) || "ยอดจอง", reportHistoryItem, null);
     next.alertSummary = deriveAlertSummary(getDisplayStatus(next), reportHistoryItem, null, next);
   }
-  return upsertBookingDeliveryRecordByPlate(next);
+  return upsertBookingDeliveryRecordByTransaction(next);
 }
 
 function buildRecordFromReports(
@@ -550,21 +558,19 @@ export async function upsertBookingDeliveryFromReportHistory(reports: ReportHist
   const bookings = activeReports.filter((report) => report.type === "booking");
   const sales = activeReports.filter((report) => report.type === "sales");
   const workingRecords = [...store.records];
-  const salesByPlate = new Map<string, ReportHistoryItem>();
-
+  const salesByBookingReportId = new Map<string, ReportHistoryItem[]>();
   for (const sale of sales) {
-    const key = normalizePlate(sale.plate);
-    if (!key) continue;
-    const current = salesByPlate.get(key);
-    if (!current || String(sale.createdAt).localeCompare(String(current.createdAt)) > 0) {
-      salesByPlate.set(key, sale);
-    }
+    const bookingReportId = text(sale.bookingReportId);
+    if (!bookingReportId) continue;
+    salesByBookingReportId.set(bookingReportId, [...(salesByBookingReportId.get(bookingReportId) || []), sale]);
   }
 
   for (const booking of bookings) {
-    const key = normalizePlate(booking.plate);
-    const salesReport = salesByPlate.get(key) || null;
-    const existing = workingRecords.find((record) => record.bookingReportId === booking.id || normalizePlate(record.plate) === key) || null;
+    const exactSales = salesByBookingReportId.get(booking.id) || [];
+    const salesReport = exactSales.length === 1 ? exactSales[0] : null;
+    const existingMatches = workingRecords.filter((record) => record.bookingReportId === booking.id);
+    if (existingMatches.length > 1) continue;
+    const existing = existingMatches[0] || null;
     const next = buildRecordFromReports(
       booking,
       salesReport,

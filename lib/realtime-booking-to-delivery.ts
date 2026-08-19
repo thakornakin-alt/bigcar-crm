@@ -1,7 +1,7 @@
 import { lookupStockByPlateDetailed } from "@/lib/apps-script";
 import { buildBookingDeliveryAlertSummary } from "@/lib/booking-delivery-alert";
 import { mergeStockExtraFields } from "@/lib/stock-extra-fields";
-import { upsertBookingDeliveryRecordByPlate } from "@/lib/booking-delivery";
+import { upsertBookingDeliveryRecordByTransaction } from "@/lib/booking-delivery";
 import type { BookingDeliveryRecord } from "@/lib/types";
 import type { RealtimeBookingV2QueueItem } from "@/lib/realtime-booking-v2";
 
@@ -120,6 +120,6 @@ export async function upsertBookingDeliveryFromRealtimeBookingV2(item: RealtimeB
     updatedAt: new Date().toISOString()
   };
 
-  const saved = await upsertBookingDeliveryRecordByPlate(record);
+  const saved = await upsertBookingDeliveryRecordByTransaction(record);
   return { record: saved, stockFound: Boolean(stock) };
 }

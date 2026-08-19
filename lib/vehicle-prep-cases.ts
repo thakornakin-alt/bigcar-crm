@@ -2,6 +2,7 @@ import { listReportHistory } from "@/lib/apps-script";
 import { listVehiclePrepRecords } from "@/lib/vehicle-prep";
 import type { ReportHistoryItem } from "@/lib/types";
 import type { VehiclePrepRecord } from "@/lib/vehicle-prep";
+import { resolveSaleForBookingReadOnly } from "@/lib/report-transaction-identity";
 
 export type CalendarVehicleOption = {
   bookingId: string;
@@ -12,10 +13,6 @@ export type CalendarVehicleOption = {
   paymentMode: "cash" | "finance" | "unknown";
   status: "รอส่งมอบ";
 };
-
-function normalizePlate(value: string) {
-  return String(value || "").replace(/\s+/g, "").toUpperCase();
-}
 
 function extractLineValue(text: string, labels: string[]) {
   const lines = String(text || "").split(/\r?\n/);
@@ -38,31 +35,17 @@ function detectPaymentMode(report: ReportHistoryItem): CalendarVehicleOption["pa
   return "unknown";
 }
 
-function latestByPlate(reports: ReportHistoryItem[]) {
-  const map = new Map<string, ReportHistoryItem>();
-  for (const report of reports) {
-    const key = normalizePlate(report.plate);
-    if (!key) continue;
-    const current = map.get(key);
-    if (!current || String(report.createdAt).localeCompare(String(current.createdAt)) > 0) {
-      map.set(key, report);
-    }
-  }
-  return map;
-}
-
 export function buildCalendarVehicleOptions(reports: ReportHistoryItem[], prepRecords: VehiclePrepRecord[]) {
   const activeReports = reports.filter((report) => report.status !== "deleted");
-  const latestSalesByPlate = latestByPlate(activeReports.filter((report) => report.type === "sales"));
+  const bookings = activeReports.filter((report) => report.type === "booking");
+  const salesReports = activeReports.filter((report) => report.type === "sales");
   const prepByBookingId = new Map(prepRecords.map((record) => [record.bookingId, record]));
 
-  return activeReports
-    .filter((report) => report.type === "booking")
+  return bookings
     .map((booking): CalendarVehicleOption | null => {
-      const plateKey = normalizePlate(booking.plate);
-      if (!plateKey) return null;
-
-      const sales = latestSalesByPlate.get(plateKey);
+      if (!booking.plate) return null;
+      const salesResolution = resolveSaleForBookingReadOnly(booking, bookings, salesReports);
+      const sales = salesResolution.status === "resolved" ? salesResolution.sale : undefined;
       if (sales?.status === "closed" || sales?.status === "delivered") return null;
 
       const paymentMode = detectPaymentMode(booking);

@@ -379,6 +379,7 @@ export type ReportHistoryType = "booking" | "sales";
 export type ReportHistoryItem = {
   id: string;
   type: ReportHistoryType;
+  bookingReportId?: string;
   bookingDate?: string;
   createdAt: string;
   updatedAt: string;
