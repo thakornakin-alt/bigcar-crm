@@ -7,6 +7,7 @@ export type DocumentV2FieldKey =
   | "contractDateDay"
   | "contractDateMonth"
   | "contractDateYear"
+  | "paymentDate"
   | "currentDate"
   | "currentDateDay"
   | "currentDateMonth"
@@ -36,24 +37,20 @@ export type DocumentV2FieldMapping = Record<string, DocumentV2MappedValue>;
 type MappingByTemplate = Record<string, DocumentV2FieldMapping>;
 
 const DEFAULT_MAPPING: DocumentV2FieldMapping = {
-  Text1: "customerName",
-  Text3: "contractDate",
-  Text3Day: "contractDateDay",
-  Text3Month: "contractDateMonth",
-  Text3Year: "contractDateYear",
-  Text4: "customerAddress",
-  Text6: "idCard",
-  Text7: "plateNo",
-  Text8: "brand",
-  Text9: "model",
-  Text10: "year",
-  Text11: "color",
-  Text12: "engineNo",
-  Text13: "chassisNo",
-  Text14: "sellPrice",
-  Text15: "deposit",
-  Text16: "remainingAmount",
-  Text17: "saleName"
+  Text1: "paymentDate",
+  Text3: "remainingAmount",
+  Text4: "sellPrice",
+  Text6: "chassisNo",
+  Text7: "contractDate",
+  Text8: "contractDate",
+  Text9: "customerName",
+  Text10: "customerAddress",
+  Text11: "idCard",
+  Text13: "brand",
+  Text14: "model",
+  Text15: "plateNo",
+  Text16: "engineNo",
+  Text17: "deposit"
 };
 
 const TEMPORARY_RECEIPT_DEFAULT_MAPPING: DocumentV2FieldMapping = {

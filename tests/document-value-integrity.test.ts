@@ -64,6 +64,27 @@ test("row 14 is rendered before unchanged row 15 and total", async () => {
   assert.match(ui, /\.remainingAmount \|\| ""/);
 });
 
+test("sales contract uses the audited AcroForm business mapping", async () => {
+  const source = await readFile(new URL("../lib/documents-v2/mapping-store.ts", import.meta.url), "utf8");
+  for (const mapping of [
+    'Text1: "paymentDate"', 'Text3: "remainingAmount"', 'Text4: "sellPrice"',
+    'Text6: "chassisNo"', 'Text7: "contractDate"', 'Text8: "contractDate"',
+    'Text9: "customerName"', 'Text10: "customerAddress"', 'Text11: "idCard"',
+    'Text13: "brand"', 'Text14: "model"', 'Text15: "plateNo"',
+    'Text16: "engineNo"', 'Text17: "deposit"'
+  ]) assert.match(source, new RegExp(mapping.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
+test("sales contract exposes Thai edit controls without raw AcroForm diagnostics", async () => {
+  const ui = await readFile(new URL("../components/documents/DocumentGeneratorV2.tsx", import.meta.url), "utf8");
+  assert.match(ui, /ข้อมูลสัญญาซื้อขาย/);
+  assert.match(ui, /แก้ไขข้อมูลสัญญา/);
+  assert.match(ui, /ชื่อผู้ซื้อ \/ นิติบุคคล/);
+  assert.match(ui, /เลขบัตรประชาชน \/ เลขผู้เสียภาษี/);
+  assert.match(ui, /ใช้ข้อมูลเดิมจากระบบ/);
+  assert.match(ui, /setSettingsMode\(isDev &&/);
+});
+
 test("identifier paths do not use numeric coercion", async () => {
   const files = [
     "../lib/documents-v2/types.ts",

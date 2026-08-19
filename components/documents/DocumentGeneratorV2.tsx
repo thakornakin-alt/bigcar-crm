@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Eye, FileText, Image as ImageIcon, Loader2, Share2 } from "lucide-react";
 import type { ReportHistoryItem } from "@/lib/types";
-import { DOC_V2_TEMPLATE_ID } from "@/lib/documents-v2/types";
+import { DOC_V2_TEMPLATE_ID, type DocumentV2Data } from "@/lib/documents-v2/types";
 import { documentTemplatesV2, getDocumentV2Templates, type DocumentV2TemplateId } from "@/lib/documents-v2/template-config";
 import type { DocumentV2FieldKey, DocumentV2FieldMapping, DocumentV2MappedValue } from "@/lib/documents-v2/mapping-store";
 import { mapBookingToDocumentV2 } from "@/lib/documents-v2/types";
@@ -240,6 +240,7 @@ const mappingOptions: Array<{ key: DocumentV2FieldKey; label: string }> = [
   { key: "contractDateDay", label: "วันที่สัญญา (วัน)" },
   { key: "contractDateMonth", label: "วันที่สัญญา (เดือน)" },
   { key: "contractDateYear", label: "วันที่สัญญา (ปี)" },
+  { key: "paymentDate", label: "วันที่ชำระส่วนที่เหลือ / ส่งมอบ" },
   { key: "currentDate", label: "วันที่ปัจจุบัน" },
   { key: "currentDateDay", label: "วันที่ปัจจุบัน (วัน)" },
   { key: "currentDateMonth", label: "วันที่ปัจจุบัน (เดือน)" },
@@ -267,6 +268,45 @@ const mappingOptions: Array<{ key: DocumentV2FieldKey; label: string }> = [
 const keyLabel: Record<DocumentV2FieldKey, string> = Object.fromEntries(
   mappingOptions.map((m) => [m.key, m.label])
 ) as Record<DocumentV2FieldKey, string>;
+
+const SALES_CONTRACT_EDIT_GROUPS: Array<{
+  title: string;
+  fields: Array<{ key: keyof DocumentV2Data; label: string; money?: boolean; wide?: boolean }>;
+}> = [
+  {
+    title: "ข้อมูลสัญญา",
+    fields: [
+      { key: "contractDate", label: "วันที่ทำสัญญา" },
+      { key: "paymentDate", label: "วันที่ชำระส่วนที่เหลือ / ส่งมอบ" }
+    ]
+  },
+  {
+    title: "ข้อมูลผู้ซื้อ",
+    fields: [
+      { key: "customerName", label: "ชื่อผู้ซื้อ / นิติบุคคล", wide: true },
+      { key: "idCard", label: "เลขบัตรประชาชน / เลขผู้เสียภาษี", wide: true },
+      { key: "customerAddress", label: "ที่อยู่", wide: true }
+    ]
+  },
+  {
+    title: "ข้อมูลรถ",
+    fields: [
+      { key: "brand", label: "ยี่ห้อ" },
+      { key: "model", label: "รุ่น" },
+      { key: "plateNo", label: "ทะเบียน" },
+      { key: "engineNo", label: "เลขเครื่องยนต์" },
+      { key: "chassisNo", label: "เลขตัวถัง", wide: true }
+    ]
+  },
+  {
+    title: "รายละเอียดการขาย",
+    fields: [
+      { key: "sellPrice", label: "ราคาขาย", money: true },
+      { key: "deposit", label: "เงินมัดจำ / เงินจอง", money: true },
+      { key: "remainingAmount", label: "ยอดชำระส่วนที่เหลือ", money: true }
+    ]
+  }
+];
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
@@ -475,6 +515,7 @@ export function DocumentGeneratorV2() {
   const [transportTransferExtras, setTransportTransferExtras] = useState<TransportTransferRequestExtraData>(DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS);
   const [vehicleDeliveryExtras, setVehicleDeliveryExtras] = useState<VehicleDeliveryDocumentExtraData>(DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS);
   const [overrideState, setOverrideState] = useState<"idle" | "loading" | "clean" | "dirty" | "saving" | "error">("idle");
+  const [contractEditMode, setContractEditMode] = useState(false);
   const savedOverrideRef = useRef<{
     data: ResolvedDocumentV2Data | null;
     temporaryReceiptExtras: TemporaryReceiptExtraData;
@@ -496,6 +537,7 @@ export function DocumentGeneratorV2() {
   const isMappingLocked = Boolean(selectedTemplate.mappingLocked);
   const isDev = process.env.NODE_ENV === "development";
   const isTemporaryReceipt = templateId === "temporary-receipt";
+  const isSalesContract = templateId === "contract-field";
   const isPowerOfAttorney = templateId === "power-of-attorney";
   const isTransportTransferRequest = templateId === "transport-transfer-request";
   const isVehicleDeliveryDocument = templateId === "vehicle-delivery-document";
@@ -978,9 +1020,9 @@ export function DocumentGeneratorV2() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      setSettingsMode(new URLSearchParams(window.location.search).get("mode") === "settings");
+      setSettingsMode(isDev && new URLSearchParams(window.location.search).get("mode") === "settings");
     }
-  }, []);
+  }, [isDev]);
 
   useEffect(() => {
     if (templates.length && !documentTemplatesV2[templateId]) {
@@ -1173,7 +1215,7 @@ export function DocumentGeneratorV2() {
   }
 
   async function saveDocumentOverride() {
-    if (!selectedReportId) return;
+    if (!selectedReportId) return false;
     try {
       setOverrideState("saving");
       setError("");
@@ -1195,9 +1237,11 @@ export function DocumentGeneratorV2() {
         vehicleDeliveryExtras: { ...vehicleDeliveryExtras }
       };
       setOverrideState("clean");
+      return true;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "บันทึกข้อมูลแก้ไขเอกสารไม่สำเร็จ");
       setOverrideState("error");
+      return false;
     }
   }
 
@@ -1216,25 +1260,28 @@ export function DocumentGeneratorV2() {
   }
 
   async function resetDocumentOverride() {
-    if (!selectedReportId) return;
-    if (!window.confirm("รีเซ็ตค่าที่แก้ไขและกลับไปใช้ข้อมูลต้นทางหรือไม่")) return;
+    if (!selectedReportId) return false;
+    if (!window.confirm("รีเซ็ตค่าที่แก้ไขและกลับไปใช้ข้อมูลต้นทางหรือไม่")) return false;
     try {
       await api(`/api/documents-v2/override?templateId=${encodeURIComponent(templateId)}&reportId=${encodeURIComponent(selectedReportId)}`, { method: "DELETE" });
       savedOverrideRef.current = null;
       resetEditableData(resolvedData || mapBookingToDocumentV2(selectedReport));
       setOverrideState("clean");
+      return true;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "รีเซ็ตข้อมูลแก้ไขเอกสารไม่สำเร็จ");
       setOverrideState("error");
+      return false;
     }
   }
 
-  async function refreshDocumentPreviews() {
+  async function refreshDocumentPreviews(renderPng = true) {
     const blob = await generatePdfBlob();
     if (!blob) return null;
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     const pdfUrl = URL.createObjectURL(blob);
     setPreviewUrl(pdfUrl);
+    if (!renderPng) return { pdfUrl };
 
     const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as any;
     pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
@@ -1266,7 +1313,7 @@ export function DocumentGeneratorV2() {
   }
 
   async function preview() {
-    return refreshDocumentPreviews();
+    return refreshDocumentPreviews(false);
   }
 
   async function previewProbe() {
@@ -1427,6 +1474,7 @@ export function DocumentGeneratorV2() {
             setFields([]);
             setDebug(null);
             setError("");
+            setContractEditMode(false);
             setIsTemplateReady(false);
             setPreviewUrl("");
             if (pngUrl) URL.revokeObjectURL(pngUrl);
@@ -1448,6 +1496,7 @@ export function DocumentGeneratorV2() {
         <select value={selectedReportId} onChange={(e) => {
           if (overrideState === "dirty" && !window.confirm("มีการแก้ไขที่ยังไม่บันทึก ต้องการเปลี่ยนรายงานและละทิ้งการแก้ไขหรือไม่")) return;
           setSelectedReportId(e.target.value);
+          setContractEditMode(false);
         }} className="w-full rounded bg-black/40 p-2">
           <option value="">-- เลือก --</option>
           {reports.map((r) => (
@@ -1580,6 +1629,92 @@ export function DocumentGeneratorV2() {
             )}
           </div>
         </>
+      ) : null}
+
+      {isSalesContract ? (
+        <section className="rounded border border-white/10 bg-white/[0.02] p-3" aria-labelledby="sales-contract-edit-heading">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 id="sales-contract-edit-heading" className="font-semibold">ข้อมูลสัญญาซื้อขาย</h2>
+              <p className="mt-1 text-xs text-gray-400">แก้เฉพาะข้อมูลในเอกสารฉบับนี้ ไม่เปลี่ยนรายงานขายหรือข้อมูล Booking</p>
+            </div>
+            {!contractEditMode ? (
+              <button
+                type="button"
+                onClick={() => setContractEditMode(true)}
+                disabled={!selectedReportId || overrideState === "loading"}
+                className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
+              >
+                แก้ไขข้อมูลสัญญา
+              </button>
+            ) : null}
+          </div>
+
+          {contractEditMode ? (
+            <div className="mt-4 space-y-4">
+              {SALES_CONTRACT_EDIT_GROUPS.map((group) => (
+                <fieldset key={group.title} className="rounded border border-white/10 bg-black/20 p-3">
+                  <legend className="px-1 text-sm font-semibold text-emerald-100">{group.title}</legend>
+                  <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {group.fields.map((field) => {
+                      const value = String((editableData || sampleData || {})[field.key] || "");
+                      const inputClassName = "mt-1 w-full rounded bg-black/40 p-2 text-sm";
+                      return (
+                        <label key={String(field.key)} className={`block text-xs text-gray-300 ${field.wide ? "md:col-span-2" : ""}`}>
+                          {field.label}
+                          {field.key === "customerAddress" ? (
+                            <textarea
+                              value={value}
+                              onChange={(event) => updateEditableField(field.key, event.target.value)}
+                              rows={3}
+                              className={`${inputClassName} resize-y`}
+                            />
+                          ) : (
+                            <input
+                              value={value}
+                              inputMode={field.money ? "decimal" : "text"}
+                              onChange={(event) => updateEditableField(field.key, event.target.value)}
+                              onBlur={() => {
+                                if (!field.money) return;
+                                const parsed = parseDocumentMoney(value);
+                                if (!parsed.ok) {
+                                  setError(`รูปแบบจำนวนเงินใน ${field.label} ไม่ถูกต้อง`);
+                                  return;
+                                }
+                                if (parsed.value !== undefined) updateEditableField(field.key, formatDocumentMoney(parsed.value));
+                              }}
+                              className={inputClassName}
+                            />
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              ))}
+              <p className="text-xs text-gray-400">สถานะ: {overrideState === "dirty" ? "มีการแก้ไขที่ยังไม่บันทึก" : overrideState === "saving" ? "กำลังบันทึก" : overrideState === "error" ? "เกิดข้อผิดพลาด" : "บันทึกแล้ว"}</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={async () => { if (await saveDocumentOverride()) setContractEditMode(false); }}
+                  disabled={!selectedReportId || overrideState === "saving" || overrideState === "loading"}
+                  className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
+                >
+                  {overrideState === "saving" ? "กำลังบันทึก..." : "บันทึก"}
+                </button>
+                <button type="button" onClick={() => { cancelDocumentEdits(); setContractEditMode(false); }} className="rounded border border-white/20 px-4 py-2 text-sm">ยกเลิก</button>
+                <button
+                  type="button"
+                  onClick={async () => { if (await resetDocumentOverride()) setContractEditMode(false); }}
+                  disabled={!selectedReportId}
+                  className="rounded border border-amber-300/40 px-4 py-2 text-sm text-amber-200 disabled:opacity-40"
+                >
+                  ใช้ข้อมูลเดิมจากระบบ
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </section>
       ) : null}
 
       {previewUrl ? (

@@ -13,6 +13,7 @@ export type DocumentV2Data = {
   contractDateDay: string;
   contractDateMonth: string;
   contractDateYear: string;
+  paymentDate: string;
   currentDate: string;
   currentDateDay: string;
   currentDateMonth: string;
@@ -186,6 +187,7 @@ export function mapBookingToDocumentV2(report?: ReportHistoryItem | null): Docum
     contractDateDay: contractDateParts.day,
     contractDateMonth: contractDateParts.month,
     contractDateYear: contractDateParts.year,
+    paymentDate: pick(raw, "paymentDate", "deliveryDate", "deliveredAt"),
     currentDate,
     currentDateDay: currentDateParts.day,
     currentDateMonth: currentDateParts.month,
