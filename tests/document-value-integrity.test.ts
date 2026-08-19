@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
-import { formatDocumentMoney, identifierText, parseDocumentMoney } from "../lib/documents/value-integrity.ts";
+import { formatDocumentMoney, identifierText, normalizeDocumentValueRecord, parseDocumentMoney, salesContractOverrideData } from "../lib/documents/value-integrity.ts";
 
 test("identifier strings preserve leading zero exactly", () => {
   for (const value of ["0917785117", "0812345678", "0990000001", "0123456789012", "01010"]) {
@@ -29,6 +29,29 @@ test("money formatter keeps meaningful decimals", () => {
   assert.equal(formatDocumentMoney(1500.5), "1,500.50");
   assert.equal(formatDocumentMoney("1,500.50"), "1,500.50");
   assert.equal(formatDocumentMoney(1250.75), "1,250.75");
+});
+
+test("Sales Contract PUT data contains supported override fields only", () => {
+  const payload = salesContractOverrideData({
+    customerName: "ผู้ซื้อทดสอบ",
+    idCard: "0123456789012",
+    sellPrice: "504,000.50",
+    discount: "-",
+    rawUiOnly: "ignore"
+  });
+  assert.deepEqual(payload, {
+    customerName: "ผู้ซื้อทดสอบ",
+    idCard: "0123456789012",
+    sellPrice: "504,000.50"
+  });
+  assert.deepEqual(normalizeDocumentValueRecord(payload), payload);
+});
+
+test("malformed Sales Contract money remains a validation error", () => {
+  assert.throws(
+    () => normalizeDocumentValueRecord(salesContractOverrideData({ sellPrice: "1,2,3" })),
+    /รูปแบบจำนวนเงินใน sellPrice ไม่ถูกต้อง/
+  );
 });
 
 test("override persistence is keyed by template and report", async () => {

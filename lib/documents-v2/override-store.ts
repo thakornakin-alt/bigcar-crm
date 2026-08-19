@@ -1,5 +1,5 @@
-import { readJsonStore, writeJsonStore } from "@/lib/json-store";
-import { identifierText, normalizeDocumentValueRecord } from "@/lib/documents/value-integrity";
+import { readJsonStore, writeJsonStore } from "../json-store.ts";
+import { identifierText, normalizeDocumentValueRecord, salesContractOverrideData } from "../documents/value-integrity.ts";
 
 const STORE_FILE = "document-overrides-v2.json";
 
@@ -18,8 +18,13 @@ export function documentOverrideKey(templateId: string, reportId: string) {
   return `${identifierText(templateId)}::${identifierText(reportId)}`;
 }
 
-function cleanRecord(input: unknown) {
-  return normalizeDocumentValueRecord(input);
+function cleanRecord(templateId: string, input: unknown) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error("ข้อมูลแก้ไขเอกสารไม่ถูกต้อง");
+  }
+  return normalizeDocumentValueRecord(
+    templateId === "contract-field" ? salesContractOverrideData(input) : input
+  );
 }
 
 function cleanTemplateData(input: unknown) {
@@ -48,15 +53,15 @@ export async function writeDocumentV2Override(input: {
   const templateId = identifierText(input.templateId);
   const reportId = identifierText(input.reportId);
   if (!templateId || !reportId) throw new Error("templateId และ reportId จำเป็นต้องมีค่า");
-  const store = await readJsonStore<OverrideStore>(STORE_FILE, {});
   const saved: DocumentV2Override = {
     templateId,
     reportId,
-    data: cleanRecord(input.data),
+    data: cleanRecord(templateId, input.data),
     templateData: cleanTemplateData(input.templateData),
     updatedAt: new Date().toISOString(),
     updatedByUserId: identifierText(input.actorUserId)
   };
+  const store = await readJsonStore<OverrideStore>(STORE_FILE, {});
   store[documentOverrideKey(templateId, reportId)] = saved;
   await writeJsonStore(STORE_FILE, store);
   return saved;

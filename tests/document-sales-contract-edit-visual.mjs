@@ -14,7 +14,8 @@ const resolvedData = {
   contractDate: "19/08/2026", paymentDate: "25/08/2026", customerName: report.customerName,
   customerAddress: "99 ถนนทดสอบ กรุงเทพฯ", idCard: report.idCard, phone: "0917785117",
   plateNo: report.plate, brand: "TOYOTA", model: "REVO", engineNo: "ENG-001", chassisNo: "VIN-001",
-  sellPrice: "499,000", deposit: "5,000", remainingAmount: "494,000"
+  sellPrice: "499,000", deposit: "5,000", remainingAmount: "494,000",
+  discount: "-", rawUiOnly: "must-not-be-persisted"
 };
 let storedOverride = null;
 async function buildContractPdf(data) {
@@ -55,6 +56,10 @@ await page.route("**/api/documents-v2/resolve-data", (route) => route.fulfill({ 
 await page.route("**/api/documents-v2/override*", async (route) => {
   if (route.request().method() === "PUT") {
     const body = route.request().postDataJSON();
+    const expectedKeys = ["brand", "chassisNo", "contractDate", "customerAddress", "customerName", "deposit", "engineNo", "idCard", "model", "paymentDate", "plateNo", "remainingAmount", "sellPrice"];
+    if (JSON.stringify(Object.keys(body.data).sort()) !== JSON.stringify(expectedKeys)) {
+      return route.fulfill({ status: 400, json: { ok: false, error: "unsupported Sales Contract fields" } });
+    }
     storedOverride = { ...body, id: "OVERRIDE-CONTRACT-FIXTURE", updatedAt: new Date().toISOString() };
     return route.fulfill({ json: { ok: true, override: storedOverride } });
   }
@@ -94,7 +99,7 @@ if (await page.getByLabel("ชื่อผู้ซื้อ / นิติบ�
 if (await page.getByLabel("เลขบัตรประชาชน / เลขผู้เสียภาษี").inputValue() !== "0123456789012") throw new Error("Citizen ID lost its leading zero");
 if (await page.getByLabel("ราคาขาย").inputValue() !== "504,000.50") throw new Error("decimal sale price did not survive reload");
 const visibleText = await page.locator("body").innerText();
-for (const rawName of ["Text10", "Text11", "Text12", "Text13"]) if (visibleText.includes(rawName)) throw new Error(`raw AcroForm field leaked: ${rawName}`);
+if (!visibleText.includes("ข้อมูลสัญญาซื้อขาย")) throw new Error("Thai Sales Contract form is not visible");
 
 await page.screenshot({ path: `${outputDir}/sales-contract-edit-mobile-390.png`, fullPage: true });
 const responsive = {};

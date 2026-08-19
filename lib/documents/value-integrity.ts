@@ -18,6 +18,31 @@ export const DOCUMENT_MONEY_KEYS = new Set([
   "line11Amount", "line12Amount", "line13Amount", "line14Amount"
 ]);
 
+export const SALES_CONTRACT_OVERRIDE_KEYS = [
+  "contractDate",
+  "paymentDate",
+  "customerName",
+  "customerAddress",
+  "idCard",
+  "brand",
+  "model",
+  "plateNo",
+  "engineNo",
+  "chassisNo",
+  "sellPrice",
+  "deposit",
+  "remainingAmount"
+] as const;
+
+export function salesContractOverrideData(input: unknown): Record<string, string> {
+  const source = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  return Object.fromEntries(
+    SALES_CONTRACT_OVERRIDE_KEYS
+      .filter((key) => source[key] !== undefined)
+      .map((key) => [key, identifierText(source[key])])
+  );
+}
+
 export function identifierText(value: unknown): string {
   return value === undefined || value === null ? "" : String(value).trim();
 }

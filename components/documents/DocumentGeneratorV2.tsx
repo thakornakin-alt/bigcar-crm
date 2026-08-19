@@ -16,7 +16,7 @@ import {
   type PowerOfAttorneySuggestion
 } from "@/lib/documents-v2/power-of-attorney";
 import type { VehicleDeliveryOcrFields } from "@/lib/documents-v2/vehicle-delivery-ocr";
-import { formatDocumentMoney, identifierText, parseDocumentMoney } from "@/lib/documents/value-integrity";
+import { formatDocumentMoney, identifierText, parseDocumentMoney, salesContractOverrideData } from "@/lib/documents/value-integrity";
 
 type FieldItem = { name: string; type: string };
 type FieldsDebug = {
@@ -308,13 +308,19 @@ const SALES_CONTRACT_EDIT_GROUPS: Array<{
   }
 ];
 
+class ApiRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
   const contentType = response.headers.get("content-type") || "";
   if (!response.ok) {
     if (contentType.includes("application/json")) {
       const err = await response.json();
-      throw new Error(err.error || "Request failed");
+      throw new ApiRequestError(err.error || "Request failed", response.status);
     }
     throw new Error("Request failed");
   }
@@ -1225,7 +1231,9 @@ export function DocumentGeneratorV2() {
         body: JSON.stringify({
           templateId,
           reportId: selectedReportId,
-          data: editableData || sampleData,
+          data: isSalesContract
+            ? salesContractOverrideData(editableData || sampleData)
+            : editableData || sampleData,
           templateData: { temporaryReceiptExtras, powerOfAttorneyExtras, transportTransferExtras, vehicleDeliveryExtras }
         })
       });
@@ -1239,7 +1247,11 @@ export function DocumentGeneratorV2() {
       setOverrideState("clean");
       return true;
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "บันทึกข้อมูลแก้ไขเอกสารไม่สำเร็จ");
+      setError(
+        reason instanceof ApiRequestError && reason.status === 400
+          ? "บันทึกไม่สำเร็จ กรุณาตรวจสอบข้อมูลที่กรอก"
+          : "บันทึกไม่สำเร็จ กรุณาลองใหม่"
+      );
       setOverrideState("error");
       return false;
     }
