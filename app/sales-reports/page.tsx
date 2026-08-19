@@ -9,6 +9,7 @@ import { normalizeCarYear } from "@/lib/format";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import { appendSalesProfileSignature } from "@/lib/sales-profile-signature";
 import type { BookingAttachment, BookingReport, DriveAttachment, DriveUploadResult, LineGroup, SalesReportInput } from "@/lib/types";
+import { DuplicateSalesReportFixture } from "@/components/sales-reports/DuplicateSalesReportFixture";
 
 type SalesAttachmentCategory =
   | "vehiclePhotos"
@@ -743,6 +744,8 @@ export default function SalesReportsPage() {
           </>
         }
       />
+
+      <DuplicateSalesReportFixture />
 
       {(message || error) && (
         <div className={`mb-4 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${error ? "border-amber-400/40 bg-amber-950/30 text-amber-100" : "border-brand/40 bg-green-950/30 text-green-100"}`}>
