@@ -119,3 +119,36 @@ test("identifier paths do not use numeric coercion", async () => {
     assert.doesNotMatch(source, /(?:phone|idCard|customer_id_no|postal)[^\n]{0,80}(?:parseInt|parseFloat)/i);
   }
 });
+
+test("report switching is latest-request-only and resolves source plus override together", async () => {
+  const ui = await readFile(new URL("../components/documents/DocumentGeneratorV2.tsx", import.meta.url), "utf8");
+  assert.match(ui, /const token = \+\+reportRequestSeqRef\.current/);
+  assert.match(ui, /new AbortController\(\)/);
+  assert.match(ui, /Promise\.all\(\[/);
+  assert.match(ui, /token !== reportRequestSeqRef\.current/);
+  assert.match(ui, /requestReportId !== selectedReportId/);
+  assert.match(ui, /pendingReportGenerationRef/);
+  assert.match(ui, /กำลังโหลดข้อมูล/);
+  assert.match(ui, /กำลังสร้างตัวอย่างเอกสาร/);
+  assert.match(ui, /ข้อมูลพร้อมแล้ว/);
+});
+
+test("document actions cannot use a stale preview or image", async () => {
+  const ui = await readFile(new URL("../components/documents/DocumentGeneratorV2.tsx", import.meta.url), "utf8");
+  assert.match(ui, /previewSourceKey\.startsWith\(`\$\{templateId\}::\$\{selectedReportId\}::`\)/);
+  assert.match(ui, /pngSourceKey === previewSourceKey/);
+  assert.match(ui, /setPngSourceKey\(""\)/);
+  assert.match(ui, /URL\.revokeObjectURL/);
+  assert.match(ui, /shareState === "preparing"/);
+  assert.match(ui, /nav\.canShare/);
+  assert.match(ui, /กำลังเตรียมรูป/);
+  assert.doesNotMatch(ui, />\s*ดาวน์โหลด PNG\s*</);
+});
+
+test("report switching has distinct recoverable data and preview errors", async () => {
+  const ui = await readFile(new URL("../components/documents/DocumentGeneratorV2.tsx", import.meta.url), "utf8");
+  assert.match(ui, /โหลดข้อมูลรายงานขายไม่สำเร็จ กรุณาลองใหม่/);
+  assert.match(ui, /ข้อมูลโหลดแล้ว แต่สร้างตัวอย่างเอกสารไม่สำเร็จ/);
+  assert.match(ui, /บันทึกแล้ว แต่แสดงตัวอย่างเอกสารไม่สำเร็จ กรุณากดอัปเดตเอกสาร/);
+  assert.match(ui, /ลองใหม่/);
+});

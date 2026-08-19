@@ -500,6 +500,12 @@ export function DocumentGeneratorV2() {
   const [pngUrl, setPngUrl] = useState("");
   const [pngBlob, setPngBlob] = useState<Blob | null>(null);
   const [pngFileName, setPngFileName] = useState("document-v2.png");
+  const [previewSourceKey, setPreviewSourceKey] = useState("");
+  const [pngSourceKey, setPngSourceKey] = useState("");
+  const [shareState, setShareState] = useState<"idle" | "preparing">("idle");
+  const [reportLoadState, setReportLoadState] = useState<"idle" | "loading-data" | "generating" | "ready" | "data-error" | "preview-error">("idle");
+  const [reportLoadMs, setReportLoadMs] = useState<number | null>(null);
+  const [reportRetryNonce, setReportRetryNonce] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [templateId, setTemplateId] = useState<DocumentV2TemplateId>(DOC_V2_TEMPLATE_ID);
@@ -529,6 +535,9 @@ export function DocumentGeneratorV2() {
     transportTransferExtras: TransportTransferRequestExtraData;
     vehicleDeliveryExtras: VehicleDeliveryDocumentExtraData;
   } | null>(null);
+  const reportRequestSeqRef = useRef(0);
+  const reportLoadStartedAtRef = useRef(0);
+  const pendingReportGenerationRef = useRef<{ token: number; data: ResolvedDocumentV2Data; sourceKey: string } | null>(null);
   const vehicleDeliveryIdCardCameraInputRef = useRef<HTMLInputElement | null>(null);
   const vehicleDeliveryIdCardPickerInputRef = useRef<HTMLInputElement | null>(null);
   const powerOfAttorneyTouchedRef = useRef<Record<string, boolean>>({});
@@ -631,7 +640,9 @@ export function DocumentGeneratorV2() {
       return acc;
     }, 0);
   }, [mapping, rawReportData, sampleData]);
-  const canRunGenerate = isTemplateReady && reportsLoaded && Boolean(selectedReport) && !resolvingData;
+  const reportSwitchBusy = reportLoadState === "loading-data" || reportLoadState === "generating";
+  const canRunGenerate = isTemplateReady && reportsLoaded && Boolean(selectedReport) && !resolvingData && !reportSwitchBusy;
+  const currentPreviewReady = reportLoadState === "ready" && overrideState === "clean" && Boolean(previewUrl) && previewSourceKey.startsWith(`${templateId}::${selectedReportId}::`);
 
   function resetEditableData(next?: ResolvedDocumentV2Data | null) {
     setEditableData(next || resolvedData || mapBookingToDocumentV2(selectedReport));
@@ -955,75 +966,14 @@ export function DocumentGeneratorV2() {
     }
   }
 
-  async function loadResolvedData(report: ReportHistoryItem | null) {
-    if (!report) {
-      setResolvedData(null);
-      setResolveDebug(null);
-      return;
-    }
-    try {
-      setResolvingData(true);
-      const res = await api<{ ok: boolean; data: ResolvedDocumentV2Data; debug: DocumentV2ResolveDebug }>("/api/documents-v2/resolve-data", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report, templateId })
-      });
-      setResolvedData(res.data || null);
-      if (!editableTouched) setEditableData(res.data || null);
-      setResolveDebug(res.debug || null);
-      if (templateId === "power-of-attorney") {
-        const reportAddress = String(res.data?.customerAddress || "").trim();
-        applyPowerOfAttorneySuggestion({
-          customerName: String(res.data?.customerName || ""),
-          plateNo: String(res.data?.plateNo || ""),
-          ...splitPowerOfAttorneyAddress(reportAddress),
-          address: reportAddress
-        }, { markEditableTouched: false, overwrite: true });
-      }
-      if (templateId === "transport-transfer-request") {
-        applyTransportTransferDefaults(res.data || {});
-      }
-      if (templateId === "vehicle-delivery-document") {
-        applyVehicleDeliveryDefaults(res.data || {});
-      }
-    } catch (e) {
-      const fallbackData = mapBookingToDocumentV2(report) as ResolvedDocumentV2Data;
-      setResolvedData(fallbackData);
-      if (!editableTouched) setEditableData(fallbackData);
-      setResolveDebug(null);
-      setError(e instanceof Error ? e.message : "โหลดข้อมูลที่จะใช้จริงไม่สำเร็จ");
-      if (templateId === "power-of-attorney") {
-        const reportAddress = String(fallbackData.customerAddress || "").trim();
-        applyPowerOfAttorneySuggestion({
-          customerName: String(fallbackData.customerName || ""),
-          plateNo: String(fallbackData.plateNo || ""),
-          ...splitPowerOfAttorneyAddress(reportAddress),
-          address: reportAddress
-        }, { markEditableTouched: false, overwrite: true });
-      }
-      if (templateId === "transport-transfer-request") {
-        applyTransportTransferDefaults(fallbackData);
-      }
-      if (templateId === "vehicle-delivery-document") {
-        applyVehicleDeliveryDefaults(fallbackData);
-      }
-    } finally {
-      setResolvingData(false);
-    }
+  async function fetchResolvedData(report: ReportHistoryItem, requestTemplateId: string, signal: AbortSignal) {
+    return api<{ ok: boolean; data: ResolvedDocumentV2Data; debug: DocumentV2ResolveDebug }>("/api/documents-v2/resolve-data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ report, templateId: requestTemplateId }),
+      signal
+    });
   }
-
-  useEffect(() => {
-    loadResolvedData(selectedReport);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedReportId, templateId]);
-
-  useEffect(() => {
-    setPreviewUrl("");
-    if (pngUrl) URL.revokeObjectURL(pngUrl);
-    setPngUrl("");
-    setPngBlob(null);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templateId, selectedReportId]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -1051,37 +1001,51 @@ export function DocumentGeneratorV2() {
   }, [templateId]);
 
   useEffect(() => {
-    if (!editableTouched) {
-      setEditableData(resolvedData || mapBookingToDocumentV2(selectedReport));
+    if (!selectedReportId || !selectedReport || !isTemplateReady || !reportsLoaded) {
+      if (!selectedReportId) setReportLoadState("idle");
+      return;
     }
-  }, [resolvedData, selectedReport, editableTouched]);
-
-  useEffect(() => {
+    const token = ++reportRequestSeqRef.current;
+    const controller = new AbortController();
+    const requestReportId = selectedReportId;
+    const requestTemplateId = templateId;
+    reportLoadStartedAtRef.current = performance.now();
+    pendingReportGenerationRef.current = null;
+    setReportLoadMs(null);
+    setReportLoadState("loading-data");
+    setResolvingData(true);
+    setOverrideState("loading");
+    setContractEditMode(false);
+    setError("");
+    setEditableTouched(false);
+    setEditableData(null);
+    setResolvedData(null);
+    setResolveDebug(null);
+    savedOverrideRef.current = null;
     powerOfAttorneyTouchedRef.current = {};
     transportTransferTouchedRef.current = {};
     vehicleDeliveryTouchedRef.current = {};
+    setTemporaryReceiptExtras(DEFAULT_TEMPORARY_RECEIPT_EXTRAS);
     setPowerOfAttorneyExtras(DEFAULT_POWER_OF_ATTORNEY_EXTRAS);
     setTransportTransferExtras(DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS);
     setVehicleDeliveryExtras(DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS);
-    if (templateId === "power-of-attorney") {
-      setEditableTouched(false);
-      setEditableData(mapBookingToDocumentV2(selectedReport));
-    }
-  }, [templateId, selectedReportId, selectedReport]);
+    if (previewUrl.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+    if (pngUrl.startsWith("blob:")) URL.revokeObjectURL(pngUrl);
+    setPreviewUrl("");
+    setPreviewSourceKey("");
+    setPngUrl("");
+    setPngBlob(null);
+    setPngSourceKey("");
 
-  useEffect(() => {
-    if (!selectedReportId) {
-      savedOverrideRef.current = null;
-      setOverrideState("idle");
-      return;
-    }
-    let cancelled = false;
-    setOverrideState("loading");
-    api<{ ok: boolean; override: null | { data?: ResolvedDocumentV2Data; templateData?: Record<string, unknown> } }>(
-      `/api/documents-v2/override?templateId=${encodeURIComponent(templateId)}&reportId=${encodeURIComponent(selectedReportId)}`
-    ).then((response) => {
-      if (cancelled) return;
-      const saved = response.override;
+    Promise.all([
+      fetchResolvedData(selectedReport, requestTemplateId, controller.signal),
+      api<{ ok: boolean; override: null | { data?: ResolvedDocumentV2Data; templateData?: Record<string, unknown> } }>(
+        `/api/documents-v2/override?templateId=${encodeURIComponent(requestTemplateId)}&reportId=${encodeURIComponent(requestReportId)}`,
+        { signal: controller.signal }
+      )
+    ]).then(([resolvedResponse, overrideResponse]) => {
+      if (token !== reportRequestSeqRef.current || requestReportId !== selectedReportId || requestTemplateId !== templateId) return;
+      const saved = overrideResponse.override;
       const templateData = saved?.templateData || {};
       const snapshot = {
         data: saved?.data || null,
@@ -1090,23 +1054,33 @@ export function DocumentGeneratorV2() {
         transportTransferExtras: { ...DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS, ...(templateData.transportTransferExtras as Partial<TransportTransferRequestExtraData> || {}) },
         vehicleDeliveryExtras: { ...DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS, ...(templateData.vehicleDeliveryExtras as Partial<VehicleDeliveryDocumentExtraData> || {}) }
       };
+      const effectiveData = { ...(resolvedResponse.data || {}), ...(snapshot.data || {}) } as ResolvedDocumentV2Data;
       savedOverrideRef.current = snapshot;
-      if (snapshot.data) {
-        setEditableData(snapshot.data);
-        setEditableTouched(true);
-      }
+      setResolvedData(resolvedResponse.data || null);
+      setResolveDebug(resolvedResponse.debug || null);
+      setEditableData(effectiveData);
+      setEditableTouched(Boolean(snapshot.data));
       setTemporaryReceiptExtras(snapshot.temporaryReceiptExtras);
       setPowerOfAttorneyExtras(snapshot.powerOfAttorneyExtras);
       setTransportTransferExtras(snapshot.transportTransferExtras);
       setVehicleDeliveryExtras(snapshot.vehicleDeliveryExtras);
       setOverrideState("clean");
+      setResolvingData(false);
+      const sourceKey = `${requestTemplateId}::${requestReportId}::${token}`;
+      pendingReportGenerationRef.current = { token, data: effectiveData, sourceKey };
+      setReportLoadState("generating");
     }).catch((reason) => {
-      if (cancelled) return;
-      setError(reason instanceof Error ? reason.message : "โหลดข้อมูลแก้ไขเอกสารไม่สำเร็จ");
+      if (controller.signal.aborted || token !== reportRequestSeqRef.current) return;
+      setResolvingData(false);
       setOverrideState("error");
+      setReportLoadState("data-error");
+      setError("โหลดข้อมูลรายงานขายไม่สำเร็จ กรุณาลองใหม่");
+      console.error("Documents V2 report switch failed", reason instanceof Error ? reason.message : "unknown");
     });
-    return () => { cancelled = true; };
-  }, [selectedReportId, templateId]);
+
+    return () => controller.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedReportId, templateId, isTemplateReady, reportsLoaded, reportRetryNonce]);
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
@@ -1139,11 +1113,27 @@ export function DocumentGeneratorV2() {
   }, [editableData, resolvedData, sampleData, templateId]);
 
   useEffect(() => {
-    if (canRunGenerate && !previewUrl) {
-      preview().catch(() => undefined);
-    }
+    if (reportLoadState !== "generating") return;
+    const pending = pendingReportGenerationRef.current;
+    if (!pending) return;
+    refreshDocumentPreviews(true, pending.data, pending.token, pending.sourceKey).then((result) => {
+      if (pending.token !== reportRequestSeqRef.current) return;
+      if (!result) {
+        setReportLoadState("preview-error");
+        setError("ข้อมูลโหลดแล้ว แต่สร้างตัวอย่างเอกสารไม่สำเร็จ");
+        return;
+      }
+      setReportLoadMs(Math.round(performance.now() - reportLoadStartedAtRef.current));
+      setReportLoadState("ready");
+      setError("");
+    }).catch((reason) => {
+      if (pending.token !== reportRequestSeqRef.current) return;
+      setReportLoadState("preview-error");
+      setError("ข้อมูลโหลดแล้ว แต่สร้างตัวอย่างเอกสารไม่สำเร็จ");
+      console.error("Documents V2 Preview generation failed", reason instanceof Error ? reason.message : "unknown");
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canRunGenerate, previewUrl, templateId, selectedReportId]);
+  }, [reportLoadState]);
 
   async function loadMapping() {
     try {
@@ -1247,9 +1237,14 @@ export function DocumentGeneratorV2() {
       };
       setEditableData(response.override.data);
       setOverrideState("refreshing");
-      const refreshed = await refreshDocumentPreviews(false, response.override.data);
+      pendingReportGenerationRef.current = null;
+      setReportLoadState("generating");
+      const refreshed = await refreshDocumentPreviews(true, response.override.data, undefined, `${templateId}::${selectedReportId}::save-${Date.now()}`);
       if (!refreshed) {
         setError("บันทึกแล้ว แต่แสดงตัวอย่างเอกสารไม่สำเร็จ กรุณากดอัปเดตเอกสาร");
+        setReportLoadState("preview-error");
+      } else {
+        setReportLoadState("ready");
       }
       setOverrideState("clean");
       return true;
@@ -1287,9 +1282,14 @@ export function DocumentGeneratorV2() {
       const sourceData = resolvedData || mapBookingToDocumentV2(selectedReport);
       resetEditableData(sourceData);
       setOverrideState("refreshing");
-      const refreshed = await refreshDocumentPreviews(false, sourceData);
+      pendingReportGenerationRef.current = null;
+      setReportLoadState("generating");
+      const refreshed = await refreshDocumentPreviews(true, sourceData, undefined, `${templateId}::${selectedReportId}::reset-${Date.now()}`);
       if (!refreshed) {
         setError("รีเซ็ตแล้ว แต่แสดงตัวอย่างเอกสารไม่สำเร็จ กรุณากดอัปเดตเอกสาร");
+        setReportLoadState("preview-error");
+      } else {
+        setReportLoadState("ready");
       }
       setOverrideState("clean");
       return true;
@@ -1300,13 +1300,27 @@ export function DocumentGeneratorV2() {
     }
   }
 
-  async function refreshDocumentPreviews(renderPng = true, sourceDataOverride?: Record<string, string>) {
+  async function refreshDocumentPreviews(
+    renderPng = true,
+    sourceDataOverride?: Record<string, string>,
+    reportToken?: number,
+    requestedSourceKey?: string
+  ) {
     const blob = await generatePdfBlob(sourceDataOverride);
     if (!blob) return null;
+    if (reportToken !== undefined && reportToken !== reportRequestSeqRef.current) return null;
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     const pdfUrl = URL.createObjectURL(blob);
+    const sourceKey = requestedSourceKey || `${templateId}::${selectedReportId}::manual-${Date.now()}`;
     setPreviewUrl(pdfUrl);
-    if (!renderPng) return { pdfUrl };
+    setPreviewSourceKey(sourceKey);
+    if (!renderPng) {
+      if (pngUrl.startsWith("blob:")) URL.revokeObjectURL(pngUrl);
+      setPngUrl("");
+      setPngBlob(null);
+      setPngSourceKey("");
+      return { pdfUrl, sourceKey };
+    }
 
     const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as any;
     pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
@@ -1323,22 +1337,36 @@ export function DocumentGeneratorV2() {
     await page.render({ canvasContext: ctx, viewport }).promise;
     const nextPngBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
     if (!nextPngBlob) throw new Error("แปลง PNG ไม่สำเร็จ");
+    if (reportToken !== undefined && reportToken !== reportRequestSeqRef.current) return null;
     if (pngUrl.startsWith("blob:")) URL.revokeObjectURL(pngUrl);
+    const imageData = sourceDataOverride || editableData || sampleData;
     const fileBase = [
       "sale-contract",
-      safeFilePart(sampleData.customerName),
-      safeFilePart(sampleData.plateNo)
+      safeFilePart(imageData.customerName),
+      safeFilePart(imageData.plateNo),
+      safeFilePart(selectedReportId)
     ].filter(Boolean).join("-");
     const fileName = `${fileBase || "document-v2"}.png`;
     const nextPngUrl = URL.createObjectURL(nextPngBlob);
     setPngUrl(nextPngUrl);
     setPngBlob(nextPngBlob);
     setPngFileName(fileName);
-    return { pdfUrl, nextPngUrl, nextPngBlob, fileName };
+    setPngSourceKey(sourceKey);
+    return { pdfUrl, nextPngUrl, nextPngBlob, fileName, sourceKey };
   }
 
   async function preview() {
-    return refreshDocumentPreviews(false);
+    pendingReportGenerationRef.current = null;
+    setReportLoadState("generating");
+    const result = await refreshDocumentPreviews(true, editableData || sampleData, undefined, `${templateId}::${selectedReportId}::manual-${Date.now()}`);
+    if (result) {
+      setReportLoadState("ready");
+      setError("");
+    } else {
+      setReportLoadState("preview-error");
+      setError("ข้อมูลโหลดแล้ว แต่สร้างตัวอย่างเอกสารไม่สำเร็จ");
+    }
+    return result;
   }
 
   async function previewProbe() {
@@ -1458,12 +1486,21 @@ export function DocumentGeneratorV2() {
   }
 
   async function sharePng() {
-    if (!pngBlob) {
-      setError("ยังไม่มีไฟล์ PNG กรุณากดเซฟ PNG ก่อน");
-      return;
-    }
+    if (shareState === "preparing" || !currentPreviewReady) return;
     try {
-      const file = new File([pngBlob], pngFileName, { type: "image/png" });
+      setShareState("preparing");
+      setError("");
+      let currentBlob = pngSourceKey === previewSourceKey ? pngBlob : null;
+      let currentUrl = pngSourceKey === previewSourceKey ? pngUrl : "";
+      let currentFileName = pngFileName;
+      if (!currentBlob) {
+        const refreshed = await refreshDocumentPreviews(true, editableData || sampleData, undefined, previewSourceKey || `${templateId}::${selectedReportId}::share-${Date.now()}`);
+        currentBlob = refreshed?.nextPngBlob || null;
+        currentUrl = refreshed?.nextPngUrl || "";
+        currentFileName = refreshed?.fileName || pngFileName;
+      }
+      if (!currentBlob) throw new Error("image preparation failed");
+      const file = new File([currentBlob], currentFileName, { type: "image/png" });
       const nav = navigator as Navigator & {
         canShare?: (data: { files?: File[] }) => boolean;
         share?: (data: { files?: File[]; title?: string; text?: string }) => Promise<void>;
@@ -1476,10 +1513,17 @@ export function DocumentGeneratorV2() {
         });
         return;
       }
-      if (pngUrl) window.open(pngUrl, "_blank", "noopener,noreferrer");
+      if (currentUrl) {
+        downloadObjectUrl(currentUrl, currentFileName);
+        setError("อุปกรณ์นี้ไม่รองรับการแชร์โดยตรง ระบบดาวน์โหลดรูปให้แล้ว");
+        return;
+      }
+      throw new Error("share unsupported");
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return;
-      setError(e instanceof Error ? e.message : "แชร์/บันทึกรูปไม่สำเร็จ");
+      setError("เตรียมรูปไม่สำเร็จ กรุณาลองใหม่");
+    } finally {
+      setShareState("idle");
     }
   }
 
@@ -1519,7 +1563,10 @@ export function DocumentGeneratorV2() {
       <div className="rounded border border-white/10 p-3">
         <label className="mb-2 block text-sm">เลือกรายงานขาย</label>
         <select value={selectedReportId} onChange={(e) => {
+          if (e.target.value === selectedReportId) return;
           if (overrideState === "dirty" && !window.confirm("มีการแก้ไขที่ยังไม่บันทึก ต้องการเปลี่ยนรายงานและละทิ้งการแก้ไขหรือไม่")) return;
+          setReportLoadState("loading-data");
+          setError("");
           setSelectedReportId(e.target.value);
           setContractEditMode(false);
         }} className="w-full rounded bg-black/40 p-2">
@@ -1530,6 +1577,21 @@ export function DocumentGeneratorV2() {
             </option>
           ))}
         </select>
+        {reportLoadState === "loading-data" ? <p className="mt-2 text-xs text-amber-200">● กำลังโหลดข้อมูล...</p> : null}
+        {reportLoadState === "generating" ? <p className="mt-2 text-xs text-amber-200">● กำลังสร้างตัวอย่างเอกสาร...</p> : null}
+        {reportLoadState === "ready" ? <p className="mt-2 text-xs text-emerald-300">● ข้อมูลพร้อมแล้ว{reportLoadMs !== null ? ` · ${reportLoadMs} ms` : ""}</p> : null}
+        {reportLoadState === "data-error" ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-red-200">
+            <span>โหลดข้อมูลรายงานขายไม่สำเร็จ กรุณาลองใหม่</span>
+            <button type="button" onClick={() => setReportRetryNonce((value) => value + 1)} className="rounded border border-red-300/40 px-2 py-1">ลองใหม่</button>
+          </div>
+        ) : null}
+        {reportLoadState === "preview-error" ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-amber-200">
+            <span>ข้อมูลโหลดแล้ว แต่สร้างตัวอย่างเอกสารไม่สำเร็จ</span>
+            <button type="button" onClick={() => preview()} className="rounded border border-amber-300/40 px-2 py-1">อัปเดตเอกสาร</button>
+          </div>
+        ) : null}
       </div>
 
       {settingsMode ? (
@@ -1667,7 +1729,7 @@ export function DocumentGeneratorV2() {
               <button
                 type="button"
                 onClick={() => setContractEditMode(true)}
-                disabled={!selectedReportId || overrideState === "loading"}
+                disabled={!selectedReportId || reportSwitchBusy || !editableData}
                 className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
               >
                 แก้ไขข้อมูลสัญญา
@@ -1722,7 +1784,7 @@ export function DocumentGeneratorV2() {
                 <button
                   type="button"
                   onClick={async () => { if (await saveDocumentOverride()) setContractEditMode(false); }}
-                  disabled={!selectedReportId || overrideState === "saving" || overrideState === "refreshing" || overrideState === "loading"}
+                  disabled={!selectedReportId || reportSwitchBusy || overrideState === "saving" || overrideState === "refreshing" || overrideState === "loading"}
                   className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
                 >
                   {overrideState === "saving" ? "กำลังบันทึก..." : overrideState === "refreshing" ? "กำลังอัปเดตเอกสาร..." : "บันทึก"}
@@ -1742,17 +1804,29 @@ export function DocumentGeneratorV2() {
         </section>
       ) : null}
 
-      {previewUrl ? (
-        <div className="rounded border border-white/10 p-3">
+      {previewUrl || reportSwitchBusy ? (
+        <div className={`relative rounded border border-white/10 p-3 ${reportSwitchBusy ? "opacity-70" : ""}`} aria-busy={reportSwitchBusy}>
           <h2 className="mb-2 font-semibold">Preview เอกสาร</h2>
-          <p className="mb-2 text-xs text-gray-300">แสดงตัวอย่างเอกสารตามข้อมูลล่าสุด หากแก้ข้อมูลด้านล่าง ให้กด “อัปเดตเอกสาร” ก่อน Download PDF</p>
-          <div
-            className="max-h-[78svh] overflow-auto rounded bg-white"
-            style={{ touchAction: "pan-x pan-y pinch-zoom", WebkitOverflowScrolling: "touch" }}
+          <p className="mb-2 text-xs text-gray-300">Preview และไฟล์ดาวน์โหลดจะตรงกับรายงานขายที่เลือกอยู่เสมอ</p>
+          {reportSwitchBusy ? (
+            <div className="flex min-h-48 items-center justify-center rounded border border-white/10 bg-black/30 p-6 text-center text-sm text-amber-100">
+              {reportLoadState === "loading-data" ? "กำลังโหลดข้อมูลใหม่..." : "กำลังสร้างตัวอย่างเอกสาร..."}
+            </div>
+          ) : previewUrl ? (
+            <div
+              className="max-h-[78svh] overflow-auto rounded bg-white"
+              style={{ touchAction: "pan-x pan-y pinch-zoom", WebkitOverflowScrolling: "touch" }}
+            >
+              <iframe src={previewUrl} className="h-[78svh] w-full rounded bg-white" />
+            </div>
+          ) : null}
+          <a
+            href={currentPreviewReady ? previewUrl : undefined}
+            aria-disabled={!currentPreviewReady}
+            onClick={(event) => { if (!currentPreviewReady) event.preventDefault(); }}
+            download={loadedTemplateFile || selectedTemplate.fileName || "document-v2.pdf"}
+            className={`mt-2 inline-flex items-center gap-2 rounded bg-emerald-500 px-3 py-2 font-semibold text-black ${!currentPreviewReady ? "pointer-events-none opacity-40" : ""}`}
           >
-            <iframe src={previewUrl} className="h-[78svh] w-full rounded bg-white" />
-          </div>
-          <a href={previewUrl} download={loadedTemplateFile || selectedTemplate.fileName || "document-v2.pdf"} className="mt-2 inline-flex items-center gap-2 rounded bg-emerald-500 px-3 py-2 font-semibold text-black">
             <Download size={16} /> Download PDF ตาม Preview นี้
           </a>
         </div>
@@ -1760,19 +1834,16 @@ export function DocumentGeneratorV2() {
 
       {!settingsMode ? (
         <>
-          <div className="grid grid-cols-1 gap-2 rounded border border-white/10 p-3 sm:grid-cols-3">
-            <button onClick={preview} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">
+          <div className="grid grid-cols-1 gap-2 rounded border border-white/10 p-3 sm:grid-cols-2">
+            <button onClick={preview} disabled={loading || reportSwitchBusy || !selectedReportId} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">
               <ImageIcon className="inline" size={16} /> อัปเดตเอกสาร
-            </button>
-            <button onClick={exportPng} disabled={loading || !canRunGenerate} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">
-              <ImageIcon className="inline" size={16} /> ดาวน์โหลด PNG
             </button>
             <button
               onClick={sharePng}
-              disabled={loading || !pngBlob}
+              disabled={loading || reportSwitchBusy || !currentPreviewReady || shareState === "preparing"}
               className="rounded border border-white/20 px-4 py-2 disabled:opacity-50"
             >
-              <Share2 className="inline" size={16} /> แชร์/บันทึกรูป
+              <Share2 className="inline" size={16} /> {shareState === "preparing" ? "กำลังเตรียมรูป..." : "แชร์/บันทึกรูป"}
             </button>
           </div>
           <p className="mt-2 text-xs text-gray-300">กดเพื่ออัปเดต Preview / PDF ตามข้อมูลที่แก้ด้านล่าง</p>
@@ -1786,8 +1857,8 @@ export function DocumentGeneratorV2() {
             <h2 className="font-semibold">แก้ข้อมูลก่อน Preview</h2>
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={cancelDocumentEdits} disabled={overrideState !== "dirty"} className="rounded border border-white/20 px-3 py-1.5 text-xs disabled:opacity-40">ยกเลิก</button>
-              <button type="button" onClick={saveDocumentOverride} disabled={!selectedReportId || overrideState === "saving" || overrideState === "loading"} className="rounded bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-40">{overrideState === "saving" ? "กำลังบันทึก..." : "บันทึก"}</button>
-              <button type="button" onClick={resetDocumentOverride} disabled={!selectedReportId} className="rounded border border-amber-300/40 px-3 py-1.5 text-xs text-amber-200 disabled:opacity-40">รีเซ็ต / ใช้ค่าต้นทาง</button>
+              <button type="button" onClick={saveDocumentOverride} disabled={!selectedReportId || reportSwitchBusy || overrideState === "saving" || overrideState === "loading"} className="rounded bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-40">{overrideState === "saving" ? "กำลังบันทึก..." : "บันทึก"}</button>
+              <button type="button" onClick={resetDocumentOverride} disabled={!selectedReportId || reportSwitchBusy} className="rounded border border-amber-300/40 px-3 py-1.5 text-xs text-amber-200 disabled:opacity-40">รีเซ็ต / ใช้ค่าต้นทาง</button>
             </div>
           </div>
           <p className="mb-1 text-xs text-gray-300">แตะช่องด้านล่างเพื่อแก้ค่าก่อนสร้าง Preview / PNG ได้เลย</p>
