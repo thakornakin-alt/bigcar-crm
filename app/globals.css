@@ -104,6 +104,49 @@ button:disabled {
   font-weight: 700;
 }
 
+/* Stock Export keeps the CRM workflow while borrowing the public BIG CAR RDD palette. */
+.stock-bigcar-brand {
+  --stock-brand-gold: #d6b66c;
+  --stock-brand-gold-soft: #f6df9d;
+  background: #07080a;
+  box-shadow: 0 0 0 100vmax #07080a;
+  clip-path: inset(0 -100vmax);
+}
+
+.stock-bigcar-brand .stock-brand-surface {
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.3);
+}
+
+.stock-bigcar-brand .text-brand,
+.stock-bigcar-brand [class*="text-brand/"] {
+  color: var(--stock-brand-gold-soft) !important;
+}
+
+.stock-bigcar-brand .bg-brand {
+  background-color: var(--stock-brand-gold) !important;
+}
+
+.stock-bigcar-brand [class*="bg-brand/"] {
+  background-color: rgba(214, 182, 108, 0.12) !important;
+}
+
+.stock-bigcar-brand .border-brand,
+.stock-bigcar-brand [class*="border-brand/"] {
+  border-color: rgba(214, 182, 108, 0.48) !important;
+}
+
+.stock-bigcar-brand .accent-brand {
+  accent-color: var(--stock-brand-gold);
+}
+
+.stock-bigcar-brand [class*="hover:border-brand"]:hover,
+.stock-bigcar-brand [class*="focus:border-brand"]:focus,
+.stock-bigcar-brand [class*="focus-within:border-brand"]:focus-within {
+  border-color: rgba(214, 182, 108, 0.7) !important;
+}
+
 @media (max-width: 640px) {
   .rdd-crm-shell > nav {
     border-radius: 0 0 1rem 1rem;

@@ -101,11 +101,26 @@ test("Stock Export uses the shared BIG CAR CRM visual system without changing da
   assert.match(ui, /NativeButton/);
   assert.match(ui, /SearchField/);
   assert.match(ui, />สต๊อกรถ</);
-  assert.match(ui, /BIG CAR CRM · STOCK/);
+  assert.match(ui, /BIG CAR RDD · STOCK/);
   assert.match(ui, /aria-label="กำลังโหลดข้อมูลสต๊อก"/);
   assert.match(ui, /stockStatusTone/);
   assert.match(ui, /ราคาเสนอขาย/);
 
   const fetchCalls = ui.match(/fetch\(/g) ?? [];
   assert.equal(fetchCalls.length, 3, "visual redesign must not add Stock requests");
+});
+
+test("Stock brand refinement reuses the public BIG CAR website palette in a page-local scope", async () => {
+  const [ui, styles, site] = await Promise.all([
+    readFile(new URL("../app/stock-export/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/site.tsx", import.meta.url), "utf8")
+  ]);
+  for (const token of ["#07080a", "#d6b66c", "#f6df9d"]) {
+    assert.match(site, new RegExp(token));
+    assert.match(styles, new RegExp(token));
+  }
+  assert.match(ui, /stock-bigcar-brand/);
+  assert.match(ui, /stock-brand-surface/);
+  assert.doesNotMatch(styles.split("* {")[0] || "", /--stock-brand-gold/, "Stock palette must not change global CRM tokens");
 });

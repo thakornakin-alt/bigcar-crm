@@ -1540,8 +1540,8 @@ export default function StockExportPage() {
   }
 
   return (
-    <NativeAppShell className="max-w-6xl pb-28">
-      <header className="relative mb-4 overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,0.18),transparent_36%),linear-gradient(135deg,#101720,#06090e)] p-4 shadow-[0_22px_64px_rgba(0,0,0,0.30)] sm:p-5">
+    <NativeAppShell className="stock-bigcar-brand max-w-6xl pb-28">
+      <header className="relative mb-4 overflow-hidden rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(214,182,108,0.13),transparent_34%),linear-gradient(145deg,#111214,#07080a)] p-4 shadow-[0_24px_90px_rgba(0,0,0,0.30)] sm:p-5">
         <div className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full border border-brand/10" />
         <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
@@ -1549,7 +1549,7 @@ export default function StockExportPage() {
               <CarFront size={22} aria-hidden="true" />
             </span>
             <div className="min-w-0">
-              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-brand/90">BIG CAR CRM · STOCK</p>
+              <p className="text-[11px] font-black uppercase tracking-[0.28em] text-brand/90">BIG CAR RDD · STOCK</p>
               <h1 className="mt-0.5 text-2xl font-black leading-tight text-white sm:text-3xl">สต๊อกรถ</h1>
               <p className="mt-1 text-xs font-medium text-soft sm:text-sm">
                 {hasSuccessfulStockLoad ? `${vehicles.length.toLocaleString("th-TH")} คันในระบบ` : "ข้อมูลสต๊อกสำหรับงานขาย"}
@@ -1620,7 +1620,7 @@ export default function StockExportPage() {
       )}
 
       <div className="space-y-4">
-          <NativeCard className="relative overflow-hidden p-4 sm:p-5">
+          <NativeCard className="stock-brand-surface relative overflow-hidden p-4 sm:p-5">
             <div className="pointer-events-none absolute -top-14 right-[-8%] h-36 w-36 rounded-full bg-brand/15 blur-[60px]" />
             <div className="relative flex items-end justify-between gap-3">
               <div><p className="text-xs font-black uppercase tracking-[0.14em] text-brand/90">ชุดสต๊อกพร้อมส่ง</p><h2 className="mt-1 text-xl font-black text-white sm:text-2xl">สรุปชุด Export</h2></div>
@@ -1635,7 +1635,7 @@ export default function StockExportPage() {
               ))}
             </div>
           </NativeCard>
-          <NativeCard>
+          <NativeCard className="stock-brand-surface">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="flex items-center gap-2 text-lg font-black text-white">
                 <Search size={18} className="text-brand" />
@@ -1903,7 +1903,7 @@ export default function StockExportPage() {
             </p>
           </NativeCard>
 
-        <NativeCard>
+        <NativeCard className="stock-brand-surface">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="flex items-center gap-2 text-lg font-black text-white">
               <CheckCircle2 size={18} className="text-brand" />
@@ -1958,7 +1958,7 @@ export default function StockExportPage() {
           )}
         </NativeCard>
 
-        <NativeCard>
+        <NativeCard className="stock-brand-surface">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="flex items-center gap-2 text-lg font-black text-white">
               <FileImage size={18} className="text-brand" />
@@ -2038,7 +2038,7 @@ export default function StockExportPage() {
           <canvas ref={canvasRef} className="hidden" />
         </NativeCard>
 
-        <NativeCard>
+        <NativeCard className="stock-brand-surface">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="flex items-center gap-2 text-lg font-black text-white">
               <Search size={18} className="text-brand" />
