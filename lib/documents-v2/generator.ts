@@ -345,6 +345,31 @@ function drawPowerOfAttorneyMoo(
   });
 }
 
+/**
+ * The audited transport form prints these three variable slots on page 1, but
+ * the source PDF does not provide AcroForm fields for them. Keep the template
+ * intact and draw only the document-local effective values into those slots.
+ */
+function drawTransportTransferPrintedSlots(
+  pdf: PDFDocument,
+  data: Record<string, unknown>,
+  thaiFont: Awaited<ReturnType<PDFDocument["embedFont"]>>
+) {
+  const page = pdf.getPage(0);
+  const slots = [
+    { value: data.vehicle_type, x: 100, y: 367, maxWidth: 245 },
+    { value: data.vehicle_engine_type, x: 430, y: 367, maxWidth: 72 },
+    { value: data.transfer_sale_price, x: 137, y: 330, maxWidth: 110 }
+  ];
+  for (const slot of slots) {
+    const value = String(slot.value || "").trim();
+    if (!value) continue;
+    let size = 10.5;
+    while (size > 7 && thaiFont.widthOfTextAtSize(value, size) > slot.maxWidth) size -= 0.25;
+    page.drawText(value, { x: slot.x, y: slot.y, size, font: thaiFont });
+  }
+}
+
 function decodeDataUrlImage(value: unknown) {
   const raw = String(value || "").trim();
   const match = raw.match(/^data:(image\/(?:png|jpeg|jpg));base64,(.+)$/i);
@@ -458,6 +483,9 @@ export async function generateDocumentV2WithBytes(
   }
   if (templateId === "power-of-attorney") {
     drawPowerOfAttorneyMoo(pdf, form, allData.customer_moo, thaiFont);
+  }
+  if (templateId === "transport-transfer-request") {
+    drawTransportTransferPrintedSlots(pdf, allData, thaiFont);
   }
   const vehicleDeliveryIdCardImage = templateId === "vehicle-delivery-document"
     ? await prepareVehicleDeliveryIdCardImage(pdf, form, allData)

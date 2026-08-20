@@ -96,6 +96,9 @@ type TransportTransferRequestExtraData = {
   vehicle_plate_no: string;
   vehicle_chassis_no: string;
   vehicle_engine_no: string;
+  vehicle_type: string;
+  vehicle_engine_type: string;
+  transfer_sale_price: string;
 };
 
 type VehicleDeliveryDocumentExtraData = {
@@ -178,7 +181,10 @@ const DEFAULT_TRANSPORT_TRANSFER_REQUEST_EXTRAS: TransportTransferRequestExtraDa
   transferee_phone: "",
   vehicle_plate_no: "",
   vehicle_chassis_no: "",
-  vehicle_engine_no: ""
+  vehicle_engine_no: "",
+  vehicle_type: "",
+  vehicle_engine_type: "",
+  transfer_sale_price: ""
 };
 
 const DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS: VehicleDeliveryDocumentExtraData = {
@@ -535,6 +541,8 @@ export function DocumentGeneratorV2() {
   const [overrideState, setOverrideState] = useState<"idle" | "loading" | "clean" | "dirty" | "saving" | "refreshing" | "error">("idle");
   const [contractEditMode, setContractEditMode] = useState(false);
   const [powerOfAttorneyEditMode, setPowerOfAttorneyEditMode] = useState(false);
+  const [transportTransferEditMode, setTransportTransferEditMode] = useState(false);
+  const [vehicleDeliveryEditMode, setVehicleDeliveryEditMode] = useState(false);
   const savedOverrideRef = useRef<{
     data: ResolvedDocumentV2Data | null;
     temporaryReceiptExtras: TemporaryReceiptExtraData;
@@ -604,10 +612,12 @@ export function DocumentGeneratorV2() {
             transferee_phone: transportTransferExtras.transferee_phone,
             vehicle_plate_no: transportTransferExtras.vehicle_plate_no,
             vehicle_chassis_no: transportTransferExtras.vehicle_chassis_no,
-            vehicle_engine_no: transportTransferExtras.vehicle_engine_no
+            vehicle_engine_no: transportTransferExtras.vehicle_engine_no,
+            vehicle_type: transportTransferExtras.vehicle_type,
+            vehicle_engine_type: transportTransferExtras.vehicle_engine_type,
+            transfer_sale_price: transportTransferExtras.transfer_sale_price
           }
-        : {})
-      ,
+        : {}),
       ...(templateId === "vehicle-delivery-document"
         ? {
             delivery_date: vehicleDeliveryExtras.deliveryDate || formatThaiBuddhistDate(),
@@ -796,6 +806,7 @@ export function DocumentGeneratorV2() {
       vehicle_plate_no: String(sourceData.plateNo || ""),
       vehicle_chassis_no: String(sourceData.chassisNo || ""),
       vehicle_engine_no: String(sourceData.engineNo || ""),
+      transfer_sale_price: String(sourceData.sellPrice || ""),
       ...addressParts
     };
     setTransportTransferExtras((prev) => {
@@ -917,6 +928,9 @@ export function DocumentGeneratorV2() {
       payload.transferee_phone = transportTransferExtras.transferee_phone || "";
       payload.vehicle_chassis_no = transportTransferExtras.vehicle_chassis_no || "";
       payload.vehicle_engine_no = transportTransferExtras.vehicle_engine_no || "";
+      payload.vehicle_type = transportTransferExtras.vehicle_type || "";
+      payload.vehicle_engine_type = transportTransferExtras.vehicle_engine_type || "";
+      payload.transfer_sale_price = transportTransferExtras.transfer_sale_price || "";
     }
     if (templateId === "vehicle-delivery-document") {
       payload.delivery_date = vehicleDeliveryExtras.deliveryDate || formatThaiBuddhistDate();
@@ -1048,6 +1062,8 @@ export function DocumentGeneratorV2() {
     setOverrideState("loading");
     setContractEditMode(false);
     setPowerOfAttorneyEditMode(false);
+    setTransportTransferEditMode(false);
+    setVehicleDeliveryEditMode(false);
     setError("");
     setEditableTouched(false);
     setEditableData(null);
@@ -1872,6 +1888,48 @@ export function DocumentGeneratorV2() {
         </section>
       ) : null}
 
+      {isTransportTransferRequest ? (
+        <section className="rounded border border-white/10 bg-white/[0.02] p-3" aria-labelledby="transport-transfer-edit-heading">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 id="transport-transfer-edit-heading" className="font-semibold">ข้อมูลใบคำขอโอนขนส่ง</h2>
+              <p className="mt-1 text-xs text-gray-400">แก้เฉพาะเอกสารฉบับนี้ ไม่เปลี่ยนรายงานขาย Booking หรือข้อมูลรถ</p>
+            </div>
+            {!transportTransferEditMode ? (
+              <button
+                type="button"
+                onClick={() => setTransportTransferEditMode(true)}
+                disabled={!selectedReportId || reportSwitchBusy || !editableData}
+                className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
+              >
+                แก้ไขข้อมูลเอกสาร
+              </button>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {isVehicleDeliveryDocument ? (
+        <section className="rounded border border-white/10 bg-white/[0.02] p-3" aria-labelledby="vehicle-delivery-edit-heading">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 id="vehicle-delivery-edit-heading" className="font-semibold">ข้อมูลเอกสารส่งมอบรถยนต์</h2>
+              <p className="mt-1 text-xs text-gray-400">แก้เฉพาะเอกสารฉบับนี้ ไม่เปลี่ยนรายงานขาย Booking Delivery หรือข้อมูลลูกค้า</p>
+            </div>
+            {!vehicleDeliveryEditMode ? (
+              <button
+                type="button"
+                onClick={() => setVehicleDeliveryEditMode(true)}
+                disabled={!selectedReportId || reportSwitchBusy || !editableData}
+                className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
+              >
+                แก้ไขข้อมูลเอกสาร
+              </button>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
       {previewUrl || reportSwitchBusy ? (
         <div className={`relative rounded border border-white/10 p-3 ${reportSwitchBusy ? "opacity-70" : ""}`} aria-busy={reportSwitchBusy}>
           <h2 className="mb-2 font-semibold">Preview เอกสาร</h2>
@@ -1919,14 +1977,14 @@ export function DocumentGeneratorV2() {
         </>
       ) : null}
 
-      {(isTemporaryReceipt || (isPowerOfAttorney && powerOfAttorneyEditMode) || isTransportTransferRequest || isVehicleDeliveryDocument) ? (
+      {(isTemporaryReceipt || (isPowerOfAttorney && powerOfAttorneyEditMode) || (isTransportTransferRequest && transportTransferEditMode) || (isVehicleDeliveryDocument && vehicleDeliveryEditMode)) ? (
         <div className="rounded border border-white/10 p-3">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-semibold">แก้ข้อมูลก่อน Preview</h2>
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => { cancelDocumentEdits(); if (isPowerOfAttorney) setPowerOfAttorneyEditMode(false); }} disabled={overrideState === "saving" || overrideState === "refreshing"} className="rounded border border-white/20 px-3 py-1.5 text-xs disabled:opacity-40">ยกเลิก</button>
-              <button type="button" onClick={async () => { if (await saveDocumentOverride()) { if (isPowerOfAttorney) setPowerOfAttorneyEditMode(false); } }} disabled={!selectedReportId || reportSwitchBusy || overrideState === "saving" || overrideState === "loading"} className="rounded bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-40">{overrideState === "saving" ? "กำลังบันทึก..." : "บันทึก"}</button>
-              <button type="button" onClick={async () => { if (await resetDocumentOverride()) { if (isPowerOfAttorney) setPowerOfAttorneyEditMode(false); } }} disabled={!selectedReportId || reportSwitchBusy} className="rounded border border-amber-300/40 px-3 py-1.5 text-xs text-amber-200 disabled:opacity-40">ใช้ข้อมูลเดิมจากระบบ</button>
+              <button type="button" onClick={() => { cancelDocumentEdits(); if (isPowerOfAttorney) setPowerOfAttorneyEditMode(false); if (isTransportTransferRequest) setTransportTransferEditMode(false); if (isVehicleDeliveryDocument) setVehicleDeliveryEditMode(false); }} disabled={overrideState === "saving" || overrideState === "refreshing"} className="rounded border border-white/20 px-3 py-1.5 text-xs disabled:opacity-40">ยกเลิก</button>
+              <button type="button" onClick={async () => { if (await saveDocumentOverride()) { if (isPowerOfAttorney) setPowerOfAttorneyEditMode(false); if (isTransportTransferRequest) setTransportTransferEditMode(false); if (isVehicleDeliveryDocument) setVehicleDeliveryEditMode(false); } }} disabled={!selectedReportId || reportSwitchBusy || overrideState === "saving" || overrideState === "loading"} className="rounded bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-40">{overrideState === "saving" ? "กำลังบันทึก..." : overrideState === "refreshing" ? "กำลังอัปเดตเอกสาร..." : "บันทึก"}</button>
+              <button type="button" onClick={async () => { if (await resetDocumentOverride()) { if (isPowerOfAttorney) setPowerOfAttorneyEditMode(false); if (isTransportTransferRequest) setTransportTransferEditMode(false); if (isVehicleDeliveryDocument) setVehicleDeliveryEditMode(false); } }} disabled={!selectedReportId || reportSwitchBusy} className="rounded border border-amber-300/40 px-3 py-1.5 text-xs text-amber-200 disabled:opacity-40">ใช้ข้อมูลเดิมจากระบบ</button>
             </div>
           </div>
           <p className="mb-1 text-xs text-gray-300">แตะช่องด้านล่างเพื่อแก้ค่าก่อนสร้าง Preview / PNG ได้เลย</p>
@@ -2149,6 +2207,8 @@ export function DocumentGeneratorV2() {
                   ["transferee_soi", "ซอย"],
                   ["transferee_road", "ถนน"],
                   ["transferee_phone", "โทรศัพท์"],
+                  ["vehicle_type", "ชนิดรถ"],
+                  ["vehicle_engine_type", "ชนิดเครื่องยนต์"],
                   ["vehicle_plate_no", "ทะเบียนรถ"],
                   ["vehicle_chassis_no", "เลขตัวรถ"],
                   ["vehicle_engine_no", "เลขเครื่องยนต์"]
@@ -2162,6 +2222,23 @@ export function DocumentGeneratorV2() {
                     />
                   </label>
                 ))}
+                <label className="block space-y-1">
+                  <span className="block text-xs text-gray-300">ราคาซื้อขาย</span>
+                  <input
+                    value={transportTransferExtras.transfer_sale_price}
+                    inputMode="decimal"
+                    onChange={(e) => updateTransportTransferExtra("transfer_sale_price", e.target.value)}
+                    onBlur={() => {
+                      const parsed = parseDocumentMoney(transportTransferExtras.transfer_sale_price);
+                      if (!parsed.ok) {
+                        setError("รูปแบบราคาซื้อขายไม่ถูกต้อง");
+                        return;
+                      }
+                      if (parsed.value !== undefined) updateTransportTransferExtra("transfer_sale_price", formatDocumentMoney(parsed.value));
+                    }}
+                    className="w-full rounded bg-black/40 p-2 text-sm"
+                  />
+                </label>
                 <div className="md:col-span-2">
                   <ThaiAddressSelector
                     value={{

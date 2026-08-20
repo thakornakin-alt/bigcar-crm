@@ -15,7 +15,7 @@ export const DOCUMENT_MONEY_KEYS = new Set([
   "sellPrice", "salePrice", "finalPrice", "deposit", "remainingAmount", "bookingPrice", "downPayment",
   "financeAmount", "netCarPrice", "discount", "discountPrice", "line2Discount", "line4Installment",
   "line5DownPayment", "line6Amount", "line7Amount", "line8Amount", "line9Amount", "line10Amount",
-  "line11Amount", "line12Amount", "line13Amount", "line14Amount"
+  "line11Amount", "line12Amount", "line13Amount", "line14Amount", "transfer_sale_price"
 ]);
 
 export const SALES_CONTRACT_OVERRIDE_KEYS = [
