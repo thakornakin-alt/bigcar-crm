@@ -196,7 +196,7 @@ if (await page.getByLabel("ชื่อผู้ซื้อ / นิติบ�
 await page.getByRole("button", { name: "ยกเลิก", exact: true }).click();
 const reportBSwitchStartedAt = Date.now();
 await page.locator("select").nth(1).selectOption(reportB.id);
-await page.getByText("● กำลังโหลดข้อมูล...").waitFor();
+await page.getByText("● กำลังโหลดข้อมูลรายงานขาย...").waitFor();
 if (!(await page.getByRole("button", { name: "แชร์/บันทึกรูป" }).isDisabled())) throw new Error("Share remained enabled while report B was loading");
 await page.screenshot({ path: `${outputDir}/report-loading-390.png`, fullPage: true });
 await page.getByText(/● ข้อมูลพร้อมแล้ว/).waitFor();

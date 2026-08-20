@@ -974,12 +974,6 @@ export function DocumentGeneratorV2() {
         setError("ไม่พบ AcroForm fields ในไฟล์นี้");
         return;
       }
-      try {
-        const mappingRes = await api<{ ok: boolean; mapping: DocumentV2FieldMapping }>(`/api/documents-v2/mapping?templateId=${encodeURIComponent(templateId)}`);
-        setMapping(mappingRes.mapping || {});
-        setSaveState("saved");
-        setLastSavedAt(new Date().toLocaleTimeString("th-TH"));
-      } catch {}
       setIsTemplateReady(true);
     } catch (e) {
       setFields([]);
@@ -1039,11 +1033,15 @@ export function DocumentGeneratorV2() {
     if (!reportsLoaded) {
       loadReports();
     }
-    if (!Object.keys(mapping).length) {
-      loadMapping();
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templateId]);
+
+  useEffect(() => {
+    if (!settingsMode || Object.keys(mapping).length) return;
+    loadMapping();
+  // Mapping is a developer/settings concern. Normal document generation reads it on the server.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsMode, templateId]);
 
   useEffect(() => {
     if (!selectedReportId || !selectedReport || !isTemplateReady || !reportsLoaded) {
@@ -1249,7 +1247,7 @@ export function DocumentGeneratorV2() {
       return await api<Blob>("/api/documents-v2/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report: selectedReport, templateId, data: payloadData })
+        body: JSON.stringify({ report: selectedReport, templateId, data: payloadData, dataResolved: true })
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Preview ไม่สำเร็จ");
@@ -1589,13 +1587,17 @@ export function DocumentGeneratorV2() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 text-white">
-      <h1 className="text-2xl font-bold">DocumentGeneratorV2</h1>
-      <p className="text-sm text-gray-300">ข้อมูลเดียวกันสำหรับ Preview, Download PDF และแชร์รูป</p>
-      {error ? <div className="rounded border border-red-500/40 bg-red-900/30 p-3 text-red-100">{error}</div> : null}
+    <div className="mx-auto max-w-5xl space-y-4 px-3 py-4 text-white sm:px-5 sm:py-6">
+      <header className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#171b22] to-[#0d1015] px-4 py-4 shadow-xl shadow-black/20 sm:px-5">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">BIG CAR CRM</p>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight">เอกสาร</h1>
+        <p className="mt-1 text-sm text-gray-400">เลือกข้อมูลและประเภทเอกสาร ระบบจะสร้างตัวอย่างให้อัตโนมัติ</p>
+      </header>
+      {error ? <div className="rounded-xl border border-red-500/40 bg-red-950/40 p-3 text-sm text-red-100">{error}</div> : null}
 
-      <div className="rounded border border-white/10 p-3">
-        <label className="mb-2 block text-sm">Template</label>
+      <div className="grid gap-3 md:grid-cols-2">
+      <div className="order-2 rounded-2xl border border-white/10 bg-[#12161c] p-4 shadow-lg shadow-black/10 md:order-2">
+        <label className="mb-2 block text-sm font-semibold text-gray-200">เลือกประเภทเอกสาร</label>
         <select
           value={templateId}
           onChange={(e) => {
@@ -1612,18 +1614,18 @@ export function DocumentGeneratorV2() {
             setPngUrl("");
             setPngBlob(null);
           }}
-          className="w-full rounded bg-black/40 p-2"
+          className="h-12 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm outline-none focus:border-emerald-400/60"
         >
           {templates.map((t) => (
             <option key={t.id} value={t.id}>
-              {t.title} ({t.fileName})
+              {t.title}
             </option>
           ))}
         </select>
       </div>
 
-      <div className="rounded border border-white/10 p-3">
-        <label className="mb-2 block text-sm">เลือกรายงานขาย</label>
+      <div className="order-1 rounded-2xl border border-white/10 bg-[#12161c] p-4 shadow-lg shadow-black/10 md:order-1">
+        <label className="mb-2 block text-sm font-semibold text-gray-200">เลือกรายงานขาย</label>
         <select value={selectedReportId} onChange={(e) => {
           if (e.target.value === selectedReportId) return;
           if (overrideState === "dirty" && !window.confirm("มีการแก้ไขที่ยังไม่บันทึก ต้องการเปลี่ยนรายงานและละทิ้งการแก้ไขหรือไม่")) return;
@@ -1632,7 +1634,7 @@ export function DocumentGeneratorV2() {
           setSelectedReportId(e.target.value);
           setContractEditMode(false);
           setPowerOfAttorneyEditMode(false);
-        }} className="w-full rounded bg-black/40 p-2">
+        }} className="h-12 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm outline-none focus:border-emerald-400/60">
           <option value="">-- เลือก --</option>
           {reports.map((r) => (
             <option key={r.id} value={r.id}>
@@ -1640,9 +1642,9 @@ export function DocumentGeneratorV2() {
             </option>
           ))}
         </select>
-        {reportLoadState === "loading-data" ? <p className="mt-2 text-xs text-amber-200">● กำลังโหลดข้อมูล...</p> : null}
-        {reportLoadState === "generating" ? <p className="mt-2 text-xs text-amber-200">● กำลังสร้างตัวอย่างเอกสาร...</p> : null}
-        {reportLoadState === "ready" ? <p className="mt-2 text-xs text-emerald-300">● ข้อมูลพร้อมแล้ว{reportLoadMs !== null ? ` · ${reportLoadMs} ms` : ""}</p> : null}
+        {reportLoadState === "loading-data" ? <p className="mt-2 text-xs font-medium text-amber-200">● กำลังโหลดข้อมูลรายงานขาย...</p> : null}
+        {reportLoadState === "generating" ? <p className="mt-2 text-xs font-medium text-amber-200">● กำลังสร้างตัวอย่างเอกสาร...</p> : null}
+        {reportLoadState === "ready" ? <p className="mt-2 text-xs font-medium text-emerald-300">● ข้อมูลพร้อมแล้ว{settingsMode && reportLoadMs !== null ? ` · ${reportLoadMs} ms` : ""}</p> : null}
         {reportLoadState === "data-error" ? (
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-red-200">
             <span>โหลดข้อมูลรายงานขายไม่สำเร็จ กรุณาลองใหม่</span>
@@ -1655,6 +1657,7 @@ export function DocumentGeneratorV2() {
             <button type="button" onClick={() => preview()} className="rounded border border-amber-300/40 px-2 py-1">อัปเดตเอกสาร</button>
           </div>
         ) : null}
+      </div>
       </div>
 
       {settingsMode ? (
@@ -1931,9 +1934,11 @@ export function DocumentGeneratorV2() {
       ) : null}
 
       {previewUrl || reportSwitchBusy ? (
-        <div className={`relative rounded border border-white/10 p-3 ${reportSwitchBusy ? "opacity-70" : ""}`} aria-busy={reportSwitchBusy}>
-          <h2 className="mb-2 font-semibold">Preview เอกสาร</h2>
-          <p className="mb-2 text-xs text-gray-300">Preview และไฟล์ดาวน์โหลดจะตรงกับรายงานขายที่เลือกอยู่เสมอ</p>
+        <section className={`relative rounded-2xl border border-white/10 bg-[#12161c] p-3 shadow-xl shadow-black/15 sm:p-4 ${reportSwitchBusy ? "opacity-80" : ""}`} aria-busy={reportSwitchBusy}>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div><h2 className="font-semibold">Preview เอกสาร</h2><p className="mt-0.5 text-xs text-gray-400">ตรงกับรายงานและข้อมูลที่เลือกในขณะนี้</p></div>
+            {currentPreviewReady ? <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-300">พร้อมใช้งาน</span> : null}
+          </div>
           {reportSwitchBusy ? (
             <div className="flex min-h-48 items-center justify-center rounded border border-white/10 bg-black/30 p-6 text-center text-sm text-amber-100">
               {reportLoadState === "loading-data" ? "กำลังโหลดข้อมูลใหม่..." : "กำลังสร้างตัวอย่างเอกสาร..."}
@@ -1955,25 +1960,25 @@ export function DocumentGeneratorV2() {
           >
             <Download size={16} /> Download PDF ตาม Preview นี้
           </a>
-        </div>
+        </section>
       ) : null}
 
       {!settingsMode ? (
         <>
-          <div className="grid grid-cols-1 gap-2 rounded border border-white/10 p-3 sm:grid-cols-2">
-            <button onClick={preview} disabled={loading || reportSwitchBusy || !selectedReportId} className="rounded border border-white/20 px-4 py-2 disabled:opacity-50">
-              <ImageIcon className="inline" size={16} /> อัปเดตเอกสาร
-            </button>
+          <div className="grid grid-cols-1 gap-2 rounded-2xl border border-white/10 bg-[#12161c] p-3 sm:grid-cols-2">
             <button
               onClick={sharePng}
               disabled={loading || reportSwitchBusy || !currentPreviewReady || shareState === "preparing"}
-              className="rounded border border-white/20 px-4 py-2 disabled:opacity-50"
+              className="min-h-11 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2 font-medium disabled:opacity-50"
             >
               <Share2 className="inline" size={16} /> {shareState === "preparing" ? "กำลังเตรียมรูป..." : "แชร์/บันทึกรูป"}
             </button>
+            <button onClick={preview} disabled={loading || reportSwitchBusy || !selectedReportId} className="min-h-11 rounded-xl px-4 py-2 text-sm text-gray-300 underline-offset-4 hover:text-white hover:underline disabled:opacity-50">
+              <ImageIcon className="inline" size={16} /> อัปเดตเอกสาร
+            </button>
           </div>
-          <p className="mt-2 text-xs text-gray-300">กดเพื่ออัปเดต Preview / PDF ตามข้อมูลที่แก้ด้านล่าง</p>
-          <p className="text-xs text-gray-300">บน iPhone ถ้าปุ่ม Download ไม่เข้า Photos ให้กด “แชร์/บันทึกรูป” แล้วเลือก Save Image</p>
+          <p className="mt-2 text-xs text-gray-400">ระบบอัปเดต Preview ให้อัตโนมัติ ปุ่มอัปเดตใช้สำหรับลองใหม่เมื่อต้องการเท่านั้น</p>
+          <p className="text-xs text-gray-400">บน iPhone ให้กด “แชร์/บันทึกรูป” แล้วเลือก Save Image</p>
         </>
       ) : null}
 

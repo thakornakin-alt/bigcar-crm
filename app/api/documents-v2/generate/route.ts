@@ -6,6 +6,7 @@ import { readDocumentV2Mapping } from "@/lib/documents-v2/mapping-store";
 import { resolveDocumentV2Data } from "@/lib/documents-v2/resolve-data";
 import { loadDocumentTemplateBytes } from "@/lib/documents-v2/template-bytes";
 import { normalizeDocumentValueRecord } from "@/lib/documents/value-integrity";
+import type { DocumentV2Data } from "@/lib/documents-v2/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,7 +19,12 @@ export async function POST(request: Request) {
     const templateId = String(body.templateId || "").trim() || undefined;
     const template = getTemplateById(templateId);
     const templateBytes = await loadDocumentTemplateBytes(template.path, request.url);
-    const { data } = await resolveDocumentV2Data(report, override);
+    // The normal Documents V2 flow resolves live report/stock data once before generation.
+    // Keep the legacy server-resolution path for older callers, while avoiding a second
+    // Apps Script/stock-extra read when the caller supplies that resolved snapshot.
+    const data = body.dataResolved === true
+      ? override as unknown as DocumentV2Data
+      : (await resolveDocumentV2Data(report, override)).data;
     const mapping = await readDocumentV2Mapping(template.id);
     const fieldProbeName = String(body.fieldProbeName || "").trim();
     const fieldProbeValue = String(body.fieldProbeValue || "").trim();
