@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, Columns3, Download, FileImage, Filter, Loader2, MessageCircle, RefreshCw, Search } from "lucide-react";
+import { AlertTriangle, Banknote, CalendarDays, CarFront, CheckCircle2, Columns3, Download, FileImage, Filter, Gauge, Loader2, MapPin, MessageCircle, RefreshCw, Search } from "lucide-react";
 import {
   ActiveFilterTag,
   BottomSheet,
@@ -11,7 +11,6 @@ import {
   NativeButton,
   NativeCard,
   SearchField,
-  StickyFilterBar,
 } from "@/app/components/ui";
 import type { DriveUploadResult, LineGroup, ReportHistoryItem, StockVehicle } from "@/lib/types";
 import { salesLineGroupStorageKey } from "@/lib/client-settings";
@@ -344,6 +343,13 @@ function vehicleTitle(vehicle: StockVehicle) {
 
 function stockStatus(vehicle: StockVehicle) {
   return String(vehicle.status || "").trim();
+}
+
+function stockStatusTone(status?: string, isBookingReserved = false) {
+  if (isBookingReserved || /จอง/.test(String(status || ""))) return "border-amber-300/30 bg-amber-300/10 text-amber-100";
+  if (/ขายแล้ว/.test(String(status || ""))) return "border-sky-300/30 bg-sky-300/10 text-sky-100";
+  if (/รอขาย|พร้อมขาย/.test(String(status || ""))) return "border-brand/35 bg-brand/10 text-brand";
+  return "border-white/10 bg-white/[0.05] text-soft";
 }
 
 function stockVehicleGroup(vehicle: StockVehicle) {
@@ -1534,9 +1540,39 @@ export default function StockExportPage() {
   }
 
   return (
-    <NativeAppShell className="max-w-5xl pb-28">
+    <NativeAppShell className="max-w-6xl pb-28">
+      <header className="relative mb-4 overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,0.18),transparent_36%),linear-gradient(135deg,#101720,#06090e)] p-4 shadow-[0_22px_64px_rgba(0,0,0,0.30)] sm:p-5">
+        <div className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full border border-brand/10" />
+        <div className="relative flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-brand/30 bg-brand/10 text-brand shadow-[0_10px_28px_rgba(34,197,94,0.12)]">
+              <CarFront size={22} aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-brand/90">BIG CAR CRM · STOCK</p>
+              <h1 className="mt-0.5 text-2xl font-black leading-tight text-white sm:text-3xl">สต๊อกรถ</h1>
+              <p className="mt-1 text-xs font-medium text-soft sm:text-sm">
+                {hasSuccessfulStockLoad ? `${vehicles.length.toLocaleString("th-TH")} คันในระบบ` : "ข้อมูลสต๊อกสำหรับงานขาย"}
+                {lastSuccessfulLoadAt ? ` · อัปเดตล่าสุด ${lastSuccessfulLoadAt}` : ""}
+              </p>
+            </div>
+          </div>
+          {hasSuccessfulStockLoad ? (
+            <div className="grid min-w-[190px] grid-cols-2 gap-2">
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5">
+                <p className="text-[11px] font-bold text-soft">ตรงตัวกรอง</p>
+                <p className="mt-0.5 text-lg font-black text-white">{sortedVehicles.length.toLocaleString("th-TH")}</p>
+              </div>
+              <div className="rounded-2xl border border-brand/25 bg-brand/10 px-3 py-2.5">
+                <p className="text-[11px] font-bold text-brand/80">พร้อม Export</p>
+                <p className="mt-0.5 text-lg font-black text-brand">{exportVehicles.length.toLocaleString("th-TH")}</p>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </header>
       <div
-        className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm ${
+        className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[22px] border px-4 py-3 text-sm shadow-[0_14px_38px_rgba(0,0,0,0.16)] ${
           stockLoadError
             ? hasSuccessfulStockLoad ? "border-amber-400/40 bg-amber-950/30 text-amber-100" : "border-red-400/40 bg-red-950/30 text-red-100"
             : loading ? "border-sky-400/30 bg-sky-950/25 text-sky-100" : "border-brand/30 bg-green-950/20 text-green-100"
@@ -1584,15 +1620,19 @@ export default function StockExportPage() {
       )}
 
       <div className="space-y-4">
-          <NativeCard className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[#0B1220]/90 p-5 shadow-[0_0_60px_rgba(34,197,94,0.10)]">
+          <NativeCard className="relative overflow-hidden p-4 sm:p-5">
             <div className="pointer-events-none absolute -top-14 right-[-8%] h-36 w-36 rounded-full bg-brand/15 blur-[60px]" />
-            <p className="text-[13px] font-bold uppercase tracking-[0.14em] text-brand/90">สร้างรูปสต็อก</p>
-            <h2 className="mt-1 text-[34px] font-black leading-tight text-white">พร้อมส่งลูกค้า</h2>
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-2xl border border-white/10 bg-[#050816]/70 px-3 py-3"><p className="text-[13px] font-semibold text-soft">ทั้งหมด</p><p className="mt-1 text-base font-black text-white">{hasSuccessfulStockLoad ? `${sortedVehicles.length.toLocaleString("th-TH")} คัน` : "—"}</p></div>
-              <div className="rounded-2xl border border-white/10 bg-[#050816]/70 px-3 py-3"><p className="text-[13px] font-semibold text-soft">ที่เลือก</p><p className="mt-1 text-base font-black text-white">{hasSuccessfulStockLoad ? `${exportVehicles.length.toLocaleString("th-TH")} คัน` : "—"}</p></div>
-              <div className="rounded-2xl border border-white/10 bg-[#050816]/70 px-3 py-3"><p className="text-[13px] font-semibold text-soft">กลุ่ม</p><p className="mt-1 text-base font-black text-white">{hasSuccessfulStockLoad ? `${exportGroups.length.toLocaleString("th-TH")} กลุ่ม` : "—"}</p></div>
-              <div className="rounded-2xl border border-white/10 bg-[#050816]/70 px-3 py-3"><p className="text-[13px] font-semibold text-soft">หน้า</p><p className="mt-1 text-base font-black text-white">{hasSuccessfulStockLoad ? `${exportPageCount.toLocaleString("th-TH")} หน้า` : "—"}</p></div>
+            <div className="relative flex items-end justify-between gap-3">
+              <div><p className="text-xs font-black uppercase tracking-[0.14em] text-brand/90">ชุดสต๊อกพร้อมส่ง</p><h2 className="mt-1 text-xl font-black text-white sm:text-2xl">สรุปชุด Export</h2></div>
+              <NativeBadge>{exportPageCount.toLocaleString("th-TH")} หน้า</NativeBadge>
+            </div>
+            <div className="relative mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[["รถทั้งหมด", sortedVehicles.length, "คัน"], ["ในชุดนี้", exportVehicles.length, "คัน"], ["กลุ่มรถ", exportGroups.length, "กลุ่ม"], ["ไฟล์ที่จะได้", exportPageCount, "หน้า"]].map(([label, value, unit]) => (
+                <div key={String(label)} className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
+                  <p className="text-xs font-semibold text-soft">{label}</p>
+                  <p className="mt-1 text-lg font-black text-white">{hasSuccessfulStockLoad ? `${Number(value).toLocaleString("th-TH")} ${unit}` : "—"}</p>
+                </div>
+              ))}
             </div>
           </NativeCard>
           <NativeCard>
@@ -1604,7 +1644,7 @@ export default function StockExportPage() {
               <NativeBadge tone="muted">Export Ready</NativeBadge>
             </div>
             {ENABLE_NEW_STOCK_UI ? (
-              <StickyFilterBar>
+              <div className="space-y-2 rounded-[22px] border border-white/10 bg-[#080c12]/88 p-2.5 shadow-[0_12px_36px_rgba(0,0,0,0.18)]">
                 <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
                   <SearchField
                     value={query}
@@ -1636,7 +1676,7 @@ export default function StockExportPage() {
                 <NativeButton type="button" onClick={clearFilters} variant="ghost" className="w-full">
                   ล้างตัวกรอง
                 </NativeButton>
-              </StickyFilterBar>
+              </div>
             ) : (
               <>
                 <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -2023,10 +2063,9 @@ export default function StockExportPage() {
           ) : (
             <div className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {loading ? (
-                  <div className="rounded-lg border border-line bg-panel p-6 text-center text-soft sm:col-span-2 xl:col-span-3">
-                    <Loader2 className="mx-auto mb-2 animate-spin text-brand" />
-                    กำลังโหลดสต็อก
+                {loading && !hasSuccessfulStockLoad ? (
+                  <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2 xl:col-span-3 xl:grid-cols-3" aria-label="กำลังโหลดข้อมูลสต๊อก">
+                    {[0, 1, 2].map((item) => <div key={item} className="h-52 animate-pulse rounded-[22px] border border-white/10 bg-white/[0.04]" />)}
                   </div>
                 ) : visibleVehicles.length ? (
                   visibleVehicles.map((vehicle) => {
@@ -2036,39 +2075,31 @@ export default function StockExportPage() {
                     return (
                       <div
                         key={`${vehicle.plate}-${vehicle.vin || vehicle.model}`}
-                        className={`rounded-lg border bg-panel p-3 text-left ${exportMode === "internal" && hasRemark ? "border-amber-300/40" : "border-line"}`}
+                        className={`group relative overflow-hidden rounded-[22px] border bg-[linear-gradient(145deg,rgba(17,24,32,0.94),rgba(7,10,15,0.96))] p-4 text-left shadow-[0_16px_42px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:border-brand/45 ${exportMode === "internal" && hasRemark ? "border-amber-300/40" : "border-white/10"}`}
                       >
+                        <div className="pointer-events-none absolute -right-10 -top-12 h-28 w-28 rounded-full bg-brand/[0.06] blur-2xl transition group-hover:bg-brand/10" />
                         <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="font-bold text-white">{vehicle.plate || "-"}</p>
-                            {isBookingReserved ? (
-                              <div className="mt-1">
-                                <span className="inline-flex rounded-full bg-amber-300/20 px-2 py-0.5 text-[11px] font-bold text-amber-200">
-                                  ติดจองรอคอนเฟิร์ม
-                                </span>
-                              </div>
-                            ) : null}
-                            <p className="mt-1 line-clamp-2 text-sm text-soft">{vehicleTitle(vehicle)}</p>
+                          <div className="relative min-w-0">
+                            <p className="text-lg font-black tracking-wide text-white">{displayPlate(vehicle.plate)}</p>
+                            <p className="mt-1 line-clamp-2 text-sm font-bold text-soft">{vehicleTitle(vehicle)}</p>
                           </div>
-                          <span className="rounded-full bg-[#0b0d11] px-2 py-1 text-xs font-bold text-soft">
-                            อยู่ในชุดรูป
+                          <span className={`relative inline-flex shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-black ${stockStatusTone(vehicle.status, isBookingReserved)}`}>
+                            {isBookingReserved ? "ติดจองรอคอนเฟิร์ม" : vehicle.status || "พร้อมขาย"}
                           </span>
                         </div>
-                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-soft">
-                          <span>สถานะ: <b className="text-white">{vehicle.status || "พร้อมขาย"}</b></span>
-                          <span>กลุ่ม: <b className="text-white">{vehicle.vehicleGroup || "-"}</b></span>
-                          <span>Location: <b className="text-white">{vehicle.parkingLocation || "-"}</b></span>
-                          <span>ปีจด: <b className="text-white">{stockRegistrationYear(vehicle) || "-"}</b></span>
-                          <span>เกียร์: <b className="text-white">{vehicle.gear || "-"}</b></span>
-                          <span>สี: <b className="text-white">{vehicle.color || "-"}</b></span>
-                          <span>เลขไมล์: <b className="text-white">{formatMileage(vehicle.mileage)}</b></span>
-                          <span className="col-span-2">ราคาเสนอขายRT: <b className="text-brand">{formatPrice(vehicle.salePrice)}</b></span>
+                        <div className="relative mt-4 grid grid-cols-2 gap-2 text-xs">
+                          <span className="flex items-center gap-1.5 text-soft"><CalendarDays size={14} className="text-brand/80" />ปี {stockRegistrationYear(vehicle) || "-"}</span>
+                          <span className="flex items-center gap-1.5 text-soft"><Gauge size={14} className="text-brand/80" />{formatMileage(vehicle.mileage)}</span>
+                          <span className="flex min-w-0 items-center gap-1.5 text-soft"><MapPin size={14} className="shrink-0 text-brand/80" /><span className="truncate">{shortLocation(vehicle.parkingLocation)}</span></span>
+                          <span className="truncate text-soft">{vehicle.gear || "-"} · {vehicle.color || "-"}</span>
+                          <span className="col-span-2 mt-1 flex items-center justify-between rounded-2xl border border-brand/20 bg-brand/[0.08] px-3 py-2.5"><span className="flex items-center gap-1.5 font-bold text-soft"><Banknote size={15} className="text-brand" />ราคาเสนอขาย</span><b className="text-sm text-brand">{formatPrice(vehicle.salePrice)}</b></span>
                           {extraColumns.map((column) => (
                             <span key={`${vehicle.plate}-${column}`} className={column === "pdiNote" || column === "vin" ? "col-span-2" : ""}>
                               {extraColumnLabel(column)}: <b className="text-white">{defaultColumnValue(vehicle, column)}</b>
                             </span>
                           ))}
                         </div>
+                        <div className="relative mt-3 flex items-center justify-between gap-2 border-t border-white/10 pt-3 text-[11px] text-soft"><span>{vehicle.vehicleGroup || "ไม่ระบุกลุ่ม"}</span><span>อยู่ในชุดรูป</span></div>
                         {exportMode === "internal" ? (
                           <div className={`mt-3 rounded-lg border px-3 py-2 ${hasRemark ? "border-amber-300/30 bg-amber-300/10" : "border-line bg-[#0b0d11]"}`}>
                             <p className="text-xs font-bold text-amber-100">หมายเหตุ PDI</p>

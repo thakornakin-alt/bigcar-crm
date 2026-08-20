@@ -94,3 +94,18 @@ test("no write route is part of Stock automatic retry", async () => {
   assert.doesNotMatch(route, /export async function (POST|PUT|PATCH|DELETE)/);
 });
 
+test("Stock Export uses the shared BIG CAR CRM visual system without changing data flow", async () => {
+  const ui = await readFile(new URL("../app/stock-export/page.tsx", import.meta.url), "utf8");
+  assert.match(ui, /NativeAppShell/);
+  assert.match(ui, /NativeCard/);
+  assert.match(ui, /NativeButton/);
+  assert.match(ui, /SearchField/);
+  assert.match(ui, />สต๊อกรถ</);
+  assert.match(ui, /BIG CAR CRM · STOCK/);
+  assert.match(ui, /aria-label="กำลังโหลดข้อมูลสต๊อก"/);
+  assert.match(ui, /stockStatusTone/);
+  assert.match(ui, /ราคาเสนอขาย/);
+
+  const fetchCalls = ui.match(/fetch\(/g) ?? [];
+  assert.equal(fetchCalls.length, 3, "visual redesign must not add Stock requests");
+});

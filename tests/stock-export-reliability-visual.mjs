@@ -51,6 +51,11 @@ await page.screenshot({ path: `${outputDir}/stock-loading-mobile-390.png`, fullP
 await page.locator('[data-stock-state="ready"]').waitFor();
 const initialRenderMs = Date.now() - initialStartedAt;
 if (!await page.getByText("2 คัน", { exact: true }).first().isVisible()) throw new Error("successful Stock count missing");
+await page.getByRole("button", { name: "ดูรายการรถทั้งหมด" }).click();
+await page.screenshot({ path: `${outputDir}/stock-ui-mobile-390.png`, fullPage: true });
+await page.setViewportSize({ width: 1440, height: 1000 });
+await page.screenshot({ path: `${outputDir}/stock-ui-desktop-1440.png`, fullPage: true });
+await page.setViewportSize({ width: 390, height: 844 });
 
 stockMode = "failure";
 const refreshStartedAt = Date.now();
