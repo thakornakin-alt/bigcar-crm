@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Columns3, Download, FileImage, Filter, Loader2, MessageCircle, Search } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Columns3, Download, FileImage, Filter, Loader2, MessageCircle, RefreshCw, Search } from "lucide-react";
 import {
   ActiveFilterTag,
   BottomSheet,
@@ -18,10 +18,21 @@ import { salesLineGroupStorageKey } from "@/lib/client-settings";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import { hasStockFieldData, realStockFieldLabels, stockRawValue } from "@/lib/stock/stock-field-aliases";
 
+type StockReadErrorCode = "timeout" | "network_error" | "upstream_http_error" | "invalid_response" | "configuration_error" | "apps_script_action_missing" | "unknown_error";
+
 type StockListResponse = {
+  ok: true;
   vehicles: StockVehicle[];
   total: number;
-  warning?: string;
+  meta?: { durationMs: number; appsScriptDurationMs: number; attempts: number };
+};
+
+type StockListErrorResponse = {
+  ok: false;
+  errorCode: StockReadErrorCode;
+  message: string;
+  retryable: boolean;
+  meta?: { durationMs: number; appsScriptDurationMs: number; attempts: number };
 };
 
 const maxTableItems = 20;
@@ -825,6 +836,11 @@ export default function StockExportPage() {
   const [listOpen, setListOpen] = useState(false);
   const [visibleCount, setVisibleCount] = useState(20);
   const [loading, setLoading] = useState(true);
+  const [stockLoadMode, setStockLoadMode] = useState<"initial" | "refresh" | "retry">("initial");
+  const [stockLoadError, setStockLoadError] = useState<StockListErrorResponse | null>(null);
+  const [hasSuccessfulStockLoad, setHasSuccessfulStockLoad] = useState(false);
+  const [stockDataStale, setStockDataStale] = useState(false);
+  const [lastSuccessfulLoadAt, setLastSuccessfulLoadAt] = useState("");
   const [exporting, setExporting] = useState(false);
   const [sendingLine, setSendingLine] = useState(false);
   const [message, setMessage] = useState("");
@@ -1135,7 +1151,7 @@ export default function StockExportPage() {
   }, [bookingInputText, linePendingReservedPlateSet, stockPlateSet]);
 
   useEffect(() => {
-    loadStock();
+    loadStock("initial");
     loadLineGroups();
     loadBookingReports();
     loadLineReservations();
@@ -1151,6 +1167,8 @@ export default function StockExportPage() {
       setFilterPresets([]);
       setExtraColumns([]);
     }
+  // Initial orchestration intentionally runs once; later Stock reads are explicit user actions.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1172,18 +1190,30 @@ export default function StockExportPage() {
     window.localStorage.setItem("bigcar-stock-extra-columns", JSON.stringify(extraColumns));
   }, [extraColumns]);
 
-  async function loadStock() {
+  async function loadStock(mode: "initial" | "refresh" | "retry" = "refresh") {
+    if (loading && mode !== "initial") return;
     setLoading(true);
-    setError("");
+    setStockLoadMode(mode);
+    setStockLoadError(null);
     setMessage("");
 
     try {
-      const data = await api<StockListResponse>("/api/stock/list?limit=500");
+      const response = await fetch("/api/stock/list?limit=500", { cache: "no-store" });
+      const data = await response.json() as StockListResponse | StockListErrorResponse | null;
+      if (!response.ok || !data || data.ok !== true) {
+        const failure = data?.ok === false ? data : { ok: false as const, errorCode: "unknown_error" as const, message: "โหลดข้อมูลสต๊อกไม่สำเร็จ กรุณาลองใหม่", retryable: true };
+        setStockLoadError(failure);
+        setStockDataStale(hasSuccessfulStockLoad);
+        return;
+      }
       setVehicles(data.vehicles);
-      if (data.warning) setError(`${data.warning} - ถ้าเพิ่งเพิ่มฟีเจอร์นี้ ต้อง deploy Apps Script เวอร์ชันใหม่ก่อน`);
-      else setMessage(`โหลดสต็อก ${data.total.toLocaleString("th-TH")} คันแล้ว`);
+      setHasSuccessfulStockLoad(true);
+      setStockDataStale(false);
+      setLastSuccessfulLoadAt(new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }));
+      setMessage(`โหลดสต๊อก ${data.total.toLocaleString("th-TH")} คันแล้ว`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "โหลดสต็อกไม่สำเร็จ");
+      setStockLoadError({ ok: false, errorCode: "network_error", message: "เชื่อมต่อข้อมูลสต๊อกไม่สำเร็จ กรุณาลองใหม่", retryable: true });
+      setStockDataStale(hasSuccessfulStockLoad);
     } finally {
       setLoading(false);
     }
@@ -1505,6 +1535,43 @@ export default function StockExportPage() {
 
   return (
     <NativeAppShell className="max-w-5xl pb-28">
+      <div
+        className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm ${
+          stockLoadError
+            ? hasSuccessfulStockLoad ? "border-amber-400/40 bg-amber-950/30 text-amber-100" : "border-red-400/40 bg-red-950/30 text-red-100"
+            : loading ? "border-sky-400/30 bg-sky-950/25 text-sky-100" : "border-brand/30 bg-green-950/20 text-green-100"
+        }`}
+        aria-live="polite"
+        data-stock-state={stockLoadError ? hasSuccessfulStockLoad ? "stale" : "error" : loading ? stockLoadMode : "ready"}
+      >
+        <div className="flex min-w-0 items-start gap-2">
+          {loading ? <Loader2 size={18} className="mt-0.5 shrink-0 animate-spin" /> : stockLoadError ? <AlertTriangle size={18} className="mt-0.5 shrink-0" /> : <CheckCircle2 size={18} className="mt-0.5 shrink-0" />}
+          <div>
+            <p className="font-semibold">
+              {loading
+                ? hasSuccessfulStockLoad ? stockLoadMode === "retry" ? "กำลังลองใหม่..." : "กำลังอัปเดต..." : "กำลังโหลดข้อมูลสต๊อก..."
+                : stockLoadError
+                  ? hasSuccessfulStockLoad ? "อัปเดตข้อมูลล่าสุดไม่สำเร็จ ข้อมูลที่แสดงยังเป็นชุดก่อนหน้า" : "โหลดข้อมูลสต๊อกไม่สำเร็จ"
+                  : "ข้อมูลสต๊อกพร้อมใช้งาน"}
+            </p>
+            {stockLoadError ? <p className="mt-0.5 text-xs opacity-85">{stockLoadError.message}</p> : null}
+            {stockDataStale ? <p className="mt-1 text-xs font-medium">ข้อมูลอาจไม่ใช่ล่าสุด{lastSuccessfulLoadAt ? ` · อัปเดตล่าสุด ${lastSuccessfulLoadAt}` : ""}</p> : null}
+            {!loading && !stockLoadError && lastSuccessfulLoadAt ? <p className="mt-0.5 text-xs opacity-75">อัปเดตล่าสุด {lastSuccessfulLoadAt}</p> : null}
+          </div>
+        </div>
+        {!stockLoadError || stockLoadError.retryable ? (
+          <NativeButton
+            type="button"
+            variant="secondary"
+            onClick={() => loadStock(stockLoadError ? "retry" : "refresh")}
+            disabled={loading}
+            className="min-h-11 shrink-0 px-4"
+          >
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+            {loading ? stockLoadMode === "retry" ? "กำลังลองใหม่..." : stockLoadMode === "initial" ? "กำลังโหลด..." : "กำลังอัปเดต..." : stockLoadError ? "ลองใหม่" : "อัปเดตข้อมูล"}
+          </NativeButton>
+        ) : null}
+      </div>
       {(message || error) && (
         <div
           className={`mb-4 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${
@@ -1522,10 +1589,10 @@ export default function StockExportPage() {
             <p className="text-[13px] font-bold uppercase tracking-[0.14em] text-brand/90">สร้างรูปสต็อก</p>
             <h2 className="mt-1 text-[34px] font-black leading-tight text-white">พร้อมส่งลูกค้า</h2>
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-2xl border border-white/10 bg-[#050816]/70 px-3 py-3"><p className="text-[13px] font-semibold text-soft">ทั้งหมด</p><p className="mt-1 text-base font-black text-white">{sortedVehicles.length.toLocaleString("th-TH")} คัน</p></div>
-              <div className="rounded-2xl border border-white/10 bg-[#050816]/70 px-3 py-3"><p className="text-[13px] font-semibold text-soft">ที่เลือก</p><p className="mt-1 text-base font-black text-white">{exportVehicles.length.toLocaleString("th-TH")} คัน</p></div>
-              <div className="rounded-2xl border border-white/10 bg-[#050816]/70 px-3 py-3"><p className="text-[13px] font-semibold text-soft">กลุ่ม</p><p className="mt-1 text-base font-black text-white">{exportGroups.length.toLocaleString("th-TH")} กลุ่ม</p></div>
-              <div className="rounded-2xl border border-white/10 bg-[#050816]/70 px-3 py-3"><p className="text-[13px] font-semibold text-soft">หน้า</p><p className="mt-1 text-base font-black text-white">{exportPageCount.toLocaleString("th-TH")} หน้า</p></div>
+              <div className="rounded-2xl border border-white/10 bg-[#050816]/70 px-3 py-3"><p className="text-[13px] font-semibold text-soft">ทั้งหมด</p><p className="mt-1 text-base font-black text-white">{hasSuccessfulStockLoad ? `${sortedVehicles.length.toLocaleString("th-TH")} คัน` : "—"}</p></div>
+              <div className="rounded-2xl border border-white/10 bg-[#050816]/70 px-3 py-3"><p className="text-[13px] font-semibold text-soft">ที่เลือก</p><p className="mt-1 text-base font-black text-white">{hasSuccessfulStockLoad ? `${exportVehicles.length.toLocaleString("th-TH")} คัน` : "—"}</p></div>
+              <div className="rounded-2xl border border-white/10 bg-[#050816]/70 px-3 py-3"><p className="text-[13px] font-semibold text-soft">กลุ่ม</p><p className="mt-1 text-base font-black text-white">{hasSuccessfulStockLoad ? `${exportGroups.length.toLocaleString("th-TH")} กลุ่ม` : "—"}</p></div>
+              <div className="rounded-2xl border border-white/10 bg-[#050816]/70 px-3 py-3"><p className="text-[13px] font-semibold text-soft">หน้า</p><p className="mt-1 text-base font-black text-white">{hasSuccessfulStockLoad ? `${exportPageCount.toLocaleString("th-TH")} หน้า` : "—"}</p></div>
             </div>
           </NativeCard>
           <NativeCard>
@@ -2013,7 +2080,7 @@ export default function StockExportPage() {
                   })
                 ) : (
                   <div className="rounded-lg border border-line bg-panel p-6 text-center text-soft sm:col-span-2 xl:col-span-3">
-                    ไม่พบสต็อกตามเงื่อนไข
+                    {hasSuccessfulStockLoad ? "ไม่พบสต๊อกตามเงื่อนไข" : "ยังไม่มีข้อมูลสต๊อกที่โหลดสำเร็จ"}
                   </div>
                 )}
               </div>

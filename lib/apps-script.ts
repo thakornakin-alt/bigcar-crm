@@ -76,10 +76,35 @@ type AppsScriptResponse<T> =
       error?: string;
     };
 
+export type AppsScriptErrorCode =
+  | "timeout"
+  | "network_error"
+  | "upstream_http_error"
+  | "invalid_response"
+  | "configuration_error"
+  | "apps_script_action_missing"
+  | "unknown_error";
+
+export class AppsScriptError extends Error {
+  readonly code: AppsScriptErrorCode;
+  readonly status?: number;
+
+  constructor(
+    code: AppsScriptErrorCode,
+    message: string,
+    status?: number
+  ) {
+    super(message);
+    this.name = "AppsScriptError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
 function getAppsScriptUrl() {
   const url = process.env.GOOGLE_APPS_SCRIPT_URL;
   if (!url) {
-    throw new Error("Missing environment variable: GOOGLE_APPS_SCRIPT_URL");
+    throw new AppsScriptError("configuration_error", "Missing environment variable: GOOGLE_APPS_SCRIPT_URL");
   }
   return url;
 }
@@ -118,7 +143,10 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 1500
       signal: controller.signal
     });
   } catch (error) {
-    throw new Error(appsScriptConnectionErrorMessage(error));
+    const message = error instanceof Error ? error.message : String(error || "");
+    const code = (error as { code?: string } | null)?.code || "";
+    const timedOut = controller.signal.aborted || error instanceof DOMException && error.name === "AbortError" || /abort|timeout/i.test(message) || code === "ETIMEDOUT" || code === "ABORT_ERR";
+    throw new AppsScriptError(timedOut ? "timeout" : "network_error", appsScriptConnectionErrorMessage(error));
   } finally {
     clearTimeout(timer);
   }
@@ -187,15 +215,17 @@ async function callAppsScript<T>(action: AppsScriptAction, payload: Record<strin
   try {
     data = JSON.parse(text) as AppsScriptResponse<T>;
   } catch {
-    throw new Error("Apps Script returned an invalid JSON response");
+    throw new AppsScriptError("invalid_response", "Apps Script returned an invalid JSON response");
   }
 
   if (!response.ok) {
-    throw new Error("Apps Script request failed");
+    throw new AppsScriptError("upstream_http_error", "Apps Script request failed", response.status);
   }
 
   if (data.ok !== true) {
-    throw new Error(data.error || "Apps Script request failed");
+    const message = data.error || "Apps Script request failed";
+    const actionMissing = /unknown action|action.*(?:missing|not found|unsupported)|ไม่รู้จัก.*action/i.test(message);
+    throw new AppsScriptError(actionMissing ? "apps_script_action_missing" : "unknown_error", message);
   }
 
   return data;

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { listStockVehicles } from "@/lib/apps-script";
 import type { StockVehicle } from "@/lib/types";
 import { mergeStockExtraFields } from "@/lib/stock-extra-fields";
+import { readStockWithBoundedRetry, StockReadFailure, stockReadUserMessage, classifyStockReadError, isRetryableStockReadError } from "@/lib/stock/stock-read-reliability";
 
 export const dynamic = "force-dynamic";
 
@@ -34,24 +35,37 @@ function normalizeStockVehicle(vehicle: StockVehicle) {
 }
 
 export async function GET(request: Request) {
+  const requestStartedAt = Date.now();
   try {
     const { searchParams } = new URL(request.url);
     const query = String(searchParams.get("query") || "").trim();
     const limit = Number(searchParams.get("limit") || 250);
-    const data = await listStockVehicles({ query, limit });
+    const { value: data, meta } = await readStockWithBoundedRetry(() => listStockVehicles({ query, limit }));
     const vehicles = await mergeStockExtraFields(data.vehicles || []);
+    const durationMs = Date.now() - requestStartedAt;
+    console.info("[stock-list-read] success", { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts, vehicleCount: vehicles.length });
     return NextResponse.json({
       ...data,
-      vehicles: vehicles.map(normalizeStockVehicle)
+      ok: true,
+      vehicles: vehicles.map(normalizeStockVehicle),
+      meta: { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts }
     });
   } catch (error) {
+    const failure = error instanceof StockReadFailure ? error : null;
+    const errorCode = failure?.code || classifyStockReadError(error);
+    const retryable = failure?.retryable ?? isRetryableStockReadError(errorCode);
+    const durationMs = Date.now() - requestStartedAt;
+    const meta = failure?.meta || { attempts: 1, attemptDurationsMs: [durationMs], appsScriptDurationMs: durationMs };
+    console.error("[stock-list-read] failure", { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts, errorCode });
     return NextResponse.json(
       {
-        vehicles: [],
-        total: 0,
-        warning: error instanceof Error ? error.message : "Unable to load stock"
+        ok: false,
+        errorCode,
+        message: stockReadUserMessage(errorCode),
+        retryable,
+        meta: { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts }
       },
-      { status: 200 }
+      { status: retryable ? 503 : errorCode === "configuration_error" ? 500 : 502 }
     );
   }
 }
