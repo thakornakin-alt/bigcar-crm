@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { renderBookingReport } from "@/lib/booking-report";
-import { lookupBookingListCommissionGroup, saveBookingReport } from "@/lib/apps-script";
+import { checkBookingReportDuplicate, lookupBookingListCommissionGroup, saveBookingReport } from "@/lib/apps-script";
 import { upsertBookingDeliveryFromBookingReport } from "@/lib/booking-delivery";
 import { saveBookingReportAndMaster } from "@/lib/booking-report-persistence";
 import type { BookingReportInput, BuyerType } from "@/lib/types";
@@ -9,6 +9,7 @@ import { RequestAuthError, requireWritableUser } from "@/lib/request-user";
 import { getRddFeatureFlags } from "@/lib/feature-flags";
 import { commissionGroupCaptureFromLookup, resolveAuthenticatedSalespersonCapture, type CommissionGroupLookupResult } from "@/lib/commission-canonical-capture";
 import { QaSyntheticCreateError, resolveQaSyntheticCreateMetadata } from "@/lib/qa-synthetic-create";
+import { createBookingRequestId } from "@/lib/booking-report-duplicate";
 
 export const dynamic = "force-dynamic";
 
@@ -56,14 +57,19 @@ function cleanReport(body: Partial<BookingReportInput>): BookingReportInput {
 export async function POST(request: Request) {
   try {
     const actor = requireWritableUser();
-    const body = await request.json() as Partial<BookingReportInput> & {
+    const payload = await request.json() as Partial<BookingReportInput> & {
+      report?: Partial<BookingReportInput>;
+      requestId?: unknown;
+      confirmationToken?: unknown;
+      checkOnly?: unknown;
       qaCreateMode?: unknown;
       qaTestMarker?: unknown;
       qaTestRecord?: unknown;
       excludeFromMetrics?: unknown;
       isCounted?: unknown;
     };
-    const qaSynthetic = resolveQaSyntheticCreateMetadata(actor, body);
+    const body = (payload.report && typeof payload.report === "object" ? payload.report : payload) as Partial<BookingReportInput>;
+    const qaSynthetic = resolveQaSyntheticCreateMetadata(actor, { ...payload, ...body });
     const input = cleanReport(body);
     const salespersonCapture = resolveAuthenticatedSalespersonCapture({
       submittedSalespersonUserId: body.salespersonUserId,
@@ -75,9 +81,44 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Booking date, customer name, plate and sale are required" }, { status: 400 });
     }
 
+    const requestId = String(payload.requestId || "").trim() || createBookingRequestId();
+    if (payload.checkOnly === true) {
+      const duplicate = await checkBookingReportDuplicate(input, actor.id);
+      if (duplicate.requiresConfirmation) {
+        return NextResponse.json({
+          status: "duplicate_booking_confirmation_required",
+          normalizedPlate: duplicate.normalizedPlate,
+          customerIdentityType: duplicate.customerIdentityType,
+          matches: duplicate.matches,
+          confirmationToken: duplicate.confirmationToken,
+          requestId
+        }, { status: 409 });
+      }
+      return NextResponse.json({ status: "ok_to_create", requestId });
+    }
+
     const commissionLookupState: { result: CommissionGroupLookupResult | null } = { result: null };
     const result = await saveBookingReportAndMaster(input, {
-      saveReport: saveBookingReport,
+      saveReport: async (report) => {
+        try {
+          return await saveBookingReport(report, {
+            requestId,
+            confirmationToken: String(payload.confirmationToken || ""),
+            actorId: actor.id
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "";
+          const marker = "BOOKING_REPORT_DUPLICATE_CONFIRMATION_REQUIRED:";
+          const markerIndex = message.indexOf(marker);
+          if (markerIndex >= 0) {
+            const duplicate = JSON.parse(message.slice(markerIndex + marker.length));
+            throw new BookingDuplicateRequiredError({ ...duplicate, requestId });
+          }
+          if (message.includes("BOOKING_REPORT_IDEMPOTENCY_CONFLICT")) throw new BookingIdempotencyConflictError();
+          if (message.includes("BOOKING_REPORT_DUPLICATE_TOKEN_INVALID")) throw new BookingConfirmationInvalidError();
+          throw error;
+        }
+      },
       upsertMaster: async (report) => {
         try {
           commissionLookupState.result = await lookupBookingListCommissionGroup({
@@ -138,6 +179,15 @@ export async function POST(request: Request) {
     }
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
+    if (error instanceof BookingDuplicateRequiredError) {
+      return NextResponse.json({ status: "duplicate_booking_confirmation_required", ...error.detail }, { status: 409 });
+    }
+    if (error instanceof BookingIdempotencyConflictError) {
+      return NextResponse.json({ status: "idempotency_conflict", error: "คำขอบันทึกนี้มีข้อมูลไม่ตรงกับครั้งก่อน" }, { status: 409 });
+    }
+    if (error instanceof BookingConfirmationInvalidError) {
+      return NextResponse.json({ status: "duplicate_confirmation_invalid", error: "การยืนยันหมดอายุหรือข้อมูลมีการเปลี่ยนแปลง กรุณายืนยันใหม่" }, { status: 409 });
+    }
     if (error instanceof RequestAuthError || error instanceof QaSyntheticCreateError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
@@ -147,3 +197,12 @@ export async function POST(request: Request) {
     );
   }
 }
+
+class BookingDuplicateRequiredError extends Error {
+  constructor(readonly detail: Record<string, unknown>) {
+    super("Booking duplicate confirmation required");
+  }
+}
+
+class BookingIdempotencyConflictError extends Error {}
+class BookingConfirmationInvalidError extends Error {}

@@ -25,6 +25,20 @@ import { useSalesProfile } from "@/lib/use-sales-profile";
 import { appendSalesProfileSignature } from "@/lib/sales-profile-signature";
 import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, DriveAttachment, DriveUploadResult, LineGroup, StockVehicle } from "@/lib/types";
 
+type BookingDuplicatePrompt = {
+  status: "duplicate_booking_confirmation_required";
+  matches: Array<{
+    bookingReportId: string;
+    bookingDate: string;
+    customerName: string;
+    plate: string;
+    salespersonDisplayName: string;
+    status: string;
+  }>;
+  confirmationToken: string;
+  requestId: string;
+};
+
 const saleEmails: Record<string, string> = {
   "ฐากร": "thakornakin@gmail.com",
   "กันตา": "kanta.deepal@gmail.com"
@@ -196,6 +210,8 @@ export default function BookingReportsPage() {
   const [lineGroups, setLineGroups] = useState<LineGroup[]>([]);
   const [selectedLineGroupId, setSelectedLineGroupId] = useState("");
   const [sendingLine, setSendingLine] = useState(false);
+  const [duplicatePrompt, setDuplicatePrompt] = useState<BookingDuplicatePrompt | null>(null);
+  const [pendingCreate, setPendingCreate] = useState<{ report: BookingReportInput; requestId: string } | null>(null);
   const reportText = useMemo(
     () => appendSalesProfileSignature(renderBookingReport({ ...form, reportText: "" }), salesProfile),
     [form, salesProfile]
@@ -416,17 +432,24 @@ export default function BookingReportsPage() {
     return data.result;
   }
 
-  async function saveDraft(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaving(true);
-    setError("");
-    setMessage("");
-    setUploadProgress("");
-    setDraftUrl("");
+  function currentCreatePayload(): BookingReportInput {
+    return {
+      ...form,
+      emailSubject: buildDefaultBookingSubject(form),
+      year: normalizeCarYear(form.year),
+      attachments: buildAttachments(),
+      reportText,
+      salespersonUserId: salesProfile && form.saleName === salesProfile.firstName ? salesProfile.id : undefined,
+      salespersonDisplayName: salesProfile && form.saleName === salesProfile.firstName
+        ? [salesProfile.firstName, salesProfile.lastName].filter(Boolean).join(" ")
+        : undefined,
+      status: "draft"
+    };
+  }
 
+  async function createBookingReport(payload: BookingReportInput, requestId: string, confirmationToken = "") {
     let uploadResult: DriveUploadResult = { folderUrl: driveFolderUrl, attachments: [] };
     let uploadWarning = "";
-
     try {
       uploadResult = await uploadBookingFiles();
     } catch (uploadError) {
@@ -435,29 +458,21 @@ export default function BookingReportsPage() {
       setUploading(false);
     }
 
-    const payload: BookingReportInput = {
-      ...form,
-      emailSubject: buildDefaultBookingSubject(form),
-      year: normalizeCarYear(form.year),
+    const savedPayload: BookingReportInput = {
+      ...payload,
       attachments: uploadResult.attachments.length
         ? uploadResult.attachments
             .filter((attachment) => isBookingAttachmentCategory(attachment.category))
             .map((attachment) => ({ ...attachment, category: attachment.category as BookingAttachmentCategory }))
-        : buildAttachments(),
-      reportText,
-      salespersonUserId: salesProfile && form.saleName === salesProfile.firstName ? salesProfile.id : undefined,
-      salespersonDisplayName: salesProfile && form.saleName === salesProfile.firstName
-        ? [salesProfile.firstName, salesProfile.lastName].filter(Boolean).join(" ")
-        : undefined,
-      status: "draft"
+        : payload.attachments
     };
 
     window.localStorage.setItem(
       "bigcar-booking-email",
       JSON.stringify({
-        emailTo: payload.emailTo,
-        emailCc: payload.emailCc,
-        emailBcc: payload.emailBcc
+        emailTo: savedPayload.emailTo,
+        emailCc: savedPayload.emailCc,
+        emailBcc: savedPayload.emailBcc
       })
     );
 
@@ -468,9 +483,11 @@ export default function BookingReportsPage() {
         warning?: string;
       }>("/api/booking-reports", {
         method: "POST",
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ report: savedPayload, requestId, confirmationToken })
       });
       setSavedReportId(data.report.id);
+      setDuplicatePrompt(null);
+      setPendingCreate(null);
       setUploadedAttachments(uploadResult.attachments);
       if (data.partialSuccess) {
         setError(data.warning || "บันทึก Booking Report แล้ว แต่ Booking Delivery Master ไม่สำเร็จ");
@@ -480,12 +497,56 @@ export default function BookingReportsPage() {
         setMessage(uploadResult.attachments.length ? "อัปโหลดรูปเข้า Google Drive และบันทึก Draft รายงานจองแล้ว" : "บันทึก Draft ลง Google Sheets แล้ว ยังไม่มีการส่ง Email/LINE จริง");
       }
     } catch (err) {
-      window.localStorage.setItem("bigcar-booking-draft-fallback", JSON.stringify(payload));
+      window.localStorage.setItem("bigcar-booking-draft-fallback", JSON.stringify(savedPayload));
       setError(
         err instanceof Error
           ? `${err.message} - บันทึก draft สำรองในเครื่องนี้แล้ว`
           : "บันทึก Google Sheets ไม่สำเร็จ - บันทึก draft สำรองในเครื่องนี้แล้ว"
       );
+    }
+  }
+
+  async function saveDraft(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    setMessage("");
+    setUploadProgress("");
+    setDraftUrl("");
+    try {
+      const payload = currentCreatePayload();
+      const requestId = crypto.randomUUID();
+      const response = await fetch("/api/booking-reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ report: payload, requestId, checkOnly: true })
+      });
+      const data = await response.json();
+      if (response.status === 409 && data.status === "duplicate_booking_confirmation_required") {
+        setPendingCreate({ report: payload, requestId: data.requestId || requestId });
+        setDuplicatePrompt(data as BookingDuplicatePrompt);
+        return;
+      }
+      if (!response.ok) throw new Error(data.error || "ตรวจสอบรายงานจองเดิมไม่สำเร็จ");
+      await createBookingReport(payload, requestId);
+    } catch (err) {
+      const payload = currentCreatePayload();
+      window.localStorage.setItem("bigcar-booking-draft-fallback", JSON.stringify(payload));
+      setError(err instanceof Error ? `${err.message} - บันทึก draft สำรองในเครื่องนี้แล้ว` : "บันทึกไม่สำเร็จ");
+    } finally {
+      setUploading(false);
+      setSaving(false);
+    }
+  }
+
+  async function confirmDuplicateCreate() {
+    if (!duplicatePrompt || !pendingCreate) return;
+    setSaving(true);
+    setError("");
+    try {
+      await createBookingReport(pendingCreate.report, pendingCreate.requestId, duplicatePrompt.confirmationToken);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "สร้างรายงานจองใหม่ไม่สำเร็จ");
     } finally {
       setUploading(false);
       setSaving(false);
@@ -889,6 +950,35 @@ export default function BookingReportsPage() {
           </SectionCard>
         </aside>
       </form>
+
+      {duplicatePrompt && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-3 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="duplicate-booking-title">
+          <section className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-xl border border-brand/40 bg-[#141821] p-4 shadow-2xl">
+            <h2 id="duplicate-booking-title" className="text-lg font-bold text-white">พบลูกค้าและทะเบียนนี้ในรายงานจองเดิม</h2>
+            <div className="mt-3 rounded-lg border border-line bg-[#0b0d11] p-3 text-sm">
+              <p className="font-semibold text-white">ลูกค้า: {pendingCreate?.report.customerName || form.customerName}</p>
+              <p className="mt-1 text-soft">ทะเบียน: {pendingCreate?.report.plate || form.plate}</p>
+              <p className="mt-1 text-soft">พบรายการเดิม {duplicatePrompt.matches.length} รายการ</p>
+            </div>
+            <div className="mt-3 space-y-2">
+              {duplicatePrompt.matches.map((match) => (
+                <div key={match.bookingReportId} className="rounded-lg border border-line p-3 text-sm">
+                  <p className="font-semibold text-white">{match.bookingDate || "ไม่ระบุวันที่"} · {match.customerName}</p>
+                  <p className="mt-1 text-xs text-soft">เซลส์: {match.salespersonDisplayName || "-"} · สถานะ: {match.status || "-"}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-sm leading-6 text-amber-50">หากเป็นการจองครั้งใหม่ สามารถสร้างรายงานจองใหม่ได้<br />รายงานเดิมจะไม่ถูกแก้ไข</p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              <a href={`/report-history?q=${encodeURIComponent(duplicatePrompt.matches[0]?.bookingReportId || "")}`} className="flex min-h-11 items-center justify-center rounded-lg border border-line px-3 text-sm font-semibold text-white">ดูรายงานเดิม</a>
+              <button type="button" onClick={() => { setDuplicatePrompt(null); setPendingCreate(null); }} disabled={saving} className="min-h-11 rounded-lg border border-line px-3 font-semibold text-white">ยกเลิก</button>
+              <button type="button" onClick={confirmDuplicateCreate} disabled={saving} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-3 font-bold text-ink disabled:opacity-60">
+                {saving ? <Loader2 size={18} className="animate-spin" /> : null}{saving ? "กำลังบันทึก..." : "สร้างรายงานจองใหม่"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </NativeAppShell>
   );
 }

@@ -257,8 +257,26 @@ export async function listInterestRates() {
   return data.rates;
 }
 
-export async function saveBookingReport(input: BookingReportInput) {
-  const data = await callAppsScript<{ report: BookingReport }>("saveBookingReport", { report: input });
+export async function checkBookingReportDuplicate(input: BookingReportInput, actorId: string) {
+  const data = await callAppsScript<{ report: import("@/lib/booking-report-duplicate").BookingDuplicateCheck }>(
+    "saveBookingReport",
+    { report: { ...input, _checkOnly: true, _actorId: actorId } }
+  );
+  return data.report;
+}
+
+export async function saveBookingReport(
+  input: BookingReportInput,
+  options: { requestId: string; confirmationToken?: string; actorId: string }
+) {
+  const data = await callAppsScript<{ report: BookingReport }>("saveBookingReport", {
+    report: {
+      ...input,
+      _requestId: options.requestId,
+      _confirmationToken: options.confirmationToken || "",
+      _actorId: options.actorId
+    }
+  });
   return data.report;
 }
 
