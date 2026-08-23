@@ -50,9 +50,11 @@ await page.route("**/api/documents-v2/override*", async (route) => {
 });
 
 async function selectTemplate(templateId) {
-  await page.locator("select").nth(0).selectOption(templateId);
-  await page.locator("select").nth(1).locator(`option[value="${reportA.id}"]`).waitFor({ state: "attached" });
-  if (await page.locator("select").nth(1).inputValue() !== reportA.id) await page.locator("select").nth(1).selectOption(reportA.id);
+  await page.getByTestId("documents-report-selector").locator(`option[value="${reportA.id}"]`).waitFor({ state: "attached" });
+  if (await page.getByTestId("documents-report-selector").inputValue() !== reportA.id) await page.getByTestId("documents-report-selector").selectOption(reportA.id);
+  await page.getByText(/● ข้อมูลพร้อมแล้ว/).waitFor({ timeout: 30000 });
+  await page.getByTestId("documents-template-selector").selectOption(templateId);
+  await page.getByText(/กำลังสร้างตัวอย่างเอกสาร/).first().waitFor({ timeout: 30000 });
   await page.getByText(/● ข้อมูลพร้อมแล้ว/).waitFor({ timeout: 30000 });
 }
 

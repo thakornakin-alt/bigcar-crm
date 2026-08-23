@@ -147,6 +147,60 @@ button:disabled {
   border-color: rgba(214, 182, 108, 0.7) !important;
 }
 
+/* Documents V2 shares the audited BIG CAR website palette while retaining CRM density. */
+.documents-bigcar-brand {
+  --documents-brand-gold: #d6b66c;
+  --documents-brand-gold-soft: #f6df9d;
+  background: #07080a;
+  box-shadow: 0 0 0 100vmax #07080a;
+  clip-path: inset(0 -100vmax);
+}
+
+.documents-bigcar-brand .documents-brand-surface {
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.3);
+}
+
+.documents-bigcar-brand .documents-brand-kicker,
+.documents-bigcar-brand .documents-step-label {
+  color: var(--documents-brand-gold-soft);
+}
+
+.documents-bigcar-brand .documents-brand-input {
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.documents-bigcar-brand .documents-brand-input:focus {
+  border-color: rgba(214, 182, 108, 0.72);
+  box-shadow: 0 0 0 3px rgba(214, 182, 108, 0.12);
+}
+
+.documents-bigcar-brand input:focus,
+.documents-bigcar-brand textarea:focus,
+.documents-bigcar-brand select:focus {
+  border-color: rgba(214, 182, 108, 0.72);
+  outline: none;
+}
+
+.documents-bigcar-brand .documents-case-summary {
+  background: linear-gradient(135deg, rgba(214, 182, 108, 0.1), rgba(255, 255, 255, 0.025));
+}
+
+.documents-bigcar-brand button[class*="bg-emerald-500"],
+.documents-bigcar-brand a[class*="bg-emerald-500"] {
+  background-color: var(--documents-brand-gold) !important;
+  color: #17120a !important;
+}
+
+.documents-bigcar-brand [class*="text-emerald-300"],
+.documents-bigcar-brand [class*="text-emerald-100"] {
+  color: var(--documents-brand-gold-soft) !important;
+}
+
+.documents-bigcar-brand [class*="border-emerald"] {
+  border-color: rgba(214, 182, 108, 0.48) !important;
+}
+
 @media (max-width: 640px) {
   .rdd-crm-shell > nav {
     border-radius: 0 0 1rem 1rem;

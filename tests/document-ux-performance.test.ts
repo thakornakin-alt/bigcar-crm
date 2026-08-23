@@ -8,12 +8,34 @@ const routePath = new URL("../app/api/documents-v2/generate/route.ts", import.me
 test("Documents V2 automatically resolves, loads override, and generates the latest report/template", async () => {
   const ui = await readFile(uiPath, "utf8");
   assert.match(ui, /Promise\.all\(\[/);
-  assert.match(ui, /fetchResolvedData\(selectedReport, requestTemplateId, controller\.signal\)/);
+  assert.match(ui, /resolvedReportSnapshotRef\.current\?\.reportId === requestReportId/);
+  assert.match(ui, /fetchResolvedData\(selectedReport, controller\.signal\)/);
   assert.match(ui, /documents-v2\/override\?templateId=/);
   assert.match(ui, /pendingReportGenerationRef\.current = \{ token, data: effectiveData, sourceKey \}/);
   assert.match(ui, /refreshDocumentPreviews\(true, pending\.data, pending\.token, pending\.sourceKey\)/);
   assert.match(ui, /pending\.token !== reportRequestSeqRef\.current/);
   assert.match(ui, /requestReportId !== selectedReportId \|\| requestTemplateId !== templateId/);
+});
+
+test("same-report template switches reuse the resolved report snapshot", async () => {
+  const ui = await readFile(uiPath, "utf8");
+  assert.match(ui, /cachedReportSnapshot\s*\? Promise\.resolve/);
+  assert.match(ui, /resolvedReportSnapshotRef\.current = \{/);
+  assert.match(ui, /reportId: requestReportId/);
+  assert.match(ui, /resolvedReportSnapshotRef\.current = null;\s*setSelectedReportId/);
+  assert.doesNotMatch(ui, /body: JSON\.stringify\(\{ report, templateId:/);
+});
+
+test("report-first UI uses stable report selection and shows case context before template selection", async () => {
+  const ui = await readFile(uiPath, "utf8");
+  const reportStep = ui.indexOf("ขั้นตอนที่ 1");
+  const templateStep = ui.indexOf("ขั้นตอนที่ 2");
+  assert.ok(reportStep >= 0 && templateStep > reportStep);
+  assert.match(ui, /data-testid="documents-report-selector"/);
+  assert.match(ui, /data-testid="documents-template-selector"/);
+  assert.match(ui, /documents-case-summary/);
+  assert.match(ui, /selectedReport\.customerName/);
+  assert.match(ui, /selectedReport\.plate/);
 });
 
 test("ready state is published only after current Preview generation succeeds", async () => {
@@ -51,4 +73,3 @@ test("normal action hierarchy keeps automatic Preview and manual refresh as retr
   assert.doesNotMatch(ui, />DocumentGeneratorV2</);
   assert.doesNotMatch(ui, /<label[^>]*>Template<\/label>/);
 });
-

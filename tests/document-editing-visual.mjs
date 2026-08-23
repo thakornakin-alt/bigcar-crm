@@ -50,8 +50,8 @@ await page.route("**/api/documents-v2/override*", async (route) => {
 });
 
 async function selectFixture() {
-  await page.locator("select").nth(0).selectOption("temporary-receipt");
-  await page.locator("select").nth(1).selectOption("REPORT-DOC-FIXTURE");
+  await page.getByTestId("documents-template-selector").selectOption("temporary-receipt");
+  await page.getByTestId("documents-report-selector").selectOption("REPORT-DOC-FIXTURE");
 }
 
 await page.goto(`${baseUrl}/documents-v2`, { waitUntil: "networkidle" });

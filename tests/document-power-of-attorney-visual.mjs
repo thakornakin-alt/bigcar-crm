@@ -57,9 +57,11 @@ await page.route("**/api/documents-v2/override*", async (route) => {
 });
 
 async function selectPowerOfAttorney(reportId = reportA.id) {
-  await page.locator("select").nth(0).selectOption("power-of-attorney");
-  await page.locator(`select`).nth(1).locator(`option[value="${reportId}"]`).waitFor({ state: "attached" });
-  if (await page.locator("select").nth(1).inputValue() !== reportId) await page.locator("select").nth(1).selectOption(reportId);
+  await page.getByTestId("documents-report-selector").locator(`option[value="${reportId}"]`).waitFor({ state: "attached" });
+  if (await page.getByTestId("documents-report-selector").inputValue() !== reportId) await page.getByTestId("documents-report-selector").selectOption(reportId);
+  await page.getByText(/● ข้อมูลพร้อมแล้ว/).waitFor();
+  await page.getByTestId("documents-template-selector").selectOption("power-of-attorney");
+  await page.getByText(/กำลังสร้างตัวอย่างเอกสาร/).first().waitFor();
   await page.getByText(/● ข้อมูลพร้อมแล้ว/).waitFor();
 }
 
@@ -106,12 +108,12 @@ for (const [label, expected] of [["บ้านเลขที่", "98"], ["ห
 await page.getByRole("button", { name: "ยกเลิก", exact: true }).click();
 
 // Report B must not inherit report A's address override.
-await page.locator("select").nth(1).selectOption(reportB.id);
+await page.getByTestId("documents-report-selector").selectOption(reportB.id);
 await page.getByText(/● ข้อมูลพร้อมแล้ว/).waitFor();
 await page.getByRole("button", { name: "แก้ไขข้อมูลหนังสือมอบอำนาจ" }).click();
 if (await page.getByLabel("หมู่ที่", { exact: true }).inputValue()) throw new Error("Report A Moo leaked into report B");
 await page.getByRole("button", { name: "ยกเลิก", exact: true }).click();
-await page.locator("select").nth(1).selectOption(reportA.id);
+await page.getByTestId("documents-report-selector").selectOption(reportA.id);
 await page.getByText(/● ข้อมูลพร้อมแล้ว/).waitFor();
 
 const downloadPromise = page.waitForEvent("download");

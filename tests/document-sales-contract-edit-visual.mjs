@@ -103,12 +103,12 @@ await page.route("**/api/documents-v2/generate", async (route) => {
 });
 
 async function selectContractFixture() {
-  if (await page.locator("select").nth(0).inputValue() !== "contract-field") {
-    await page.locator("select").nth(0).selectOption("contract-field");
+  if (await page.getByTestId("documents-template-selector").inputValue() !== "contract-field") {
+    await page.getByTestId("documents-template-selector").selectOption("contract-field");
   }
-  await page.locator(`select`).nth(1).locator(`option[value="${report.id}"]`).waitFor({ state: "attached" });
-  if (await page.locator("select").nth(1).inputValue() !== report.id) {
-    await page.locator("select").nth(1).selectOption(report.id);
+  await page.getByTestId("documents-report-selector").locator(`option[value="${report.id}"]`).waitFor({ state: "attached" });
+  if (await page.getByTestId("documents-report-selector").inputValue() !== report.id) {
+    await page.getByTestId("documents-report-selector").selectOption(report.id);
   }
 }
 
@@ -195,7 +195,7 @@ if (await page.getByLabel("ชื่อผู้ซื้อ / นิติบ�
 // Report switches expose an immediate nearby loading state and never leak A into B.
 await page.getByRole("button", { name: "ยกเลิก", exact: true }).click();
 const reportBSwitchStartedAt = Date.now();
-await page.locator("select").nth(1).selectOption(reportB.id);
+await page.getByTestId("documents-report-selector").selectOption(reportB.id);
 await page.getByText("● กำลังโหลดข้อมูลรายงานขาย...").waitFor();
 if (!(await page.getByRole("button", { name: "แชร์/บันทึกรูป" }).isDisabled())) throw new Error("Share remained enabled while report B was loading");
 await page.screenshot({ path: `${outputDir}/report-loading-390.png`, fullPage: true });
@@ -206,9 +206,9 @@ if (await page.getByLabel("ชื่อผู้ซื้อ / นิติบ�
 await page.getByRole("button", { name: "ยกเลิก", exact: true }).click();
 
 // A -> B -> C resolves to C even though A and B are intentionally slower.
-await page.locator("select").nth(1).selectOption(report.id);
-await page.locator("select").nth(1).selectOption(reportB.id);
-await page.locator("select").nth(1).selectOption(reportC.id);
+await page.getByTestId("documents-report-selector").selectOption(report.id);
+await page.getByTestId("documents-report-selector").selectOption(reportB.id);
+await page.getByTestId("documents-report-selector").selectOption(reportC.id);
 await page.getByText(/● ข้อมูลพร้อมแล้ว/).waitFor();
 await page.waitForTimeout(500);
 await page.getByRole("button", { name: "แก้ไขข้อมูลสัญญา" }).click();

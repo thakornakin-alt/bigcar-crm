@@ -28,6 +28,12 @@ type FieldsDebug = {
   fieldNames: string[];
 };
 
+type ResolvedReportSnapshot = {
+  reportId: string;
+  data: ResolvedDocumentV2Data;
+  debug: DocumentV2ResolveDebug | null;
+};
+
 type TemporaryReceiptExtraStatus = "none" | "gift" | "charge";
 type TemporaryReceiptExtraData = {
   row3NetPriceNote: string;
@@ -515,7 +521,7 @@ export function DocumentGeneratorV2() {
   const [previewSourceKey, setPreviewSourceKey] = useState("");
   const [pngSourceKey, setPngSourceKey] = useState("");
   const [shareState, setShareState] = useState<"idle" | "preparing">("idle");
-  const [reportLoadState, setReportLoadState] = useState<"idle" | "loading-data" | "generating" | "ready" | "data-error" | "preview-error">("idle");
+  const [reportLoadState, setReportLoadState] = useState<"idle" | "loading-data" | "loading-template" | "generating" | "ready" | "data-error" | "preview-error">("idle");
   const [reportLoadMs, setReportLoadMs] = useState<number | null>(null);
   const [reportRetryNonce, setReportRetryNonce] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -551,6 +557,7 @@ export function DocumentGeneratorV2() {
     vehicleDeliveryExtras: VehicleDeliveryDocumentExtraData;
   } | null>(null);
   const reportRequestSeqRef = useRef(0);
+  const resolvedReportSnapshotRef = useRef<ResolvedReportSnapshot | null>(null);
   const reportLoadStartedAtRef = useRef(0);
   const pendingReportGenerationRef = useRef<{ token: number; data: ResolvedDocumentV2Data; sourceKey: string } | null>(null);
   const vehicleDeliveryIdCardCameraInputRef = useRef<HTMLInputElement | null>(null);
@@ -657,7 +664,7 @@ export function DocumentGeneratorV2() {
       return acc;
     }, 0);
   }, [mapping, rawReportData, sampleData]);
-  const reportSwitchBusy = reportLoadState === "loading-data" || reportLoadState === "generating";
+  const reportSwitchBusy = reportLoadState === "loading-data" || reportLoadState === "loading-template" || reportLoadState === "generating";
   const canRunGenerate = isTemplateReady && reportsLoaded && Boolean(selectedReport) && !resolvingData && !reportSwitchBusy;
   const currentPreviewReady = reportLoadState === "ready" && overrideState === "clean" && Boolean(previewUrl) && previewSourceKey.startsWith(`${templateId}::${selectedReportId}::`);
 
@@ -995,6 +1002,7 @@ export function DocumentGeneratorV2() {
       return typeOk || hasCore;
     });
     setReports(filtered);
+    resolvedReportSnapshotRef.current = null;
     setSelectedReportId(filtered[0]?.id || "");
     setPreviewUrl("");
     setPngUrl("");
@@ -1005,11 +1013,11 @@ export function DocumentGeneratorV2() {
     }
   }
 
-  async function fetchResolvedData(report: ReportHistoryItem, requestTemplateId: string, signal: AbortSignal) {
+  async function fetchResolvedData(report: ReportHistoryItem, signal: AbortSignal) {
     return api<{ ok: boolean; data: ResolvedDocumentV2Data; debug: DocumentV2ResolveDebug }>("/api/documents-v2/resolve-data", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ report, templateId: requestTemplateId }),
+      body: JSON.stringify({ report }),
       signal
     });
   }
@@ -1052,11 +1060,14 @@ export function DocumentGeneratorV2() {
     const controller = new AbortController();
     const requestReportId = selectedReportId;
     const requestTemplateId = templateId;
+    const cachedReportSnapshot = resolvedReportSnapshotRef.current?.reportId === requestReportId
+      ? resolvedReportSnapshotRef.current
+      : null;
     reportLoadStartedAtRef.current = performance.now();
     pendingReportGenerationRef.current = null;
     setReportLoadMs(null);
-    setReportLoadState("loading-data");
-    setResolvingData(true);
+    setReportLoadState(cachedReportSnapshot ? "loading-template" : "loading-data");
+    setResolvingData(!cachedReportSnapshot);
     setOverrideState("loading");
     setContractEditMode(false);
     setPowerOfAttorneyEditMode(false);
@@ -1065,8 +1076,10 @@ export function DocumentGeneratorV2() {
     setError("");
     setEditableTouched(false);
     setEditableData(null);
-    setResolvedData(null);
-    setResolveDebug(null);
+    if (!cachedReportSnapshot) {
+      setResolvedData(null);
+      setResolveDebug(null);
+    }
     savedOverrideRef.current = null;
     powerOfAttorneyTouchedRef.current = {};
     transportTransferTouchedRef.current = {};
@@ -1084,7 +1097,9 @@ export function DocumentGeneratorV2() {
     setPngSourceKey("");
 
     Promise.all([
-      fetchResolvedData(selectedReport, requestTemplateId, controller.signal),
+      cachedReportSnapshot
+        ? Promise.resolve({ ok: true, data: cachedReportSnapshot.data, debug: cachedReportSnapshot.debug })
+        : fetchResolvedData(selectedReport, controller.signal),
       api<{ ok: boolean; override: null | { data?: ResolvedDocumentV2Data; templateData?: Record<string, unknown> } }>(
         `/api/documents-v2/override?templateId=${encodeURIComponent(requestTemplateId)}&reportId=${encodeURIComponent(requestReportId)}`,
         { signal: controller.signal }
@@ -1101,6 +1116,11 @@ export function DocumentGeneratorV2() {
         vehicleDeliveryExtras: { ...DEFAULT_VEHICLE_DELIVERY_DOCUMENT_EXTRAS, ...(templateData.vehicleDeliveryExtras as Partial<VehicleDeliveryDocumentExtraData> || {}) }
       };
       const effectiveData = { ...(resolvedResponse.data || {}), ...(snapshot.data || {}) } as ResolvedDocumentV2Data;
+      resolvedReportSnapshotRef.current = {
+        reportId: requestReportId,
+        data: resolvedResponse.data || {},
+        debug: resolvedResponse.debug || null
+      };
       savedOverrideRef.current = snapshot;
       setResolvedData(resolvedResponse.data || null);
       setResolveDebug(resolvedResponse.debug || null);
@@ -1587,19 +1607,71 @@ export function DocumentGeneratorV2() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 px-3 py-4 text-white sm:px-5 sm:py-6">
-      <header className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#171b22] to-[#0d1015] px-4 py-4 shadow-xl shadow-black/20 sm:px-5">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">BIG CAR CRM</p>
+    <div className="documents-bigcar-brand mx-auto max-w-6xl space-y-4 px-3 py-4 text-white sm:px-5 sm:py-6">
+      <header className="documents-brand-surface rounded-2xl border border-white/10 px-4 py-4 sm:px-5">
+        <p className="documents-brand-kicker text-xs font-semibold uppercase tracking-[0.18em]">BIG CAR CRM</p>
         <h1 className="mt-1 text-2xl font-bold tracking-tight">เอกสาร</h1>
-        <p className="mt-1 text-sm text-gray-400">เลือกข้อมูลและประเภทเอกสาร ระบบจะสร้างตัวอย่างให้อัตโนมัติ</p>
+        <p className="mt-1 text-sm text-white/55">เลือกรายงานขายก่อน แล้วเลือกรูปแบบเอกสาร ระบบจะสร้างตัวอย่างให้อัตโนมัติ</p>
       </header>
       {error ? <div className="rounded-xl border border-red-500/40 bg-red-950/40 p-3 text-sm text-red-100">{error}</div> : null}
 
-      <div className="grid gap-3 md:grid-cols-2">
-      <div className="order-2 rounded-2xl border border-white/10 bg-[#12161c] p-4 shadow-lg shadow-black/10 md:order-2">
-        <label className="mb-2 block text-sm font-semibold text-gray-200">เลือกประเภทเอกสาร</label>
+      <div className="space-y-3">
+      <section className="documents-brand-surface rounded-2xl border border-white/10 p-4">
+        <p className="documents-step-label mb-1 text-[11px] font-bold uppercase tracking-[0.16em]">ขั้นตอนที่ 1</p>
+        <label className="mb-2 block text-sm font-semibold text-white">เลือกรายงานขาย</label>
+        <select data-testid="documents-report-selector" value={selectedReportId} onChange={(e) => {
+          if (e.target.value === selectedReportId) return;
+          if (overrideState === "dirty" && !window.confirm("มีการแก้ไขที่ยังไม่บันทึก ต้องการเปลี่ยนรายงานและละทิ้งการแก้ไขหรือไม่")) return;
+          setReportLoadState("loading-data");
+          setError("");
+          resolvedReportSnapshotRef.current = null;
+          setSelectedReportId(e.target.value);
+          setContractEditMode(false);
+          setPowerOfAttorneyEditMode(false);
+        }} className="documents-brand-input h-12 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm outline-none">
+          <option value="">-- เลือก --</option>
+          {reports.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.customerName || "ไม่ระบุ"} · {r.plate || "ไม่ระบุ"} · {r.createdAt ? new Date(r.createdAt).toLocaleDateString("th-TH") : "ไม่ระบุวันที่"} · {r.saleName || "ไม่ระบุเซลส์"}
+            </option>
+          ))}
+        </select>
+        {reportLoadState === "loading-data" ? <p className="mt-2 text-xs font-medium text-amber-200">● กำลังโหลดข้อมูลรายงานขาย...</p> : null}
+        {reportLoadState === "loading-template" || reportLoadState === "generating" ? <p className="mt-2 text-xs font-medium text-amber-200">● กำลังสร้างตัวอย่างเอกสาร...</p> : null}
+        {reportLoadState === "ready" ? <p className="mt-2 text-xs font-medium text-emerald-300">● ข้อมูลพร้อมแล้ว{settingsMode && reportLoadMs !== null ? ` · ${reportLoadMs} ms` : ""}</p> : null}
+        {reportLoadState === "data-error" ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-red-200">
+            <span>โหลดข้อมูลรายงานขายไม่สำเร็จ กรุณาลองใหม่</span>
+            <button type="button" onClick={() => { resolvedReportSnapshotRef.current = null; setReportRetryNonce((value) => value + 1); }} className="rounded border border-red-300/40 px-2 py-1">ลองใหม่</button>
+          </div>
+        ) : null}
+        {reportLoadState === "preview-error" ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-amber-200">
+            <span>ข้อมูลโหลดแล้ว แต่สร้างตัวอย่างเอกสารไม่สำเร็จ</span>
+            <button type="button" onClick={() => preview()} className="rounded border border-amber-300/40 px-2 py-1">อัปเดตเอกสาร</button>
+          </div>
+        ) : null}
+        {selectedReport ? (
+          <div className="documents-case-summary mt-3 grid gap-2 rounded-xl border border-white/10 p-3 sm:grid-cols-[1fr_auto]">
+            <div>
+              <p className="font-semibold text-white">{selectedReport.customerName || "ไม่ระบุชื่อลูกค้า"}</p>
+              <p className="mt-1 text-sm text-white/70">{selectedReport.plate || "ไม่ระบุทะเบียน"} · {[selectedReport.brand, selectedReport.model].filter(Boolean).join(" ") || "ไม่ระบุรถ"}</p>
+            </div>
+            <div className="text-xs text-white/55 sm:text-right">
+              <p>รายงานขาย {selectedReport.createdAt ? new Date(selectedReport.createdAt).toLocaleDateString("th-TH") : "ไม่ระบุวันที่"}</p>
+              <p className="mt-1">เซลส์: {selectedReport.saleName || "ไม่ระบุ"}</p>
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      <section className={`documents-brand-surface rounded-2xl border border-white/10 p-4 ${!selectedReportId ? "opacity-60" : ""}`}>
+        <p className="documents-step-label mb-1 text-[11px] font-bold uppercase tracking-[0.16em]">ขั้นตอนที่ 2</p>
+        <label className="mb-2 block text-sm font-semibold text-white">เลือกประเภทเอกสาร</label>
         <select
+          data-testid="documents-template-selector"
           value={templateId}
+          disabled={!selectedReportId}
           onChange={(e) => {
             if (overrideState === "dirty" && !window.confirm("มีการแก้ไขที่ยังไม่บันทึก ต้องการเปลี่ยนเอกสารและละทิ้งการแก้ไขหรือไม่")) return;
             setTemplateId(e.target.value as DocumentV2TemplateId);
@@ -1614,50 +1686,11 @@ export function DocumentGeneratorV2() {
             setPngUrl("");
             setPngBlob(null);
           }}
-          className="h-12 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm outline-none focus:border-emerald-400/60"
+          className="documents-brand-input h-12 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm outline-none disabled:cursor-not-allowed"
         >
-          {templates.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.title}
-            </option>
-          ))}
+          {templates.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
         </select>
-      </div>
-
-      <div className="order-1 rounded-2xl border border-white/10 bg-[#12161c] p-4 shadow-lg shadow-black/10 md:order-1">
-        <label className="mb-2 block text-sm font-semibold text-gray-200">เลือกรายงานขาย</label>
-        <select value={selectedReportId} onChange={(e) => {
-          if (e.target.value === selectedReportId) return;
-          if (overrideState === "dirty" && !window.confirm("มีการแก้ไขที่ยังไม่บันทึก ต้องการเปลี่ยนรายงานและละทิ้งการแก้ไขหรือไม่")) return;
-          setReportLoadState("loading-data");
-          setError("");
-          setSelectedReportId(e.target.value);
-          setContractEditMode(false);
-          setPowerOfAttorneyEditMode(false);
-        }} className="h-12 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm outline-none focus:border-emerald-400/60">
-          <option value="">-- เลือก --</option>
-          {reports.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.customerName || "ไม่ระบุ"} · {r.plate || "ไม่ระบุ"} · {r.saleName || "ไม่ระบุ"}
-            </option>
-          ))}
-        </select>
-        {reportLoadState === "loading-data" ? <p className="mt-2 text-xs font-medium text-amber-200">● กำลังโหลดข้อมูลรายงานขาย...</p> : null}
-        {reportLoadState === "generating" ? <p className="mt-2 text-xs font-medium text-amber-200">● กำลังสร้างตัวอย่างเอกสาร...</p> : null}
-        {reportLoadState === "ready" ? <p className="mt-2 text-xs font-medium text-emerald-300">● ข้อมูลพร้อมแล้ว{settingsMode && reportLoadMs !== null ? ` · ${reportLoadMs} ms` : ""}</p> : null}
-        {reportLoadState === "data-error" ? (
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-red-200">
-            <span>โหลดข้อมูลรายงานขายไม่สำเร็จ กรุณาลองใหม่</span>
-            <button type="button" onClick={() => setReportRetryNonce((value) => value + 1)} className="rounded border border-red-300/40 px-2 py-1">ลองใหม่</button>
-          </div>
-        ) : null}
-        {reportLoadState === "preview-error" ? (
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-amber-200">
-            <span>ข้อมูลโหลดแล้ว แต่สร้างตัวอย่างเอกสารไม่สำเร็จ</span>
-            <button type="button" onClick={() => preview()} className="rounded border border-amber-300/40 px-2 py-1">อัปเดตเอกสาร</button>
-          </div>
-        ) : null}
-      </div>
+      </section>
       </div>
 
       {settingsMode ? (
