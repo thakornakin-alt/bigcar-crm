@@ -79,6 +79,9 @@ export async function GET(request: Request) {
     const bookingDeliveryRecords = shouldSyncBookingDelivery
       ? await syncBookingDeliveryFromReportHistory().catch(() => listBookingDeliveryRecords())
       : await listBookingDeliveryRecords();
+    const operationalBookingDeliveries = bookingDeliveryRecords.filter((record) =>
+      record.qaTestRecord !== true && record.excludeFromMetrics !== true && record.isCounted !== false
+    );
 
     const leads =
       currentUser && !canReadAllCustomers(currentUser)
@@ -110,8 +113,8 @@ export async function GET(request: Request) {
         financeWaiting: financeWaiting.length,
         waitingDelivery: readyDelivery.length,
         delivered: delivered.length,
-        bookingDeliveries: bookingDeliveryRecords.filter((record) => record.status !== "ยกเลิก").length,
-        bookingDeliveriesPending: bookingDeliveryRecords.filter(
+        bookingDeliveries: operationalBookingDeliveries.filter((record) => record.status !== "ยกเลิก").length,
+        bookingDeliveriesPending: operationalBookingDeliveries.filter(
           (record) => record.status !== "ยกเลิก" && record.workflowStatus !== "ยอดส่งมอบ"
         ).length,
         todayEvents: todayEvents.length

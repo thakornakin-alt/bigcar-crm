@@ -389,9 +389,10 @@ export async function getStockImportStatus() {
   return data.status;
 }
 
-export async function listReportHistory(query: string, type: string) {
+export async function listReportHistory(query: string, type: string, options: { includeExcluded?: boolean } = {}) {
   const data = await callAppsScript<{ reports: ReportHistoryItem[] }>("listReportHistory", { query, type });
-  return data.reports;
+  const { applySalesReportQaPolicy } = await import("@/lib/sales-report-qa-metadata");
+  return applySalesReportQaPolicy(data.reports, options);
 }
 
 export async function updateReportStatus(input: { id: string; type: string; status: string }) {

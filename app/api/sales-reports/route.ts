@@ -7,6 +7,13 @@ import { recordActivity } from "@/lib/activity-log";
 import { RequestAuthError, requireWritableUser } from "@/lib/request-user";
 import { resolveAuthenticatedSalespersonCapture } from "@/lib/commission-canonical-capture";
 import { createSalesRequestId } from "@/lib/sales-report-duplicate";
+import {
+  finalizeSalesReportQaMetadata,
+  removeSalesReportQaReservation,
+  reserveSalesReportQaMetadata,
+  resolveSalesReportQaRequest,
+  SalesReportQaError
+} from "@/lib/sales-report-qa-metadata";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +77,11 @@ export async function POST(request: Request) {
       confirmationToken?: string;
       createdFromSalesReportId?: string;
       checkOnly?: boolean;
+      qaCreateMode?: unknown;
+      qaTestMarker?: unknown;
+      qaTestRecord?: unknown;
+      excludeFromMetrics?: unknown;
+      isCounted?: unknown;
     } & Partial<SalesReportInput>;
     const body = (payload.report && typeof payload.report === "object" ? payload.report : payload) as Partial<SalesReportInput>;
     const report = clean(body);
@@ -79,6 +91,12 @@ export async function POST(request: Request) {
     }
 
     const requestId = String(payload.requestId || "").trim() || createSalesRequestId();
+    const qaMetadata = resolveSalesReportQaRequest(actor, {
+      qaCreateMode: payload.qaCreateMode,
+      qaTestMarker: payload.qaTestMarker,
+      bookingReportId: report.bookingReportId,
+      requestId
+    });
     if (payload.checkOnly === true) {
       const duplicate = await checkSalesReportDuplicate(report, actor.id);
       if (duplicate.requiresConfirmation) {
@@ -93,6 +111,7 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ status: "ok_to_create", requestId });
     }
+    if (qaMetadata) await reserveSalesReportQaMetadata(qaMetadata);
     let saved;
     try {
       saved = await saveSalesReport(report, {
@@ -105,6 +124,7 @@ export async function POST(request: Request) {
       const marker = "SALES_REPORT_DUPLICATE_CONFIRMATION_REQUIRED:";
       const markerIndex = message.indexOf(marker);
       if (markerIndex >= 0) {
+        if (qaMetadata) await removeSalesReportQaReservation(requestId);
         const duplicate = JSON.parse(message.slice(markerIndex + marker.length));
         return NextResponse.json({
           status: "duplicate_plate_customer_confirmation_required",
@@ -116,12 +136,27 @@ export async function POST(request: Request) {
         }, { status: 409 });
       }
       if (message.includes("SALES_REPORT_IDEMPOTENCY_CONFLICT")) {
+        if (qaMetadata) await removeSalesReportQaReservation(requestId);
         return NextResponse.json({ status: "idempotency_conflict", error: "คำขอบันทึกนี้มีข้อมูลไม่ตรงกับครั้งก่อน" }, { status: 409 });
       }
       if (message.includes("SALES_REPORT_DUPLICATE_TOKEN_INVALID")) {
+        if (qaMetadata) await removeSalesReportQaReservation(requestId);
         return NextResponse.json({ status: "duplicate_confirmation_invalid", error: "การยืนยันหมดอายุหรือข้อมูลมีการเปลี่ยนแปลง กรุณายืนยันใหม่" }, { status: 409 });
       }
       throw error;
+    }
+    if (qaMetadata) {
+      try {
+        await finalizeSalesReportQaMetadata(requestId, saved.id);
+      } catch (error) {
+        console.error("[sales-reports] QA sidecar finalization failed; downstream sync stopped", {
+          requestId,
+          salesReportId: saved.id,
+          bookingReportId: saved.bookingReportId,
+          error: error instanceof Error ? error.message : "unknown"
+        });
+        throw new SalesReportQaError(503, "Sales QA metadata persistence failed; downstream processing stopped");
+      }
     }
     await recordActivity(actor, {
       action: "salesReport.create",
@@ -150,6 +185,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ report: saved }, { status: 201 });
   } catch (error) {
     if (error instanceof RequestAuthError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof SalesReportQaError) return NextResponse.json({ error: error.message }, { status: error.status });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to save sales report" },
       { status: 500 }

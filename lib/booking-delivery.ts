@@ -344,7 +344,7 @@ async function resolveStockSnapshot(plate: string) {
 }
 
 export async function syncBookingDeliveryFromReportHistory() {
-  const reports = await listReportHistory("", "all");
+  const reports = await listReportHistory("", "all", { includeExcluded: true });
   return upsertBookingDeliveryFromReportHistory(reports);
 }
 
@@ -455,6 +455,10 @@ function buildRecordFromReports(
     ...bookingFoundationFromReport(booking.bookingDate, current),
     bookingReportId: booking.id,
     salesReportId: sales?.id || current?.salesReportId || "",
+    qaTestRecord: sales?.qaTestRecord === true || current?.qaTestRecord === true ? true : undefined,
+    excludeFromMetrics: sales?.excludeFromMetrics === true || current?.excludeFromMetrics === true ? true : undefined,
+    isCounted: sales?.isCounted === false ? false : current?.isCounted,
+    qaTestMarker: sales?.qaTestMarker || current?.qaTestMarker,
     plate: text(booking.plate || sales?.plate),
     customerName: text(booking.customerName || sales?.customerName),
     brand: text(booking.brand || sales?.brand),
@@ -469,9 +473,6 @@ function buildRecordFromReports(
     commissionGroup: current?.commissionGroup,
     commissionGroupSource: current?.commissionGroupSource,
     commissionGroupCapturedAt: current?.commissionGroupCapturedAt,
-    qaTestRecord: current?.qaTestRecord === true ? true : undefined,
-    excludeFromMetrics: current?.excludeFromMetrics === true ? true : undefined,
-    qaTestMarker: text(current?.qaTestMarker) || undefined,
     archivedAt: text(current?.archivedAt) || undefined,
     archiveReason: text(current?.archiveReason) || undefined,
     teamName: text(booking.teamName || sales?.teamName),

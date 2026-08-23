@@ -419,6 +419,11 @@ export type ReportHistoryItem = {
   driveFolderUrl: string;
   attachments: Array<BookingAttachment | DriveAttachment>;
   reportText: string;
+  qaTestRecord?: boolean;
+  excludeFromMetrics?: boolean;
+  isCounted?: boolean;
+  qaTestMarker?: string;
+  qaMetadataPending?: boolean;
 };
 
 export type BookingDeliveryStatus =
