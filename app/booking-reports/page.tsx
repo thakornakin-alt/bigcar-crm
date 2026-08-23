@@ -24,6 +24,7 @@ import { BookingReportOcrScanner } from "@/components/booking-reports/BookingRep
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import { appendSalesProfileSignature } from "@/lib/sales-profile-signature";
 import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, DriveAttachment, DriveUploadResult, LineGroup, StockVehicle } from "@/lib/types";
+import { formatThaiReportDate } from "@/lib/booking-report-display";
 
 type BookingDuplicatePrompt = {
   status: "duplicate_booking_confirmation_required";
@@ -963,7 +964,7 @@ export default function BookingReportsPage() {
             <div className="mt-3 space-y-2">
               {duplicatePrompt.matches.map((match) => (
                 <div key={match.bookingReportId} className="rounded-lg border border-line p-3 text-sm">
-                  <p className="font-semibold text-white">{match.bookingDate || "ไม่ระบุวันที่"} · {match.customerName}</p>
+                  <p className="font-semibold text-white">{formatThaiReportDate(match.bookingDate)} · {match.customerName}</p>
                   <p className="mt-1 text-xs text-soft">เซลส์: {match.salespersonDisplayName || "-"} · สถานะ: {match.status || "-"}</p>
                 </div>
               ))}

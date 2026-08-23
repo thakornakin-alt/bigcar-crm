@@ -11,6 +11,7 @@ import { appendSalesProfileSignature } from "@/lib/sales-profile-signature";
 import type { BookingAttachment, BookingReport, DriveAttachment, DriveUploadResult, LineGroup, ReportHistoryItem, SalesReportInput } from "@/lib/types";
 import { DuplicateSalesReportFixture } from "@/components/sales-reports/DuplicateSalesReportFixture";
 import { copySalesReportForNewTransaction } from "@/lib/sales-report-duplicate";
+import { formatThaiReportDate, formatThaiReportDateTime, latestBookingReportId } from "@/lib/booking-report-display";
 
 type DuplicatePrompt = {
   normalizedPlate: string;
@@ -277,6 +278,7 @@ export default function SalesReportsPage() {
   const [createdFromSalesReportId, setCreatedFromSalesReportId] = useState("");
   const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicatePrompt | null>(null);
   const [pendingCreate, setPendingCreate] = useState<{ report: Record<string, unknown>; requestId: string } | null>(null);
+  const latestBookingId = useMemo(() => latestBookingReportId(results), [results]);
 
   const reportText = useMemo(
     () => appendSalesProfileSignature(renderSalesReport({ ...form, reportText: "" }), salesProfile),
@@ -891,10 +893,23 @@ export default function SalesReportsPage() {
                     key={report.id}
                     type="button"
                     onClick={() => selectBooking(report)}
-                    className="w-full rounded-lg border border-line bg-[#0b0d11] p-3 text-left hover:border-brand/60"
+                    className={`w-full rounded-lg border bg-[#0b0d11] p-3 text-left transition hover:border-brand/60 ${report.id === latestBookingId ? "border-brand/50" : "border-line"}`}
                   >
-                    <p className="font-bold text-white">{report.customerName || "-"}</p>
-                    <p className="mt-1 text-sm text-soft">{report.plate} / {report.model} / {report.phone}</p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-bold text-white">{report.customerName || "-"}</p>
+                        <p className="mt-1 text-sm text-soft">{report.plate || "ไม่ระบุทะเบียน"}{report.model ? ` · ${report.model}` : ""}</p>
+                      </div>
+                      {report.id === latestBookingId && (
+                        <span className="shrink-0 rounded-full border border-brand/50 bg-brand/10 px-2 py-1 text-[11px] font-bold text-brand">ล่าสุด</span>
+                      )}
+                    </div>
+                    <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                      <div><dt className="text-soft">วันที่จอง</dt><dd className="mt-0.5 font-semibold text-white">{formatThaiReportDate(report.bookingDate)}</dd></div>
+                      <div><dt className="text-soft">สร้างเมื่อ</dt><dd className="mt-0.5 font-semibold text-white">{formatThaiReportDateTime(report.createdAt)}</dd></div>
+                      <div><dt className="text-soft">เซลส์</dt><dd className="mt-0.5 font-semibold text-white">{report.saleName || "-"}</dd></div>
+                      <div><dt className="text-soft">สถานะ</dt><dd className="mt-0.5 font-semibold text-white">{report.status || "-"}</dd></div>
+                    </dl>
                   </button>
                 ))}
               </div>
