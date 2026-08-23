@@ -67,10 +67,14 @@ test("source assertions prohibit plate mutation and latest-sale reduction", asyn
   assert.doesNotMatch(prepPage, /latestSalesByPlate|latestByPlate/);
 });
 
-test("Apps Script mirrors expose BookingReportId and keep duplicate Sales Report blocking", async () => {
+test("Apps Script mirrors expose BookingReportId and enforce confirmed, idempotent duplicate Sales creation", async () => {
   for (const file of ["Code.gs", "Code.compact.gs"]) {
     const source = await readFile(new URL(`../google-apps-script/${file}`, import.meta.url), "utf8");
     assert.match(source, /bookingReportId:String\(r\[4\]\|\|""\)/);
-    assert.match(source, /if\(hasReportDuplicate_\(s,SALES_HEADERS,r\.plate\)\)throw new Error/);
+    assert.match(source, /SALES_REPORT_DUPLICATE_CONFIRMATION_REQUIRED/);
+    assert.match(source, /verifySalesDuplicateToken_/);
+    assert.match(source, /SALES_REPORT_DUPLICATE_TOKEN_INVALID/);
+    assert.match(source, /SALES_REPORT_IDEMPOTENCY_CONFLICT/);
+    assert.doesNotMatch(source, /allowDuplicate/);
   }
 });
