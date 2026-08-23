@@ -12,7 +12,8 @@ test("Code.gs and Code.compact.gs are exact deployment mirrors", () => {
 test("transaction identity and duplicate protection remain in both mirrors", () => {
   for (const source of [canonical, compact]) {
     assert.match(source, /bookingReportId:String\(r\[4\]\|\|""\)/);
-    assert.match(source, /hasReportDuplicate_\(s,SALES_HEADERS,r\.plate\)/);
+    assert.match(source, /findSalesReportDuplicates_\(r\)/);
+    assert.match(source, /SALES_REPORT_DUPLICATE_CONFIRMATION_REQUIRED/);
     assert.match(source, /function hasReportDuplicate_\(/);
   }
 });

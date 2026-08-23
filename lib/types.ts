@@ -395,6 +395,18 @@ export type ReportHistoryItem = {
   color: string;
   engineNo?: string;
   chassisNo?: string;
+  bookingPrice?: string;
+  salePrice?: string;
+  centralDiscount?: string;
+  finalPrice?: string;
+  paymentType?: string;
+  source?: string;
+  ownership?: string;
+  project?: string;
+  paymentDetail?: string;
+  saleConditions?: string;
+  branch?: string;
+  deliveryDate?: string;
   saleName: string;
   teamName: string;
   emailSubject: string;

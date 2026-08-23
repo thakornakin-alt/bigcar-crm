@@ -48,6 +48,7 @@ type AppsScriptAction =
   | "updateReportStatus"
   | "searchBookingReports"
   | "saveSalesReport"
+  | "checkSalesReportDuplicate"
   | "resetUserData"
   | "uploadDriveFiles"
   | "createSalesEmailDraft"
@@ -385,8 +386,20 @@ export async function searchBookingReports(query: string) {
   return data.reports;
 }
 
-export async function saveSalesReport(input: SalesReportInput) {
-  const data = await callAppsScript<{ report: SalesReport }>("saveSalesReport", { report: input });
+export async function checkSalesReportDuplicate(input: SalesReportInput, actorId: string) {
+  const data = await callAppsScript<{ result: import("@/lib/sales-report-duplicate").SalesDuplicateCheck }>("checkSalesReportDuplicate", { report: input, actorId });
+  return data.result;
+}
+
+export async function saveSalesReport(input: SalesReportInput, options: { requestId: string; confirmationToken?: string; actorId: string }) {
+  const data = await callAppsScript<{ report: SalesReport }>("saveSalesReport", {
+    report: {
+      ...input,
+      _requestId: options.requestId,
+      _confirmationToken: options.confirmationToken || "",
+      _actorId: options.actorId
+    }
+  });
   return data.report;
 }
 

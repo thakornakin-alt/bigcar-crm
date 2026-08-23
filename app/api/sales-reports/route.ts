@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { saveSalesReport } from "@/lib/apps-script";
+import { checkSalesReportDuplicate, saveSalesReport } from "@/lib/apps-script";
 import { captureBookingDeliverySalespersonFromSalesReport, syncBookingDeliveryFromReportHistory } from "@/lib/booking-delivery";
 import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
 import type { SalesReportInput } from "@/lib/types";
 import { recordActivity } from "@/lib/activity-log";
 import { RequestAuthError, requireWritableUser } from "@/lib/request-user";
 import { resolveAuthenticatedSalespersonCapture } from "@/lib/commission-canonical-capture";
+import { createSalesRequestId } from "@/lib/sales-report-duplicate";
 
 export const dynamic = "force-dynamic";
 
@@ -63,20 +64,74 @@ function clean(body: Partial<SalesReportInput>): SalesReportInput {
 export async function POST(request: Request) {
   try {
     const actor = requireWritableUser();
-    const body = await request.json() as Partial<SalesReportInput>;
+    const payload = await request.json() as {
+      report?: Partial<SalesReportInput>;
+      requestId?: string;
+      confirmationToken?: string;
+      createdFromSalesReportId?: string;
+      checkOnly?: boolean;
+    } & Partial<SalesReportInput>;
+    const body = (payload.report && typeof payload.report === "object" ? payload.report : payload) as Partial<SalesReportInput>;
     const report = clean(body);
     const salespersonCapture = resolveAuthenticatedSalespersonCapture({ submittedSalespersonUserId: body.salespersonUserId, submittedSaleName: report.saleName, actor });
     if (!report.customerName || !report.plate || !report.saleName) {
       return NextResponse.json({ error: "Customer name, plate and sale are required" }, { status: 400 });
     }
 
-    const saved = await saveSalesReport(report);
+    const requestId = String(payload.requestId || "").trim() || createSalesRequestId();
+    if (payload.checkOnly === true) {
+      const duplicate = await checkSalesReportDuplicate(report, actor.id);
+      if (duplicate.requiresConfirmation) {
+        return NextResponse.json({
+          status: "duplicate_plate_customer_confirmation_required",
+          normalizedPlate: duplicate.normalizedPlate,
+          customerIdentityType: duplicate.customerIdentityType,
+          matches: duplicate.matches,
+          confirmationToken: duplicate.confirmationToken,
+          requestId
+        }, { status: 409 });
+      }
+      return NextResponse.json({ status: "ok_to_create", requestId });
+    }
+    let saved;
+    try {
+      saved = await saveSalesReport(report, {
+        requestId,
+        confirmationToken: String(payload.confirmationToken || ""),
+        actorId: actor.id
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      const marker = "SALES_REPORT_DUPLICATE_CONFIRMATION_REQUIRED:";
+      const markerIndex = message.indexOf(marker);
+      if (markerIndex >= 0) {
+        const duplicate = JSON.parse(message.slice(markerIndex + marker.length));
+        return NextResponse.json({
+          status: "duplicate_plate_customer_confirmation_required",
+          normalizedPlate: duplicate.normalizedPlate,
+          customerIdentityType: duplicate.customerIdentityType,
+          matches: duplicate.matches,
+          confirmationToken: duplicate.confirmationToken,
+          requestId
+        }, { status: 409 });
+      }
+      if (message.includes("SALES_REPORT_IDEMPOTENCY_CONFLICT")) {
+        return NextResponse.json({ status: "idempotency_conflict", error: "คำขอบันทึกนี้มีข้อมูลไม่ตรงกับครั้งก่อน" }, { status: 409 });
+      }
+      if (message.includes("SALES_REPORT_DUPLICATE_TOKEN_INVALID")) {
+        return NextResponse.json({ status: "duplicate_confirmation_invalid", error: "การยืนยันหมดอายุหรือข้อมูลมีการเปลี่ยนแปลง กรุณายืนยันใหม่" }, { status: 409 });
+      }
+      throw error;
+    }
     await recordActivity(actor, {
       action: "salesReport.create",
       targetType: "salesReport",
       targetId: saved.id,
       source: "api",
-      after: { status: saved.status, bookingReportId: saved.bookingReportId }
+      after: { status: saved.status, bookingReportId: saved.bookingReportId },
+      metadata: payload.createdFromSalesReportId
+        ? { createdFromSalesReportId: String(payload.createdFromSalesReportId) }
+        : undefined
     });
     await syncBookingDeliveryFromReportHistory().catch(() => null);
     const identityResult = salespersonCapture && report.bookingReportId

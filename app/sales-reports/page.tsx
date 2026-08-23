@@ -1,15 +1,23 @@
 "use client";
 
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Camera, CheckCircle2, Clipboard, Cloud, Eye, FileText, ImagePlus, Loader2, Mail, Save, Search, Send, X } from "lucide-react";
+import { ArrowLeft, Camera, CheckCircle2, Clipboard, Cloud, CopyPlus, Eye, FileText, ImagePlus, Loader2, Mail, Save, Search, Send, X } from "lucide-react";
 import { NativeAppHeader, NativeAppShell, NativeBadge, TopMenuButton } from "@/app/components/ui";
 import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
 import { defaultSystemSettings, readSystemSettings, salesLineGroupStorageKey } from "@/lib/client-settings";
 import { normalizeCarYear } from "@/lib/format";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import { appendSalesProfileSignature } from "@/lib/sales-profile-signature";
-import type { BookingAttachment, BookingReport, DriveAttachment, DriveUploadResult, LineGroup, SalesReportInput } from "@/lib/types";
+import type { BookingAttachment, BookingReport, DriveAttachment, DriveUploadResult, LineGroup, ReportHistoryItem, SalesReportInput } from "@/lib/types";
 import { DuplicateSalesReportFixture } from "@/components/sales-reports/DuplicateSalesReportFixture";
+import { copySalesReportForNewTransaction } from "@/lib/sales-report-duplicate";
+
+type DuplicatePrompt = {
+  normalizedPlate: string;
+  matches: Array<{ salesReportId: string; saleDate: string; customerName: string; plate: string; salespersonDisplayName: string; status: string }>;
+  confirmationToken: string;
+  requestId: string;
+};
 
 type SalesAttachmentCategory =
   | "vehiclePhotos"
@@ -263,6 +271,12 @@ export default function SalesReportsPage() {
   const [lineGroups, setLineGroups] = useState<LineGroup[]>([]);
   const [selectedLineGroupId, setSelectedLineGroupId] = useState("");
   const [sendingLine, setSendingLine] = useState(false);
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [historyResults, setHistoryResults] = useState<ReportHistoryItem[]>([]);
+  const [historySearching, setHistorySearching] = useState(false);
+  const [createdFromSalesReportId, setCreatedFromSalesReportId] = useState("");
+  const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicatePrompt | null>(null);
+  const [pendingCreate, setPendingCreate] = useState<{ report: Record<string, unknown>; requestId: string } | null>(null);
 
   const reportText = useMemo(
     () => appendSalesProfileSignature(renderSalesReport({ ...form, reportText: "" }), salesProfile),
@@ -416,6 +430,7 @@ export default function SalesReportsPage() {
   }
 
   function selectBooking(report: BookingReport) {
+    setCreatedFromSalesReportId("");
     setSelectedBooking(report);
     const nextForm = fromBooking(report);
     setForm({
@@ -424,6 +439,34 @@ export default function SalesReportsPage() {
       teamName: nextForm.teamName || defaultTeamName,
       branch: nextForm.branch || salesProfile?.branch || ""
     });
+  }
+
+  async function searchSalesHistory(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setHistorySearching(true);
+    setError("");
+    try {
+      const data = await api<{ reports: ReportHistoryItem[] }>(`/api/reports/history?type=sales&q=${encodeURIComponent(historyQuery)}`);
+      setHistoryResults(data.reports.filter((item) => item.type === "sales"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ค้นหารายงานขายเดิมไม่สำเร็จ");
+    } finally {
+      setHistorySearching(false);
+    }
+  }
+
+  function startFromExisting(source: ReportHistoryItem) {
+    const draft = copySalesReportForNewTransaction(source);
+    setForm(draft);
+    setSelectedBooking(null);
+    setCreatedFromSalesReportId(source.id);
+    setSavedReportId("");
+    setSalesFiles({});
+    setDriveFolderUrl("");
+    setEmailFields({ subject: "", to: defaultEmailTo, cc: defaultEmailCc, bcc: "" });
+    setMessage("สร้างฉบับร่างใหม่แล้ว กรุณาตรวจสอบราคา วันที่ ลูกค้า การชำระเงิน การส่งมอบ และเซลส์");
+    setError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function addSalesFiles(category: SalesAttachmentCategory, event: ChangeEvent<HTMLInputElement>) {
@@ -554,6 +597,53 @@ export default function SalesReportsPage() {
     }
   }
 
+  function currentCreatePayload(): Record<string, unknown> {
+    return {
+      ...form,
+      emailSubject: emailFields.subject,
+      emailTo: emailFields.to,
+      emailCc: emailFields.cc,
+      emailBcc: emailFields.bcc,
+      paymentDetail: buildSalesPaymentDetail(form),
+      salespersonUserId: salesProfile && form.saleName === salesProfile.firstName ? salesProfile.id : undefined,
+      salespersonDisplayName: salesProfile && form.saleName === salesProfile.firstName
+        ? [salesProfile.firstName, salesProfile.lastName].filter(Boolean).join(" ")
+        : undefined,
+      reportText
+    };
+  }
+
+  async function createSalesReport(payload: Record<string, unknown>, requestId: string, confirmationToken = "") {
+    let uploadResult: DriveUploadResult = { folderUrl: driveFolderUrl, attachments: [] };
+    let uploadWarning = "";
+    try {
+      uploadResult = await uploadPendingFiles();
+    } catch (uploadError) {
+      uploadWarning = uploadError instanceof Error ? uploadError.message : "อัปโหลด Google Drive ไม่สำเร็จ";
+      setUploadProgress("");
+    }
+    const response = await fetch("/api/sales-reports", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        report: { ...payload, attachments: uploadResult.attachments, driveFolderUrl: uploadResult.folderUrl },
+        requestId,
+        confirmationToken,
+        createdFromSalesReportId: createdFromSalesReportId || undefined
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "บันทึกรายงานขายไม่สำเร็จ");
+    setSavedReportId(data.report.id);
+    setDuplicatePrompt(null);
+    setPendingCreate(null);
+    if (uploadWarning) {
+      setError(`${uploadWarning} - บันทึก Draft รายงานขายลง Google Sheets แบบไม่มีไฟล์แนบ Drive แล้ว`);
+    } else {
+      setMessage(uploadResult.attachments.length ? "อัปโหลดรูปเข้า Google Drive และสร้างรายงานขายใหม่แล้ว" : "สร้างรายงานขายใหม่แล้ว");
+    }
+  }
+
   async function saveDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
@@ -561,41 +651,38 @@ export default function SalesReportsPage() {
     setMessage("");
     setUploadProgress("");
     try {
-      let uploadResult: DriveUploadResult = { folderUrl: driveFolderUrl, attachments: [] };
-      let uploadWarning = "";
-      try {
-        uploadResult = await uploadPendingFiles();
-      } catch (uploadError) {
-        uploadWarning = uploadError instanceof Error ? uploadError.message : "อัปโหลด Google Drive ไม่สำเร็จ";
-        setUploadProgress("");
-      }
-      const data = await api<{ report: { id: string } }>("/api/sales-reports", {
+      const payload = currentCreatePayload();
+      const requestId = crypto.randomUUID();
+      const preflight = await fetch("/api/sales-reports", {
         method: "POST",
-        body: JSON.stringify({
-          ...form,
-          emailSubject: emailFields.subject,
-          emailTo: emailFields.to,
-          emailCc: emailFields.cc,
-          emailBcc: emailFields.bcc,
-          attachments: uploadResult.attachments,
-          driveFolderUrl: uploadResult.folderUrl,
-          paymentDetail: buildSalesPaymentDetail(form),
-          salespersonUserId: salesProfile && form.saleName === salesProfile.firstName ? salesProfile.id : undefined,
-          salespersonDisplayName: salesProfile && form.saleName === salesProfile.firstName
-            ? [salesProfile.firstName, salesProfile.lastName].filter(Boolean).join(" ")
-            : undefined,
-          reportText
-        })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ report: payload, requestId, checkOnly: true })
       });
-      setSavedReportId(data.report.id);
-      if (uploadWarning) {
-        setError(`${uploadWarning} - บันทึก Draft รายงานขายลง Google Sheets แบบไม่มีไฟล์แนบ Drive แล้ว`);
-      } else {
-        setMessage(uploadResult.attachments.length ? "อัปโหลดรูปเข้า Google Drive และบันทึก Draft รายงานขายแล้ว" : "บันทึก Draft รายงานขายลง Google Sheets แล้ว");
+      const preflightData = await preflight.json();
+      if (preflight.status === 409 && preflightData.status === "duplicate_plate_customer_confirmation_required") {
+        setPendingCreate({ report: payload, requestId: preflightData.requestId || requestId });
+        setDuplicatePrompt(preflightData as DuplicatePrompt);
+        return;
       }
+      if (!preflight.ok) throw new Error(preflightData.error || "ตรวจสอบรายงานเดิมไม่สำเร็จ");
+      await createSalesReport(payload, requestId);
     } catch (err) {
       window.localStorage.setItem("bigcar-sales-draft-fallback", JSON.stringify({ ...form, paymentDetail: buildSalesPaymentDetail(form), reportText }));
       setError(err instanceof Error ? `${err.message} - บันทึกสำรองในเครื่องแล้ว` : "บันทึกไม่สำเร็จ");
+    } finally {
+      setUploading(false);
+      setSaving(false);
+    }
+  }
+
+  async function confirmDuplicateCreate() {
+    if (!duplicatePrompt || !pendingCreate) return;
+    setSaving(true);
+    setError("");
+    try {
+      await createSalesReport(pendingCreate.report, pendingCreate.requestId, duplicatePrompt.confirmationToken);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "สร้างรายงานขายใหม่ไม่สำเร็จ");
     } finally {
       setUploading(false);
       setSaving(false);
@@ -747,6 +834,13 @@ export default function SalesReportsPage() {
 
       <DuplicateSalesReportFixture />
 
+      {createdFromSalesReportId && (
+        <div data-testid="create-from-existing-banner" className="mb-4 rounded-lg border border-brand/50 bg-brand/10 px-4 py-3 text-sm text-amber-50">
+          <p className="font-bold">รายงานใหม่ — คัดลอกจากรายงานเดิม</p>
+          <p className="mt-1 text-xs text-soft">อ้างอิง {createdFromSalesReportId} · กรุณาตรวจสอบราคา วันที่ ลูกค้า การชำระเงิน การส่งมอบ และเซลส์ก่อนบันทึก</p>
+        </div>
+      )}
+
       {(message || error) && (
         <div className={`mb-4 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${error ? "border-amber-400/40 bg-amber-950/30 text-amber-100" : "border-brand/40 bg-green-950/30 text-green-100"}`}>
           <CheckCircle2 size={18} className="mt-0.5 shrink-0" />
@@ -756,6 +850,32 @@ export default function SalesReportsPage() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
         <div className="space-y-4">
+          <section className="rounded-lg border border-line bg-panel p-4 shadow-glow">
+            <form onSubmit={searchSalesHistory} className="space-y-3">
+              <Field label="ค้นรายงานขายเดิม" value={historyQuery} onChange={setHistoryQuery} placeholder="ทะเบียน / ชื่อลูกค้า / เบอร์โทร" />
+              <button type="submit" disabled={historySearching} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-brand/50 px-4 font-bold text-brand disabled:opacity-60">
+                {historySearching ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
+                ค้นหารายงานขายเดิม
+              </button>
+            </form>
+            {historyResults.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {historyResults.map((report) => (
+                  <div key={report.id} className="rounded-lg border border-line bg-[#0b0d11] p-3">
+                    <p className="font-bold text-white">{report.customerName || "-"}</p>
+                    <p className="mt-1 text-sm text-soft">{report.plate} · {report.model} · {report.createdAt}</p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <a href={`/report-history?q=${encodeURIComponent(report.id)}`} className="flex min-h-10 items-center justify-center rounded-lg border border-line px-3 text-sm font-semibold text-white">ดูรายงานเดิม</a>
+                      <button type="button" onClick={() => startFromExisting(report)} className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-3 text-sm font-bold text-ink">
+                        <CopyPlus size={17} />สร้างรายงานใหม่จากข้อมูลนี้
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
           <section className="rounded-lg border border-line bg-panel p-4 shadow-glow">
             <form onSubmit={searchReports} className="space-y-3">
               <Field label="ค้นรายงานจอง" value={query} onChange={setQuery} placeholder="ทะเบียน / ชื่อลูกค้า / เบอร์โทร" />
@@ -992,6 +1112,35 @@ export default function SalesReportsPage() {
           </section>
         </aside>
       </div>
+
+      {duplicatePrompt && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-3 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="duplicate-sales-title">
+          <section className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-xl border border-brand/40 bg-[#141821] p-4 shadow-2xl">
+            <h2 id="duplicate-sales-title" className="text-lg font-bold text-white">พบลูกค้าและทะเบียนนี้ในรายงานขายเดิม</h2>
+            <div className="mt-3 rounded-lg border border-line bg-[#0b0d11] p-3 text-sm">
+              <p className="font-semibold text-white">ลูกค้า: {form.customerName}</p>
+              <p className="mt-1 text-soft">ทะเบียน: {form.plate}</p>
+              <p className="mt-1 text-soft">พบรายงานเดิม {duplicatePrompt.matches.length} รายการ</p>
+            </div>
+            <div className="mt-3 space-y-2">
+              {duplicatePrompt.matches.map((match) => (
+                <div key={match.salesReportId} className="rounded-lg border border-line p-3 text-sm">
+                  <p className="font-semibold text-white">{match.saleDate || "ไม่ระบุวันที่"} · {match.customerName}</p>
+                  <p className="mt-1 text-xs text-soft">เซลส์: {match.salespersonDisplayName || "-"} · สถานะ: {match.status || "-"}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-sm leading-6 text-amber-50">หากเป็นการขายครั้งใหม่ สามารถสร้างรายงานขายใหม่ได้<br />รายงานเดิมจะไม่ถูกแก้ไข</p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              <a href={`/report-history?q=${encodeURIComponent(duplicatePrompt.matches[0]?.salesReportId || "")}`} className="flex min-h-11 items-center justify-center rounded-lg border border-line px-3 text-sm font-semibold text-white">ดูรายงานเดิม</a>
+              <button type="button" onClick={() => { setDuplicatePrompt(null); setPendingCreate(null); }} disabled={saving} className="min-h-11 rounded-lg border border-line px-3 font-semibold text-white">ยกเลิก</button>
+              <button type="button" onClick={confirmDuplicateCreate} disabled={saving} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-3 font-bold text-ink disabled:opacity-60">
+                {saving ? <Loader2 size={18} className="animate-spin" /> : <CopyPlus size={18} />}สร้างรายงานใหม่
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </NativeAppShell>
   );
 }
