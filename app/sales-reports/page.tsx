@@ -58,10 +58,6 @@ const vehiclePhotoCategories = new Set<SalesAttachmentCategory>([
   "vehiclePhotos"
 ]);
 
-const saleEmails: Record<string, string> = {
-  "ฐากร": "thakornakin@gmail.com",
-  "กันตา": "kanta.deepal@gmail.com"
-};
 const defaultEmailTo = "RDDUsedcarBooked@segroup.co.th";
 const defaultEmailCc = "rongsarit.s@tgh.co.th";
 const defaultTeamName = "พี่ลีฟ";
@@ -713,8 +709,6 @@ export default function SalesReportsPage() {
     setMessage("");
     setDraftUrl("");
     try {
-      if (!emailFields.to.trim()) throw new Error("กรุณากรอก To ก่อนสร้าง Gmail Draft");
-
       let uploadResult: DriveUploadResult = { folderUrl: driveFolderUrl, attachments: [] };
       try {
         uploadResult = await uploadPendingFiles();
@@ -1014,12 +1008,10 @@ export default function SalesReportsPage() {
 
             <Panel title="Gmail Draft">
               <div className="rounded-lg border border-line bg-[#0b0d11] p-3 text-sm text-soft">
-                ผู้ส่งตาม Sale: <span className="font-semibold text-white">{saleEmails[form.saleName] || "ยังไม่พบ mapping"}</span> - สร้างเป็น Draft เท่านั้น ยังไม่ส่งจริง
+                ผู้ส่ง: <span className="font-semibold text-white">บัญชีระบบ BIG CAR CRM</span> · เจ้าของเคส: {salesProfile ? `${salesProfile.firstName} ${salesProfile.lastName}`.trim() : "ระบบจะตรวจจากเจ้าของเคส"} · สร้างเป็น Draft เท่านั้น
               </div>
               <Field label="หัวข้ออีเมล" value={emailFields.subject} onChange={(value) => updateEmail("subject", value)} />
-              <Field label="To" value={emailFields.to} onChange={(value) => updateEmail("to", value)} placeholder="email1@example.com, email2@example.com" />
-              <Field label="CC" value={emailFields.cc} onChange={(value) => updateEmail("cc", value)} />
-              <Field label="BCC" value={emailFields.bcc} onChange={(value) => updateEmail("bcc", value)} />
+              <div className="rounded-lg border border-line bg-[#0b0d11] p-3 text-xs text-soft">ปลายทางถูกกำหนดจากเจ้าของเคสและค่าระบบฝั่ง Server ไม่รับอีเมลที่กรอกจาก Browser</div>
               <button
                 type="button"
                 onClick={createEmailDraft}

@@ -40,10 +40,6 @@ type BookingDuplicatePrompt = {
   requestId: string;
 };
 
-const saleEmails: Record<string, string> = {
-  "ฐากร": "thakornakin@gmail.com",
-  "กันตา": "kanta.deepal@gmail.com"
-};
 const defaultEmailTo = "RDDUsedcarBooked@segroup.co.th";
 const defaultEmailCc = "rongsarit.s@tgh.co.th";
 const defaultTeamName = "พี่ลีฟ";
@@ -218,7 +214,6 @@ export default function BookingReportsPage() {
     () => appendSalesProfileSignature(renderBookingReport({ ...form, reportText: "" }), salesProfile),
     [form, salesProfile]
   );
-  const senderEmail = saleEmails[form.saleName] || "";
   const companyWarning = form.buyerType === "company" && attachmentFiles.companyCertificate.length === 0;
   const saleOptions = useMemo(() => uniqueOptions([salesProfile?.firstName || "", blankForm.saleName, "กันตา"]), [salesProfile?.firstName]);
   const paymentMode = form.paymentType.includes("สด")
@@ -565,8 +560,6 @@ export default function BookingReportsPage() {
     setUploadProgress("");
 
     try {
-      if (!form.emailTo.trim()) throw new Error("กรุณากรอก To ก่อนสร้าง Gmail Draft");
-
       let attachments = uploadedAttachments;
       if (!attachments.length && Object.values(attachmentFiles).some((files) => files.length > 0)) {
         const uploadResult = await uploadBookingFiles();
@@ -828,12 +821,10 @@ export default function BookingReportsPage() {
 
           <SectionCard title="Gmail Draft" icon={<Mail size={18} />}>
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs text-soft">
-              ผู้ส่งตาม Sale: {senderEmail || "ยังไม่พบ mapping"} - สร้างเป็น Draft เท่านั้น ยังไม่ส่งจริง
+              ผู้ส่ง: บัญชีระบบ BIG CAR CRM · เจ้าของเคส: {salesProfile ? `${salesProfile.firstName} ${salesProfile.lastName}`.trim() : "ระบบจะตรวจจากเจ้าของเคส"} · สร้างเป็น Draft เท่านั้น
             </p>
             <Field label="หัวข้ออีเมล" value={buildDefaultBookingSubject(form)} onChange={() => undefined} />
-            <Field label="To" value={form.emailTo} onChange={(value) => update("emailTo", value)} placeholder="email1@example.com, email2@example.com" />
-            <Field label="CC" value={form.emailCc} onChange={(value) => update("emailCc", value)} />
-            <Field label="BCC" value={form.emailBcc} onChange={(value) => update("emailBcc", value)} />
+            <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs text-soft">ปลายทางถูกกำหนดจากเจ้าของเคสและค่าระบบฝั่ง Server ไม่รับอีเมลที่กรอกจาก Browser</p>
             <button
               type="button"
               onClick={createEmailDraft}
