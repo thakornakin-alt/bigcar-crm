@@ -573,6 +573,37 @@ export async function sendPasswordResetEmail(input: PasswordResetEmailInput) {
   return data.result;
 }
 
+export async function verifyPasswordResetEmailSenderBoundary(previewOrigin: string) {
+  const capture = async (input: PasswordResetEmailInput) => {
+    try {
+      await sendPasswordResetEmail(input);
+      return "unexpected_send";
+    } catch (error) {
+      return error instanceof Error ? error.message : "unknown_error";
+    }
+  };
+  const token = "a".repeat(43);
+  const users = await listSalesUsers();
+  return {
+    signedListSalesUsers: { ok: true, count: users.length },
+    signedFixture: await capture({
+      recipientEmail: "invalid",
+      resetUrl: `${previewOrigin}/reset-password?token=${token}`,
+      requestId: "runtime-v63-fixture-invalid-recipient"
+    }),
+    invalidUrl: await capture({
+      recipientEmail: "qa@example.invalid",
+      resetUrl: `https://invalid.example/reset-password?token=${token}`,
+      requestId: "runtime-v63-invalid-url"
+    }),
+    productionUrl: await capture({
+      recipientEmail: "qa@example.invalid",
+      resetUrl: `https://bigcar-crm.vercel.app/reset-password?token=${token}`,
+      requestId: "runtime-v63-production-url"
+    })
+  };
+}
+
 export async function uploadProfileImage(input: ProfileImageUploadInput) {
   const data = await callAppsScript<{ result: ProfileImageUploadResult }>("uploadProfileImage", input);
   return data.result;
