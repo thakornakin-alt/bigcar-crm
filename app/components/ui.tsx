@@ -13,7 +13,7 @@ function classNames(...values: Array<string | false | null | undefined>) {
 
 export function PageContainer({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
   return (
-    <main className={`mx-auto min-h-screen w-full px-4 pb-24 pt-5 sm:px-6 ${wide ? "max-w-5xl" : "max-w-3xl"}`}>
+    <main className={`crm-page mx-auto min-h-screen w-full px-4 pb-24 pt-5 sm:px-6 ${wide ? "max-w-6xl" : "max-w-4xl"}`}>
       {children}
     </main>
   );
@@ -33,7 +33,7 @@ export function PageTitle({
       <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">{title}</h1>
+          <h1 className="mt-1 text-2xl font-black tracking-[-0.02em] text-white sm:text-3xl">{title}</h1>
           {subtitle && <p className="mt-1 text-sm text-soft">{subtitle}</p>}
         </div>
         {actions && <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>}
@@ -159,7 +159,7 @@ export function GlobalNav({ workspaceEnabled = false, commissionEnabled = false 
   }
 
   return (
-    <nav className="sticky top-0 z-50 mb-5 rounded-[24px] border border-white/10 bg-[#070b10]/88 shadow-[0_18px_48px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+    <nav className="crm-global-nav sticky top-0 z-50 mb-5 rounded-b-[18px] border-x border-b border-white/10 bg-[#08090b]/92 shadow-[0_18px_48px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:top-3 sm:mx-auto sm:w-[calc(100%-2rem)] sm:max-w-[1560px] sm:rounded-[18px] sm:border">
       <div data-testid="authenticated-global-header" className="grid min-h-[66px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 px-2 sm:gap-3 sm:px-4">
         <div className="min-w-0 justify-self-start">
           <ProfileIndicator />
@@ -194,7 +194,7 @@ export function GlobalNav({ workspaceEnabled = false, commissionEnabled = false 
                 className={classNames(
                   "flex min-h-12 items-center gap-3 rounded-xl border px-3 text-sm font-bold",
                   hasOddMenuCount && index === 0 ? "col-span-2 sm:col-span-1" : "",
-                  active ? "border-white bg-white text-ink" : "border-white/10 bg-white/5 text-white"
+                  active ? "border-brand bg-brand text-ink" : "border-white/10 bg-white/[0.045] text-white hover:border-brand/45 hover:bg-white/[0.07]"
                 )}
               >
                 <Icon size={18} className={active ? "text-ink" : "text-brand"} />
@@ -222,7 +222,7 @@ export function AppHeader({
       <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-normal text-white">{title}</h1>
+          <h1 className="mt-1 text-2xl font-black tracking-[-0.02em] text-white sm:text-3xl">{title}</h1>
           {subtitle && <div className="mt-1 text-sm text-soft">{subtitle}</div>}
         </div>
         {actions && <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>}
@@ -243,10 +243,10 @@ export function SectionCard({
   className?: string;
 }) {
   return (
-    <section className={`rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(17,24,32,0.92),rgba(7,10,15,0.94))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] ${className}`}>
+    <section className={`rounded-[16px] border border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.055),rgba(255,255,255,0.025))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)] ${className}`}>
       {title && (
         <h2 className="mb-3 flex items-center gap-2 text-lg font-black text-white">
-          {icon && <span className="flex h-9 w-9 items-center justify-center rounded-2xl border border-brand/25 bg-brand/10 text-brand">{icon}</span>}
+          {icon && <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-brand/25 bg-brand/10 text-brand">{icon}</span>}
           {title}
         </h2>
       )}
@@ -257,7 +257,7 @@ export function SectionCard({
 
 export function NativeAppShell({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <main className={classNames("mx-auto min-h-screen w-full max-w-3xl px-4 pb-28 pt-4 sm:px-6", className)}>
+    <main className={classNames("crm-page mx-auto min-h-screen w-full max-w-4xl px-4 pb-28 pt-4 sm:px-6", className)}>
       {children}
     </main>
   );
@@ -276,7 +276,7 @@ export function NativeAppHeader({
 }) {
   return (
     <>
-      <header className="mb-5 overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,0.16),transparent_34%),linear-gradient(135deg,#101720,#06090e)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
+      <header className="mb-5 overflow-hidden rounded-[20px] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(214,182,108,0.16),transparent_34%),linear-gradient(135deg,#15140f,#07080a)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.38)] sm:p-6">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             {eyebrow ? <p className="text-[11px] font-black uppercase tracking-[0.22em] text-brand">{eyebrow}</p> : null}
@@ -302,7 +302,7 @@ export function NativeCard({
   return (
     <section
       className={classNames(
-        "rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(17,24,32,0.92),rgba(7,10,15,0.94))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.24)]",
+        "rounded-[16px] border border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.055),rgba(255,255,255,0.025))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]",
         interactive && "transition hover:border-brand/50 hover:bg-[#111820] active:scale-[0.99]",
         className
       )}
@@ -334,7 +334,7 @@ export function NativeButton({
       type="button"
       {...props}
       className={classNames(
-        "inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-black transition hover:border-brand/70 disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-black transition duration-150 hover:border-brand/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/35 disabled:cursor-not-allowed disabled:opacity-50",
         variantClass,
         className
       )}
@@ -344,10 +344,16 @@ export function NativeButton({
   );
 }
 
-export function NativeBadge({ children, tone = "brand" }: { children: ReactNode; tone?: "brand" | "muted" | "warning" }) {
+export function NativeBadge({ children, tone = "brand" }: { children: ReactNode; tone?: "brand" | "muted" | "success" | "warning" | "danger" | "info" }) {
   const toneClass =
-    tone === "warning"
+    tone === "success"
+      ? "border-emerald-300/35 bg-emerald-300/10 text-emerald-100"
+      : tone === "warning"
       ? "border-amber-300/35 bg-amber-300/10 text-amber-100"
+      : tone === "danger"
+        ? "border-rose-300/35 bg-rose-300/10 text-rose-100"
+        : tone === "info"
+          ? "border-sky-300/35 bg-sky-300/10 text-sky-100"
       : tone === "muted"
         ? "border-line bg-[#0b0d11] text-soft"
         : "border-brand/40 bg-brand/10 text-brand";

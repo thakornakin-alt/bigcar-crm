@@ -31,9 +31,9 @@ export function CrmShell({
   actions?: ReactNode;
 }) {
   return (
-    <main className="mx-auto min-h-screen w-full max-w-6xl px-4 pb-24 pt-5 sm:px-6">
+    <main className="crm-page mx-auto min-h-screen w-full max-w-7xl px-4 pb-24 pt-5 sm:px-6">
       <div className="lg:grid lg:grid-cols-[230px_1fr] lg:gap-5">
-      <aside className="mb-4 hidden rounded-lg border border-line bg-panel p-4 shadow-glow lg:block">
+      <aside className="mb-4 hidden rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-glow lg:block">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Big Car CRM</p>
         <p className="mt-1 text-xs text-soft">{fullName(user)} · {roleLabels[user.role]}</p>
         <nav className="mt-4 grid grid-cols-2 gap-2">

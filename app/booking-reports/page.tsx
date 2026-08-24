@@ -695,7 +695,7 @@ export default function BookingReportsPage() {
           className={`mb-4 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${
             error || companyWarning
               ? "border-amber-400/40 bg-amber-950/30 text-amber-100"
-              : "border-brand/40 bg-green-950/30 text-green-100"
+              : "border-emerald-400/35 bg-emerald-950/25 text-emerald-100"
           }`}
         >
           {error || companyWarning ? <AlertTriangle size={18} className="mt-0.5 shrink-0" /> : <CheckCircle2 size={18} />}
@@ -812,7 +812,7 @@ export default function BookingReportsPage() {
               <Field label="ทีม" value={form.teamName} onChange={(value) => update("teamName", value)} placeholder="เช่น พี่ลีฟ" />
             </div>
             {salesProfile && (
-              <p className="rounded-lg border border-brand/30 bg-green-950/20 px-3 py-2 text-xs leading-5 text-green-100">
+              <p className="rounded-lg border border-emerald-400/30 bg-emerald-950/20 px-3 py-2 text-xs leading-5 text-emerald-100">
                 ดึงจากโปรไฟล์ Login: {salesProfile.firstName} {salesProfile.lastName} · {salesProfile.phone} · {salesProfile.branch}
               </p>
             )}
@@ -844,7 +844,7 @@ export default function BookingReportsPage() {
 
           <SectionCard title="ไฟล์แนบ Draft" icon={<Paperclip size={18} />}>
             {(uploadProgress || driveFolderUrl) && (
-              <div className="rounded-lg border border-brand/40 bg-green-950/20 p-3 text-sm text-green-100">
+              <div className="rounded-lg border border-emerald-400/35 bg-emerald-950/20 p-3 text-sm text-emerald-100">
                 <div className="flex items-start gap-2">
                   {uploading ? <Loader2 size={18} className="mt-0.5 shrink-0 animate-spin text-brand" /> : <Cloud size={18} className="mt-0.5 shrink-0 text-brand" />}
                   <div className="min-w-0">

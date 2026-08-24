@@ -172,7 +172,7 @@ export default function SettingsPage() {
       {(message || error) && (
         <div
           className={`mb-4 flex items-start gap-2 rounded-2xl border px-4 py-3 text-sm ${
-            error ? "border-red-400/40 bg-red-950/30 text-red-100" : "border-brand/40 bg-green-950/30 text-green-100"
+            error ? "border-red-400/40 bg-red-950/30 text-red-100" : "border-emerald-400/35 bg-emerald-950/25 text-emerald-100"
           }`}
         >
           <CheckCircle2 size={18} className="mt-0.5 shrink-0" />

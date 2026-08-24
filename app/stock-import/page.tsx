@@ -742,7 +742,7 @@ export default function StockImportPage() {
       {(message || error) && (
         <div
           className={`mb-4 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${
-            error ? "border-amber-400/40 bg-amber-950/30 text-amber-100" : "border-brand/40 bg-green-950/30 text-green-100"
+            error ? "border-amber-400/40 bg-amber-950/30 text-amber-100" : "border-emerald-400/35 bg-emerald-950/25 text-emerald-100"
           }`}
         >
           {error ? <AlertTriangle size={18} className="mt-0.5 shrink-0" /> : <CheckCircle2 size={18} className="mt-0.5 shrink-0" />}
@@ -826,7 +826,7 @@ export default function StockImportPage() {
           )}
 
           {activeHiddenColumns.length > 0 && (
-            <div className="rounded-lg border border-brand/30 bg-green-950/10 p-4 shadow-glow">
+            <div className="rounded-lg border border-emerald-400/25 bg-emerald-950/10 p-4 shadow-glow">
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div>
                   <h2 className="flex items-center gap-2 text-lg font-bold text-white">

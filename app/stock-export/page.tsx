@@ -1545,7 +1545,7 @@ export default function StockExportPage() {
         <div className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full border border-brand/10" />
         <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-brand/30 bg-brand/10 text-brand shadow-[0_10px_28px_rgba(34,197,94,0.12)]">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-brand/30 bg-brand/10 text-brand shadow-[0_10px_28px_rgba(214,182,108,0.12)]">
               <CarFront size={22} aria-hidden="true" />
             </span>
             <div className="min-w-0">
@@ -1575,7 +1575,7 @@ export default function StockExportPage() {
         className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[22px] border px-4 py-3 text-sm shadow-[0_14px_38px_rgba(0,0,0,0.16)] ${
           stockLoadError
             ? hasSuccessfulStockLoad ? "border-amber-400/40 bg-amber-950/30 text-amber-100" : "border-red-400/40 bg-red-950/30 text-red-100"
-            : loading ? "border-sky-400/30 bg-sky-950/25 text-sky-100" : "border-brand/30 bg-green-950/20 text-green-100"
+            : loading ? "border-sky-400/30 bg-sky-950/25 text-sky-100" : "border-emerald-400/30 bg-emerald-950/20 text-emerald-100"
         }`}
         aria-live="polite"
         data-stock-state={stockLoadError ? hasSuccessfulStockLoad ? "stale" : "error" : loading ? stockLoadMode : "ready"}
@@ -1611,7 +1611,7 @@ export default function StockExportPage() {
       {(message || error) && (
         <div
           className={`mb-4 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${
-            error ? "border-amber-400/40 bg-amber-950/30 text-amber-100" : "border-brand/40 bg-green-950/30 text-green-100"
+            error ? "border-amber-400/40 bg-amber-950/30 text-amber-100" : "border-emerald-400/35 bg-emerald-950/25 text-emerald-100"
           }`}
         >
           {loading ? <Loader2 size={18} className="mt-0.5 shrink-0 animate-spin" /> : <CheckCircle2 size={18} className="mt-0.5 shrink-0" />}
@@ -2336,7 +2336,7 @@ export default function StockExportPage() {
       ) : null}
 
       <div className="fixed inset-x-0 bottom-4 z-40 px-4 sm:px-6">
-        <div className="mx-auto flex w-full max-w-5xl items-center gap-2 rounded-[24px] border border-white/10 bg-[#0b1220]/90 p-2 shadow-[0_0_40px_rgba(34,197,94,0.10)] backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-5xl items-center gap-2 rounded-[24px] border border-white/10 bg-[#0b0d11]/92 p-2 shadow-[0_0_40px_rgba(214,182,108,0.08)] backdrop-blur-xl">
           <NativeButton type="button" onClick={() => setListOpen(true)} variant="secondary" className="flex-1">
             <FileImage size={18} />
             Preview

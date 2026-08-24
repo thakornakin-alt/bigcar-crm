@@ -133,7 +133,7 @@ function BentoCard({
       href={href}
       className={`group relative flex flex-col justify-between overflow-hidden rounded-[24px] border border-white/10 p-4 shadow-[0_18px_46px_rgba(0,0,0,0.22)] transition hover:border-brand/50 active:scale-[0.99] ${
         featured
-          ? "col-span-2 bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,0.18),transparent_35%),linear-gradient(145deg,#121b23,#070b10)]"
+          ? "col-span-2 bg-[radial-gradient(circle_at_top_right,rgba(214,182,108,0.16),transparent_35%),linear-gradient(145deg,#17150f,#07080a)]"
           : "bg-[linear-gradient(145deg,#101720,#070b10)]"
       }`}
     >

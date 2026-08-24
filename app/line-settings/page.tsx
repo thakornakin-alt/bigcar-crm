@@ -118,7 +118,7 @@ export default function LineSettingsPage() {
       {(status || error) && (
         <div
           className={`mb-4 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${
-            error ? "border-red-400/40 bg-red-950/30 text-red-100" : "border-brand/40 bg-green-950/30 text-green-100"
+            error ? "border-red-400/40 bg-red-950/30 text-red-100" : "border-emerald-400/35 bg-emerald-950/25 text-emerald-100"
           }`}
         >
           {error ? <MessageCircle size={18} className="mt-0.5 shrink-0" /> : <CheckCircle2 size={18} className="mt-0.5 shrink-0" />}
@@ -257,7 +257,7 @@ export default function LineSettingsPage() {
 
 function StatusPill({ label, ok }: { label: string; ok: boolean }) {
   return (
-    <span className={`rounded-lg border px-3 py-2 ${ok ? "border-brand/40 bg-green-950/20 text-green-100" : "border-red-400/40 bg-red-950/30 text-red-100"}`}>
+    <span className={`rounded-lg border px-3 py-2 ${ok ? "border-emerald-400/35 bg-emerald-950/20 text-emerald-100" : "border-red-400/40 bg-red-950/30 text-red-100"}`}>
       {label}: {ok ? "OK" : "Missing"}
     </span>
   );

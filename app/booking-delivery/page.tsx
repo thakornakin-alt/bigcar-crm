@@ -418,7 +418,7 @@ export default function BookingDeliveryPage() {
                       setMobileDetailOpen(true);
                     }}
                     className={`text-left rounded-[22px] border p-4 transition ${
-                      active ? "border-brand bg-brand/10 shadow-[0_16px_38px_rgba(34,197,94,0.12)]" : "border-white/10 bg-[#0b0d11] hover:border-brand/50"
+                      active ? "border-brand bg-brand/10 shadow-[0_16px_38px_rgba(214,182,108,0.12)]" : "border-white/10 bg-[#0b0d11] hover:border-brand/50"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">

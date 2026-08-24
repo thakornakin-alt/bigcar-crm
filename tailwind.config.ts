@@ -9,14 +9,15 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#08090b",
-        panel: "#111318",
-        line: "#252932",
-        soft: "#aeb5c2",
-        brand: "#22c55e"
+        ink: "#07080a",
+        panel: "#101216",
+        line: "#292c33",
+        soft: "#a7adb8",
+        brand: "#d6b66c",
+        success: "#34d399"
       },
       boxShadow: {
-        glow: "0 18px 70px rgba(0, 0, 0, 0.35)"
+        glow: "0 18px 60px rgba(0, 0, 0, 0.42)"
       }
     }
   },

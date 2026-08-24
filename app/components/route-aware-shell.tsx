@@ -11,7 +11,7 @@ export function RouteAwareShell({ children, rddShellEnabled, workspaceEnabled, c
 
   if (isPublic) return <>{children}</>;
   return (
-    <div className={rddShellEnabled ? "rdd-crm-shell" : undefined}>
+    <div className={`bigcar-crm-shell ${rddShellEnabled ? "rdd-crm-shell" : ""}`}>
       <GlobalNav workspaceEnabled={workspaceEnabled} commissionEnabled={commissionEnabled} />
       {children}
     </div>

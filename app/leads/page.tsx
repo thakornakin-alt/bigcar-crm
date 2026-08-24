@@ -179,7 +179,7 @@ export default function LeadsPage() {
       />
 
       {(message || error) && (
-        <div className={`mb-4 rounded-2xl border px-4 py-3 text-sm font-semibold ${error ? "border-red-400/40 bg-red-950/30 text-red-100" : "border-brand/40 bg-green-950/30 text-green-100"}`}>
+        <div className={`mb-4 rounded-2xl border px-4 py-3 text-sm font-semibold ${error ? "border-red-400/40 bg-red-950/30 text-red-100" : "border-emerald-400/35 bg-emerald-950/25 text-emerald-100"}`}>
           {error || message}
         </div>
       )}
