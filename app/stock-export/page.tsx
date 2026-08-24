@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Banknote, CalendarDays, CarFront, CheckCircle2, Columns3, Download, FileImage, Filter, Gauge, Loader2, MapPin, MessageCircle, RefreshCw, Search } from "lucide-react";
+import { AlertTriangle, Banknote, CalendarDays, CarFront, CheckCircle2, Columns3, Download, FileImage, Filter, Gauge, ImageOff, Loader2, MapPin, MessageCircle, RefreshCw, Search } from "lucide-react";
 import {
   ActiveFilterTag,
   BottomSheet,
@@ -343,6 +343,24 @@ function vehicleTitle(vehicle: StockVehicle) {
 
 function stockStatus(vehicle: StockVehicle) {
   return String(vehicle.status || "").trim();
+}
+
+function VehicleImagePlaceholder({ vehicle }: { vehicle: StockVehicle }) {
+  return (
+    <div
+      className="relative flex h-[104px] w-[92px] shrink-0 flex-col items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_50%_5%,rgba(214,182,108,0.18),transparent_52%),linear-gradient(155deg,#15181d,#090b0e)] text-center shadow-inner sm:h-[116px] sm:w-[108px]"
+      role="img"
+      aria-label={`ยังไม่มีภาพรถ ${displayPlate(vehicle.plate)}`}
+      data-vehicle-image="placeholder"
+    >
+      <div className="absolute inset-x-3 bottom-3 h-px bg-gradient-to-r from-transparent via-brand/35 to-transparent" />
+      <CarFront size={31} strokeWidth={1.45} className="text-brand/85" aria-hidden="true" />
+      <span className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold text-soft">
+        <ImageOff size={11} aria-hidden="true" />
+        ยังไม่มีภาพรถ
+      </span>
+    </div>
+  );
 }
 
 function stockStatusTone(status?: string, isBookingReserved = false) {
@@ -2073,21 +2091,27 @@ export default function StockExportPage() {
                     const hasRemark = hasPdiRemark(pdiRemark);
                     const isBookingReserved = linePendingReservedPlateSet.has(normalizePlateForMatch(vehicle.plate));
                     return (
-                      <div
+                      <article
                         key={`${vehicle.plate}-${vehicle.vin || vehicle.model}`}
-                        className={`group relative overflow-hidden rounded-[22px] border bg-[linear-gradient(145deg,rgba(17,24,32,0.94),rgba(7,10,15,0.96))] p-4 text-left shadow-[0_16px_42px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:border-brand/45 ${exportMode === "internal" && hasRemark ? "border-amber-300/40" : "border-white/10"}`}
+                        className={`group relative overflow-hidden rounded-[20px] border bg-[linear-gradient(145deg,rgba(17,24,32,0.94),rgba(7,10,15,0.96))] p-3.5 text-left shadow-[0_16px_42px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:border-brand/45 sm:p-4 ${exportMode === "internal" && hasRemark ? "border-amber-300/40" : "border-white/10"}`}
                       >
                         <div className="pointer-events-none absolute -right-10 -top-12 h-28 w-28 rounded-full bg-brand/[0.06] blur-2xl transition group-hover:bg-brand/10" />
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="relative min-w-0">
-                            <p className="text-lg font-black tracking-wide text-white">{displayPlate(vehicle.plate)}</p>
-                            <p className="mt-1 line-clamp-2 text-sm font-bold text-soft">{vehicleTitle(vehicle)}</p>
+                        <div className="relative flex items-start gap-3">
+                          <VehicleImagePlaceholder vehicle={vehicle} />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex min-w-0 flex-col items-start gap-2">
+                              <span className={`inline-flex max-w-full rounded-full border px-2.5 py-1 text-[10px] font-black leading-tight ${stockStatusTone(vehicle.status, isBookingReserved)}`}>
+                                <span className="truncate">{isBookingReserved ? "ติดจองรอคอนเฟิร์ม" : vehicle.status || "พร้อมขาย"}</span>
+                              </span>
+                              <div className="min-w-0">
+                                <p className="truncate text-lg font-black tracking-wide text-white">{displayPlate(vehicle.plate)}</p>
+                                <p className="mt-0.5 line-clamp-2 text-sm font-bold leading-5 text-soft">{vehicleTitle(vehicle)}</p>
+                              </div>
+                            </div>
+                            <p className="mt-2 truncate text-[11px] font-semibold text-soft">{vehicle.vehicleGroup || "ไม่ระบุกลุ่ม"}</p>
                           </div>
-                          <span className={`relative inline-flex shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-black ${stockStatusTone(vehicle.status, isBookingReserved)}`}>
-                            {isBookingReserved ? "ติดจองรอคอนเฟิร์ม" : vehicle.status || "พร้อมขาย"}
-                          </span>
                         </div>
-                        <div className="relative mt-4 grid grid-cols-2 gap-2 text-xs">
+                        <div className="relative mt-3 grid grid-cols-2 gap-2 border-t border-white/8 pt-3 text-xs">
                           <span className="flex items-center gap-1.5 text-soft"><CalendarDays size={14} className="text-brand/80" />ปี {stockRegistrationYear(vehicle) || "-"}</span>
                           <span className="flex items-center gap-1.5 text-soft"><Gauge size={14} className="text-brand/80" />{formatMileage(vehicle.mileage)}</span>
                           <span className="flex min-w-0 items-center gap-1.5 text-soft"><MapPin size={14} className="shrink-0 text-brand/80" /><span className="truncate">{shortLocation(vehicle.parkingLocation)}</span></span>
@@ -2099,14 +2123,14 @@ export default function StockExportPage() {
                             </span>
                           ))}
                         </div>
-                        <div className="relative mt-3 flex items-center justify-between gap-2 border-t border-white/10 pt-3 text-[11px] text-soft"><span>{vehicle.vehicleGroup || "ไม่ระบุกลุ่ม"}</span><span>อยู่ในชุดรูป</span></div>
+                        <div className="relative mt-3 flex items-center justify-end gap-2 border-t border-white/10 pt-3 text-[11px] font-semibold text-soft"><CheckCircle2 size={13} className="text-emerald-300" /><span>อยู่ในชุด Export</span></div>
                         {exportMode === "internal" ? (
                           <div className={`mt-3 rounded-lg border px-3 py-2 ${hasRemark ? "border-amber-300/30 bg-amber-300/10" : "border-line bg-[#0b0d11]"}`}>
                             <p className="text-xs font-bold text-amber-100">หมายเหตุ PDI</p>
                             <p className={`mt-1 text-sm leading-6 ${hasRemark ? "text-amber-50" : "text-soft"}`}>{pdiRemarkText(pdiRemark)}</p>
                           </div>
                         ) : null}
-                      </div>
+                      </article>
                     );
                   })
                 ) : (
