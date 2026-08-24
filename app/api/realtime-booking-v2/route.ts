@@ -4,6 +4,7 @@ import { SYSTEM_VERSION_HEADER } from "@/lib/system-version";
 import { requireWritableUser, RequestAuthError } from "@/lib/request-user";
 import { profileActivityName } from "@/lib/user-profile";
 import { ownershipFromUser, saveCaseOwnership } from "@/lib/case-ownership";
+import { enqueueAndProcessMatchedRealtimeBookingLines, requireApprovedRealtimeBookingLineRoute } from "@/lib/realtime-booking-outbox";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,8 @@ export async function POST(request: Request) {
   try {
     const actor = await requireWritableUser();
     const body = await request.json();
+    const requestedLineTargetId = String(body.lineTargetId || "").trim();
+    const lineTargetId = requestedLineTargetId ? await requireApprovedRealtimeBookingLineRoute(requestedLineTargetId) : "";
     const item = await createRealtimeBookingV2Queue({
       plate: String(body.plate || ""),
       customerName: String(body.customerName || ""),
@@ -26,11 +29,20 @@ export async function POST(request: Request) {
       ownerUserId: actor.id,
       ownerEmail: actor.email,
       ownerBranch: actor.branch,
+      lineTargetId,
       remark: String(body.remark || ""),
       discount: Number(body.discount || 0)
     });
     await saveCaseOwnership(ownershipFromUser(actor, { caseType: "realtime_booking_v2", caseId: item.id }));
-    const response = NextResponse.json({ ok: true, item });
+    let notificationOutboxProcessed = 0;
+    let notificationWarning = "";
+    try {
+      notificationOutboxProcessed = (await enqueueAndProcessMatchedRealtimeBookingLines()).length;
+    } catch (notificationError) {
+      notificationWarning = "บันทึกคิวแล้ว แต่ระบบแจ้งเตือนยังไม่พร้อม กรุณาลองส่งการแจ้งเตือนอีกครั้ง";
+      console.error(JSON.stringify({ event: "realtime_booking_outbox_enqueue_failed", entityId: item.id, errorCode: "configuration_error" }));
+    }
+    const response = NextResponse.json({ ok: true, item, notificationOutboxProcessed, notificationWarning });
     response.headers.set("x-system-version", SYSTEM_VERSION_HEADER);
     return response;
   } catch (error) {

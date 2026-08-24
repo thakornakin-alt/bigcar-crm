@@ -91,7 +91,8 @@ const SIGNED_APPS_SCRIPT_ACTIONS = new Set<AppsScriptAction>([
   "registerSalesUser",
   "listSalesUsers",
   "updateSalesUser",
-  "sendPasswordResetEmail"
+  "sendPasswordResetEmail",
+  "createBookingEmailDraft"
 ]);
 
 function canonicalJson(value: unknown): string {

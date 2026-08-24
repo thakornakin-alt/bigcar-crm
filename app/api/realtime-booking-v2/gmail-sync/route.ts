@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { syncRealtimeBookingV2FromGmail } from "@/lib/realtime-booking-v2";
 import { SYSTEM_VERSION_HEADER } from "@/lib/system-version";
+import { enqueueAndProcessMatchedRealtimeBookingLines } from "@/lib/realtime-booking-outbox";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -24,8 +25,11 @@ export async function POST(request: Request) {
       query: body.query ? String(body.query) : undefined,
       maxResults: body.maxResults ? Number(body.maxResults) : undefined
     });
+    let notificationResults: unknown[] = [];
+    try { notificationResults = await enqueueAndProcessMatchedRealtimeBookingLines(); }
+    catch { console.error(JSON.stringify({ event: "realtime_booking_outbox_process_failed", errorCode: "configuration_error" })); }
 
-    const response = NextResponse.json(result);
+    const response = NextResponse.json({ ...result, notificationOutboxProcessed: notificationResults.length });
     response.headers.set("x-system-version", SYSTEM_VERSION_HEADER);
     return response;
   } catch (error) {

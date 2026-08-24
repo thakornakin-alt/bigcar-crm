@@ -847,7 +847,7 @@ export async function getRealtimeBookingV2Dashboard(): Promise<RealtimeBookingV2
   };
 }
 
-export async function createRealtimeBookingV2Queue(input: { plate: string; customerName: string; paymentType?: "cash" | "finance"; saleName: string; ownerUserId: string; ownerEmail: string; ownerBranch?: string; remark?: string; discount?: number }) {
+export async function createRealtimeBookingV2Queue(input: { plate: string; customerName: string; paymentType?: "cash" | "finance"; saleName: string; ownerUserId: string; ownerEmail: string; ownerBranch?: string; lineTargetId?: string; remark?: string; discount?: number }) {
   await ensureRealtimeBookingV2Store();
   const plate = String(input.plate || "").trim();
   const customerName = String(input.customerName || "").trim();
@@ -876,13 +876,21 @@ export async function createRealtimeBookingV2Queue(input: { plate: string; custo
     remark: String(input.remark || "").trim(),
     status: "WAITING",
     createdAt: new Date().toISOString(),
-    lineStatus: "not_sent"
+    lineStatus: "not_sent",
+    lineTargetId: String(input.lineTargetId || "").trim()
   };
 
   store.queue.unshift(item);
   await saveStore(store);
-  void matchQueueItem(item).then(() => saveStore(store));
+  await matchQueueItem(item);
+  await saveStore(store);
   return item;
+}
+
+export async function getRealtimeBookingV2QueueItem(id: string) {
+  await ensureRealtimeBookingV2Store();
+  const item = getStore().queue.find((queueItem) => queueItem.id === id);
+  return item ? { ...item } : null;
 }
 
 export async function simulateRealtimeBookingV2Price(input: { plate?: string; rtPrice: number; ignoreTtl?: boolean }) {

@@ -52,10 +52,38 @@ function envelope(action, payload, secret, timestamp = Date.now(), nonce = "a".r
 
 test("Apps Script mirrors remain byte-equivalent", () => assert.equal(code, mirror));
 
-test("only the five approved user and password-reset actions are protected", () => {
-  for (const action of ["loginSalesUser", "registerSalesUser", "listSalesUsers", "updateSalesUser", "sendPasswordResetEmail"])
+test("approved user, password-reset, and Booking Draft actions are protected", () => {
+  for (const action of ["loginSalesUser", "registerSalesUser", "listSalesUsers", "updateSalesUser", "sendPasswordResetEmail", "createBookingEmailDraft"])
     assert.match(code, new RegExp(`isProtectedAuthAction_[^\\n]+${action}`));
   assert.doesNotMatch(code.match(/function isProtectedAuthAction_\([^\r\n]+/)[0], /saveSalesReport|saveBookingReport|listStockVehicles/);
+});
+
+test("Booking Draft router consumes only the verified payload and enforces central recipients", () => {
+  assert.match(code, /createBookingEmailDraft\(p\|\|\{\}\)/);
+  assert.match(code, /function createBookingEmailDraft[^\n]+RDDUsedcarBooked@segroup\.co\.th/);
+  assert.match(code, /function createBookingEmailDraft[^\n]+rongsarit\.s@tgh\.co\.th/);
+  assert.doesNotMatch(code.match(/function createBookingEmailDraft\([^\r\n]+/)[0], /input\.to|input\.cc|input\.bcc/);
+});
+
+test("unsigned Booking Draft is rejected and signed fixture reaches the contract without Gmail", () => {
+  const secret = "fixture-secret-not-for-runtime";
+  const context = boundary(secret);
+  const calls = [];
+  context.parseRequestBody = (event) => event.body;
+  context.jsonResponse = (value) => value;
+  context.getErrorMessage = (error) => String(error?.message || error || "");
+  context.createBookingEmailDraft = (payload) => { calls.push(payload); return { status: "fixture_only" }; };
+  vm.runInNewContext([extract("isProtectedAuthAction_"), extract("doPost")].join("\n"), context);
+  const unsigned = context.doPost({ body: { action: "createBookingEmailDraft", subject: "unsafe", body: "unsafe" } });
+  assert.equal(unsigned.ok, false);
+  assert.equal(unsigned.error, "unauthorized_application_request");
+  assert.equal(calls.length, 0);
+  const payload = { reportId: "BR-FIXTURE", subject: "fixture", body: "fixture", to: "spoof@example.invalid" };
+  const signed = envelope("createBookingEmailDraft", payload, secret, Date.now(), "e".repeat(48));
+  const accepted = context.doPost({ body: signed });
+  assert.equal(accepted.ok, true);
+  assert.equal(accepted.result.status, "fixture_only");
+  assert.equal(calls.length, 1);
 });
 
 test("canonical vector accepts valid signature and rejects replay/tampering/expiry", () => {

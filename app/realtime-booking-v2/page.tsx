@@ -267,7 +267,6 @@ export default function RealtimeBookingV2Page() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const autoSendPendingRef = useRef<Set<string>>(new Set());
   const watchSyncLockRef = useRef(false);
   const lastManualSyncAtRef = useRef(0);
   const watchSessionRef = useRef(0);
@@ -549,58 +548,6 @@ export default function RealtimeBookingV2Page() {
     []
   );
 
-  const canAutoSendLine = useCallback(
-    (item: QueueItem) =>
-      item.status === "MATCHED" &&
-      (item.lineStatus === "not_sent" || !item.lineStatus) &&
-      Boolean(selectedLineTargetId) &&
-      Boolean(item.plate) &&
-      Boolean(lineTextForItem(item)) &&
-      !item.autoSendAttemptedAt &&
-      item.autoSendStatus !== "sent",
-    [selectedLineTargetId, lineDrafts]
-  );
-
-  useEffect(() => {
-    const candidates = (visibleQueue || []).filter((item) => canAutoSendLine(item));
-    if (!candidates.length) return;
-
-    let cancelled = false;
-    async function run() {
-      for (const item of candidates) {
-        if (cancelled) return;
-        if (autoSendPendingRef.current.has(item.id)) continue;
-        autoSendPendingRef.current.add(item.id);
-        try {
-          await api("/api/realtime-booking-v2/send-line", {
-            method: "POST",
-            body: JSON.stringify({
-              id: item.id,
-              targetId: selectedLineTargetId,
-              paymentType: lineDrafts[item.id]?.paymentType || item.paymentType || "finance",
-              saleName: lineDrafts[item.id]?.salesName || item.saleName || "บิ๊ก",
-              remark: lineDrafts[item.id]?.remark ?? item.remark ?? "",
-              discount: Number(lineDrafts[item.id]?.discount ?? item.discount ?? 0) || 0,
-              autoSend: true
-            })
-          });
-          setMessage("ส่ง LINE อัตโนมัติสำเร็จ");
-          await load();
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "ส่ง LINE อัตโนมัติไม่สำเร็จ");
-          await load();
-        } finally {
-          autoSendPendingRef.current.delete(item.id);
-        }
-      }
-    }
-
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [visibleQueue, selectedLineTargetId, lineDrafts]);
-
   const lineTextForItem = (item: QueueItem) => {
     const draft = lineDrafts[item.id];
     return formatRealtimeBookingV2LineText({
@@ -646,7 +593,8 @@ export default function RealtimeBookingV2Page() {
           paymentType,
           saleName: salesName,
           remark,
-          discount: Number(discount) > 0 ? Number(discount) : 0
+          discount: Number(discount) > 0 ? Number(discount) : 0,
+          lineTargetId: selectedLineTargetId
         })
       });
       setMessage("สร้างคิวแล้ว");
