@@ -585,7 +585,7 @@ export async function verifyPasswordResetEmailSenderBoundary(previewOrigin: stri
   const token = "a".repeat(43);
   const users = await listSalesUsers();
   return {
-    signedListSalesUsers: { ok: true, count: users.length },
+    signedListSalesUsers: { ok: Array.isArray(users) },
     signedFixture: await capture({
       recipientEmail: "invalid",
       resetUrl: `${previewOrigin}/reset-password?token=${token}`,

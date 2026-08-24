@@ -16,4 +16,5 @@ test("runtime probes are fixed invalid fixtures that cannot reach Gmail send", (
   assert.match(helper, /https:\/\/invalid\.example/);
   assert.match(helper, /https:\/\/bigcar-crm\.vercel\.app/);
   assert.match(helper, /signedListSalesUsers/);
+  assert.doesNotMatch(helper, /signedListSalesUsers: \{ ok: true, count:/);
 });

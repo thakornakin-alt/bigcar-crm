@@ -20,4 +20,5 @@ test("admin and external routes are classified narrowly", () => {
   assert.equal(routeAccess("/api/line/webhook"), "external");
   assert.equal(routeAccess("/api/realtime-booking/gmail-oauth/callback"), "external");
   assert.equal(routeAccess("/api/realtime-booking/gmail-webhook"), "external");
+  assert.equal(routeAccess("/api/internal/password-reset-email-sender-check"), "external");
 });

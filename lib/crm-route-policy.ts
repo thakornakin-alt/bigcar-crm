@@ -14,7 +14,8 @@ const PUBLIC_APIS = ["/api/auth/login", "/api/auth/me", "/api/site-admin/login"]
 const EXTERNAL_APIS = [
   "/api/line/webhook",
   "/api/realtime-booking/gmail-oauth/callback",
-  "/api/realtime-booking/gmail-webhook"
+  "/api/realtime-booking/gmail-webhook",
+  "/api/internal/password-reset-email-sender-check"
 ];
 
 function matches(pathname: string, prefix: string) {
