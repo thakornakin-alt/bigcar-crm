@@ -53,10 +53,16 @@ test("sessions require sessionVersion and API authorization compares current cre
 test("legacy UX bypass is removed and unauthenticated profile is not an admin", async () => {
   const loginPage = await readFile(path.join(root, "app/page.tsx"), "utf8");
   const profile = await readFile(path.join(root, "app/profile/page.tsx"), "utf8");
+  const crm = await readFile(path.join(root, "app/crm/page.tsx"), "utf8");
+  const adminCrm = await readFile(path.join(root, "app/admin/crm/page.tsx"), "utf8");
   assert.doesNotMatch(loginPage, /เข้าระบบเดิม/);
   assert.doesNotMatch(profile, /demoCurrentUser/);
+  assert.doesNotMatch(crm, /demoCurrentUser/);
+  assert.doesNotMatch(adminCrm, /demoCurrentUser/);
   assert.match(profile, /role: "viewer"/);
   assert.match(profile, /ยังไม่ได้เข้าสู่ระบบ/);
+  assert.match(crm, /redirect\("\/dashboard"\)/);
+  assert.match(adminCrm, /redirect\("\/admin\/users"\)/);
 });
 
 test("Apps Script source remains unchanged at the legacy boundary", async () => {
