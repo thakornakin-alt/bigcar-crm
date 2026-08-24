@@ -28,13 +28,14 @@ function sign(payload: string) {
   return createHmac("sha256", secret()).update(payload).digest("base64url");
 }
 
-export function createSalesProfileToken(user: SalesUser) {
+export function createSalesProfileToken(user: SalesUser, sessionVersion: number) {
+  if (!Number.isInteger(sessionVersion) || sessionVersion < 1) throw new Error("Valid sessionVersion is required");
   const iat = Date.now();
-  const payload = base64Url(JSON.stringify({ user, iat, exp: iat + maxAge * 1000 }));
+  const payload = base64Url(JSON.stringify({ user, sessionVersion, iat, exp: iat + maxAge * 1000 }));
   return `${payload}.${sign(payload)}`;
 }
 
-export function verifySalesProfileToken(token?: string) {
+export function verifySalesProfileSession(token?: string) {
   if (!token || !token.includes(".")) return null;
   const [payload, signature] = token.split(".");
   const expected = sign(payload);
@@ -47,15 +48,21 @@ export function verifySalesProfileToken(token?: string) {
     const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { user?: SalesUser; iat?: number; exp?: number };
     const issuedAt = Number(parsed.iat || 0);
     const expiresAt = Number(parsed.exp || issuedAt + maxAge * 1000);
+    const sessionVersion = Number((parsed as { sessionVersion?: number }).sessionVersion);
     if (!parsed.user?.id || !issuedAt || issuedAt > Date.now() + 60_000 || expiresAt <= Date.now()) return null;
-    return parsed.user;
+    if (!Number.isInteger(sessionVersion) || sessionVersion < 1) return null;
+    return { user: parsed.user, sessionVersion, iat: issuedAt, exp: expiresAt };
   } catch {
     return null;
   }
 }
 
-export function setSalesProfileCookie(response: NextResponse, user: SalesUser) {
-  response.cookies.set(salesProfileCookieName, createSalesProfileToken(user), {
+export function verifySalesProfileToken(token?: string) {
+  return verifySalesProfileSession(token)?.user || null;
+}
+
+export function setSalesProfileCookie(response: NextResponse, user: SalesUser, sessionVersion: number) {
+  response.cookies.set(salesProfileCookieName, createSalesProfileToken(user, sessionVersion), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

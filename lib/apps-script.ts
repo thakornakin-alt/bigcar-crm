@@ -31,6 +31,7 @@ import type {
   StockVehicle
 } from "@/lib/types";
 import type { CommissionGroupLookupInput, CommissionGroupLookupResult } from "@/lib/commission-canonical-capture";
+import { createHmac, randomBytes } from "node:crypto";
 
 type AppsScriptAction =
   | "list"
@@ -76,6 +77,40 @@ type AppsScriptResponse<T> =
       ok: false;
       error?: string;
     };
+
+const SIGNED_APPS_SCRIPT_ACTIONS = new Set<AppsScriptAction>([
+  "loginSalesUser",
+  "registerSalesUser",
+  "listSalesUsers",
+  "updateSalesUser"
+]);
+
+function canonicalJson(value: unknown): string {
+  if (value === null) return "null";
+  if (typeof value === "string" || typeof value === "boolean") return JSON.stringify(value);
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new AppsScriptError("configuration_error", "Non-finite signed payload value");
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().filter((key) => record[key] !== undefined).map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(",")}}`;
+  }
+  throw new AppsScriptError("configuration_error", "Unsupported signed payload value");
+}
+
+function signedAppsScriptBody(action: AppsScriptAction, payload: Record<string, unknown>) {
+  if (!SIGNED_APPS_SCRIPT_ACTIONS.has(action)) return { action, ...payload };
+  const secret = process.env.BIGCAR_APPS_SCRIPT_AUTH_SECRET;
+  if (!secret) throw new AppsScriptError("configuration_error", "Missing Apps Script application-boundary secret");
+  const timestamp = String(Date.now());
+  const nonce = randomBytes(24).toString("hex");
+  const canonicalPayload = canonicalJson(payload);
+  const canonical = [action, timestamp, nonce, canonicalPayload].join("\n");
+  const signature = createHmac("sha256", secret).update(canonical, "utf8").digest("hex");
+  return { action, payload, envelope: { timestamp, nonce, signature } };
+}
 
 export type AppsScriptErrorCode =
   | "timeout"
@@ -161,7 +196,7 @@ async function callAppsScriptDetailed<T>(action: AppsScriptAction, payload: Reco
       headers: {
         "Content-Type": "text/plain;charset=utf-8"
       },
-      body: JSON.stringify({ action, ...payload }),
+      body: JSON.stringify(signedAppsScriptBody(action, payload)),
       cache: "no-store"
     });
     const text = await response.text();
@@ -206,7 +241,7 @@ async function callAppsScript<T>(action: AppsScriptAction, payload: Record<strin
     headers: {
       "Content-Type": "text/plain;charset=utf-8"
     },
-    body: JSON.stringify({ action, ...payload }),
+    body: JSON.stringify(signedAppsScriptBody(action, payload)),
     cache: "no-store"
   });
 

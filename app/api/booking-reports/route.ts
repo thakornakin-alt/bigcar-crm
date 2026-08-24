@@ -56,7 +56,7 @@ function cleanReport(body: Partial<BookingReportInput>): BookingReportInput {
 
 export async function POST(request: Request) {
   try {
-    const actor = requireWritableUser();
+    const actor = await requireWritableUser();
     const payload = await request.json() as Partial<BookingReportInput> & {
       report?: Partial<BookingReportInput>;
       requestId?: unknown;

@@ -12,7 +12,7 @@ function previewView() {
 
 export async function GET() {
   try {
-    requireWritableUser();
+    await requireWritableUser();
     if (!getRddFeatureFlags().commissionPreview) return NextResponse.json({ error: "Commission Preview ปิดอยู่" }, { status: 404 });
     return NextResponse.json(previewView());
   } catch (error) {
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   try {
     if (!getRddFeatureFlags().commissionPreview) return NextResponse.json({ error: "Commission Preview ปิดอยู่" }, { status: 404 });
     const body = await request.json() as Record<string, unknown>;
-    const actor = body.action === "adjust" || body.action === "reverse" ? requireAdmin() : requireWritableUser();
+    const actor = body.action === "adjust" || body.action === "reverse" ? await requireAdmin() : await requireWritableUser();
     const now = new Date().toISOString();
     let result: unknown;
     if (body.action === "recognize") result = recognizeIsolatedCase({ bookingCaseId: String(body.bookingCaseId || ""), method: body.method === "manual_cutoff" ? "manual_cutoff" : "delivered", recognizedMonth: String(body.recognizedMonth || "2026-08"), actorUserId: actor.id, now });

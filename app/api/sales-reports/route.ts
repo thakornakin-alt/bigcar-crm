@@ -70,7 +70,7 @@ function clean(body: Partial<SalesReportInput>): SalesReportInput {
 
 export async function POST(request: Request) {
   try {
-    const actor = requireWritableUser();
+    const actor = await requireWritableUser();
     const payload = await request.json() as {
       report?: Partial<SalesReportInput>;
       requestId?: string;

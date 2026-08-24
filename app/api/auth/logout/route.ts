@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function POST() {
   let user;
   try {
-    user = requireUser();
+    user = await requireUser();
   } catch (error) {
     if (error instanceof RequestAuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     throw error;

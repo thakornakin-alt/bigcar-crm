@@ -9,7 +9,7 @@ import test from "node:test";
 
 const authSecret = "booking-delivery-auth-compatibility-test-secret";
 
-function sessionToken() {
+function sessionToken(sessionVersion = 1) {
   const now = Date.now();
   const user = {
     id: "USER-TEST",
@@ -28,7 +28,7 @@ function sessionToken() {
     createdAt: "",
     updatedAt: ""
   };
-  const payload = Buffer.from(JSON.stringify({ user, iat: now, exp: now + 60_000 })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ user, sessionVersion, iat: now, exp: now + 60_000 })).toString("base64url");
   const signature = createHmac("sha256", authSecret).update(payload).digest("base64url");
   return `${payload}.${signature}`;
 }
@@ -93,6 +93,21 @@ test("Booking Delivery GET remains rollback-safe while write auth stays enforced
       { id: "UNASSIGNED", bookingId: "BK-UNASSIGNED", status: "ยอดจอง" }
     ]
   }), "utf8");
+  await writeFile(path.join(dataDir, "auth-credentials-v2.json"), JSON.stringify({
+    credentials: {
+      "USER-TEST": {
+        userId: "USER-TEST",
+        algorithm: "scrypt",
+        version: 2,
+        salt: "fixture",
+        verifier: "fixture",
+        parameters: { N: 32768, r: 8, p: 1, keyLength: 64, maxmem: 67108864 },
+        sessionVersion: 1,
+        createdAt: "2026-08-24T00:00:00.000Z",
+        updatedAt: "2026-08-24T00:00:00.000Z"
+      }
+    }
+  }), "utf8");
 
   try {
     const disabled = await startServer(false, dataDir);
@@ -137,6 +152,13 @@ test("Booking Delivery GET remains rollback-safe while write auth stays enforced
         const body = await response.json();
         assert.equal(response.status, 200);
         assert.equal(body.records.length, 2);
+      });
+
+      await t.test("sessionVersion mismatch is rejected", async () => {
+        const response = await fetch(`${enabled.baseUrl}/api/booking-delivery`, {
+          headers: { Cookie: `bigcar_sales_profile=${sessionToken(2)}` }
+        });
+        assert.equal(response.status, 401);
       });
     } finally {
       await stopServer(enabled.child);

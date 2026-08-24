@@ -59,7 +59,7 @@ export async function GET(request: Request) {
     const shouldSyncBookingDelivery = ["1", "true"].includes(String(url.searchParams.get("sync") || "").toLowerCase());
     let currentUser = null;
     try {
-      currentUser = getRequestSalesUser();
+      currentUser = await getRequestSalesUser();
     } catch {
       currentUser = null;
     }

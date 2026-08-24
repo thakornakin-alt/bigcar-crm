@@ -25,7 +25,7 @@ function getRowIndex(params: { rowIndex: string }) {
 
 export async function PUT(request: Request, { params }: { params: { rowIndex: string } }) {
   try {
-    const currentUser = requireWritableUser();
+    const currentUser = await requireWritableUser();
     const rowIndex = getRowIndex(params);
     const input = cleanInput(await request.json());
     const existing = (await listCustomers()).find((customer) => customer.rowIndex === rowIndex);
@@ -62,7 +62,7 @@ export async function PUT(request: Request, { params }: { params: { rowIndex: st
 
 export async function DELETE(_request: Request, { params }: { params: { rowIndex: string } }) {
   try {
-    const currentUser = requireWritableUser();
+    const currentUser = await requireWritableUser();
     const rowIndex = getRowIndex(params);
     const existing = (await listCustomers()).find((customer) => customer.rowIndex === rowIndex);
     if (!existing) return NextResponse.json({ error: "Customer not found" }, { status: 404 });

@@ -6,7 +6,7 @@ import { filterByOwnership, ownershipScope } from "@/lib/rdd-ownership";
 
 export async function GET(request: Request) {
   try {
-    const currentUser = requireUser();
+    const currentUser = await requireUser();
     const leads = await listSalesLeads();
     const visibleLeads = filterByOwnership(leads, ownershipScope(new URL(request.url).searchParams.get("scope")), currentUser.id);
     return NextResponse.json({ leads: visibleLeads, total: leads.length });
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const currentUser = requireWritableUser();
+    const currentUser = await requireWritableUser();
     const body = await request.json();
     const lead = await addSalesLead({
       name: body.name,
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const currentUser = requireWritableUser();
+    const currentUser = await requireWritableUser();
     const body = await request.json();
     const existing = (await listSalesLeads()).find((lead) => lead.id === String(body.id || "").trim());
     if (!existing) return NextResponse.json({ error: "ไม่พบลูกค้ามุ่งหวัง" }, { status: 404 });

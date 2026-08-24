@@ -5,6 +5,7 @@ import { recordActivity } from "@/lib/activity-log";
 import { RequestAuthError, requireAdmin } from "@/lib/request-user";
 import type { SalesUserRole } from "@/lib/types";
 import { mergeStoredSalesProfile } from "@/lib/sales-profile-store";
+import { getAuthCredentialV2 } from "@/lib/auth-credentials-v2";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ const validRoles = new Set(["super_admin", "admin", "sales", "viewer"]);
 
 export async function GET() {
   try {
-    requireAdmin();
+    await requireAdmin();
     const users = await Promise.all((await listSalesUsers()).map(async (user) => await mergeStoredSalesProfile(user) || user));
     return NextResponse.json({ users });
   } catch (error) {
@@ -26,7 +27,7 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    const currentUser = requireAdmin();
+    const currentUser = await requireAdmin();
     const body = await request.json();
     const role = String(body.role || "") as SalesUserRole;
     const nextUser = await updateSalesUser({
@@ -42,7 +43,11 @@ export async function PATCH(request: Request) {
     });
 
     const response = NextResponse.json({ user: nextUser });
-    if (nextUser.id === currentUser.id) setSalesProfileCookie(response, nextUser);
+    if (nextUser.id === currentUser.id) {
+      const credential = await getAuthCredentialV2(nextUser.id);
+      if (!credential) throw new Error("Credential session unavailable");
+      setSalesProfileCookie(response, nextUser, credential.sessionVersion);
+    }
     return response;
   } catch (error) {
     if (error instanceof RequestAuthError) return NextResponse.json({ error: error.message }, { status: error.status });

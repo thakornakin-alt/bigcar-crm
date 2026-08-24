@@ -12,7 +12,7 @@ function errorResponse(error: unknown, fallback: string) {
 
 export async function GET(request: Request) {
   try {
-    requireUser();
+    await requireUser();
     const url = new URL(request.url);
     const templateId = String(url.searchParams.get("templateId") || "").trim();
     const reportId = String(url.searchParams.get("reportId") || "").trim();
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const actor = requireWritableUser();
+    const actor = await requireWritableUser();
     const body = await request.json();
     const saved = await writeDocumentV2Override({
       templateId: body.templateId,
@@ -42,7 +42,7 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    requireWritableUser();
+    await requireWritableUser();
     const url = new URL(request.url);
     const templateId = String(url.searchParams.get("templateId") || "").trim();
     const reportId = String(url.searchParams.get("reportId") || "").trim();

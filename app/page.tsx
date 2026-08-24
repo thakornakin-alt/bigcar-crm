@@ -145,12 +145,6 @@ export default function LoginHomePage() {
               >
                 สมัครบัญชีใหม่
               </Link>
-              <Link
-                href="/dashboard"
-                className="flex min-h-12 items-center justify-center rounded-xl border border-line bg-[#0b0d11] px-4 text-sm font-black text-white transition hover:border-brand/60"
-              >
-                เข้าระบบเดิม
-              </Link>
             </div>
           </div>
         </div>

@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     }
 
     const result = await pushLineReport(groupId, message, attachments);
-    await recordActivity(getRequestSalesUser(), {
+    await recordActivity(await getRequestSalesUser(), {
       action: "line.sendReport",
       targetType: "lineGroup",
       targetId: groupId,

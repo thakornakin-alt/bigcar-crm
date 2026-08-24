@@ -38,7 +38,7 @@ test("Profile update sends canonical names to Apps Script before mirroring and s
   assert.match(profileSource, /lastName: identity\.lastName/);
   assert.match(profileSource, /nickname: identity\.nickname/);
   assert.match(profileSource, /await saveSalesProfile\(nextUser, \{ throwOnError: true \}\)/);
-  assert.match(profileSource, /setSalesProfileCookie\(response, nextUser\)/);
+  assert.match(profileSource, /setSalesProfileCookie\(response, nextUser, credential\.sessionVersion\)/);
   assert.match(profileSource, /partialSuccess: true/);
   assert.match(profileSource, /canonicalSaved: true/);
   assert.match(profileSource, /mirrorSaved: false/);

@@ -20,7 +20,7 @@ function cleanInput(body: Partial<CustomerInput>): CustomerInput {
 
 export async function GET(request: Request) {
   try {
-    const currentUser = requireUser();
+    const currentUser = await requireUser();
     const customers = await listCustomers();
     const scope = ownershipScope(new URL(request.url).searchParams.get("scope"));
     const visibleCustomers = filterByOwnership(customers, scope, currentUser.id);
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const currentUser = requireWritableUser();
+    const currentUser = await requireWritableUser();
     const input = cleanInput(await request.json());
     input.ownerId = currentUser.id;
     input.ownerName = salesUserOwnerName(currentUser);

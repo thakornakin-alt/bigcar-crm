@@ -1,6 +1,6 @@
 import type { SalesUser } from "@/lib/types";
 
-export type SessionPayload = { user: SalesUser; iat: number; exp?: number };
+export type SessionPayload = { user: SalesUser; sessionVersion: number; iat: number; exp?: number };
 
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 export const FALLBACK_AUTH_SECRET = "big-car-crm-local-profile-secret";
@@ -43,7 +43,7 @@ export async function verifySessionTokenEdge(token: string | undefined, secret: 
   const expected = bytesToBase64Url(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload))));
   if (signature !== expected) return null;
   const parsed = decodePayload(payload);
-  if (!parsed?.user?.id || !Number.isFinite(parsed.iat)) return null;
+  if (!parsed?.user?.id || !Number.isFinite(parsed.iat) || !Number.isInteger(parsed.sessionVersion) || parsed.sessionVersion < 1) return null;
   const expiresAt = parsed.exp || parsed.iat + SESSION_MAX_AGE_SECONDS * 1000;
   if (parsed.iat > now + 60_000 || expiresAt <= now) return null;
   return parsed.user;

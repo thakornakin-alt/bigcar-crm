@@ -15,7 +15,7 @@ export async function PATCH(request: Request) {
     if (!getRddFeatureFlags().workspaceEdit) {
       return NextResponse.json({ error: "Workspace ยังอยู่ในโหมดอ่านอย่างเดียว" }, { status: 403 });
     }
-    const actor = requireWritableUser();
+    const actor = await requireWritableUser();
     const input = validateRddWorkspacePatchBody(await request.json());
     const result = await updateRddWorkspaceRecord(input);
 

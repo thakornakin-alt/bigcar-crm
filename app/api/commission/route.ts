@@ -4,7 +4,7 @@ import { RequestAuthError, requireWritableUser } from "@/lib/request-user";
 
 export async function POST() {
   try {
-    requireWritableUser();
+    await requireWritableUser();
     if (!getRddFeatureFlags().commissionRealWrites) return NextResponse.json({ error: "ยังไม่เปิดใช้งานการบันทึกค่าคอมจริง" }, { status: 403 });
     return NextResponse.json({ error: "Real Commission persistence ยังไม่เปิดใช้ใน Phase 2A" }, { status: 501 });
   } catch (error) {

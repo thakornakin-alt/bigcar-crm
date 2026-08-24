@@ -19,7 +19,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const user = getRequestSalesUser();
+    const user = await getRequestSalesUser();
     const body = await request.json();
     const item = await saveDocumentHistory({
       templateId: String(body.templateId || "") as DocumentTemplateId,

@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     }
 
     await pushLineText(groupId, message);
-    await recordActivity(getRequestSalesUser(), {
+    await recordActivity(await getRequestSalesUser(), {
       action: "line.sendText",
       targetType: "lineGroup",
       targetId: groupId,

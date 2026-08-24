@@ -1,8 +1,9 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { updateSalesUser, uploadProfileImage } from "@/lib/apps-script";
 import { recordActivity } from "@/lib/activity-log";
-import { salesProfileCookieName, setSalesProfileCookie, verifySalesProfileToken } from "@/lib/auth-session";
+import { setSalesProfileCookie } from "@/lib/auth-session";
+import { requireUser } from "@/lib/request-user";
+import { getAuthCredentialV2 } from "@/lib/auth-credentials-v2";
 import { saveSalesProfile } from "@/lib/sales-profile-store";
 import type { ProfileImageKind } from "@/lib/types";
 
@@ -18,9 +19,7 @@ function cleanBase64(value: string) {
 
 export async function POST(request: Request) {
   try {
-    const token = cookies().get(salesProfileCookieName)?.value;
-    const currentUser = verifySalesProfileToken(token);
-    if (!currentUser) throw new Error("กรุณา Login ก่อนอัปโหลดรูป");
+    const currentUser = await requireUser();
 
     const body = await request.json();
     const kind = String(body.kind || "") as ProfileImageKind;
@@ -56,7 +55,9 @@ export async function POST(request: Request) {
     await saveSalesProfile(nextUser);
 
     const response = NextResponse.json({ image: { ...uploaded, url: imageUrl }, user: nextUser }, { status: 201 });
-    setSalesProfileCookie(response, nextUser);
+    const credential = await getAuthCredentialV2(nextUser.id);
+    if (!credential) throw new Error("Credential session unavailable");
+    setSalesProfileCookie(response, nextUser, credential.sessionVersion);
     await recordActivity(nextUser, {
       action: kind === "avatar" ? "profile.avatar.upload" : "profile.lineQr.upload",
       targetType: "salesUser",

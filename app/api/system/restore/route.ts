@@ -12,8 +12,8 @@ const restoreStores = new Set([
   "sales-profiles.json"
 ]);
 
-function assertAdmin() {
-  const user = getRequestSalesUser();
+async function assertAdmin() {
+  const user = await getRequestSalesUser();
   if (user?.role !== "super_admin" && user?.role !== "admin") {
     throw new Error("ไม่มีสิทธิ์ Restore Backup");
   }
@@ -31,7 +31,7 @@ function extractBackupData(payload: unknown) {
 
 export async function POST(request: Request) {
   try {
-    assertAdmin();
+    await assertAdmin();
 
     const payload = await request.json();
     const data = extractBackupData(payload);

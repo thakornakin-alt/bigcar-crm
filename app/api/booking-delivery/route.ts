@@ -57,7 +57,7 @@ export async function GET(request: Request) {
   const totalStart = Date.now();
   const provider = String(process.env.BIG_CAR_STORE_PROVIDER || "json").trim().toLowerCase();
   try {
-    const actor = getRddFeatureFlags().authEnforcement ? requireUser() : getRequestSalesUser();
+    const actor = getRddFeatureFlags().authEnforcement ? await requireUser() : await getRequestSalesUser();
     timingLog("start GET /api/booking-delivery", {
       ts: totalStart,
       provider
@@ -117,7 +117,7 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const actor = requireWritableUser();
+    const actor = await requireWritableUser();
     const body = (await request.json()) as Record<string, unknown>;
     const id = String(body.id || body.bookingId || "").trim();
     if (!id) {

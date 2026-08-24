@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
-import { salesProfileCookieName, verifySalesProfileToken } from "@/lib/auth-session";
+import { salesProfileCookieName, verifySalesProfileSession } from "@/lib/auth-session";
+import { getAuthCredentialV2 } from "@/lib/auth-credentials-v2";
 import type { SalesUser } from "@/lib/types";
 
 export class RequestAuthError extends Error {
@@ -9,26 +10,30 @@ export class RequestAuthError extends Error {
   }
 }
 
-export function getRequestSalesUser(): SalesUser | null {
+export async function getRequestSalesUser(): Promise<SalesUser | null> {
   const token = cookies().get(salesProfileCookieName)?.value;
-  return verifySalesProfileToken(token);
+  const session = verifySalesProfileSession(token);
+  if (!session) return null;
+  const credential = await getAuthCredentialV2(session.user.id);
+  if (!credential || credential.sessionVersion !== session.sessionVersion) return null;
+  return session.user;
 }
 
-export function requireUser() {
-  const user = getRequestSalesUser();
+export async function requireUser() {
+  const user = await getRequestSalesUser();
   if (!user) throw new RequestAuthError(401, "Authentication required");
   if (user.locked) throw new RequestAuthError(403, "User account is locked");
   return user;
 }
 
-export function requireWritableUser() {
-  const user = requireUser();
+export async function requireWritableUser() {
+  const user = await requireUser();
   if (user.role === "viewer") throw new RequestAuthError(403, "Read-only account");
   return user;
 }
 
-export function requireAdmin() {
-  const user = requireUser();
+export async function requireAdmin() {
+  const user = await requireUser();
   if (user.role !== "admin" && user.role !== "super_admin") {
     throw new RequestAuthError(403, "Admin access required");
   }

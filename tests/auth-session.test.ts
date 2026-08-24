@@ -13,17 +13,25 @@ const user: SalesUser = {
 test("Edge verification accepts a signed, unexpired session", async () => {
   const secret = "test-secret-that-is-not-the-fallback";
   const now = Date.now();
-  const payload = Buffer.from(JSON.stringify({ user, iat: now, exp: now + 60_000 })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ user, sessionVersion: 1, iat: now, exp: now + 60_000 })).toString("base64url");
   const signature = createHmac("sha256", secret).update(payload).digest("base64url");
   assert.equal((await verifySessionTokenEdge(`${payload}.${signature}`, secret, now))?.id, user.id);
 });
 
 test("expired and tampered sessions are rejected", async () => {
   const secret = "test-secret";
-  const payload = Buffer.from(JSON.stringify({ user, iat: 1, exp: 2 })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ user, sessionVersion: 1, iat: 1, exp: 2 })).toString("base64url");
   const signature = createHmac("sha256", secret).update(payload).digest("base64url");
   assert.equal(await verifySessionTokenEdge(`${payload}.${signature}`, secret, 3), null);
   assert.equal(await verifySessionTokenEdge(`${payload}.${signature}x`, secret, 1), null);
+});
+
+test("legacy session without sessionVersion is rejected", async () => {
+  const secret = "test-secret";
+  const now = Date.now();
+  const payload = Buffer.from(JSON.stringify({ user, iat: now, exp: now + 60_000 })).toString("base64url");
+  const signature = createHmac("sha256", secret).update(payload).digest("base64url");
+  assert.equal(await verifySessionTokenEdge(`${payload}.${signature}`, secret, now), null);
 });
 
 test("fallback and missing production secrets are not usable", () => {

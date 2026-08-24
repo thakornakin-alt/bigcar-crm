@@ -4,8 +4,8 @@ import { resetUserData } from "@/lib/apps-script";
 
 export const dynamic = "force-dynamic";
 
-function assertAdmin() {
-  const user = getRequestSalesUser();
+async function assertAdmin() {
+  const user = await getRequestSalesUser();
   if (user?.role !== "super_admin" && user?.role !== "admin") {
     throw new Error("ไม่มีสิทธิ์ Reset ข้อมูล");
   }
@@ -14,7 +14,7 @@ function assertAdmin() {
 
 export async function POST(request: Request) {
   try {
-    assertAdmin();
+    await assertAdmin();
     const payload = await request.json().catch(() => ({}));
     const keepMonth = typeof payload?.keepMonth === "string" ? payload.keepMonth : undefined;
     const result = await resetUserData(keepMonth ? { keepMonth } : {});

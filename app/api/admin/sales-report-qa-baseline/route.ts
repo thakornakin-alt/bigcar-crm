@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    requireAdmin();
+    await requireAdmin();
     const now = new Date();
     const [reports, bookingDeliveries] = await Promise.all([
       listReportHistory("", "all"),

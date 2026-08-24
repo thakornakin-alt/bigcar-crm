@@ -4,12 +4,13 @@ import { recordActivity } from "@/lib/activity-log";
 import { saveSalesProfile } from "@/lib/sales-profile-store";
 import { RequestAuthError, requireAdmin } from "@/lib/request-user";
 import { validateProfileIdentity } from "@/lib/user-profile";
+import { createAuthCredentialV2IfMissing } from "@/lib/auth-credentials-v2";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
-    const actor = requireAdmin();
+    const actor = await requireAdmin();
     const body = await request.json();
     for (const forbidden of ["role", "locked", "active", "ownerUserId", "admin"]) {
       if (Object.prototype.hasOwnProperty.call(body, forbidden)) throw new Error("ผู้สมัครไม่สามารถกำหนดสิทธิ์ของตนเองได้");
@@ -51,7 +52,14 @@ export async function POST(request: Request) {
       }
     }
     await saveSalesProfile(user);
-    const response = NextResponse.json({ user, warning: avatarWarning || undefined });
+    let credentialWarning = "";
+    try {
+      await createAuthCredentialV2IfMissing(user.id, String(body.password || ""));
+    } catch (credentialError) {
+      credentialWarning = "สร้างบัญชีแล้ว แต่ credential v2 จะ migrate ในการ Login สำเร็จครั้งแรก";
+      console.warn("credential_migration_failed", { userId: user.id, reason: credentialError instanceof Error ? credentialError.message : "unknown" });
+    }
+    const response = NextResponse.json({ user, warning: [avatarWarning, credentialWarning].filter(Boolean).join(" · ") || undefined });
     await recordActivity(actor, {
       action: "auth.register",
       targetType: "salesUser",

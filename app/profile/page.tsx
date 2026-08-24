@@ -7,14 +7,28 @@ import Link from "next/link";
 import { ImageUp, LineChart, Loader2, LogOut, Phone, QrCode, Save, UserRound } from "lucide-react";
 import { CrmShell } from "@/app/components/crm-shell";
 import { SectionCard } from "@/app/components/ui";
-import { demoCurrentUser, fullName, roleLabels } from "@/lib/crm-core";
+import { fullName, roleLabels, type CrmUserProfile } from "@/lib/crm-core";
 import { profileDisplayName } from "@/lib/user-profile";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 
 export default function ProfilePage() {
   const router = useRouter();
   const { user: salesProfile, loading, setUser } = useSalesProfile();
-  const user = salesProfile || demoCurrentUser;
+  const unauthenticatedUser: CrmUserProfile = {
+    id: "unauthenticated",
+    firstName: "ยังไม่ได้เข้าสู่ระบบ",
+    lastName: "",
+    nickname: "Guest",
+    phone: "",
+    lineId: "",
+    lineQrUrl: "",
+    avatarUrl: "",
+    email: "-",
+    position: "",
+    branch: "",
+    role: "viewer"
+  };
+  const user = salesProfile || unauthenticatedUser;
   const isAdmin = user.role === "super_admin" || user.role === "admin";
   const [form, setForm] = useState({
     firstName: "",
