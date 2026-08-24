@@ -636,6 +636,26 @@ export default function SalesReportsPage() {
       })
     });
     const data = await response.json();
+    if (response.status === 409 && data.error === "existing_sales_report_for_booking") {
+      setDuplicatePrompt({
+        status: "existing_sales_report_for_booking",
+        normalizedPlate: "",
+        bookingReportId: String(data.bookingReportId || payload.bookingReportId || ""),
+        matches: [{
+          salesReportId: String(data.existingSalesReportId || ""),
+          bookingReportId: String(data.bookingReportId || payload.bookingReportId || ""),
+          saleDate: "",
+          customerName: String(payload.customerName || ""),
+          plate: String(payload.plate || ""),
+          salespersonDisplayName: String(payload.saleName || ""),
+          status: ""
+        }],
+        requestId
+      });
+      setPendingCreate(null);
+      setConfirmExceptionalCreate(false);
+      return;
+    }
     if (!response.ok) throw new Error(data.error || "บันทึกรายงานขายไม่สำเร็จ");
     setSavedReportId(data.report.id);
     setDuplicatePrompt(null);

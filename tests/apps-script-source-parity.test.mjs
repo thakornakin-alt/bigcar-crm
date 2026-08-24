@@ -13,6 +13,8 @@ test("transaction identity and duplicate protection remain in both mirrors", () 
   for (const source of [canonical, compact]) {
     assert.match(source, /bookingReportId:String\(r\[4\]\|\|""\)/);
     assert.match(source, /findSalesReportDuplicates_\(r\)/);
+    assert.match(source, /findActiveSalesReportByBookingReportId_\(r\.bookingReportId\)/);
+    assert.match(source, /SALES_REPORT_BOOKING_RELATIONSHIP_CONFLICT/);
     assert.match(source, /SALES_REPORT_DUPLICATE_CONFIRMATION_REQUIRED/);
     assert.match(source, /function hasReportDuplicate_\(/);
   }

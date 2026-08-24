@@ -38,9 +38,10 @@ test("Sales flow resolves exact booking before customer-plate duplicate and keep
   const page = readFileSync(new URL("../app/sales-reports/page.tsx", import.meta.url), "utf8");
   assert.ok(route.indexOf("salesReportsForExactBooking") < route.indexOf("const duplicate = await checkSalesReportDuplicate(report, actor.id)"));
   assert.match(route, /status: "existing_sales_report_for_booking"/);
+  assert.match(route, /error: "existing_sales_report_for_booking"/);
+  assert.match(route, /existingSalesReportId/);
   assert.match(route, /relationship: "verified_booking_report"/);
   assert.match(page, />เปิดรายงานขายเดิม</);
   assert.match(page, /duplicatePrompt\.confirmationToken \|\| ""/);
   assert.match(page, /ยืนยันสร้างรายงานขายใหม่\?/);
 });
-

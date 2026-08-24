@@ -158,6 +158,20 @@ export async function POST(request: Request) {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
+      const relationshipMarker = "SALES_REPORT_BOOKING_RELATIONSHIP_CONFLICT:";
+      const relationshipMarkerIndex = message.indexOf(relationshipMarker);
+      if (relationshipMarkerIndex >= 0) {
+        if (qaMetadata) await removeSalesReportQaReservation(requestId);
+        const relationship = JSON.parse(message.slice(relationshipMarkerIndex + relationshipMarker.length)) as {
+          salesReportId?: unknown;
+          bookingReportId?: unknown;
+        };
+        return NextResponse.json({
+          error: "existing_sales_report_for_booking",
+          existingSalesReportId: String(relationship.salesReportId || ""),
+          bookingReportId: String(relationship.bookingReportId || report.bookingReportId || "")
+        }, { status: 409 });
+      }
       const marker = "SALES_REPORT_DUPLICATE_CONFIRMATION_REQUIRED:";
       const markerIndex = message.indexOf(marker);
       if (markerIndex >= 0) {
