@@ -241,6 +241,19 @@ export async function compareAndSwapJsonStore<T>(
     const { table } = supabaseConfig();
     const key = encodeURIComponent(fileName);
     const revision = new Date().toISOString();
+    if (expectedRevision === "missing") {
+      const inserted = await supabaseRequest<SupabaseStoreRow[]>(
+        `${table}?on_conflict=store_key&select=store_key,updated_at`,
+        {
+          method: "POST",
+          headers: { Prefer: "resolution=ignore-duplicates,return=representation" },
+          body: JSON.stringify({ store_key: fileName, data, updated_at: revision })
+        }
+      );
+      return inserted.length === 1
+        ? { updated: true, revision: String(inserted[0].updated_at || revision) }
+        : { updated: false, revision: expectedRevision };
+    }
     const rows = await supabaseRequest<SupabaseStoreRow[]>(
       `${table}?store_key=eq.${key}&updated_at=eq.${encodeURIComponent(expectedRevision)}&select=store_key,updated_at`,
       {

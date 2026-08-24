@@ -96,6 +96,24 @@ export async function createAuthCredentialV2IfMissing(userId: string, password: 
   throw new Error("Credential migration conflicted; retry login");
 }
 
+export async function resetAuthCredentialV2(userId: string, password: string) {
+  const safeUserId = cleanUserId(userId);
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const snapshot = await readJsonStoreSnapshot<AuthCredentialStore>(storeFile, blankStore());
+    const existing = snapshot.data.credentials[safeUserId] || null;
+    const now = new Date().toISOString();
+    const replacement = await buildAuthCredentialV2(safeUserId, password, now);
+    replacement.createdAt = existing?.createdAt || now;
+    replacement.sessionVersion = (existing?.sessionVersion || 0) + 1;
+    const nextStore: AuthCredentialStore = {
+      credentials: { ...snapshot.data.credentials, [safeUserId]: replacement }
+    };
+    const result = await compareAndSwapJsonStore(storeFile, nextStore, snapshot.revision);
+    if (result.updated) return replacement;
+  }
+  throw new Error("Credential reset conflicted; request a new reset link");
+}
+
 export function publicCredentialState(credential: AuthCredentialV2 | null) {
   return credential ? {
     algorithm: credential.algorithm,

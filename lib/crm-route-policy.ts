@@ -1,7 +1,7 @@
 export type RouteAccess = "public" | "authenticated" | "admin" | "external";
 
 const PUBLIC_PAGES = [
-  "/", "/auth", "/cars", "/articles", "/contact", "/showroom", "/locations",
+  "/", "/auth", "/forgot-password", "/reset-password", "/cars", "/articles", "/contact", "/showroom", "/locations",
   "/why-us", "/lease-return-cars"
 ];
 
@@ -10,7 +10,7 @@ const ADMIN_APIS = [
   "/api/admin", "/api/activity/logs", "/api/system/export", "/api/system/restore",
   "/api/system/reset-user-data", "/api/system/storage-status"
 ];
-const PUBLIC_APIS = ["/api/auth/login", "/api/auth/me", "/api/site-admin/login"];
+const PUBLIC_APIS = ["/api/auth/login", "/api/auth/me", "/api/auth/forgot-password", "/api/auth/reset-password", "/api/site-admin/login"];
 const EXTERNAL_APIS = [
   "/api/line/webhook",
   "/api/realtime-booking/gmail-oauth/callback",

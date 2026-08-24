@@ -118,6 +118,12 @@ export default function LoginHomePage() {
                 placeholder="••••••••"
               />
 
+              <div className="flex justify-end">
+                <Link href="/forgot-password" className="min-h-10 px-1 py-2 text-sm font-black text-brand hover:underline">
+                  ลืมรหัสผ่าน?
+                </Link>
+              </div>
+
               <label className="flex min-h-10 items-center gap-3 text-sm font-bold text-soft">
                 <input
                   type="checkbox"

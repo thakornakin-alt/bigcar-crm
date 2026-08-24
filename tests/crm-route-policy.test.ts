@@ -3,7 +3,7 @@ import test from "node:test";
 import { routeAccess } from "../lib/crm-route-policy.ts";
 
 test("public website and login dependencies stay public", () => {
-  for (const path of ["/", "/cars", "/cars/car-1", "/articles", "/contact", "/api/auth/login", "/api/auth/me"]) {
+  for (const path of ["/", "/forgot-password", "/reset-password", "/cars", "/cars/car-1", "/articles", "/contact", "/api/auth/login", "/api/auth/me", "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/reset-password/validate"]) {
     assert.equal(routeAccess(path), "public", path);
   }
 });
