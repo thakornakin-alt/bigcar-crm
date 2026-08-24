@@ -70,3 +70,9 @@ test("security logs never include token, password, verifier, or cookie values", 
   const logCalls = [...service.matchAll(/console\.(?:info|error)\(([^\n]+)/g)].map((match) => match[1]).join("\n");
   assert.doesNotMatch(logCalls, /rawToken|tokenHash|newPassword|verifier|salt|cookie/i);
 });
+
+test("Preview readiness exposes only a masked canonical Super Admin destination", () => {
+  assert.match(service, /user\.role === "super_admin" && !user\.locked/);
+  assert.match(service, /maskedSuperAdminEmail/);
+  assert.doesNotMatch(service, /superAdminEmail:\s*superAdmin\.email/);
+});

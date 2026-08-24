@@ -193,5 +193,24 @@ export async function completePasswordReset(rawToken: string, newPassword: strin
   }
 }
 
+function maskEmail(email: string) {
+  const [local, domain] = normalizeResetEmail(email).split("@");
+  if (!local || !domain) return "configured";
+  const visible = local.slice(0, Math.min(2, local.length));
+  return `${visible}${"*".repeat(Math.max(3, local.length - visible.length))}@${domain}`;
+}
+
+export async function getPasswordResetReadiness() {
+  const [snapshot, users] = await Promise.all([
+    readJsonStoreSnapshot<PasswordResetStore>(STORE_FILE, blankStore()),
+    listSalesUsers()
+  ]);
+  const superAdmin = users.find((user) => user.role === "super_admin" && !user.locked);
+  return {
+    storeOperational: snapshot.data.version === 1,
+    maskedSuperAdminEmail: superAdmin ? maskEmail(superAdmin.email) : null
+  };
+}
+
 export const PASSWORD_RESET_GENERIC_MESSAGE = genericMessage;
 export const PASSWORD_RESET_POLICY = { tokenTtlMs: TOKEN_TTL_MS, accountCooldownMs: ACCOUNT_COOLDOWN_MS, accountMaxPerHour: ACCOUNT_MAX_PER_HOUR, sourceMaxPerHour: SOURCE_MAX_PER_HOUR };
