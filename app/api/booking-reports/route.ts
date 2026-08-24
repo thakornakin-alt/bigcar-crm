@@ -6,10 +6,10 @@ import { saveBookingReportAndMaster } from "@/lib/booking-report-persistence";
 import type { BookingReportInput, BuyerType } from "@/lib/types";
 import { recordActivity } from "@/lib/activity-log";
 import { RequestAuthError, requireWritableUser } from "@/lib/request-user";
-import { getRddFeatureFlags } from "@/lib/feature-flags";
 import { commissionGroupCaptureFromLookup, resolveAuthenticatedSalespersonCapture, type CommissionGroupLookupResult } from "@/lib/commission-canonical-capture";
 import { QaSyntheticCreateError, resolveQaSyntheticCreateMetadata } from "@/lib/qa-synthetic-create";
 import { createBookingRequestId } from "@/lib/booking-report-duplicate";
+import { ownershipFromUser, saveCaseOwnership } from "@/lib/case-ownership";
 
 export const dynamic = "force-dynamic";
 
@@ -72,8 +72,8 @@ export async function POST(request: Request) {
     const qaSynthetic = resolveQaSyntheticCreateMetadata(actor, { ...payload, ...body });
     const input = cleanReport(body);
     const salespersonCapture = resolveAuthenticatedSalespersonCapture({
-      submittedSalespersonUserId: body.salespersonUserId,
-      submittedSaleName: input.saleName,
+      submittedSalespersonUserId: actor.id,
+      submittedSaleName: actor.firstName,
       actor
     });
 
@@ -101,11 +101,17 @@ export async function POST(request: Request) {
     const result = await saveBookingReportAndMaster(input, {
       saveReport: async (report) => {
         try {
-          return await saveBookingReport(report, {
+          const savedReport = await saveBookingReport(report, {
             requestId,
             confirmationToken: String(payload.confirmationToken || ""),
             actorId: actor.id
           });
+          await saveCaseOwnership(ownershipFromUser(actor, {
+            caseType: "booking",
+            caseId: savedReport.id,
+            teamName: input.teamName
+          }));
+          return savedReport;
         } catch (error) {
           const message = error instanceof Error ? error.message : "";
           const marker = "BOOKING_REPORT_DUPLICATE_CONFIRMATION_REQUIRED:";
@@ -136,7 +142,7 @@ export async function POST(request: Request) {
           : undefined;
         return upsertBookingDeliveryFromBookingReport(
           report,
-          getRddFeatureFlags().ownerMetadata ? actor : null,
+          actor,
           { salesperson: salespersonCapture, group, qaSynthetic }
         );
       }

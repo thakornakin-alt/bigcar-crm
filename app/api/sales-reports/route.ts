@@ -16,6 +16,7 @@ import {
 } from "@/lib/sales-report-qa-metadata";
 import { requiresSalesDuplicateConfirmation } from "@/lib/sales-report-duplicate";
 import { salesReportsForExactBooking } from "@/lib/report-transaction-identity";
+import { getCaseOwnership, ownershipFromUser, salesOwnershipFromBooking, saveCaseOwnership } from "@/lib/case-ownership";
 
 export const dynamic = "force-dynamic";
 
@@ -87,7 +88,10 @@ export async function POST(request: Request) {
     } & Partial<SalesReportInput>;
     const body = (payload.report && typeof payload.report === "object" ? payload.report : payload) as Partial<SalesReportInput>;
     const report = clean(body);
-    const salespersonCapture = resolveAuthenticatedSalespersonCapture({ submittedSalespersonUserId: body.salespersonUserId, submittedSaleName: report.saleName, actor });
+    const bookingOwnership = report.bookingReportId ? await getCaseOwnership("booking", report.bookingReportId) : null;
+    const salespersonCapture = bookingOwnership
+      ? { salespersonUserId: bookingOwnership.ownerUserId, salespersonDisplayName: bookingOwnership.ownerDisplayName }
+      : resolveAuthenticatedSalespersonCapture({ submittedSalespersonUserId: actor.id, submittedSaleName: actor.firstName, actor });
     if (!report.customerName || !report.plate || !report.saleName) {
       return NextResponse.json({ error: "Customer name, plate and sale are required" }, { status: 400 });
     }
@@ -191,6 +195,10 @@ export async function POST(request: Request) {
         throw new SalesReportQaError(503, "Sales QA metadata persistence failed; downstream processing stopped");
       }
     }
+    const salesOwnership = bookingOwnership
+      ? salesOwnershipFromBooking(bookingOwnership, saved.id)
+      : ownershipFromUser(actor, { caseType: "sales", caseId: saved.id, teamName: report.teamName });
+    await saveCaseOwnership(salesOwnership);
     await recordActivity(actor, {
       action: "salesReport.create",
       targetType: "salesReport",

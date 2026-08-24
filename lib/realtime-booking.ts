@@ -347,7 +347,7 @@ export function addWaitingQueue(input: WaitingQueueInput) {
     discount: Number(input.discount || 0),
     paymentType: input.paymentType,
     saleName: input.saleName.trim(),
-    userId: input.userId || "local-user",
+    userId: input.userId || "",
     waitingOrder: store.sequence,
     status: activeSamePlate ? "DUPLICATED" : "WAITING",
     createdAt: new Date().toISOString(),

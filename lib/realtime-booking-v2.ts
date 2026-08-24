@@ -13,6 +13,9 @@ export type RealtimeBookingV2QueueItem = {
   normalizedPlate: string;
   customerName: string;
   saleName: string;
+  ownerUserId: string;
+  ownerEmail: string;
+  ownerBranch: string;
   paymentType: "cash" | "finance";
   discount: number;
   remark?: string;
@@ -842,7 +845,7 @@ export async function getRealtimeBookingV2Dashboard(): Promise<RealtimeBookingV2
   };
 }
 
-export async function createRealtimeBookingV2Queue(input: { plate: string; customerName: string; paymentType?: "cash" | "finance"; saleName?: string; remark?: string; discount?: number }) {
+export async function createRealtimeBookingV2Queue(input: { plate: string; customerName: string; paymentType?: "cash" | "finance"; saleName: string; ownerUserId: string; ownerEmail: string; ownerBranch?: string; remark?: string; discount?: number }) {
   await ensureRealtimeBookingV2Store();
   const plate = String(input.plate || "").trim();
   const customerName = String(input.customerName || "").trim();
@@ -862,7 +865,10 @@ export async function createRealtimeBookingV2Queue(input: { plate: string; custo
     plate,
     normalizedPlate,
     customerName,
-    saleName: String(input.saleName || "บิ๊ก").trim() || "บิ๊ก",
+    saleName: String(input.saleName).trim(),
+    ownerUserId: String(input.ownerUserId).trim(),
+    ownerEmail: String(input.ownerEmail).trim().toLowerCase(),
+    ownerBranch: String(input.ownerBranch || "").trim(),
     paymentType: input.paymentType === "cash" ? "cash" : "finance",
     discount: Number(input.discount || 0) > 0 ? Math.round(Number(input.discount || 0)) : 0,
     remark: String(input.remark || "").trim(),

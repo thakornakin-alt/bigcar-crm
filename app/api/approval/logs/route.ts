@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { saveApprovalLog } from "@/lib/apps-script";
+import { requireWritableUser, RequestAuthError } from "@/lib/request-user";
+import { ownershipFromUser, saveCaseOwnership } from "@/lib/case-ownership";
+import { recordActivity } from "@/lib/activity-log";
+import { randomUUID } from "node:crypto";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
+    const actor = await requireWritableUser();
     const body = await request.json();
     const formType = String(body.formType || "").trim();
     const plate = String(body.plate || "").trim();
@@ -16,8 +21,12 @@ export async function POST(request: Request) {
     }
 
     const result = await saveApprovalLog({ formType, plate, saleName, message });
-    return NextResponse.json({ result });
+    const approvalId = `approval-${randomUUID()}`;
+    await saveCaseOwnership(ownershipFromUser(actor, { caseType: "approval", caseId: approvalId }));
+    await recordActivity(actor, { action: "approval.create", targetType: "approval", targetId: approvalId, source: "api", metadata: { formType } });
+    return NextResponse.json({ result, approvalId });
   } catch (error) {
+    if (error instanceof RequestAuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to save approval log" },
       { status: 500 }
