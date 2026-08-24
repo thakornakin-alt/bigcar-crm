@@ -13,10 +13,8 @@ export async function GET() {
     return NextResponse.json({ error: "invalid_preview_origin" }, { status: 500 });
   }
   try {
-    const [senderBoundary, passwordResetReadiness] = await Promise.all([
-      verifyPasswordResetEmailSenderBoundary(origin),
-      getPasswordResetReadiness()
-    ]);
+    const senderBoundary = await verifyPasswordResetEmailSenderBoundary(origin);
+    const passwordResetReadiness = await getPasswordResetReadiness();
     return NextResponse.json({ ...senderBoundary, passwordResetReadiness });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "verification_failed" }, { status: 500 });
