@@ -108,3 +108,13 @@ test("application signing stays server-only and secret has no public prefix", ()
   assert.doesNotMatch(app, /NEXT_PUBLIC_BIGCAR_APPS_SCRIPT_AUTH_SECRET/);
   assert.equal([...app.matchAll(/createHmac\("sha256"/g)].length, 1);
 });
+
+test("Preview boundary diagnostic reaches Booking Draft validation before Gmail", () => {
+  const route = fs.readFileSync(new URL("../app/api/internal/password-reset-email-sender-check/route.ts", import.meta.url), "utf8");
+  assert.match(route, /process\.env\.VERCEL_ENV !== "preview"/);
+  assert.match(route, /createBookingEmailDraft\(\{/);
+  assert.match(route, /subject: ""/);
+  assert.match(route, /body: ""/);
+  assert.match(route, /reachedSignedContract: result === "Subject and body are required"/);
+  assert.match(route, /gmailDraftCreated: false/);
+});
