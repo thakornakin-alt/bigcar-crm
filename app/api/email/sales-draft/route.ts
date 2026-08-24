@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createSalesEmailDraft } from "@/lib/apps-script";
 import type { EmailDraftInput } from "@/lib/types";
+import { requireWritableUser, RequestAuthError } from "@/lib/request-user";
+import { maskEmail, resolveEmailRoute } from "@/lib/email-routing";
+import { finalizeNotification, notificationFingerprint, notificationKey, reserveNotification } from "@/lib/email-notification-idempotency";
 
 export const dynamic = "force-dynamic";
 
@@ -25,14 +28,29 @@ function clean(body: Partial<EmailDraftInput>): EmailDraftInput {
 
 export async function POST(request: Request) {
   try {
+    await requireWritableUser();
     const payload = clean(await request.json());
-    if (!payload.to || !payload.subject || !payload.body) {
-      return NextResponse.json({ error: "To, subject and body are required" }, { status: 400 });
-    }
+    if (!payload.reportId || !payload.subject || !payload.body) return NextResponse.json({ error: "Report, subject and body are required" }, { status: 400 });
+    const route = await resolveEmailRoute({ eventType: "sales_report_draft", entityId: payload.reportId });
+    if (route.status !== "resolved" || !route.recipient) return NextResponse.json({ error: "unresolved_email_route", reason: route.reason }, { status: 409 });
+    payload.to = route.recipient.to;
+    payload.cc = route.recipient.cc;
+    payload.bcc = route.recipient.bcc;
+    const key = notificationKey(route.eventType, payload.reportId, payload.to);
+    const reservation = await reserveNotification(key, notificationFingerprint(payload));
+    if (!reservation.created && reservation.record.status === "sent") return NextResponse.json({ result: reservation.record.result, idempotentReplay: true }, { status: 200 });
+    if (!reservation.created && reservation.record.status === "pending") return NextResponse.json({ error: "email_notification_pending" }, { status: 409 });
 
-    const result = await createSalesEmailDraft(payload);
-    return NextResponse.json({ result }, { status: 201 });
+    try {
+      const result = await createSalesEmailDraft(payload);
+      await finalizeNotification(key, "sent", result);
+      return NextResponse.json({ result, route: { owner: route.ownerDisplayName, email: maskEmail(route.ownerEmail) } }, { status: 201 });
+    } catch (error) {
+      await finalizeNotification(key, "failed");
+      throw error;
+    }
   } catch (error) {
+    if (error instanceof RequestAuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to create Gmail draft" },
       { status: 500 }
