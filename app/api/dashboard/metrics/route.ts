@@ -32,10 +32,6 @@ function legacyThaiDate() {
   return `${day}/${month}/${year}`;
 }
 
-function normalizePlate(value: string) {
-  return String(value || "").replace(/\s+/g, "").toUpperCase();
-}
-
 function extractLineValue(text: string, labels: string[]) {
   const lines = String(text || "").split(/\r?\n/);
   for (const line of lines) {
@@ -65,20 +61,21 @@ export async function GET(request: Request) {
     }
     const today = bangkokDateKey();
     const legacyToday = legacyThaiDate();
-    const [allLeadsResult, reportsResult, prepRecordsResult, todayEventsResult] = await Promise.allSettled([
+    const [allLeadsResult, reportsResult, prepRecordsResult, todayEventsResult, bookingDeliveryResult] = await Promise.allSettled([
       listSalesLeads(),
       listReportHistory("", "all"),
       listVehiclePrepRecords(),
-      listCalendarEvents({ from: today, to: today })
+      listCalendarEvents({ from: today, to: today }),
+      shouldSyncBookingDelivery
+        ? syncBookingDeliveryFromReportHistory().catch(() => listBookingDeliveryRecords())
+        : listBookingDeliveryRecords()
     ]);
 
     const allLeads = allLeadsResult.status === "fulfilled" ? allLeadsResult.value : [];
     const reports = reportsResult.status === "fulfilled" ? reportsResult.value : [];
     const prepRecords = prepRecordsResult.status === "fulfilled" ? prepRecordsResult.value : [];
     const todayEvents = todayEventsResult.status === "fulfilled" ? todayEventsResult.value : [];
-    const bookingDeliveryRecords = shouldSyncBookingDelivery
-      ? await syncBookingDeliveryFromReportHistory().catch(() => listBookingDeliveryRecords())
-      : await listBookingDeliveryRecords();
+    const bookingDeliveryRecords = bookingDeliveryResult.status === "fulfilled" ? bookingDeliveryResult.value : [];
     const operationalBookingDeliveries = bookingDeliveryRecords.filter((record) =>
       record.qaTestRecord !== true && record.excludeFromMetrics !== true && record.isCounted !== false
     );
@@ -90,11 +87,11 @@ export async function GET(request: Request) {
     const activeReports = reports.filter((report) => report.status !== "deleted");
     const bookings = activeReports.filter((report) => report.type === "booking");
     const sales = activeReports.filter((report) => report.type === "sales");
-    const salesPlateKeys = new Set(sales.map((report) => normalizePlate(report.plate)).filter(Boolean));
+    const salesBookingReportIds = new Set(sales.map((report) => String(report.bookingReportId || "").trim()).filter(Boolean));
     const financeWaiting = bookings.filter((report) =>
       isFinanceBooking(report) &&
       report.status !== "finance_approved" &&
-      !salesPlateKeys.has(normalizePlate(report.plate))
+      !salesBookingReportIds.has(report.id)
     );
     const readyDelivery = (() => {
       try {
@@ -105,6 +102,12 @@ export async function GET(request: Request) {
     })();
     const delivered = sales.filter((report) => report.status === "closed" || report.status === "delivered");
 
+    const failures: string[] = [];
+    if (allLeadsResult.status === "rejected") failures.push("leads");
+    if (reportsResult.status === "rejected") failures.push("reports");
+    if (prepRecordsResult.status === "rejected") failures.push("vehicle_prep");
+    if (todayEventsResult.status === "rejected") failures.push("calendar");
+    if (bookingDeliveryResult.status === "rejected") failures.push("booking_delivery");
     return NextResponse.json({
       metrics: {
         leads: leads.length,
@@ -118,7 +121,9 @@ export async function GET(request: Request) {
           (record) => record.status !== "ยกเลิก" && record.workflowStatus !== "ยอดส่งมอบ"
         ).length,
         todayEvents: todayEvents.length
-      }
+      },
+      complete: failures.length === 0,
+      warnings: failures
     });
   } catch (error) {
     return NextResponse.json({

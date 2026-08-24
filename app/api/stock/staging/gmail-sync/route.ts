@@ -50,7 +50,8 @@ async function getAccessToken() {
       refresh_token: requiredEnv("GMAIL_REFRESH_TOKEN"),
       grant_type: "refresh_token"
     }),
-    cache: "no-store"
+    cache: "no-store",
+    signal: AbortSignal.timeout(10000)
   });
 
   if (!response.ok) throw new Error(`Gmail token refresh failed: ${await response.text()}`);
@@ -62,7 +63,8 @@ async function getAccessToken() {
 async function gmailFetch<T>(path: string, token: string) {
   const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(gmailUser())}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store"
+    cache: "no-store",
+    signal: AbortSignal.timeout(12000)
   });
   if (!response.ok) throw new Error(`Gmail API failed: ${await response.text()}`);
   return await response.json() as T;

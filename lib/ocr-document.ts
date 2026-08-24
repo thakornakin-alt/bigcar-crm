@@ -114,7 +114,8 @@ export async function readDocumentOcr(input: OcrDocumentInput) {
           ]
         }
       ]
-    })
+    }),
+    signal: AbortSignal.timeout(25000)
   });
 
   const data = (await response.json().catch(() => ({}))) as {

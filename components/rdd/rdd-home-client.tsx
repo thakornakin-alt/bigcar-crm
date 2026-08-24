@@ -104,8 +104,9 @@ export function RddHomeClient({ initialYear, initialMonth, commissionPreview = f
         </div>
       </header>
 
-      {error ? <RddError message={error} onRetry={retry} /> : loading ? <RddSkeleton rows={4} /> : (
+      {error && records.length === 0 ? <RddError message={error} onRetry={retry} /> : loading && records.length === 0 ? <RddSkeleton rows={4} /> : (
         <div className="grid gap-4">
+          {error ? <div className="rounded-xl border border-amber-300/25 bg-amber-300/[0.08] p-3 text-sm text-amber-100">ข้อมูลอาจไม่ใช่ล่าสุด · {error} <button type="button" onClick={retry} className="ml-2 font-black underline">ลองใหม่</button></div> : null}
           {scope === "mine" && scoped.length === 0 && (
             <RddEmpty title="ยังไม่มีรายการที่ผูกกับบัญชีนี้" detail="ข้อมูลเก่ายังอยู่ใน ‘ทั้งหมด’" />
           )}

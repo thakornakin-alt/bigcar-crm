@@ -40,11 +40,25 @@ const blankMetrics: DashboardMetrics = {
 export default function DashboardPage() {
   const { user: salesProfile } = useSalesProfile();
   const [metrics, setMetrics] = useState<DashboardMetrics>(blankMetrics);
+  const [staleAt, setStaleAt] = useState("");
 
   useEffect(() => {
-    api<{ metrics: DashboardMetrics }>("/api/dashboard/metrics")
-      .then((data) => setMetrics(data.metrics || blankMetrics))
-      .catch(() => setMetrics(blankMetrics));
+    const cached = window.sessionStorage.getItem("bigcar-dashboard-last-good");
+    let cachedMetrics: { metrics: DashboardMetrics; at: string } | null = null;
+    if (cached) {
+      try {
+        cachedMetrics = JSON.parse(cached) as { metrics: DashboardMetrics; at: string };
+        setMetrics(cachedMetrics.metrics);
+      } catch { window.sessionStorage.removeItem("bigcar-dashboard-last-good"); }
+    }
+    api<{ metrics: DashboardMetrics; complete?: boolean }>("/api/dashboard/metrics")
+      .then((data) => {
+        if (data.complete === false && cachedMetrics) { setStaleAt(cachedMetrics.at || ""); return; }
+        const next = data.metrics || blankMetrics;
+        setMetrics(next);
+        if (data.complete !== false) window.sessionStorage.setItem("bigcar-dashboard-last-good", JSON.stringify({ metrics: next, at: new Date().toISOString() }));
+      })
+      .catch(() => { if (cachedMetrics) setStaleAt(cachedMetrics.at || ""); });
   }, []);
 
   const dashboard = useMemo(() => formatDashboardMetrics(metrics), [metrics]);
@@ -63,6 +77,8 @@ export default function DashboardPage() {
           </span>
         }
       />
+
+      {staleAt ? <p className="mb-3 rounded-xl border border-amber-300/25 bg-amber-300/[0.08] px-3 py-2 text-xs text-amber-100">ข้อมูลอาจไม่ใช่ล่าสุด · สำเร็จล่าสุด {new Date(staleAt).toLocaleString("th-TH")}</p> : null}
 
       <section className="mb-4 grid auto-rows-[116px] grid-cols-2 gap-3">
         <BentoCard href="/leads" label="ลูกค้ามุ่งหวัง" value={dashboard.leads} hint={`ใหม่วันนี้ ${dashboard.newLeadsToday}`} icon={<User size={18} />} featured />

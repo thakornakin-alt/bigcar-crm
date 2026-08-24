@@ -45,7 +45,8 @@ export async function GET(request: Request) {
       redirect_uri: getRedirectUri(request),
       grant_type: "authorization_code"
     }),
-    cache: "no-store"
+    cache: "no-store",
+    signal: AbortSignal.timeout(10000)
   });
 
   const text = await response.text();

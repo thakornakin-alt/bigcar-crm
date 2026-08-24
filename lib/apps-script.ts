@@ -79,6 +79,13 @@ type AppsScriptResponse<T> =
       error?: string;
     };
 
+const RETRYABLE_READ_ACTIONS = new Set<AppsScriptAction>([
+  "list", "listInterestRates", "searchBookingReports", "listReportHistory", "getStaffList",
+  "lookupByPlate", "lookupBookingByPlate", "lookupBookingListCommissionGroup", "listActivityLogs",
+  "listLineGroups", "listLineWebhookLogs", "listSalesUsers", "lookupStockByPlate", "listStockVehicles",
+  "lookupCustomerById", "getStockImportStatus"
+]);
+
 const SIGNED_APPS_SCRIPT_ACTIONS = new Set<AppsScriptAction>([
   "loginSalesUser",
   "registerSalesUser",
@@ -238,14 +245,32 @@ async function callAppsScriptDetailed<T>(action: AppsScriptAction, payload: Reco
 }
 
 async function callAppsScript<T>(action: AppsScriptAction, payload: Record<string, unknown> = {}) {
-  const response = await fetchWithTimeout(getAppsScriptUrl(), {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8"
-    },
-    body: JSON.stringify(signedAppsScriptBody(action, payload)),
-    cache: "no-store"
-  });
+  const startedAt = Date.now();
+  const requestId = randomBytes(8).toString("hex");
+  const maxAttempts = RETRYABLE_READ_ACTIONS.has(action) ? 2 : 1;
+  let response: Response | null = null;
+  let lastError: unknown = null;
+  let attempts = 0;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    attempts = attempt;
+    try {
+      response = await fetchWithTimeout(getAppsScriptUrl(), {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(signedAppsScriptBody(action, payload)),
+        cache: "no-store"
+      });
+      break;
+    } catch (error) {
+      lastError = error;
+      if (attempt >= maxAttempts || !(error instanceof AppsScriptError) || !["timeout", "network_error"].includes(error.code)) break;
+      await new Promise((resolve) => setTimeout(resolve, 120 * attempt));
+    }
+  }
+  if (!response) {
+    console.error(JSON.stringify({ level: "error", event: "apps_script_request", requestId, action, durationMs: Date.now() - startedAt, attempts, classification: lastError instanceof AppsScriptError ? lastError.code : "unknown_error" }));
+    throw lastError;
+  }
 
   const text = await response.text();
   let data: AppsScriptResponse<T>;
@@ -265,6 +290,8 @@ async function callAppsScript<T>(action: AppsScriptAction, payload: Record<strin
     const actionMissing = /unknown action|action.*(?:missing|not found|unsupported)|ไม่รู้จัก.*action/i.test(message);
     throw new AppsScriptError(actionMissing ? "apps_script_action_missing" : "unknown_error", message);
   }
+
+  console.info(JSON.stringify({ level: "info", event: "apps_script_request", requestId, action, durationMs: Date.now() - startedAt, attempts, classification: "success" }));
 
   return data;
 }

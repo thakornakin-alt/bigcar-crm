@@ -19,7 +19,6 @@ export function useBookingDeliveryRead() {
       setRecords(Array.isArray(data.records) ? data.records : []);
       setRevision(String(data.revision || ""));
     } catch (loadError) {
-      setRecords([]);
       setError(loadError instanceof Error ? loadError.message : "โหลด Booking Delivery ไม่สำเร็จ");
     } finally {
       setLoading(false);

@@ -23,6 +23,19 @@ type LinePushMessage = {
   previewImageUrl: string;
 };
 
+const LINE_READ_TIMEOUT_MS = 6000;
+const LINE_WRITE_TIMEOUT_MS = 10000;
+
+async function lineFetch(url: string, init: RequestInit, timeoutMs: number) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try { return await fetch(url, { ...init, signal: controller.signal }); }
+  catch (error) {
+    if (controller.signal.aborted) throw new Error("LINE_TIMEOUT");
+    throw new Error("LINE_NETWORK_ERROR");
+  } finally { clearTimeout(timer); }
+}
+
 export type LineReportAttachment = {
   name: string;
   type: string;
@@ -61,10 +74,10 @@ export function getLineConfigStatus() {
 
 export async function getLineGroupName(groupId: string) {
   try {
-    const response = await fetch(`https://api.line.me/v2/bot/group/${encodeURIComponent(groupId)}/summary`, {
+    const response = await lineFetch(`https://api.line.me/v2/bot/group/${encodeURIComponent(groupId)}/summary`, {
       headers: { Authorization: `Bearer ${getLineToken()}` },
       cache: "no-store"
-    });
+    }, LINE_READ_TIMEOUT_MS);
     if (!response.ok) return "";
     const data = (await response.json()) as { groupName?: string };
     return String(data.groupName || "");
@@ -163,7 +176,7 @@ async function pushLineMessagesInChunks(to: string, messages: LinePushMessage[])
 }
 
 async function pushLineMessages(to: string, messages: LinePushMessage[]) {
-  const response = await fetch("https://api.line.me/v2/bot/message/push", {
+  const response = await lineFetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${getLineToken()}`,
@@ -173,11 +186,10 @@ async function pushLineMessages(to: string, messages: LinePushMessage[]) {
       to,
       messages
     })
-  });
+  }, LINE_WRITE_TIMEOUT_MS);
 
   if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`LINE push failed: ${detail || response.status}`);
+    throw new Error(`LINE_UPSTREAM_HTTP_${response.status}`);
   }
 
   return true;

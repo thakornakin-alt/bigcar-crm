@@ -14,7 +14,8 @@ export async function GET(_request: Request, { params }: { params: { fileId: str
     headers: {
       "User-Agent": "BigCarCRM/1.0"
     },
-    cache: "no-store"
+    cache: "no-store",
+    signal: AbortSignal.timeout(10000)
   });
 
   if (!response.ok) {

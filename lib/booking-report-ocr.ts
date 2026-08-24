@@ -341,7 +341,8 @@ async function readFreeOcrText(input: BookingReportOcrInput) {
       OCREngine: "2",
       scale: "true",
       base64Image: `data:${mimeType};base64,${base64}`
-    })
+    }),
+    signal: AbortSignal.timeout(20000)
   });
 
   const data = (await response.json().catch(() => ({}))) as {
@@ -399,7 +400,8 @@ async function runOpenAiOcr(input: BookingReportOcrInput): Promise<BookingReport
           ]
         }
       ]
-    })
+    }),
+    signal: AbortSignal.timeout(25000)
   });
 
   const data = (await response.json().catch(() => ({}))) as {
