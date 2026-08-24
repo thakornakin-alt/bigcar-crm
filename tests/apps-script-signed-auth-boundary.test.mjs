@@ -52,8 +52,8 @@ function envelope(action, payload, secret, timestamp = Date.now(), nonce = "a".r
 
 test("Apps Script mirrors remain byte-equivalent", () => assert.equal(code, mirror));
 
-test("only the four approved user actions are protected", () => {
-  for (const action of ["loginSalesUser", "registerSalesUser", "listSalesUsers", "updateSalesUser"])
+test("only the five approved user and password-reset actions are protected", () => {
+  for (const action of ["loginSalesUser", "registerSalesUser", "listSalesUsers", "updateSalesUser", "sendPasswordResetEmail"])
     assert.match(code, new RegExp(`isProtectedAuthAction_[^\\n]+${action}`));
   assert.doesNotMatch(code.match(/function isProtectedAuthAction_\([^\r\n]+/)[0], /saveSalesReport|saveBookingReport|listStockVehicles/);
 });
@@ -68,9 +68,9 @@ test("canonical vector accepts valid signature and rejects replay/tampering/expi
   const tampered = envelope("updateSalesUser", payload, secret, Date.now(), "b".repeat(48));
   tampered.payload.user.email = "changed@example.invalid";
   assert.throws(() => context.verifyApplicationEnvelope_(tampered.action, tampered), /unauthorized_application_request/);
-  const expired = envelope("listSalesUsers", {}, secret, Date.now() - 120001, "c".repeat(48));
+  const expired = envelope("listSalesUsers", {}, secret, Date.now() - 121000, "c".repeat(48));
   assert.throws(() => context.verifyApplicationEnvelope_(expired.action, expired), /unauthorized_application_request/);
-  const future = envelope("listSalesUsers", {}, secret, Date.now() + 120001, "d".repeat(48));
+  const future = envelope("listSalesUsers", {}, secret, Date.now() + 121000, "d".repeat(48));
   assert.throws(() => context.verifyApplicationEnvelope_(future.action, future), /unauthorized_application_request/);
 });
 

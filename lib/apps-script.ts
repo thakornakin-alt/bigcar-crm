@@ -67,6 +67,7 @@ type AppsScriptAction =
   | "loginSalesUser"
   | "listSalesUsers"
   | "updateSalesUser"
+  | "sendPasswordResetEmail"
   | "uploadProfileImage"
   | "saveActivityLog"
   | "listActivityLogs";
@@ -82,7 +83,8 @@ const SIGNED_APPS_SCRIPT_ACTIONS = new Set<AppsScriptAction>([
   "loginSalesUser",
   "registerSalesUser",
   "listSalesUsers",
-  "updateSalesUser"
+  "updateSalesUser",
+  "sendPasswordResetEmail"
 ]);
 
 function canonicalJson(value: unknown): string {
@@ -553,6 +555,22 @@ export async function updateSalesUser(input: {
 }) {
   const data = await callAppsScript<{ user: SalesUser }>("updateSalesUser", { user: input });
   return data.user;
+}
+
+export type PasswordResetEmailInput = {
+  recipientEmail: string;
+  resetUrl: string;
+  displayName?: string;
+  requestId: string;
+};
+
+export type PasswordResetEmailResult = {
+  status: "sent" | "retryable_failure" | "permanent_failure" | "duplicate_request";
+};
+
+export async function sendPasswordResetEmail(input: PasswordResetEmailInput) {
+  const data = await callAppsScript<{ result: PasswordResetEmailResult }>("sendPasswordResetEmail", input);
+  return data.result;
 }
 
 export async function uploadProfileImage(input: ProfileImageUploadInput) {
