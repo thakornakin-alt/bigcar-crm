@@ -574,6 +574,21 @@ export async function sendPasswordResetEmail(input: PasswordResetEmailInput) {
 }
 
 export async function verifyPasswordResetEmailSenderBoundary(previewOrigin: string) {
+  type BoundaryEnvelope = {
+    action: AppsScriptAction;
+    payload: Record<string, unknown>;
+    envelope: { timestamp: string; nonce: string; signature: string };
+  };
+  const postBoundaryFixture = async (body: BoundaryEnvelope) => {
+    const response = await fetchWithTimeout(getAppsScriptUrl(), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(body),
+      cache: "no-store"
+    });
+    const data = JSON.parse(await response.text()) as AppsScriptResponse<{ users?: SalesUser[] }>;
+    return { ok: response.ok && data.ok === true, error: data.ok === false ? data.error || "unknown_error" : undefined };
+  };
   const capture = async (input: PasswordResetEmailInput) => {
     try {
       await sendPasswordResetEmail(input);
@@ -584,8 +599,16 @@ export async function verifyPasswordResetEmailSenderBoundary(previewOrigin: stri
   };
   const token = "a".repeat(43);
   const users = await listSalesUsers();
+  const replayBody = signedAppsScriptBody("listSalesUsers", {}) as BoundaryEnvelope;
+  const replayFirst = await postBoundaryFixture(replayBody);
+  const replaySecond = await postBoundaryFixture(replayBody);
+  const invalidSignatureBody = signedAppsScriptBody("listSalesUsers", {}) as BoundaryEnvelope;
+  invalidSignatureBody.envelope.signature = "0".repeat(64);
+  const invalidSignature = await postBoundaryFixture(invalidSignatureBody);
   return {
     signedListSalesUsers: { ok: Array.isArray(users) },
+    replay: { firstAccepted: replayFirst.ok, secondError: replaySecond.error },
+    invalidSignature: invalidSignature.error,
     signedFixture: await capture({
       recipientEmail: "invalid",
       resetUrl: `${previewOrigin}/reset-password?token=${token}`,
