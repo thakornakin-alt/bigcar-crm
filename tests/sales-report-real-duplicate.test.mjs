@@ -61,7 +61,9 @@ test("normal Sales UI has real create-new flow while fixture remains query-gated
   const fixture = await readFile(new URL("../components/sales-reports/DuplicateSalesReportFixture.tsx", import.meta.url), "utf8");
   assert.match(page, /สร้างรายงานใหม่จากข้อมูลนี้/);
   assert.match(page, /รายงานใหม่ — คัดลอกจากรายงานเดิม/);
-  assert.match(page, /พบลูกค้าและทะเบียนนี้ในรายงานขายเดิม/);
+  assert.match(page, /พบรายงานขายเดิม/);
+  assert.match(page, /เปิดรายงานขายเดิม/);
+  assert.match(page, /ยืนยันสร้างรายงานขายใหม่\?/);
   assert.match(fixture, /duplicateFixture/);
 });
 

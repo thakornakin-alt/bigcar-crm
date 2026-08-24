@@ -39,7 +39,9 @@ test("Booking API preflights before upload and exposes safe 409 contracts", asyn
   const page = await readFile(new URL("../app/booking-reports/page.tsx", import.meta.url), "utf8");
   const route = await readFile(new URL("../app/api/booking-reports/route.ts", import.meta.url), "utf8");
   assert.ok(page.indexOf("checkOnly: true") < page.indexOf("await createBookingReport(payload, requestId)"));
-  assert.match(page, /พบลูกค้าและทะเบียนนี้ในรายงานจองเดิม/);
+  assert.match(page, /พบรายงานจองเดิม/);
+  assert.match(page, /เปิดรายงานเดิม/);
+  assert.match(page, /ยืนยันสร้างรายงานจองใหม่\?/);
   assert.match(route, /duplicate_booking_confirmation_required/);
   assert.match(route, /idempotency_conflict/);
   assert.match(route, /duplicate_confirmation_invalid/);

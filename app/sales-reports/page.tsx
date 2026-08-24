@@ -14,9 +14,11 @@ import { copySalesReportForNewTransaction } from "@/lib/sales-report-duplicate";
 import { formatThaiReportDate, formatThaiReportDateTime, latestBookingReportId } from "@/lib/booking-report-display";
 
 type DuplicatePrompt = {
+  status: "duplicate_plate_customer_confirmation_required" | "existing_sales_report_for_booking";
   normalizedPlate: string;
-  matches: Array<{ salesReportId: string; saleDate: string; customerName: string; plate: string; salespersonDisplayName: string; status: string }>;
-  confirmationToken: string;
+  bookingReportId?: string;
+  matches: Array<{ salesReportId: string; bookingReportId?: string; saleDate: string; createdAt?: string; customerName: string; plate: string; salespersonDisplayName: string; status: string }>;
+  confirmationToken?: string;
   requestId: string;
 };
 
@@ -278,7 +280,9 @@ export default function SalesReportsPage() {
   const [createdFromSalesReportId, setCreatedFromSalesReportId] = useState("");
   const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicatePrompt | null>(null);
   const [pendingCreate, setPendingCreate] = useState<{ report: Record<string, unknown>; requestId: string } | null>(null);
+  const [confirmExceptionalCreate, setConfirmExceptionalCreate] = useState(false);
   const latestBookingId = useMemo(() => latestBookingReportId(results), [results]);
+  const latestSalesId = useMemo(() => latestBookingReportId(historyResults), [historyResults]);
 
   const reportText = useMemo(
     () => appendSalesProfileSignature(renderSalesReport({ ...form, reportText: "" }), salesProfile),
@@ -468,6 +472,7 @@ export default function SalesReportsPage() {
     setEmailFields({ subject: "", to: defaultEmailTo, cc: defaultEmailCc, bcc: "" });
     setMessage("สร้างฉบับร่างใหม่แล้ว กรุณาตรวจสอบราคา วันที่ ลูกค้า การชำระเงิน การส่งมอบ และเซลส์");
     setError("");
+    setConfirmExceptionalCreate(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -661,13 +666,14 @@ export default function SalesReportsPage() {
         body: JSON.stringify({ report: payload, requestId, checkOnly: true })
       });
       const preflightData = await preflight.json();
-      if (preflight.status === 409 && preflightData.status === "duplicate_plate_customer_confirmation_required") {
+      if (preflight.status === 409 && (preflightData.status === "duplicate_plate_customer_confirmation_required" || preflightData.status === "existing_sales_report_for_booking")) {
         setPendingCreate({ report: payload, requestId: preflightData.requestId || requestId });
         setDuplicatePrompt(preflightData as DuplicatePrompt);
+        setConfirmExceptionalCreate(false);
         return;
       }
       if (!preflight.ok) throw new Error(preflightData.error || "ตรวจสอบรายงานเดิมไม่สำเร็จ");
-      await createSalesReport(payload, requestId);
+      await createSalesReport(payload, requestId, preflightData.confirmationToken || "");
     } catch (err) {
       window.localStorage.setItem("bigcar-sales-draft-fallback", JSON.stringify({ ...form, paymentDetail: buildSalesPaymentDetail(form), reportText }));
       setError(err instanceof Error ? `${err.message} - บันทึกสำรองในเครื่องแล้ว` : "บันทึกไม่สำเร็จ");
@@ -682,7 +688,7 @@ export default function SalesReportsPage() {
     setSaving(true);
     setError("");
     try {
-      await createSalesReport(pendingCreate.report, pendingCreate.requestId, duplicatePrompt.confirmationToken);
+      await createSalesReport(pendingCreate.report, pendingCreate.requestId, duplicatePrompt.confirmationToken || "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "สร้างรายงานขายใหม่ไม่สำเร็จ");
     } finally {
@@ -863,12 +869,21 @@ export default function SalesReportsPage() {
             {historyResults.length > 0 && (
               <div className="mt-3 space-y-2">
                 {historyResults.map((report) => (
-                  <div key={report.id} className="rounded-lg border border-line bg-[#0b0d11] p-3">
-                    <p className="font-bold text-white">{report.customerName || "-"}</p>
-                    <p className="mt-1 text-sm text-soft">{report.plate} · {report.model} · {report.createdAt}</p>
+                  <div key={report.id} className={`rounded-lg border bg-[#0b0d11] p-3 ${report.id === latestSalesId ? "border-brand/50" : "border-line"}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0"><p className="font-bold text-white">{report.customerName || "-"}</p><p className="mt-1 text-sm text-soft">{report.plate} · {report.model}</p></div>
+                      {report.id === latestSalesId && <span className="shrink-0 rounded-full border border-brand/50 bg-brand/10 px-2 py-1 text-[11px] font-bold text-brand">ล่าสุด</span>}
+                    </div>
+                    <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                      <div><dt className="text-soft">วันที่รายงาน</dt><dd className="mt-0.5 font-semibold text-white">{formatThaiReportDate(report.createdAt)}</dd></div>
+                      <div><dt className="text-soft">สร้างเมื่อ</dt><dd className="mt-0.5 font-semibold text-white">{formatThaiReportDateTime(report.createdAt)}</dd></div>
+                      <div><dt className="text-soft">เซลส์</dt><dd className="mt-0.5 font-semibold text-white">{report.saleName || "-"}</dd></div>
+                      <div><dt className="text-soft">สถานะ</dt><dd className="mt-0.5 font-semibold text-white">{report.status || "-"}</dd></div>
+                    </dl>
+                    {report.bookingReportId && <p className="mt-2 break-all text-[11px] text-soft">อ้างอิงรายงานจอง: {report.bookingReportId}</p>}
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      <a href={`/report-history?q=${encodeURIComponent(report.id)}`} className="flex min-h-10 items-center justify-center rounded-lg border border-line px-3 text-sm font-semibold text-white">ดูรายงานเดิม</a>
-                      <button type="button" onClick={() => startFromExisting(report)} className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-3 text-sm font-bold text-ink">
+                      <a href={`/report-history?q=${encodeURIComponent(report.id)}`} className="flex min-h-10 items-center justify-center rounded-lg bg-brand px-3 text-sm font-bold text-ink">เปิดรายงานเดิม</a>
+                      <button type="button" onClick={() => startFromExisting(report)} className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line px-3 text-sm font-semibold text-soft">
                         <CopyPlus size={17} />สร้างรายงานใหม่จากข้อมูลนี้
                       </button>
                     </div>
@@ -1131,7 +1146,19 @@ export default function SalesReportsPage() {
       {duplicatePrompt && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-3 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="duplicate-sales-title">
           <section className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-xl border border-brand/40 bg-[#141821] p-4 shadow-2xl">
-            <h2 id="duplicate-sales-title" className="text-lg font-bold text-white">พบลูกค้าและทะเบียนนี้ในรายงานขายเดิม</h2>
+            <h2 id="duplicate-sales-title" className="text-lg font-bold text-white">{confirmExceptionalCreate ? "ยืนยันสร้างรายงานขายใหม่?" : duplicatePrompt.status === "existing_sales_report_for_booking" ? "พบรายงานขายของรายงานจองนี้แล้ว" : "พบรายงานขายเดิม"}</h2>
+            {confirmExceptionalCreate ? (
+              <>
+                <p className="mt-3 text-sm leading-6 text-amber-50">รายงานเดิมจะไม่ถูกแก้ไข และระบบจะสร้างเคสใหม่แยกต่างหาก</p>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <button type="button" onClick={() => setConfirmExceptionalCreate(false)} disabled={saving} className="min-h-11 rounded-lg border border-line px-3 font-semibold text-white">กลับ</button>
+                  <button type="button" onClick={confirmDuplicateCreate} disabled={saving} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-3 font-bold text-ink disabled:opacity-60">
+                    {saving ? <Loader2 size={18} className="animate-spin" /> : <CopyPlus size={18} />}ยืนยันสร้างเคสใหม่
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
             <div className="mt-3 rounded-lg border border-line bg-[#0b0d11] p-3 text-sm">
               <p className="font-semibold text-white">ลูกค้า: {form.customerName}</p>
               <p className="mt-1 text-soft">ทะเบียน: {form.plate}</p>
@@ -1140,19 +1167,20 @@ export default function SalesReportsPage() {
             <div className="mt-3 space-y-2">
               {duplicatePrompt.matches.map((match) => (
                 <div key={match.salesReportId} className="rounded-lg border border-line p-3 text-sm">
-                  <p className="font-semibold text-white">{match.saleDate || "ไม่ระบุวันที่"} · {match.customerName}</p>
+                  <p className="font-semibold text-white">{formatThaiReportDate(match.saleDate)} · {match.customerName}</p>
                   <p className="mt-1 text-xs text-soft">เซลส์: {match.salespersonDisplayName || "-"} · สถานะ: {match.status || "-"}</p>
+                  {match.bookingReportId && <p className="mt-1 break-all text-[11px] text-soft">อ้างอิงรายงานจอง: {match.bookingReportId}</p>}
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-sm leading-6 text-amber-50">หากเป็นการขายครั้งใหม่ สามารถสร้างรายงานขายใหม่ได้<br />รายงานเดิมจะไม่ถูกแก้ไข</p>
-            <div className="mt-4 grid gap-2 sm:grid-cols-3">
-              <a href={`/report-history?q=${encodeURIComponent(duplicatePrompt.matches[0]?.salesReportId || "")}`} className="flex min-h-11 items-center justify-center rounded-lg border border-line px-3 text-sm font-semibold text-white">ดูรายงานเดิม</a>
-              <button type="button" onClick={() => { setDuplicatePrompt(null); setPendingCreate(null); }} disabled={saving} className="min-h-11 rounded-lg border border-line px-3 font-semibold text-white">ยกเลิก</button>
-              <button type="button" onClick={confirmDuplicateCreate} disabled={saving} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-3 font-bold text-ink disabled:opacity-60">
-                {saving ? <Loader2 size={18} className="animate-spin" /> : <CopyPlus size={18} />}สร้างรายงานใหม่
-              </button>
+            <p className="mt-3 text-sm leading-6 text-amber-50">{duplicatePrompt.status === "existing_sales_report_for_booking" ? "รายงานจองนี้มีรายงานขายแล้ว เปิดรายงานเดิมเพื่อทำงานต่อ" : "ลูกค้าและทะเบียนนี้มีรายงานขายอยู่แล้ว คุณสามารถเปิดรายงานเดิมเพื่อทำงานต่อได้"}</p>
+            <div className="mt-4 grid gap-2">
+              <a href={`/report-history?q=${encodeURIComponent(duplicatePrompt.matches[0]?.salesReportId || "")}`} className="flex min-h-12 items-center justify-center rounded-lg bg-brand px-3 text-sm font-bold text-ink">เปิดรายงานขายเดิม</a>
+              <button type="button" onClick={() => { setDuplicatePrompt(null); setPendingCreate(null); setConfirmExceptionalCreate(false); }} disabled={saving} className="min-h-11 rounded-lg border border-line px-3 font-semibold text-white">ยกเลิก</button>
+              {duplicatePrompt.status !== "existing_sales_report_for_booking" && <button type="button" onClick={() => setConfirmExceptionalCreate(true)} disabled={saving} className="min-h-10 rounded-lg px-3 text-sm font-semibold text-soft underline decoration-white/20 underline-offset-4 hover:text-white">สร้างเป็นเคสใหม่</button>}
             </div>
+              </>
+            )}
           </section>
         </div>
       )}

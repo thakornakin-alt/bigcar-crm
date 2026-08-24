@@ -37,5 +37,6 @@ test("Booking search UX exposes differentiating transaction context", async () =
 test("Booking duplicate confirmation uses the shared Thai date formatter", async () => {
   const page = await readFile(new URL("../app/booking-reports/page.tsx", import.meta.url), "utf8");
   assert.match(page, /formatThaiReportDate\(match\.bookingDate\)/);
-  assert.match(page, /พบลูกค้าและทะเบียนนี้ในรายงานจองเดิม/);
+  assert.match(page, /พบรายงานจองเดิม/);
+  assert.match(page, /เปิดรายงานเดิม/);
 });

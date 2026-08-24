@@ -23,6 +23,17 @@ export type SalesRelationshipResolution =
   | { status: "resolved"; sale: ReportHistoryItem; source: "bookingReportId" | "unique_legacy_plate" }
   | { status: "not_found" | "conflict"; sale?: undefined; source?: undefined };
 
+export function salesReportsForExactBooking(
+  reports: ReportHistoryItem[],
+  bookingReportId: unknown
+) {
+  const stableId = String(bookingReportId || "").trim();
+  if (!stableId) return [];
+  return reports
+    .filter((report) => report.type === "sales" && String(report.bookingReportId || "") === stableId)
+    .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")));
+}
+
 /**
  * Resolve a sale for read-side presentation. Exact bookingReportId is authoritative.
  * Legacy plate fallback is allowed only when both booking and sale history are unique.

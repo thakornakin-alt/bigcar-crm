@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkSalesReportDuplicate, saveSalesReport } from "@/lib/apps-script";
+import { checkSalesReportDuplicate, listReportHistory, saveSalesReport } from "@/lib/apps-script";
 import { captureBookingDeliverySalespersonFromSalesReport, syncBookingDeliveryFromReportHistory } from "@/lib/booking-delivery";
 import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
 import type { SalesReportInput } from "@/lib/types";
@@ -14,6 +14,8 @@ import {
   resolveSalesReportQaRequest,
   SalesReportQaError
 } from "@/lib/sales-report-qa-metadata";
+import { requiresSalesDuplicateConfirmation } from "@/lib/sales-report-duplicate";
+import { salesReportsForExactBooking } from "@/lib/report-transaction-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -98,6 +100,37 @@ export async function POST(request: Request) {
       requestId
     });
     if (payload.checkOnly === true) {
+      if (report.bookingReportId) {
+        const relatedHistory = await listReportHistory(report.bookingReportId, "all");
+        const booking = relatedHistory.find((item) => item.type === "booking" && item.id === report.bookingReportId);
+        const existingSales = salesReportsForExactBooking(relatedHistory, report.bookingReportId);
+        if (existingSales.length) {
+          return NextResponse.json({
+            status: "existing_sales_report_for_booking",
+            bookingReportId: report.bookingReportId,
+            matches: existingSales.map((item) => ({
+              salesReportId: item.id,
+              bookingReportId: item.bookingReportId,
+              saleDate: item.createdAt,
+              createdAt: item.createdAt,
+              customerName: item.customerName,
+              plate: item.plate,
+              salespersonDisplayName: item.saleName,
+              status: item.status
+            })),
+            requestId
+          }, { status: 409 });
+        }
+        if (booking && requiresSalesDuplicateConfirmation(report, booking)) {
+          const duplicate = await checkSalesReportDuplicate(report, actor.id);
+          return NextResponse.json({
+            status: "ok_to_create",
+            requestId,
+            confirmationToken: duplicate.requiresConfirmation ? duplicate.confirmationToken : undefined,
+            relationship: "verified_booking_report"
+          });
+        }
+      }
       const duplicate = await checkSalesReportDuplicate(report, actor.id);
       if (duplicate.requiresConfirmation) {
         return NextResponse.json({
