@@ -1008,25 +1008,8 @@ export default function SalesReportsPage() {
 
             <Panel title="Gmail Draft">
               <div className="rounded-lg border border-line bg-[#0b0d11] p-3 text-sm text-soft">
-                ผู้ส่ง: <span className="font-semibold text-white">บัญชีระบบ BIG CAR CRM</span> · เจ้าของเคส: {salesProfile ? `${salesProfile.firstName} ${salesProfile.lastName}`.trim() : "ระบบจะตรวจจากเจ้าของเคส"} · สร้างเป็น Draft เท่านั้น
+                ฟังก์ชัน Email / Gmail Draft สำหรับรายงานขายถูกปิดใช้งาน
               </div>
-              <Field label="หัวข้ออีเมล" value={emailFields.subject} onChange={(value) => updateEmail("subject", value)} />
-              <div className="rounded-lg border border-line bg-[#0b0d11] p-3 text-xs text-soft">ปลายทางถูกกำหนดจากเจ้าของเคสและค่าระบบฝั่ง Server ไม่รับอีเมลที่กรอกจาก Browser</div>
-              <button
-                type="button"
-                onClick={createEmailDraft}
-                disabled={drafting || uploading}
-                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-brand/50 bg-[#0b0d11] px-4 font-bold text-brand disabled:opacity-70"
-              >
-                {drafting || uploading ? <Loader2 size={20} className="animate-spin" /> : <Mail size={20} />}
-                {drafting ? "กำลังสร้าง Gmail Draft..." : "สร้าง Gmail Draft"}
-              </button>
-              {draftUrl && (
-                <a href={draftUrl} target="_blank" rel="noreferrer" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink">
-                  <Mail size={20} />
-                  เปิด Gmail Draft
-                </a>
-              )}
             </Panel>
 
             <Panel title="ไฟล์แนบ Draft รายงานขาย">

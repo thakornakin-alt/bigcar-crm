@@ -821,10 +821,10 @@ export default function BookingReportsPage() {
 
           <SectionCard title="Gmail Draft" icon={<Mail size={18} />}>
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs text-soft">
-              ผู้ส่ง: บัญชีระบบ BIG CAR CRM · เจ้าของเคส: {salesProfile ? `${salesProfile.firstName} ${salesProfile.lastName}`.trim() : "ระบบจะตรวจจากเจ้าของเคส"} · สร้างเป็น Draft เท่านั้น
+              ผู้ส่ง: Gmail กลางของ BIG CAR CRM · เจ้าของเคสในรายงาน: {salesProfile ? `${salesProfile.firstName} ${salesProfile.lastName}`.trim() : "ระบบจะตรวจจาก CRM Login"} · สร้างเป็น Draft เท่านั้น
             </p>
             <Field label="หัวข้ออีเมล" value={buildDefaultBookingSubject(form)} onChange={() => undefined} />
-            <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs text-soft">ปลายทางถูกกำหนดจากเจ้าของเคสและค่าระบบฝั่ง Server ไม่รับอีเมลที่กรอกจาก Browser</p>
+            <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs text-soft">To: RDDUsedcarBooked@segroup.co.th · CC: rongsarit.s@tgh.co.th · กำหนดคงที่ฝั่ง Server</p>
             <button
               type="button"
               onClick={createEmailDraft}

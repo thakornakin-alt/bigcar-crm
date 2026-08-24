@@ -18,6 +18,7 @@ export type EmailRouteResolution = {
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DEFAULT_REPORT_TO = "RDDUsedcarBooked@segroup.co.th";
+const BOOKING_REPORT_CC = "rongsarit.s@tgh.co.th";
 
 function caseTypeForEvent(eventType: OperationalEmailEvent): CaseOwnershipType {
   if (eventType === "booking_report_draft") return "booking";
@@ -28,8 +29,8 @@ function caseTypeForEvent(eventType: OperationalEmailEvent): CaseOwnershipType {
 
 function configuredRoute(eventType: OperationalEmailEvent, ownerEmail: string) {
   if (eventType === "owner_notification") return { to: ownerEmail, cc: "", bcc: "", type: "owner" as const };
-  if (eventType === "booking_report_draft") return { to: process.env.BOOKING_REPORT_EMAIL_TO || DEFAULT_REPORT_TO, cc: ownerEmail, bcc: "", type: "approved_team" as const };
-  if (eventType === "sales_report_draft") return { to: process.env.SALES_REPORT_EMAIL_TO || DEFAULT_REPORT_TO, cc: ownerEmail, bcc: "", type: "approved_team" as const };
+  if (eventType === "booking_report_draft") return { to: DEFAULT_REPORT_TO, cc: BOOKING_REPORT_CC, bcc: "", type: "approved_team" as const };
+  if (eventType === "sales_report_draft") return null;
   const to = String(process.env.APPROVAL_EMAIL_TO || "").trim();
   return to ? { to, cc: ownerEmail, bcc: "", type: "approval" as const } : null;
 }
