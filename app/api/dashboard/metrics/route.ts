@@ -6,7 +6,6 @@ import { derivePersonalDashboardMetrics, normalizeDashboardMonth } from "@/lib/d
 import { listSalesLeads } from "@/lib/leads";
 import { RequestAuthError, requireUser } from "@/lib/request-user";
 import { listVehiclePrepRecords } from "@/lib/vehicle-prep";
-import { readDashboardReportingBaseline } from "@/lib/dashboard-reporting-baseline";
 
 export const dynamic = "force-dynamic";
 const blankMetrics = { leads: 0, newLeadsToday: 0, bookings: 0, financeWaiting: 0, waitingDelivery: 0, delivered: 0, bookingDeliveries: 0, bookingDeliveriesPending: 0, todayEvents: 0 };
@@ -25,8 +24,8 @@ export async function GET(request: Request) {
     const targetUserId = canSelectUser && requestedUserId ? requestedUserId : actor.id;
     const target = users.find((user) => user.id === targetUserId && !user.locked);
     if (!target) return NextResponse.json({ error: "ไม่พบผู้ใช้ที่เลือก" }, { status: 404 });
-    const [leadsResult, reportsResult, prepResult, deliveryResult, ownershipResult, baselineResult] = await Promise.allSettled([
-      listSalesLeads(), listReportHistory("", "all"), listVehiclePrepRecords(), listBookingDeliveryRecords(), listCaseOwnership(), readDashboardReportingBaseline()
+    const [leadsResult, reportsResult, prepResult, deliveryResult, ownershipResult] = await Promise.allSettled([
+      listSalesLeads(), listReportHistory("", "all"), listVehiclePrepRecords(), listBookingDeliveryRecords(), listCaseOwnership()
     ]);
     const failures: string[] = [];
     if (leadsResult.status === "rejected") failures.push("leads");
@@ -34,7 +33,6 @@ export async function GET(request: Request) {
     if (prepResult.status === "rejected") failures.push("vehicle_prep");
     if (deliveryResult.status === "rejected") failures.push("booking_delivery");
     if (ownershipResult.status === "rejected") failures.push("case_ownership");
-    if (baselineResult.status === "rejected") failures.push("dashboard_reporting_baseline");
     const complete = failures.length === 0;
     const metrics = complete ? derivePersonalDashboardMetrics({
       targetUserId, month,
@@ -42,8 +40,7 @@ export async function GET(request: Request) {
       reports: reportsResult.status === "fulfilled" ? reportsResult.value : [],
       prepRecords: prepResult.status === "fulfilled" ? prepResult.value : [],
       bookingDeliveries: deliveryResult.status === "fulfilled" ? deliveryResult.value : [],
-      ownership: ownershipResult.status === "fulfilled" ? ownershipResult.value : [], users,
-      reportingOverrides: baselineResult.status === "fulfilled" ? baselineResult.value.records : {}
+      ownership: ownershipResult.status === "fulfilled" ? ownershipResult.value : [], users
     }) : blankMetrics;
     return NextResponse.json({
       metrics,

@@ -10,8 +10,7 @@ async function loadMetricsModule() {
   const source = (await read("lib/dashboard-personal-metrics.ts"))
     .replace(/import type[^;]+;\s*/g, "")
     .replace(/import \{ buildCalendarVehicleOptions \}[^;]+;/, "const buildCalendarVehicleOptions = (_reports, prep) => prep.map((item) => ({ bookingId: item.bookingId }));")
-    .replace(/import \{ currentBangkokMonth \}[^;]+;/, "const currentBangkokMonth = (now = new Date()) => { const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit' }).formatToParts(now); return p.find(x => x.type === 'year').value + '-' + p.find(x => x.type === 'month').value; };")
-    .replace(/import \{ baselineReportingMonth,[^;]+;/s, "const baselineReportingMonth = (records, entityType, entityId, actualDateKey) => records?.[entityType + ':' + entityId]?.reportingMonth || actualDateKey.slice(0, 7);");
+    .replace(/import \{ currentBangkokMonth \}[^;]+;/, "const currentBangkokMonth = (now = new Date()) => { const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit' }).formatToParts(now); return p.find(x => x.type === 'year').value + '-' + p.find(x => x.type === 'month').value; };");
   const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const module = { exports: {} };
   vm.runInNewContext(`(function(exports,module){${output}})(module.exports,module)`, { module, exports: module.exports, Intl, Date, Map, Set });
@@ -46,7 +45,8 @@ test("all dashboard cohorts use stable owner and selected month; calendar total 
   assert.match(metrics, /record\.salespersonUserId/);
   assert.match(metrics, /record\.bookingReportId && bookingById\.get/);
   assert.match(metrics, /lead\.ownerId === targetUserId/);
-  assert.match(metrics, /baselineReportingMonth\(reportingOverrides, "booking", report\.id, reportDate\(report\)\) === month/);
+  assert.match(metrics, /isDashboardReportingEraRecord\(report\.createdAt\)/);
+  assert.match(metrics, /reportDate\(report\)\.slice\(0, 7\) === month/);
   assert.match(metrics, /todayEvents: 0/);
   assert.doesNotMatch(metrics, /plate.*owner|owner.*plate/i);
 });
@@ -59,13 +59,14 @@ test("Bangkok date and business-date priority cover month boundaries", async () 
   assert.match(metrics, /month > current/);
 });
 
-test("QA exclusions and scoped v2 last-good cache prevent cross-user/month leakage", async () => {
+test("QA exclusions and scoped v3 last-good cache prevent cross-user/month leakage", async () => {
   const metrics = await read("lib/dashboard-personal-metrics.ts");
   const scope = await read("lib/dashboard-scope.ts");
   const page = await read("app/dashboard/page.tsx");
   for (const rule of ["qaTestRecord !== true", "excludeFromMetrics !== true", "isCounted !== false"]) assert.match(metrics, new RegExp(rule.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  assert.match(scope, /bigcar-dashboard-last-good:v2:\$\{sessionUserId\}:\$\{targetUserId\}:\$\{month\}/);
-  assert.match(page, /sessionStorage\.removeItem\("bigcar-dashboard-last-good"\)/);
+  assert.match(scope, /bigcar-dashboard-last-good:v3:\$\{sessionUserId\}:\$\{targetUserId\}:\$\{month\}/);
+  assert.match(scope, /bigcar-dashboard-last-good:v2:/);
+  assert.match(page, /clearRetiredDashboardCaches\(window\.sessionStorage\)/);
   assert.match(page, /dashboardCacheKey\(salesProfile\.id, effectiveTarget, month\)/);
 });
 
@@ -98,21 +99,21 @@ test("fixture: month boundaries, stable owners, QA exclusions and same-plate cas
   const report = (id, date, overrides = {}) => ({ id, type: "booking", bookingDate: date, createdAt: `${date}T00:00:00Z`, updatedAt: `${date}T00:00:00Z`, status: "draft", plate: "SAME", saleName: "", reportText: "", ...overrides });
   const users = [user("A", "Alpha"), user("B", "Beta")];
   const reports = [
-    report("BR-JUL", "2026-07-31"), report("BR-A1", "2026-08-01"), report("BR-A2", "2026-08-31"),
-    report("BR-B", "2026-08-15"), report("BR-SEP", "2026-09-01"),
-    report("SR-A", "2026-08-01", { type: "sales", bookingReportId: "BR-A1", deliveryDate: "2026-08-20", status: "delivered" }),
-    report("BR-QA", "2026-08-12", { qaTestRecord: true, excludeFromMetrics: true, isCounted: false })
+    report("BR-JUL", "2026-07-31"), report("BR-A1", "2026-08-26"), report("BR-A2", "2026-08-31"),
+    report("BR-B", "2026-08-27"), report("BR-SEP", "2026-09-01"),
+    report("SR-A", "2026-08-26", { type: "sales", bookingReportId: "BR-A1", deliveryDate: "2026-08-29", status: "delivered" }),
+    report("BR-QA", "2026-08-28", { qaTestRecord: true, excludeFromMetrics: true, isCounted: false })
   ];
   const ownership = ["BR-JUL", "BR-A1", "BR-A2", "BR-SEP", "BR-QA"].map((caseId) => ({ caseType: "booking", caseId, ownerUserId: "A" })).concat([
     { caseType: "booking", caseId: "BR-B", ownerUserId: "B" }, { caseType: "sales", caseId: "SR-A", ownerUserId: "A" }
   ]);
   const bookingDeliveries = [
-    { id: "BD-A", bookingReportId: "BR-A1", salesReportId: "SR-A", bookingDate: "2026-08-01", deliveredAt: "2026-08-20T10:00:00+07:00", ownerUserId: "A", status: "ยอดส่งมอบ", workflowStatus: "ยอดส่งมอบ", createdAt: "2026-08-01" },
-    { id: "BD-B", bookingReportId: "BR-B", salesReportId: "", bookingDate: "2026-08-15", ownerUserId: "B", status: "ยอดจอง", workflowStatus: "รอส่งมอบ", createdAt: "2026-08-15" },
-    { id: "BD-QA", bookingReportId: "BR-QA", bookingDate: "2026-08-12", ownerUserId: "A", status: "ยอดจอง", workflowStatus: "รอส่งมอบ", qaTestRecord: true, excludeFromMetrics: true, isCounted: false, createdAt: "2026-08-12" }
+    { id: "BD-A", bookingReportId: "BR-A1", salesReportId: "SR-A", bookingDate: "2026-08-26", deliveredAt: "2026-08-29T10:00:00+07:00", ownerUserId: "A", status: "ยอดส่งมอบ", workflowStatus: "ยอดส่งมอบ", createdAt: "2026-08-29" },
+    { id: "BD-B", bookingReportId: "BR-B", salesReportId: "", bookingDate: "2026-08-27", ownerUserId: "B", status: "ยอดจอง", workflowStatus: "รอส่งมอบ", createdAt: "2026-08-30" },
+    { id: "BD-QA", bookingReportId: "BR-QA", bookingDate: "2026-08-28", ownerUserId: "A", status: "ยอดจอง", workflowStatus: "รอส่งมอบ", qaTestRecord: true, excludeFromMetrics: true, isCounted: false, createdAt: "2026-08-29" }
   ];
   const common = { month: "2026-08", now: new Date("2026-08-25T03:00:00Z"), reports, prepRecords: [{ bookingId: "BR-A2" }, { bookingId: "BR-B" }], bookingDeliveries, ownership, users };
-  const a = derivePersonalDashboardMetrics({ ...common, targetUserId: "A", leads: [{ ownerId: "A", date: "01/08/2026", createdAt: "2026-08-01" }, { ownerId: "B", date: "01/08/2026", createdAt: "2026-08-01" }] });
+  const a = derivePersonalDashboardMetrics({ ...common, targetUserId: "A", leads: [{ ownerId: "A", date: "26/08/2026", createdAt: "2026-08-26" }, { ownerId: "B", date: "26/08/2026", createdAt: "2026-08-26" }] });
   const b = derivePersonalDashboardMetrics({ ...common, targetUserId: "B", leads: [] });
   assert.equal(a.bookings, 2);
   assert.equal(a.bookingDeliveries, 1);
@@ -128,6 +129,6 @@ test("fixture: month boundaries, stable owners, QA exclusions and same-plate cas
 test("fixture: ambiguous exact legacy name is excluded instead of guessed", async () => {
   const { derivePersonalDashboardMetrics } = await loadMetricsModule();
   const users = [{ id: "A", firstName: "ชื่อซ้ำ", lastName: "คนขาย" }, { id: "B", firstName: "ชื่อซ้ำ", lastName: "คนขาย" }];
-  const metrics = derivePersonalDashboardMetrics({ targetUserId: "A", month: "2026-08", now: new Date("2026-08-10T00:00:00Z"), leads: [], prepRecords: [], bookingDeliveries: [], ownership: [], users, reports: [{ id: "LEGACY", type: "booking", bookingDate: "2026-08-01", createdAt: "2026-08-01", status: "draft", saleName: "ชื่อซ้ำ คนขาย", reportText: "" }] });
+  const metrics = derivePersonalDashboardMetrics({ targetUserId: "A", month: "2026-08", now: new Date("2026-08-27T00:00:00Z"), leads: [], prepRecords: [], bookingDeliveries: [], ownership: [], users, reports: [{ id: "LEGACY", type: "booking", bookingDate: "2026-08-27", createdAt: "2026-08-27", status: "draft", saleName: "ชื่อซ้ำ คนขาย", reportText: "" }] });
   assert.equal(metrics.bookings, 0);
 });

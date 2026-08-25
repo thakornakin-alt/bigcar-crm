@@ -8,5 +8,16 @@ export function currentBangkokMonth(now = new Date()) {
 }
 
 export function dashboardCacheKey(sessionUserId: string, targetUserId: string, month: string) {
-  return `bigcar-dashboard-last-good:v2:${sessionUserId}:${targetUserId}:${month}`;
+  return `bigcar-dashboard-last-good:v3:${sessionUserId}:${targetUserId}:${month}`;
+}
+
+export function clearRetiredDashboardCaches(storage: Pick<Storage, "length" | "key" | "removeItem">) {
+  const retiredKeys: string[] = [];
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key === "bigcar-dashboard-last-good" || key?.startsWith("bigcar-dashboard-last-good:v1:") || key?.startsWith("bigcar-dashboard-last-good:v2:")) {
+      retiredKeys.push(key);
+    }
+  }
+  retiredKeys.forEach((key) => storage.removeItem(key));
 }

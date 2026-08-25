@@ -4,7 +4,6 @@ import type { BookingDeliveryRecord, ReportHistoryItem, SalesUser } from "@/lib/
 import type { VehiclePrepRecord } from "@/lib/vehicle-prep";
 import { buildCalendarVehicleOptions } from "@/lib/vehicle-prep-cases";
 import { currentBangkokMonth } from "@/lib/dashboard-scope";
-import { baselineReportingMonth, type DashboardReportingBaselineRecord } from "@/lib/dashboard-reporting-baseline";
 
 export type DashboardMetrics = {
   leads: number; newLeadsToday: number; bookings: number; financeWaiting: number;
@@ -13,6 +12,8 @@ export type DashboardMetrics = {
 };
 
 const BANGKOK = "Asia/Bangkok";
+export const DASHBOARD_REPORTING_START_DATE = "2026-08-26";
+const DASHBOARD_REPORTING_START_INSTANT = Date.parse(`${DASHBOARD_REPORTING_START_DATE}T00:00:00+07:00`);
 
 export function bangkokDateKey(now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: BANGKOK, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
@@ -35,6 +36,15 @@ export function businessDateKey(value: unknown) {
   if (!raw) return "";
   const parsed = new Date(raw);
   return Number.isNaN(parsed.valueOf()) ? "" : bangkokDateKey(parsed);
+}
+
+export function isDashboardReportingEraRecord(createdAt: unknown) {
+  const raw = String(createdAt || "").trim();
+  if (!raw) return false;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw >= DASHBOARD_REPORTING_START_DATE;
+  const withoutZone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?$/.test(raw);
+  const instant = Date.parse(withoutZone ? `${raw}+07:00` : raw);
+  return Number.isFinite(instant) && instant >= DASHBOARD_REPORTING_START_INSTANT;
 }
 
 function reportDate(report: ReportHistoryItem) {
@@ -69,9 +79,8 @@ export function derivePersonalDashboardMetrics(input: {
   targetUserId: string; month: string; now?: Date; leads: SalesLead[]; reports: ReportHistoryItem[];
   prepRecords: VehiclePrepRecord[]; bookingDeliveries: BookingDeliveryRecord[];
   ownership: CaseOwnership[]; users: SalesUser[];
-  reportingOverrides?: Record<string, DashboardReportingBaselineRecord>;
 }): DashboardMetrics {
-  const { targetUserId, month, leads, reports, prepRecords, bookingDeliveries, ownership, users, reportingOverrides } = input;
+  const { targetUserId, month, leads, reports, prepRecords, bookingDeliveries, ownership, users } = input;
   const today = bangkokDateKey(input.now || new Date());
   const ownershipByCase = new Map(ownership.map((item) => [`${item.caseType}:${item.caseId}`, item.ownerUserId]));
   const active = reports.filter((report) => report.status !== "deleted" && report.qaTestRecord !== true && report.excludeFromMetrics !== true && report.isCounted !== false);
@@ -81,18 +90,24 @@ export function derivePersonalDashboardMetrics(input: {
   const salesById = new Map(sales.map((item) => [item.id, item]));
   const bookingOwner = (report: ReportHistoryItem) => ownershipByCase.get(`booking:${report.id}`) || String((report as ReportHistoryItem & { salespersonUserId?: string }).salespersonUserId || "").trim() || exactLegacyUserId(report.saleName, users);
   const salesOwner = (report: ReportHistoryItem) => ownershipByCase.get(`sales:${report.id}`) || (report.bookingReportId ? bookingById.get(report.bookingReportId) && bookingOwner(bookingById.get(report.bookingReportId)!) : "") || String((report as ReportHistoryItem & { salespersonUserId?: string }).salespersonUserId || "").trim() || exactLegacyUserId(report.saleName, users);
-  const ownedBookings = bookings.filter((report) => bookingOwner(report) === targetUserId && baselineReportingMonth(reportingOverrides, "booking", report.id, reportDate(report)) === month);
+  const eligibleBookings = bookings.filter((report) => isDashboardReportingEraRecord(report.createdAt));
+  const ownedBookings = eligibleBookings.filter((report) => bookingOwner(report) === targetUserId && reportDate(report).slice(0, 7) === month);
   const ownedBookingIds = new Set(ownedBookings.map((report) => report.id));
   const ownedSales = sales.filter((report) => salesOwner(report) === targetUserId);
   const salesBookingIds = new Set(ownedSales.map((report) => String(report.bookingReportId || "").trim()).filter(Boolean));
-  const scopedLeads = leads.filter((lead) => lead.ownerId === targetUserId && baselineReportingMonth(reportingOverrides, "lead", lead.id, businessDateKey(lead.date) || businessDateKey(lead.createdAt)) === month);
+  const scopedLeads = leads.filter((lead) => isDashboardReportingEraRecord(lead.createdAt) && lead.ownerId === targetUserId && (businessDateKey(lead.date) || businessDateKey(lead.createdAt)).slice(0, 7) === month);
   const readyBookingIds = new Set(buildCalendarVehicleOptions(active, prepRecords).map((item) => item.bookingId));
   const operationalDeliveries = bookingDeliveries.filter((record) => record.qaTestRecord !== true && record.excludeFromMetrics !== true && record.isCounted !== false);
   const deliveryOwner = (record: BookingDeliveryRecord) => String(record.ownerUserId || "").trim() || (record.bookingReportId && bookingById.get(record.bookingReportId) ? bookingOwner(bookingById.get(record.bookingReportId)!) : "") || String(record.salespersonUserId || "").trim();
-  const scopedDeliveries = operationalDeliveries.filter((record) => deliveryOwner(record) === targetUserId && baselineReportingMonth(reportingOverrides, "booking_delivery_cohort", record.id, businessDateKey(record.bookingDate) || businessDateKey(record.createdAt)) === month);
+  const deliveryBooking = (record: BookingDeliveryRecord) => bookingById.get(String(record.bookingReportId || "").trim());
+  const scopedDeliveries = operationalDeliveries.filter((record) => {
+    const booking = deliveryBooking(record);
+    return Boolean(booking) && isDashboardReportingEraRecord(booking!.createdAt) && deliveryOwner(record) === targetUserId && reportDate(booking!).slice(0, 7) === month;
+  });
   const delivered = operationalDeliveries.filter((record) => {
+    const booking = deliveryBooking(record);
     const isDelivered = record.status === "ยอดส่งมอบ" || record.workflowStatus === "ยอดส่งมอบ" || record.caseStatus === "delivered";
-    return isDelivered && deliveryOwner(record) === targetUserId && baselineReportingMonth(reportingOverrides, "delivery_completion", record.id, deliveryDate(record, salesById.get(record.salesReportId))) === month;
+    return Boolean(booking) && isDashboardReportingEraRecord(booking!.createdAt) && isDelivered && deliveryOwner(record) === targetUserId && deliveryDate(record, salesById.get(record.salesReportId)).slice(0, 7) === month;
   });
   return {
     leads: scopedLeads.length,

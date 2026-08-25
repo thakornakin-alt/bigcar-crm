@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Bell, CalendarDays, Check, ChevronLeft, ChevronRight, ClipboardCheck, FileText, Plus, User } from "lucide-react";
 import { FloatingActionButton, NativeAppHeader, NativeAppShell, NativeBadge, NativeBottomNav, NativeCard } from "@/app/components/ui";
 import { useSalesProfile } from "@/lib/use-sales-profile";
-import { currentBangkokMonth, dashboardCacheKey } from "@/lib/dashboard-scope";
+import { clearRetiredDashboardCaches, currentBangkokMonth, dashboardCacheKey } from "@/lib/dashboard-scope";
 
 async function api<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, { cache: "no-store", signal });
@@ -54,7 +54,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!salesProfile?.id) return;
     const controller = new AbortController();
-    window.sessionStorage.removeItem("bigcar-dashboard-last-good");
+    clearRetiredDashboardCaches(window.sessionStorage);
     const effectiveTarget = targetUserId || salesProfile.id;
     const cacheKey = dashboardCacheKey(salesProfile.id, effectiveTarget, month);
     const cached = window.sessionStorage.getItem(cacheKey);
@@ -120,6 +120,7 @@ export default function DashboardPage() {
           <p className="text-center text-sm font-black text-brand">{formatThaiMonth(month)}</p>
           <button type="button" aria-label="เดือนถัดไป" disabled={month >= currentBangkokMonth()} onClick={() => setMonth((value) => shiftMonth(value, 1))} className="flex h-11 items-center justify-center rounded-xl border border-white/10 bg-black/25 text-soft hover:border-brand/40 hover:text-brand disabled:cursor-not-allowed disabled:opacity-30"><ChevronRight size={18} /></button>
         </div>
+        <p className="mt-2 text-center text-[11px] font-semibold text-white/45">เริ่มนับข้อมูลใหม่ตั้งแต่ 26 ส.ค. 2569</p>
       </section>
 
       {staleAt ? <p className="mb-3 rounded-xl border border-amber-300/25 bg-amber-300/[0.08] px-3 py-2 text-xs text-amber-100">ข้อมูลอาจไม่ใช่ล่าสุด · สำเร็จล่าสุด {new Date(staleAt).toLocaleString("th-TH")}</p> : null}

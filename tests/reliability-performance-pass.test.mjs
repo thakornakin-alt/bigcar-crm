@@ -32,9 +32,11 @@ test("Dashboard parallelizes independent sources and never associates Sales by p
 
 test("Dashboard and RDD preserve last-known-good on transient read failure", async () => {
   const dashboard = await read("app/dashboard/page.tsx");
+  const dashboardScope = await read("lib/dashboard-scope.ts");
   const hook = await read("components/rdd/use-booking-delivery-read.ts");
   const rdd = await read("components/rdd/rdd-home-client.tsx");
-  assert.match(dashboard, /bigcar-dashboard-last-good/);
+  assert.match(dashboard, /dashboardCacheKey/);
+  assert.match(dashboardScope, /bigcar-dashboard-last-good:v3/);
   assert.match(dashboard, /ข้อมูลอาจไม่ใช่ล่าสุด/);
   assert.doesNotMatch(hook, /catch \(loadError\) \{\s*setRecords\(\[\]\)/);
   assert.match(rdd, /error && records\.length === 0/);
