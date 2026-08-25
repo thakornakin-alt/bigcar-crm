@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, Eye, FileText, Image as ImageIcon, Loader2, Share2 } from "lucide-react";
+import { Download, Eye, FileText, Image as ImageIcon, Loader2, Search, Share2, X } from "lucide-react";
 import type { ReportHistoryItem } from "@/lib/types";
 import { DOC_V2_TEMPLATE_ID, type DocumentV2Data } from "@/lib/documents-v2/types";
 import { documentTemplatesV2, getDocumentV2Templates, type DocumentV2TemplateId } from "@/lib/documents-v2/template-config";
@@ -19,6 +19,7 @@ import {
 import type { VehicleDeliveryOcrFields } from "@/lib/documents-v2/vehicle-delivery-ocr";
 import { formatDocumentMoney, identifierText, parseDocumentMoney, salesContractOverrideData } from "@/lib/documents/value-integrity";
 import { loadThaiAddressDataset, validateThaiAddressSelection, type ThaiAddressMode } from "@/lib/documents-v2/thai-address";
+import { filterDocumentSalesReports } from "@/lib/documents-v2/report-search";
 
 type FieldItem = { name: string; type: string };
 type FieldsDebug = {
@@ -513,6 +514,7 @@ export function DocumentGeneratorV2() {
   const templates = getDocumentV2Templates();
   const [fields, setFields] = useState<FieldItem[]>([]);
   const [reports, setReports] = useState<ReportHistoryItem[]>([]);
+  const [reportSearch, setReportSearch] = useState("");
   const [selectedReportId, setSelectedReportId] = useState("");
   const [previewUrl, setPreviewUrl] = useState("");
   const [pngUrl, setPngUrl] = useState("");
@@ -582,6 +584,10 @@ export function DocumentGeneratorV2() {
   const selectedReport = useMemo(
     () => reports.find((r) => r.id === selectedReportId) || null,
     [reports, selectedReportId]
+  );
+  const filteredReports = useMemo(
+    () => filterDocumentSalesReports(reports, reportSearch),
+    [reports, reportSearch]
   );
   const sampleData = useMemo(() => editableData || resolvedData || mapBookingToDocumentV2(selectedReport), [editableData, resolvedData, selectedReport]);
   const rawReportData = useMemo(
@@ -1619,6 +1625,28 @@ export function DocumentGeneratorV2() {
       <section className="documents-brand-surface rounded-2xl border border-white/10 p-4">
         <p className="documents-step-label mb-1 text-[11px] font-bold uppercase tracking-[0.16em]">ขั้นตอนที่ 1</p>
         <label className="mb-2 block text-sm font-semibold text-white">เลือกรายงานขาย</label>
+        <div className="relative mb-2">
+          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/45" />
+          <input
+            data-testid="documents-report-search"
+            type="search"
+            value={reportSearch}
+            onChange={(event) => setReportSearch(event.target.value)}
+            placeholder="ค้นหาทะเบียน / ชื่อลูกค้า / เบอร์โทร"
+            aria-label="ค้นหารายงานขาย"
+            className="documents-brand-input h-11 w-full rounded-xl border border-white/10 bg-black/30 pl-10 pr-10 text-base outline-none placeholder:text-white/35 sm:text-sm"
+          />
+          {reportSearch ? (
+            <button
+              type="button"
+              onClick={() => setReportSearch("")}
+              aria-label="ล้างคำค้นหา"
+              className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-white/55 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d6b66c]/70"
+            >
+              <X aria-hidden="true" className="h-4 w-4" />
+            </button>
+          ) : null}
+        </div>
         <select data-testid="documents-report-selector" value={selectedReportId} onChange={(e) => {
           if (e.target.value === selectedReportId) return;
           if (overrideState === "dirty" && !window.confirm("มีการแก้ไขที่ยังไม่บันทึก ต้องการเปลี่ยนรายงานและละทิ้งการแก้ไขหรือไม่")) return;
@@ -1630,12 +1658,15 @@ export function DocumentGeneratorV2() {
           setPowerOfAttorneyEditMode(false);
         }} className="documents-brand-input h-12 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm outline-none">
           <option value="">-- เลือก --</option>
-          {reports.map((r) => (
+          {filteredReports.map((r) => (
             <option key={r.id} value={r.id}>
               {r.customerName || "ไม่ระบุ"} · {r.plate || "ไม่ระบุ"} · {r.createdAt ? new Date(r.createdAt).toLocaleDateString("th-TH") : "ไม่ระบุวันที่"} · {r.saleName || "ไม่ระบุเซลส์"}
             </option>
           ))}
         </select>
+        {reportSearch.trim() && filteredReports.length === 0 ? (
+          <p data-testid="documents-report-search-empty" className="mt-2 text-xs text-white/55">ไม่พบรายงานขายที่ตรงกับคำค้นหา</p>
+        ) : null}
         {reportLoadState === "loading-data" ? <p className="mt-2 text-xs font-medium text-amber-200">● กำลังโหลดข้อมูลรายงานขาย...</p> : null}
         {reportLoadState === "loading-template" || reportLoadState === "generating" ? <p className="mt-2 text-xs font-medium text-amber-200">● กำลังสร้างตัวอย่างเอกสาร...</p> : null}
         {reportLoadState === "ready" ? <p className="mt-2 text-xs font-medium text-emerald-300">● ข้อมูลพร้อมแล้ว{settingsMode && reportLoadMs !== null ? ` · ${reportLoadMs} ms` : ""}</p> : null}
