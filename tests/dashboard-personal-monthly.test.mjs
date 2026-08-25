@@ -10,7 +10,8 @@ async function loadMetricsModule() {
   const source = (await read("lib/dashboard-personal-metrics.ts"))
     .replace(/import type[^;]+;\s*/g, "")
     .replace(/import \{ buildCalendarVehicleOptions \}[^;]+;/, "const buildCalendarVehicleOptions = (_reports, prep) => prep.map((item) => ({ bookingId: item.bookingId }));")
-    .replace(/import \{ currentBangkokMonth \}[^;]+;/, "const currentBangkokMonth = (now = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit' }).formatToParts(now).filter(p => p.type === 'year' || p.type === 'month').map(p => p.value).join('-');");
+    .replace(/import \{ currentBangkokMonth \}[^;]+;/, "const currentBangkokMonth = (now = new Date()) => { const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit' }).formatToParts(now); return p.find(x => x.type === 'year').value + '-' + p.find(x => x.type === 'month').value; };")
+    .replace(/import \{ baselineReportingMonth,[^;]+;/s, "const baselineReportingMonth = (records, entityType, entityId, actualDateKey) => records?.[entityType + ':' + entityId]?.reportingMonth || actualDateKey.slice(0, 7);");
   const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const module = { exports: {} };
   vm.runInNewContext(`(function(exports,module){${output}})(module.exports,module)`, { module, exports: module.exports, Intl, Date, Map, Set });
@@ -45,7 +46,7 @@ test("all dashboard cohorts use stable owner and selected month; calendar total 
   assert.match(metrics, /record\.salespersonUserId/);
   assert.match(metrics, /record\.bookingReportId && bookingById\.get/);
   assert.match(metrics, /lead\.ownerId === targetUserId/);
-  assert.match(metrics, /reportDate\(report\)\.slice\(0, 7\) === month/);
+  assert.match(metrics, /baselineReportingMonth\(reportingOverrides, "booking", report\.id, reportDate\(report\)\) === month/);
   assert.match(metrics, /todayEvents: 0/);
   assert.doesNotMatch(metrics, /plate.*owner|owner.*plate/i);
 });
