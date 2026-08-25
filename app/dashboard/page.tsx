@@ -2,12 +2,13 @@
 
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bell, CalendarDays, Check, ClipboardCheck, FileText, Plus, User } from "lucide-react";
+import { Bell, CalendarDays, Check, ChevronLeft, ChevronRight, ClipboardCheck, FileText, Plus, User } from "lucide-react";
 import { FloatingActionButton, NativeAppHeader, NativeAppShell, NativeBadge, NativeBottomNav, NativeCard } from "@/app/components/ui";
 import { useSalesProfile } from "@/lib/use-sales-profile";
+import { currentBangkokMonth, dashboardCacheKey } from "@/lib/dashboard-scope";
 
-async function api<T>(url: string): Promise<T> {
-  const response = await fetch(url, { cache: "no-store" });
+async function api<T>(url: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(url, { cache: "no-store", signal });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Request failed");
   return data;
@@ -25,6 +26,10 @@ type DashboardMetrics = {
   todayEvents: number;
 };
 
+type DashboardScope = { month: string; targetUserId: string; targetDisplayName: string; sessionUserId: string; mode: "personal"; canSelectUser: boolean };
+type SelectableUser = { id: string; displayName: string; branch: string };
+type DashboardResponse = { metrics: DashboardMetrics; scope: DashboardScope; selectableUsers?: SelectableUser[]; complete?: boolean };
+
 const blankMetrics: DashboardMetrics = {
   leads: 0,
   newLeadsToday: 0,
@@ -41,25 +46,45 @@ export default function DashboardPage() {
   const { user: salesProfile } = useSalesProfile();
   const [metrics, setMetrics] = useState<DashboardMetrics>(blankMetrics);
   const [staleAt, setStaleAt] = useState("");
+  const [month, setMonth] = useState(() => currentBangkokMonth());
+  const [targetUserId, setTargetUserId] = useState("");
+  const [scope, setScope] = useState<DashboardScope | null>(null);
+  const [selectableUsers, setSelectableUsers] = useState<SelectableUser[]>([]);
 
   useEffect(() => {
-    const cached = window.sessionStorage.getItem("bigcar-dashboard-last-good");
+    if (!salesProfile?.id) return;
+    const controller = new AbortController();
+    window.sessionStorage.removeItem("bigcar-dashboard-last-good");
+    const effectiveTarget = targetUserId || salesProfile.id;
+    const cacheKey = dashboardCacheKey(salesProfile.id, effectiveTarget, month);
+    const cached = window.sessionStorage.getItem(cacheKey);
     let cachedMetrics: { metrics: DashboardMetrics; at: string } | null = null;
     if (cached) {
       try {
         cachedMetrics = JSON.parse(cached) as { metrics: DashboardMetrics; at: string };
         setMetrics(cachedMetrics.metrics);
-      } catch { window.sessionStorage.removeItem("bigcar-dashboard-last-good"); }
+      } catch { window.sessionStorage.removeItem(cacheKey); }
     }
-    api<{ metrics: DashboardMetrics; complete?: boolean }>("/api/dashboard/metrics")
+    if (!cachedMetrics) {
+      setMetrics(blankMetrics);
+      setScope(null);
+      setStaleAt("");
+    }
+    const query = new URLSearchParams({ month });
+    if (targetUserId) query.set("userId", targetUserId);
+    api<DashboardResponse>(`/api/dashboard/metrics?${query}`, controller.signal)
       .then((data) => {
         if (data.complete === false && cachedMetrics) { setStaleAt(cachedMetrics.at || ""); return; }
         const next = data.metrics || blankMetrics;
         setMetrics(next);
-        if (data.complete !== false) window.sessionStorage.setItem("bigcar-dashboard-last-good", JSON.stringify({ metrics: next, at: new Date().toISOString() }));
+        setScope(data.scope);
+        setSelectableUsers(data.selectableUsers || []);
+        setStaleAt("");
+        if (data.complete !== false) window.sessionStorage.setItem(cacheKey, JSON.stringify({ metrics: next, at: new Date().toISOString() }));
       })
-      .catch(() => { if (cachedMetrics) setStaleAt(cachedMetrics.at || ""); });
-  }, []);
+      .catch((error) => { if (error instanceof DOMException && error.name === "AbortError") return; if (cachedMetrics) setStaleAt(cachedMetrics.at || ""); });
+    return () => controller.abort();
+  }, [month, salesProfile?.id, targetUserId]);
 
   const dashboard = useMemo(() => formatDashboardMetrics(metrics), [metrics]);
 
@@ -77,6 +102,25 @@ export default function DashboardPage() {
           </span>
         }
       />
+
+      <section className="mb-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="truncate text-sm font-black text-white">ข้อมูลของ {scope?.targetDisplayName || salesProfile?.nickname || "ฉัน"}</p>
+          {scope?.canSelectUser ? (
+            <label className="flex min-w-0 items-center gap-2 text-xs font-bold text-soft">
+              <span className="shrink-0">ดูข้อมูลของ</span>
+              <select value={targetUserId || scope.targetUserId} onChange={(event) => setTargetUserId(event.target.value)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-base font-bold text-white outline-none focus:border-brand/60 sm:w-44">
+                {selectableUsers.map((user) => <option key={user.id} value={user.id}>{user.displayName}</option>)}
+              </select>
+            </label>
+          ) : null}
+        </div>
+        <div className="mt-2 grid grid-cols-[44px_1fr_44px] items-center gap-2">
+          <button type="button" aria-label="เดือนก่อน" onClick={() => setMonth((value) => shiftMonth(value, -1))} className="flex h-11 items-center justify-center rounded-xl border border-white/10 bg-black/25 text-soft hover:border-brand/40 hover:text-brand"><ChevronLeft size={18} /></button>
+          <p className="text-center text-sm font-black text-brand">{formatThaiMonth(month)}</p>
+          <button type="button" aria-label="เดือนถัดไป" disabled={month >= currentBangkokMonth()} onClick={() => setMonth((value) => shiftMonth(value, 1))} className="flex h-11 items-center justify-center rounded-xl border border-white/10 bg-black/25 text-soft hover:border-brand/40 hover:text-brand disabled:cursor-not-allowed disabled:opacity-30"><ChevronRight size={18} /></button>
+        </div>
+      </section>
 
       {staleAt ? <p className="mb-3 rounded-xl border border-amber-300/25 bg-amber-300/[0.08] px-3 py-2 text-xs text-amber-100">ข้อมูลอาจไม่ใช่ล่าสุด · สำเร็จล่าสุด {new Date(staleAt).toLocaleString("th-TH")}</p> : null}
 
@@ -165,4 +209,15 @@ function formatDashboardMetrics(metrics: DashboardMetrics) {
     bookingDeliveriesPending: metrics.bookingDeliveriesPending.toLocaleString("th-TH"),
     todayEvents: metrics.todayEvents ? `${metrics.todayEvents.toLocaleString("th-TH")} งาน` : "เปิดปฏิทิน"
   };
+}
+
+function shiftMonth(month: string, amount: number) {
+  const [year, number] = month.split("-").map(Number);
+  const next = new Date(Date.UTC(year, number - 1 + amount, 1));
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatThaiMonth(month: string) {
+  const [year, number] = month.split("-").map(Number);
+  return new Intl.DateTimeFormat("th-TH", { month: "long", year: "numeric", timeZone: "Asia/Bangkok" }).format(new Date(Date.UTC(year, number - 1, 15)));
 }

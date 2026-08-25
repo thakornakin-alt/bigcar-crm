@@ -54,6 +54,11 @@ export async function getCaseOwnership(caseType: CaseOwnershipType, caseId: stri
   return snapshot.data.records[key(caseType, caseId)] || null;
 }
 
+export async function listCaseOwnership() {
+  const snapshot = await readJsonStoreSnapshot(FILE, EMPTY);
+  return Object.values(snapshot.data.records);
+}
+
 export async function saveCaseOwnership(record: CaseOwnership) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const snapshot = await readJsonStoreSnapshot(FILE, EMPTY);

@@ -23,10 +23,11 @@ test("business writes are never included in automatic retry allowlist", async ()
 
 test("Dashboard parallelizes independent sources and never associates Sales by plate", async () => {
   const source = await read("app/api/dashboard/metrics/route.ts");
+  const metrics = await read("lib/dashboard-personal-metrics.ts");
   assert.match(source, /Promise\.allSettled/);
-  assert.match(source, /salesBookingReportIds\.has\(report\.id\)/);
-  assert.doesNotMatch(source, /salesPlateKeys/);
-  assert.match(source, /complete: failures\.length === 0/);
+  assert.match(metrics, /salesBookingIds\.has\(report\.id\)/);
+  assert.doesNotMatch(metrics, /salesPlateKeys/);
+  assert.match(source, /const complete = failures\.length === 0/);
 });
 
 test("Dashboard and RDD preserve last-known-good on transient read failure", async () => {

@@ -1,144 +1,59 @@
 import { NextResponse } from "next/server";
-import { listCalendarEvents } from "@/lib/calendar-events";
-import { listReportHistory } from "@/lib/apps-script";
-import { listBookingDeliveryRecords, syncBookingDeliveryFromReportHistory } from "@/lib/booking-delivery";
+import { listReportHistory, listSalesUsers } from "@/lib/apps-script";
+import { listBookingDeliveryRecords } from "@/lib/booking-delivery";
+import { listCaseOwnership } from "@/lib/case-ownership";
+import { derivePersonalDashboardMetrics, normalizeDashboardMonth } from "@/lib/dashboard-personal-metrics";
 import { listSalesLeads } from "@/lib/leads";
-import { canReadAllCustomers, getRequestSalesUser } from "@/lib/request-user";
+import { RequestAuthError, requireUser } from "@/lib/request-user";
 import { listVehiclePrepRecords } from "@/lib/vehicle-prep";
-import { buildCalendarVehicleOptions } from "@/lib/vehicle-prep-cases";
-import type { ReportHistoryItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-
-function bangkokDateKey() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Bangkok",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).format(new Date());
-}
-
-function legacyThaiDate() {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Bangkok",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric"
-  }).formatToParts(new Date());
-  const day = parts.find((part) => part.type === "day")?.value || "";
-  const month = parts.find((part) => part.type === "month")?.value || "";
-  const year = parts.find((part) => part.type === "year")?.value || "";
-  return `${day}/${month}/${year}`;
-}
-
-function extractLineValue(text: string, labels: string[]) {
-  const lines = String(text || "").split(/\r?\n/);
-  for (const line of lines) {
-    const compact = line.replace(/\*/g, "").trim();
-    for (const label of labels) {
-      if (compact.startsWith(label)) return compact.slice(label.length).replace(/^[:：\s-]+/, "").trim();
-    }
-  }
-  return "";
-}
-
-function isFinanceBooking(report: ReportHistoryItem) {
-  const payment = extractLineValue(report.reportText, ["การชำระเงิน"]);
-  const source = `${payment} ${report.reportText}`.toLowerCase();
-  return source.includes("ไฟแนนซ์") || source.includes("finance");
-}
+const blankMetrics = { leads: 0, newLeadsToday: 0, bookings: 0, financeWaiting: 0, waitingDelivery: 0, delivered: 0, bookingDeliveries: 0, bookingDeliveriesPending: 0, todayEvents: 0 };
 
 export async function GET(request: Request) {
   try {
+    const actor = await requireUser();
     const url = new URL(request.url);
-    const shouldSyncBookingDelivery = ["1", "true"].includes(String(url.searchParams.get("sync") || "").toLowerCase());
-    let currentUser = null;
-    try {
-      currentUser = await getRequestSalesUser();
-    } catch {
-      currentUser = null;
+    const requestedUserId = String(url.searchParams.get("userId") || "").trim();
+    const canSelectUser = actor.role === "admin" || actor.role === "super_admin";
+    if (requestedUserId && !canSelectUser && requestedUserId !== actor.id) {
+      return NextResponse.json({ error: "ไม่อนุญาตให้ดูข้อมูลของผู้ใช้อื่น" }, { status: 403 });
     }
-    const today = bangkokDateKey();
-    const legacyToday = legacyThaiDate();
-    const [allLeadsResult, reportsResult, prepRecordsResult, todayEventsResult, bookingDeliveryResult] = await Promise.allSettled([
-      listSalesLeads(),
-      listReportHistory("", "all"),
-      listVehiclePrepRecords(),
-      listCalendarEvents({ from: today, to: today }),
-      shouldSyncBookingDelivery
-        ? syncBookingDeliveryFromReportHistory().catch(() => listBookingDeliveryRecords())
-        : listBookingDeliveryRecords()
+    const month = normalizeDashboardMonth(url.searchParams.get("month"));
+    const users = await listSalesUsers();
+    const targetUserId = canSelectUser && requestedUserId ? requestedUserId : actor.id;
+    const target = users.find((user) => user.id === targetUserId && !user.locked);
+    if (!target) return NextResponse.json({ error: "ไม่พบผู้ใช้ที่เลือก" }, { status: 404 });
+    const [leadsResult, reportsResult, prepResult, deliveryResult, ownershipResult] = await Promise.allSettled([
+      listSalesLeads(), listReportHistory("", "all"), listVehiclePrepRecords(), listBookingDeliveryRecords(), listCaseOwnership()
     ]);
-
-    const allLeads = allLeadsResult.status === "fulfilled" ? allLeadsResult.value : [];
-    const reports = reportsResult.status === "fulfilled" ? reportsResult.value : [];
-    const prepRecords = prepRecordsResult.status === "fulfilled" ? prepRecordsResult.value : [];
-    const todayEvents = todayEventsResult.status === "fulfilled" ? todayEventsResult.value : [];
-    const bookingDeliveryRecords = bookingDeliveryResult.status === "fulfilled" ? bookingDeliveryResult.value : [];
-    const operationalBookingDeliveries = bookingDeliveryRecords.filter((record) =>
-      record.qaTestRecord !== true && record.excludeFromMetrics !== true && record.isCounted !== false
-    );
-
-    const leads =
-      currentUser && !canReadAllCustomers(currentUser)
-        ? allLeads.filter((lead) => lead.ownerId === currentUser.id)
-        : allLeads;
-    const activeReports = reports.filter((report) => report.status !== "deleted");
-    const bookings = activeReports.filter((report) => report.type === "booking");
-    const sales = activeReports.filter((report) => report.type === "sales");
-    const salesBookingReportIds = new Set(sales.map((report) => String(report.bookingReportId || "").trim()).filter(Boolean));
-    const financeWaiting = bookings.filter((report) =>
-      isFinanceBooking(report) &&
-      report.status !== "finance_approved" &&
-      !salesBookingReportIds.has(report.id)
-    );
-    const readyDelivery = (() => {
-      try {
-        return buildCalendarVehicleOptions(activeReports, prepRecords);
-      } catch {
-        return [];
-      }
-    })();
-    const delivered = sales.filter((report) => report.status === "closed" || report.status === "delivered");
-
     const failures: string[] = [];
-    if (allLeadsResult.status === "rejected") failures.push("leads");
+    if (leadsResult.status === "rejected") failures.push("leads");
     if (reportsResult.status === "rejected") failures.push("reports");
-    if (prepRecordsResult.status === "rejected") failures.push("vehicle_prep");
-    if (todayEventsResult.status === "rejected") failures.push("calendar");
-    if (bookingDeliveryResult.status === "rejected") failures.push("booking_delivery");
+    if (prepResult.status === "rejected") failures.push("vehicle_prep");
+    if (deliveryResult.status === "rejected") failures.push("booking_delivery");
+    if (ownershipResult.status === "rejected") failures.push("case_ownership");
+    const complete = failures.length === 0;
+    const metrics = complete ? derivePersonalDashboardMetrics({
+      targetUserId, month,
+      leads: leadsResult.status === "fulfilled" ? leadsResult.value : [],
+      reports: reportsResult.status === "fulfilled" ? reportsResult.value : [],
+      prepRecords: prepResult.status === "fulfilled" ? prepResult.value : [],
+      bookingDeliveries: deliveryResult.status === "fulfilled" ? deliveryResult.value : [],
+      ownership: ownershipResult.status === "fulfilled" ? ownershipResult.value : [], users
+    }) : blankMetrics;
     return NextResponse.json({
-      metrics: {
-        leads: leads.length,
-        newLeadsToday: leads.filter((lead) => String(lead.date || "") === legacyToday).length,
-        bookings: bookings.length,
-        financeWaiting: financeWaiting.length,
-        waitingDelivery: readyDelivery.length,
-        delivered: delivered.length,
-        bookingDeliveries: operationalBookingDeliveries.filter((record) => record.status !== "ยกเลิก").length,
-        bookingDeliveriesPending: operationalBookingDeliveries.filter(
-          (record) => record.status !== "ยกเลิก" && record.workflowStatus !== "ยอดส่งมอบ"
-        ).length,
-        todayEvents: todayEvents.length
+      metrics,
+      scope: {
+        month, targetUserId,
+        targetDisplayName: target.nickname || [target.firstName, target.lastName].filter(Boolean).join(" ") || target.email,
+        sessionUserId: actor.id, mode: "personal", canSelectUser
       },
-      complete: failures.length === 0,
-      warnings: failures
+      selectableUsers: canSelectUser ? users.filter((user) => !user.locked && user.role !== "viewer").map((user) => ({ id: user.id, displayName: user.nickname || [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email, branch: user.branch || "" })) : undefined,
+      complete, warnings: failures
     });
   } catch (error) {
-    return NextResponse.json({
-      metrics: {
-        leads: 0,
-        newLeadsToday: 0,
-        bookings: 0,
-        financeWaiting: 0,
-        waitingDelivery: 0,
-        delivered: 0,
-        bookingDeliveries: 0,
-        bookingDeliveriesPending: 0,
-        todayEvents: 0
-      },
-      warning: error instanceof Error ? error.message : "โหลด Dashboard ไม่สำเร็จ"
-    });
+    if (error instanceof RequestAuthError) return NextResponse.json({ error: error.message }, { status: error.status });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "โหลด Dashboard ไม่สำเร็จ" }, { status: 500 });
   }
 }
