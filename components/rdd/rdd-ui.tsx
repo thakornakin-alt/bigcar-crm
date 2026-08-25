@@ -47,10 +47,10 @@ export function RddError({ message, onRetry }: { message: string; onRetry: () =>
 
 export function RddSection({ eyebrow, title, action, children }: { eyebrow?: string; title: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <section className="rounded-[26px] border border-white/10 bg-[linear-gradient(145deg,rgba(24,24,27,0.96),rgba(8,9,11,0.96))] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.24)] sm:p-5">
+    <section className="rounded-[16px] border border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.055),rgba(255,255,255,0.025))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)] sm:p-5">
       <div className="mb-4 flex items-end justify-between gap-3">
         <div>
-          {eyebrow && <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#d6b66c]">{eyebrow}</p>}
+          {eyebrow && <p className="text-[10px] font-black uppercase tracking-[0.22em] text-brand">{eyebrow}</p>}
           <h2 className="mt-1 text-lg font-black text-white sm:text-xl">{title}</h2>
         </div>
         {action}

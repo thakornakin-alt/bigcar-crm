@@ -74,16 +74,16 @@ export function RddHomeClient({ initialYear, initialMonth, commissionPreview = f
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-[1600px] px-3 pb-28 sm:px-5 lg:px-6">
-      <header className="mb-5 overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(116,31,44,0.45),transparent_36%),linear-gradient(145deg,#1b1b1f,#09090b)] p-4 shadow-[0_28px_80px_rgba(0,0,0,0.3)] sm:p-6">
+      <header className="mb-5 overflow-hidden rounded-[20px] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(214,182,108,0.16),transparent_36%),linear-gradient(145deg,#17150f,#07080a)] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.36)] sm:p-6">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.28em] text-[#d6b66c]">RDD Command Center</p>
+          <p className="text-[11px] font-black uppercase tracking-[0.28em] text-brand">RDD Command Center</p>
           <h1 className="mt-2 text-2xl font-black text-white sm:text-3xl">วันนี้ต้องตามอะไร</h1>
           <p className="mt-2 text-sm text-white/58">ภาพรวมงาน Booking Delivery วันนี้</p>
         </div>
 
         <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(260px,1fr)_auto_auto]">
-          <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-white/12 bg-black/25 px-3 focus-within:border-[#d6b66c]/70">
-            <Search size={18} className="text-[#d6b66c]" />
+          <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-white/12 bg-black/25 px-3 focus-within:border-brand/70">
+            <Search size={18} className="text-brand" />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ค้นหาทะเบียน หรือชื่อลูกค้า" className="w-full bg-transparent text-white outline-none placeholder:text-white/35" />
           </label>
           <div className="grid grid-cols-2 gap-2">
@@ -96,7 +96,7 @@ export function RddHomeClient({ initialYear, initialMonth, commissionPreview = f
           </div>
           <div className="grid grid-cols-2 rounded-2xl border border-white/12 bg-black/25 p-1">
             {(["all", "mine"] as OwnershipScope[]).map((item) => (
-              <button key={item} type="button" onClick={() => setScope(item)} className={`min-h-10 rounded-xl px-4 text-sm font-black ${scope === item ? "bg-[#d6b66c] text-[#16120b]" : "text-white/60"}`}>
+              <button key={item} type="button" onClick={() => setScope(item)} className={`min-h-10 rounded-xl px-4 text-sm font-black ${scope === item ? "bg-brand text-ink" : "text-white/60"}`}>
                 {item === "all" ? "ทั้งหมด" : "ของฉัน"}
               </button>
             ))}
