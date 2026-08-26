@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
 import { renderBookingReport } from "@/lib/booking-report";
-import { checkBookingReportDuplicate, lookupBookingListCommissionGroup, saveBookingReport } from "@/lib/apps-script";
+import { checkBookingReportDuplicate, listSalesUsers, lookupBookingListCommissionGroup, saveBookingReport } from "@/lib/apps-script";
 import { upsertBookingDeliveryFromBookingReport } from "@/lib/booking-delivery";
 import { saveBookingReportAndMaster } from "@/lib/booking-report-persistence";
 import type { BookingReportInput, BuyerType } from "@/lib/types";
 import { recordActivity } from "@/lib/activity-log";
 import { RequestAuthError, requireWritableUser } from "@/lib/request-user";
-import { commissionGroupCaptureFromLookup, resolveAuthenticatedSalespersonCapture, type CommissionGroupLookupResult } from "@/lib/commission-canonical-capture";
+import { commissionGroupCaptureFromLookup, type CommissionGroupLookupResult } from "@/lib/commission-canonical-capture";
 import { QaSyntheticCreateError, resolveQaSyntheticCreateMetadata } from "@/lib/qa-synthetic-create";
 import { createBookingRequestId } from "@/lib/booking-report-duplicate";
 import { ownershipFromUser, saveCaseOwnership } from "@/lib/case-ownership";
+import { BookingOwnerSelectionError, resolveBookingOwnerSelection } from "@/lib/booking-owner-selection";
 
 export const dynamic = "force-dynamic";
 
@@ -70,12 +71,16 @@ export async function POST(request: Request) {
     };
     const body = (payload.report && typeof payload.report === "object" ? payload.report : payload) as Partial<BookingReportInput>;
     const qaSynthetic = resolveQaSyntheticCreateMetadata(actor, { ...payload, ...body });
-    const input = cleanReport(body);
-    const salespersonCapture = resolveAuthenticatedSalespersonCapture({
-      submittedSalespersonUserId: actor.id,
-      submittedSaleName: actor.firstName,
-      actor
+    const canonicalUsers = actor.role === "admin" || actor.role === "super_admin" ? await listSalesUsers() : undefined;
+    const ownerSelection = resolveBookingOwnerSelection({
+      actor,
+      requestedOwnerUserId: body.salespersonUserId,
+      canonicalUsers
     });
+    const input = cleanReport({ ...body, saleName: ownerSelection.saleName });
+    input.salespersonUserId = ownerSelection.owner.id;
+    input.salespersonDisplayName = ownerSelection.salesperson.salespersonDisplayName;
+    const salespersonCapture = ownerSelection.salesperson;
 
     if (!input.bookingDate || !input.customerName || !input.plate || !input.saleName) {
       return NextResponse.json({ error: "Booking date, customer name, plate and sale are required" }, { status: 400 });
@@ -106,7 +111,7 @@ export async function POST(request: Request) {
             confirmationToken: String(payload.confirmationToken || ""),
             actorId: actor.id
           });
-          await saveCaseOwnership(ownershipFromUser(actor, {
+          await saveCaseOwnership(ownershipFromUser(ownerSelection.owner, {
             caseType: "booking",
             caseId: savedReport.id,
             teamName: input.teamName
@@ -142,7 +147,7 @@ export async function POST(request: Request) {
           : undefined;
         return upsertBookingDeliveryFromBookingReport(
           report,
-          actor,
+          ownerSelection.owner,
           { salesperson: salespersonCapture, group, qaSynthetic }
         );
       }
@@ -162,7 +167,7 @@ export async function POST(request: Request) {
         targetId: result.bookingDelivery.id,
         source: "api",
         after: { changedFields: ["salespersonUserId", "salespersonDisplayName"] },
-        metadata: { source: "authenticated_self_selection" }
+        metadata: { source: actor.id === ownerSelection.owner.id ? "authenticated_self_selection" : "admin_selected_owner" }
       });
     }
     const commissionGroupLookup = commissionLookupState.result;
@@ -194,7 +199,7 @@ export async function POST(request: Request) {
     if (error instanceof BookingConfirmationInvalidError) {
       return NextResponse.json({ status: "duplicate_confirmation_invalid", error: "การยืนยันหมดอายุหรือข้อมูลมีการเปลี่ยนแปลง กรุณายืนยันใหม่" }, { status: 409 });
     }
-    if (error instanceof RequestAuthError || error instanceof QaSyntheticCreateError) {
+    if (error instanceof RequestAuthError || error instanceof QaSyntheticCreateError || error instanceof BookingOwnerSelectionError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     return NextResponse.json(

@@ -19,7 +19,8 @@ test("Commission Preview is feature-gated and never calls real Booking/Commissio
 test("Phase 2C capture is additive and leaves real Commission boundary closed", () => {
   assert.doesNotMatch(capture, /CommissionSnapshot|MonthlyCommissionStatement|manual_cutoff/);
   assert.doesNotMatch(capture, /writeJsonStore|fetch\s*\(|appendRow|setValues/);
-  assert.match(bookingRoute, /resolveAuthenticatedSalespersonCapture/);
+  assert.match(bookingRoute, /resolveBookingOwnerSelection/);
+  assert.match(bookingRoute, /ownerSelection\.salesperson/);
   assert.match(salesRoute, /resolveAuthenticatedSalespersonCapture/);
   assert.doesNotMatch(bookingRoute, /commissionGroup\s*:/);
   assert.doesNotMatch(salesRoute, /commissionGroup\s*:/);

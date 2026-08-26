@@ -23,7 +23,7 @@ import { normalizeCarYear } from "@/lib/format";
 import { BookingReportOcrScanner } from "@/components/booking-reports/BookingReportOcrScanner";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import { appendSalesProfileSignature } from "@/lib/sales-profile-signature";
-import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, DriveAttachment, DriveUploadResult, LineGroup, StockVehicle } from "@/lib/types";
+import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, DriveAttachment, DriveUploadResult, LineGroup, SalesUser, StockVehicle } from "@/lib/types";
 import { formatThaiReportDate } from "@/lib/booking-report-display";
 
 type BookingDuplicatePrompt = {
@@ -177,10 +177,6 @@ function fillIfEmpty(current: BookingReportInput, vehicle: StockVehicle): Bookin
   };
 }
 
-function uniqueOptions(values: string[]) {
-  return values.map((value) => value.trim()).filter((value, index, list) => value && list.indexOf(value) === index);
-}
-
 export default function BookingReportsPage() {
   const { user: salesProfile } = useSalesProfile();
   const [form, setForm] = useState<BookingReportInput>(blankForm);
@@ -210,12 +206,18 @@ export default function BookingReportsPage() {
   const [duplicatePrompt, setDuplicatePrompt] = useState<BookingDuplicatePrompt | null>(null);
   const [pendingCreate, setPendingCreate] = useState<{ report: BookingReportInput; requestId: string } | null>(null);
   const [confirmExceptionalCreate, setConfirmExceptionalCreate] = useState(false);
+  const [eligibleSalesUsers, setEligibleSalesUsers] = useState<SalesUser[]>([]);
+  const [selectedOwnerUserId, setSelectedOwnerUserId] = useState("");
   const reportText = useMemo(
     () => appendSalesProfileSignature(renderBookingReport({ ...form, reportText: "" }), salesProfile),
     [form, salesProfile]
   );
   const companyWarning = form.buyerType === "company" && attachmentFiles.companyCertificate.length === 0;
-  const saleOptions = useMemo(() => uniqueOptions([salesProfile?.firstName || "", blankForm.saleName, "กันตา"]), [salesProfile?.firstName]);
+  const canSelectOwner = salesProfile?.role === "admin" || salesProfile?.role === "super_admin";
+  const selectedOwner = useMemo(
+    () => eligibleSalesUsers.find((user) => user.id === selectedOwnerUserId) || null,
+    [eligibleSalesUsers, selectedOwnerUserId]
+  );
   const paymentMode = form.paymentType.includes("สด")
     ? "cash"
     : form.paymentType.includes("ไฟแนนซ์") || form.paymentType.toLowerCase().includes("finance")
@@ -254,6 +256,22 @@ export default function BookingReportsPage() {
       teamName: !current.teamName ? defaultTeamName : current.teamName
     }));
   }, [salesProfile]);
+
+  useEffect(() => {
+    if (!canSelectOwner) {
+      setEligibleSalesUsers([]);
+      setSelectedOwnerUserId("");
+      return;
+    }
+    readJson<{ users: SalesUser[] }>("/api/admin/users")
+      .then(({ users }) => setEligibleSalesUsers(users.filter((user) => user.role === "sales" && !user.locked)))
+      .catch(() => setEligibleSalesUsers([]));
+  }, [canSelectOwner]);
+
+  useEffect(() => {
+    if (!canSelectOwner) return;
+    setForm((current) => ({ ...current, saleName: selectedOwner?.firstName || selectedOwner?.nickname || "" }));
+  }, [canSelectOwner, selectedOwner]);
 
   useEffect(() => {
     readJson<{ groups: LineGroup[] }>("/api/line/groups")
@@ -436,10 +454,8 @@ export default function BookingReportsPage() {
       year: normalizeCarYear(form.year),
       attachments: buildAttachments(),
       reportText,
-      salespersonUserId: salesProfile && form.saleName === salesProfile.firstName ? salesProfile.id : undefined,
-      salespersonDisplayName: salesProfile && form.saleName === salesProfile.firstName
-        ? [salesProfile.firstName, salesProfile.lastName].filter(Boolean).join(" ")
-        : undefined,
+      salespersonUserId: canSelectOwner ? selectedOwnerUserId || undefined : salesProfile?.id,
+      salespersonDisplayName: undefined,
       status: "draft"
     };
   }
@@ -808,7 +824,17 @@ export default function BookingReportsPage() {
               <Field label="Campaign" value={form.campaign} onChange={(value) => update("campaign", value)} />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Select label="Sale" value={form.saleName} onChange={(value) => update("saleName", value)} options={saleOptions} />
+              {canSelectOwner ? (
+                <UserSelect
+                  label="เซลส์เจ้าของเคส"
+                  value={selectedOwnerUserId}
+                  onChange={setSelectedOwnerUserId}
+                  users={eligibleSalesUsers}
+                  required
+                />
+              ) : (
+                <Field label="Sale" value={form.saleName} onChange={() => undefined} readOnly />
+              )}
               <Field label="ทีม" value={form.teamName} onChange={(value) => update("teamName", value)} placeholder="เช่น พี่ลีฟ" />
             </div>
             {salesProfile && (
@@ -821,7 +847,7 @@ export default function BookingReportsPage() {
 
           <SectionCard title="Gmail Draft" icon={<Mail size={18} />}>
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs text-soft">
-              ผู้ส่ง: Gmail กลางของ BIG CAR CRM · เจ้าของเคสในรายงาน: {salesProfile ? `${salesProfile.firstName} ${salesProfile.lastName}`.trim() : "ระบบจะตรวจจาก CRM Login"} · สร้างเป็น Draft เท่านั้น
+              ผู้ส่ง: Gmail กลางของ BIG CAR CRM · เจ้าของเคสในรายงาน: {selectedOwner ? `${selectedOwner.firstName} ${selectedOwner.lastName}`.trim() : salesProfile ? `${salesProfile.firstName} ${salesProfile.lastName}`.trim() : "ระบบจะตรวจจาก CRM Login"} · สร้างเป็น Draft เท่านั้น
             </p>
             <Field label="หัวข้ออีเมล" value={buildDefaultBookingSubject(form)} onChange={() => undefined} />
             <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs text-soft">To: RDDUsedcarBooked@segroup.co.th · CC: rongsarit.s@tgh.co.th · กำหนดคงที่ฝั่ง Server</p>
@@ -997,6 +1023,7 @@ function Field({
   placeholder,
   required,
   inputMode,
+  readOnly,
   type = "text"
 }: {
   label: string;
@@ -1005,6 +1032,7 @@ function Field({
   placeholder?: string;
   required?: boolean;
   inputMode?: "text" | "tel" | "numeric";
+  readOnly?: boolean;
   type?: "text" | "date";
 }) {
   return (
@@ -1017,22 +1045,25 @@ function Field({
         placeholder={placeholder}
         required={required}
         inputMode={inputMode}
+        readOnly={readOnly}
         className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none placeholder:text-[#6f7785] focus:border-brand"
       />
     </label>
   );
 }
 
-function Select({
+function UserSelect({
   label,
   value,
   onChange,
-  options
+  users,
+  required = false
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  options: string[];
+  users: SalesUser[];
+  required?: boolean;
 }) {
   return (
     <label className="block">
@@ -1040,11 +1071,13 @@ function Select({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white outline-none focus:border-brand"
+        required={required}
+        className="h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-base text-white outline-none focus:border-brand"
       >
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
+        <option value="">เลือกเซลส์</option>
+        {users.map((user) => (
+          <option key={user.id} value={user.id}>
+            {[user.nickname || user.firstName, user.branch].filter(Boolean).join(" · ")}
           </option>
         ))}
       </select>

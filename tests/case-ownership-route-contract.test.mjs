@@ -4,11 +4,12 @@ import test from "node:test";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("Booking ownership is derived from the authenticated actor", async () => {
+test("Booking owner is server-resolved while authenticated actor remains the writer", async () => {
   const source = await read("app/api/booking-reports/route.ts");
-  assert.match(source, /submittedSalespersonUserId: actor\.id/);
-  assert.match(source, /saveCaseOwnership\(ownershipFromUser\(actor/);
-  assert.doesNotMatch(source, /submittedSalespersonUserId: body\.salespersonUserId/);
+  assert.match(source, /requestedOwnerUserId: body\.salespersonUserId/);
+  assert.match(source, /canonicalUsers/);
+  assert.match(source, /saveCaseOwnership\(ownershipFromUser\(ownerSelection\.owner/);
+  assert.match(source, /recordActivity\(actor/);
 });
 
 test("Sales inherits owner through exact bookingReportId", async () => {
