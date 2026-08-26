@@ -827,8 +827,8 @@ export default function StockImportPage() {
 
           {activeHiddenColumns.length > 0 && (
             <div className="rounded-lg border border-emerald-400/25 bg-emerald-950/10 p-4 shadow-glow">
-              <div className="mb-3 flex items-start justify-between gap-3">
-                <div>
+              <div className="mb-3 flex flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
                   <h2 className="flex items-center gap-2 text-lg font-bold text-white">
                     <FileSpreadsheet size={18} className="text-brand" />
                     Hidden Columns
@@ -838,7 +838,7 @@ export default function StockImportPage() {
                     {activeHiddenRows ? ` / แถวซ่อน ${activeHiddenRows.toLocaleString("th-TH")} แถว` : ""} ค่าเริ่มต้นคือไม่ import และไม่แสดงใน Preview/Export
                   </p>
                 </div>
-                <button type="button" onClick={resetNeverImportPolicy} className="shrink-0 rounded-lg border border-line px-3 py-2 text-xs font-bold text-white">
+                <button type="button" onClick={resetNeverImportPolicy} className="min-h-11 w-full shrink-0 rounded-lg border border-line px-3 py-2 text-xs font-bold text-white sm:w-auto">
                   Reset Never
                 </button>
               </div>
@@ -848,12 +848,12 @@ export default function StockImportPage() {
                   const action = hiddenColumnActions[key] || "ignore";
                   return (
                     <div key={`${column.letter}-${column.header}`} className="rounded-lg border border-line bg-[#0b0d11] p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-black text-white">{column.header}</p>
                           <p className="mt-0.5 text-xs text-soft">Column {column.letter} · default hidden</p>
                         </div>
-                        <div className="grid grid-cols-3 gap-1">
+                        <div className="grid w-full grid-cols-3 gap-2 sm:w-auto">
                           {[
                             ["import", "Import"],
                             ["ignore", "Ignore"],
@@ -863,7 +863,7 @@ export default function StockImportPage() {
                               key={value}
                               type="button"
                               onClick={() => setHiddenColumnAction(column, value as HiddenColumnAction)}
-                              className={`min-h-9 rounded-md border px-2 text-xs font-black ${
+                              className={`min-h-11 min-w-0 rounded-md border px-2 text-xs font-black ${
                                 action === value ? "border-brand bg-brand text-ink" : "border-line bg-panel text-white"
                               }`}
                             >
