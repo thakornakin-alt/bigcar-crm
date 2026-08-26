@@ -78,7 +78,7 @@ test("create sequencing persists QA exclusion before downstream sync and normal 
   const route = await readFile(new URL("../app/api/sales-reports/route.ts", import.meta.url), "utf8");
   const page = await readFile(new URL("../app/sales-reports/page.tsx", import.meta.url), "utf8");
   const bookingDelivery = await readFile(new URL("../lib/booking-delivery.ts", import.meta.url), "utf8");
-  const dashboard = await readFile(new URL("../app/api/dashboard/metrics/route.ts", import.meta.url), "utf8");
+  const dashboardMetrics = await readFile(new URL("../lib/dashboard-personal-metrics.ts", import.meta.url), "utf8");
   assert.ok(route.indexOf("reserveSalesReportQaMetadata") < route.indexOf("saveSalesReport(report"));
   assert.ok(route.indexOf("await finalizeSalesReportQaMetadata") < route.indexOf("await syncBookingDeliveryFromReportHistory"));
   assert.match(route, /downstream processing stopped/);
@@ -86,6 +86,8 @@ test("create sequencing persists QA exclusion before downstream sync and normal 
   assert.match(bookingDelivery, /includeExcluded: true/);
   assert.match(bookingDelivery, /sales\?\.qaTestRecord/);
   assert.match(bookingDelivery, /sales\?\.isCounted === false/);
-  assert.match(dashboard, /operationalBookingDeliveries/);
+  assert.match(dashboardMetrics, /record\.qaTestRecord !== true/);
+  assert.match(dashboardMetrics, /record\.excludeFromMetrics !== true/);
+  assert.match(dashboardMetrics, /record\.isCounted !== false/);
   assert.doesNotMatch(route, /stock.*(?:write|update|save)/i);
 });

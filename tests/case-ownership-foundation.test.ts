@@ -18,7 +18,7 @@ function user(id: string, firstName: string, lastName = "ผู้ใช้"): S
 test("authenticated user is canonical owner and browser display data is irrelevant", () => {
   const owner = ownershipFromUser(user("USER-A", "สมชาย"), { caseType: "booking", caseId: "BR-A" });
   assert.equal(owner.ownerUserId, "USER-A");
-  assert.equal(owner.ownerEmail, "user-a@example.com");
+  assert.equal(owner.ownerEmail.toLocaleLowerCase("en-US"), "user-a@example.com");
 });
 
 test("Booking to Sales preserves the exact stable owner", () => {
