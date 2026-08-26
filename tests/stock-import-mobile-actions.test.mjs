@@ -26,3 +26,11 @@ test("existing action handlers and import behavior remain connected", () => {
   assert.match(source, /async function importRows\(\)/);
   assert.match(source, /จับคู่คอลัมน์/);
 });
+
+test("final Stock Import action remains visible and full-width on mobile", () => {
+  assert.match(source, /onClick=\{importRows\}/);
+  assert.match(source, /disabled=\{importing \|\| missingPlate \|\| !parsedRows\.length\}/);
+  assert.match(source, /min-h-11 w-full shrink-0[^"]*sm:w-auto/);
+  assert.match(source, /flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between/);
+  assert.match(source, /อัปโหลดสต๊อก/);
+});

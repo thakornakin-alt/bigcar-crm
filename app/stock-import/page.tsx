@@ -917,8 +917,8 @@ export default function StockImportPage() {
 
           {previewRows.length > 0 && (
             <div className="rounded-lg border border-line bg-panel p-4 shadow-glow">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
+              <div className="mb-3 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
                   <h2 className="text-lg font-bold text-white">Preview</h2>
                   <p className="text-xs text-soft">พบข้อมูลพร้อม import {parsedRows.length.toLocaleString("th-TH")} แถว</p>
                   <p className="mt-1 text-xs text-soft">
@@ -930,10 +930,10 @@ export default function StockImportPage() {
                   type="button"
                   disabled={importing || missingPlate || !parsedRows.length}
                   onClick={importRows}
-                  className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-bold text-ink"
+                  className="flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-bold text-ink sm:w-auto"
                 >
                   {importing ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
-                  Import
+                  อัปโหลดสต๊อก
                 </button>
               </div>
               {importing && (
