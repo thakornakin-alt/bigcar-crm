@@ -863,11 +863,12 @@ export default function StockImportPage() {
                               key={value}
                               type="button"
                               onClick={() => setHiddenColumnAction(column, value as HiddenColumnAction)}
+                              style={{ color: action === value ? "#07080a" : "#ffffff" }}
                               className={`min-h-11 min-w-0 rounded-md border px-2 text-xs font-black ${
-                                action === value ? "border-brand bg-brand text-ink" : "border-line bg-panel text-white"
+                                action === value ? "border-brand bg-brand" : "border-line bg-panel"
                               }`}
                             >
-                              {label}
+                              <span className="block whitespace-nowrap leading-none">{label}</span>
                             </button>
                           ))}
                         </div>
@@ -930,10 +931,11 @@ export default function StockImportPage() {
                   type="button"
                   disabled={importing || missingPlate || !parsedRows.length}
                   onClick={importRows}
-                  className="flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-bold text-ink sm:w-auto"
+                  style={{ color: "#07080a" }}
+                  className="flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-bold sm:w-auto"
                 >
-                  {importing ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
-                  อัปโหลดสต๊อก
+                  {importing ? <Loader2 size={18} className="shrink-0 animate-spin text-[#07080a]" /> : <Upload size={18} className="shrink-0 text-[#07080a]" />}
+                  <span className="whitespace-nowrap text-[#07080a]">อัปโหลดสต๊อก</span>
                 </button>
               </div>
               {importing && (
