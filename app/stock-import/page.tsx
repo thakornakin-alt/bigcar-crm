@@ -750,8 +750,8 @@ export default function StockImportPage() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
-        <section className="space-y-4">
+      <div className="grid w-full min-w-0 max-w-full gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+        <section className="min-w-0 space-y-4">
           <div className="rounded-lg border border-line bg-panel p-4 shadow-glow">
             <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-white">
               <Database size={18} className="text-brand" />
@@ -826,7 +826,7 @@ export default function StockImportPage() {
           )}
 
           {activeHiddenColumns.length > 0 && (
-            <div className="rounded-lg border border-emerald-400/25 bg-emerald-950/10 p-4 shadow-glow">
+            <div className="box-border w-full min-w-0 max-w-full rounded-lg border border-emerald-400/25 bg-emerald-950/10 p-3 shadow-glow sm:p-4">
               <div className="mb-3 flex flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <h2 className="flex items-center gap-2 text-lg font-bold text-white">
@@ -847,13 +847,13 @@ export default function StockImportPage() {
                   const key = headerPolicyKey(column.header);
                   const action = hiddenColumnActions[key] || "ignore";
                   return (
-                    <div key={`${column.letter}-${column.header}`} className="rounded-lg border border-line bg-[#0b0d11] p-3">
+                    <div key={`${column.letter}-${column.header}`} className="box-border w-full min-w-0 max-w-full rounded-lg border border-line bg-[#0b0d11] p-3">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-black text-white">{column.header}</p>
                           <p className="mt-0.5 text-xs text-soft">Column {column.letter} · default hidden</p>
                         </div>
-                        <div className="grid w-full grid-cols-3 gap-2 sm:w-auto">
+                        <div className="box-border grid w-full min-w-0 max-w-full grid-cols-3 gap-1.5 sm:w-auto sm:gap-2">
                           {[
                             ["import", "Import"],
                             ["ignore", "Ignore"],
@@ -864,7 +864,7 @@ export default function StockImportPage() {
                               type="button"
                               onClick={() => setHiddenColumnAction(column, value as HiddenColumnAction)}
                               style={{ color: action === value ? "#07080a" : "#ffffff" }}
-                              className={`min-h-11 min-w-0 rounded-md border px-2 text-xs font-black ${
+                              className={`box-border min-h-11 w-full min-w-0 max-w-full rounded-md border px-1 text-xs font-black sm:px-2 ${
                                 action === value ? "border-brand bg-brand" : "border-line bg-panel"
                               }`}
                             >
@@ -886,9 +886,9 @@ export default function StockImportPage() {
           )}
         </section>
 
-        <section className="space-y-4">
+        <section className="min-w-0 space-y-4">
           {headers.length > 0 && (
-            <div className="rounded-lg border border-line bg-panel p-4 shadow-glow">
+            <div className="box-border w-full min-w-0 max-w-full rounded-lg border border-line bg-panel p-3 shadow-glow sm:p-4">
               <h2 className="mb-3 text-lg font-bold text-white">จับคู่คอลัมน์</h2>
               <div className="grid gap-3 sm:grid-cols-2">
                 {fieldLabels.map((field) => (
@@ -932,7 +932,7 @@ export default function StockImportPage() {
                   disabled={importing || missingPlate || !parsedRows.length}
                   onClick={importRows}
                   style={{ color: "#07080a" }}
-                  className="flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-bold sm:w-auto"
+                  className="box-border flex min-h-11 w-full min-w-0 max-w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-bold sm:w-auto sm:shrink-0"
                 >
                   {importing ? <Loader2 size={18} className="shrink-0 animate-spin text-[#07080a]" /> : <Upload size={18} className="shrink-0 text-[#07080a]" />}
                   <span className="whitespace-nowrap text-[#07080a]">อัปโหลดสต๊อก</span>

@@ -5,8 +5,8 @@ import test from "node:test";
 const source = await readFile(new URL("../app/stock-import/page.tsx", import.meta.url), "utf8");
 
 test("Hidden Column actions stay visible as an equal-width mobile grid", () => {
-  assert.match(source, /grid w-full grid-cols-3 gap-2 sm:w-auto/);
-  assert.match(source, /min-h-11 min-w-0 rounded-md/);
+  assert.match(source, /grid w-full min-w-0 max-w-full grid-cols-3 gap-1\.5 sm:w-auto sm:gap-2/);
+  assert.match(source, /min-h-11 w-full min-w-0 max-w-full rounded-md/);
   assert.match(source, /\[\s*\["import", "Import"\],\s*\["ignore", "Ignore"\],\s*\["never", "Never"\]\s*\]/);
   assert.match(source, /activeHiddenColumns\.map/);
   assert.match(source, /style=\{\{ color: action === value \? "#07080a" : "#ffffff" \}\}/);
@@ -32,10 +32,18 @@ test("existing action handlers and import behavior remain connected", () => {
 test("final Stock Import action remains visible and full-width on mobile", () => {
   assert.match(source, /onClick=\{importRows\}/);
   assert.match(source, /disabled=\{importing \|\| missingPlate \|\| !parsedRows\.length\}/);
-  assert.match(source, /min-h-11 w-full shrink-0[^"]*sm:w-auto/);
+  assert.match(source, /min-h-11 w-full min-w-0 max-w-full[^"]*sm:w-auto sm:shrink-0/);
   assert.match(source, /flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between/);
   assert.match(source, /อัปโหลดสต๊อก/);
   assert.match(source, /style=\{\{ color: "#07080a" \}\}/);
   assert.match(source, /Upload size=\{18\} className="shrink-0 text-\[#07080a\]"/);
   assert.match(source, /whitespace-nowrap text-\[#07080a\]">อัปโหลดสต๊อก/);
+});
+
+test("recent Stock controls and their grid columns cannot widen the mobile viewport", () => {
+  assert.match(source, /grid w-full min-w-0 max-w-full gap-4 lg:grid-cols-\[minmax\(0,0\.8fr\)_minmax\(0,1\.2fr\)\]/);
+  assert.match(source, /section className="min-w-0 space-y-4"/);
+  assert.match(source, /box-border w-full min-w-0 max-w-full rounded-lg border border-emerald/);
+  assert.match(source, /box-border w-full min-w-0 max-w-full rounded-lg border border-line bg-panel/);
+  assert.match(source, /overflow-x-auto rounded-lg border border-line/);
 });
