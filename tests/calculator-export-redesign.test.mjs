@@ -46,13 +46,30 @@ test("actual vehicle title and professional rough-quote fallback are explicit", 
   assert.doesNotMatch(renderer, /ยังไม่ระบุรุ่นรถ/);
 });
 
-test("selected payment hero and selected row-cell emphasis preserve authoritative values", () => {
+test("selected payment hero shows the selected term rate while row emphasis remains authoritative", () => {
   assert.match(renderer, /ผ่อนประมาณ/);
   assert.match(renderer, /บาท\/เดือน/);
   assert.match(renderer, /ดาวน์ \$\{selectedRow\?\.label \|\| "-"\} · \$\{selectedTerm\.months\} งวด/);
-  assert.match(renderer, /term\.key === model\.selectedTermKey/);
+  assert.match(renderer, /const selectedInterestRate = model\.rate\[model\.selectedTermKey\]/);
+  assert.match(renderer, /ดอกเบี้ย \$\{formatInterestRate\(selectedInterestRate\)\} ต่อปี/);
+  assert.match(renderer, /const selected = row\.label === model\.selectedDownLabel/);
   assert.doesNotMatch(renderer, /selectedColumnIndex/);
   assert.doesNotMatch(renderer, /selectedColumn\.label/);
+});
+
+test("all installment headers render their actual model rates with a safe null fallback", () => {
+  assert.match(renderer, /terms\.forEach\(\(term, termIndex\) => \{/);
+  assert.match(renderer, /`ดอก \$\{formatInterestRate\(model\.rate\[term\.key\]\)\}`/);
+  assert.match(renderer, /value === null \? "-" : `\$\{\(value \* 100\)\.toFixed\(2\)\}%`/);
+  assert.match(renderer, /const headerH = 72/);
+});
+
+test("selected term no longer creates a special installment-column pill", () => {
+  const tableRows = renderer.slice(renderer.indexOf("model.rows.forEach"), renderer.indexOf("const profileTop"));
+  assert.doesNotMatch(tableRows, /term\.key === model\.selectedTermKey/);
+  assert.doesNotMatch(tableRows, /columns\[termIndex \+ 3\]\.x - 8/);
+  assert.doesNotMatch(tableRows, /const active = selected/);
+  assert.match(renderer, /ctx\.fillStyle = selected \? "#4b222b"/);
 });
 
 test("edge labels stay inside the 56px export safe area", () => {

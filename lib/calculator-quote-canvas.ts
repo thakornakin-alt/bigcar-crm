@@ -58,6 +58,7 @@ export function drawCalculatorQuote(
   const selectedRow = model.rows.find((row) => row.label === model.selectedDownLabel) || model.rows[0];
   const selectedTerm = terms.find((term) => term.key === model.selectedTermKey) || terms[2];
   const selectedPayment = selectedRow?.payments[model.selectedTermKey] || 0;
+  const selectedInterestRate = model.rate[model.selectedTermKey];
   const hasVehicleTitle = Boolean(model.carModel.trim());
 
   const gradient = ctx.createLinearGradient(0, 0, CALCULATOR_EXPORT_WIDTH, CALCULATOR_EXPORT_HEIGHT);
@@ -115,9 +116,11 @@ export function drawCalculatorQuote(
   ctx.fillText("บาท/เดือน", 756, 303);
   ctx.fillStyle = "#5d5860";
   ctx.font = "700 17px Arial, sans-serif";
-  ctx.fillText(`ดาวน์ ${selectedRow?.label || "-"} · ${selectedTerm.months} งวด`, 756, 350);
-  ctx.font = "600 15px Arial, sans-serif";
-  ctx.fillText(`เงินดาวน์ ${wholeMoney(selectedRow?.downPayment || 0)} บาท`, 756, 378);
+  ctx.fillText(`ดาวน์ ${selectedRow?.label || "-"} · ${selectedTerm.months} งวด`, 756, 335);
+  ctx.font = "700 14px Arial, sans-serif";
+  ctx.fillText(`ดอกเบี้ย ${formatInterestRate(selectedInterestRate)} ต่อปี`, 756, 359);
+  ctx.font = "600 14px Arial, sans-serif";
+  ctx.fillText(`เงินดาวน์ ${wholeMoney(selectedRow?.downPayment || 0)} บาท`, 756, 382);
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "900 25px Arial, sans-serif";
@@ -129,7 +132,7 @@ export function drawCalculatorQuote(
   const tableX = 48;
   const tableY = 538;
   const tableW = 984;
-  const headerH = 54;
+  const headerH = 72;
   const rowH = 54;
   card(ctx, tableX, tableY, tableW, headerH + rowH * model.rows.length, 22, "#222226");
   ctx.save();
@@ -150,7 +153,16 @@ export function drawCalculatorQuote(
   ];
   ctx.font = "700 16px Arial, sans-serif";
   ctx.fillStyle = "#d8d8dc";
-  columns.forEach((column) => cellText(ctx, column.label, column.x, tableY + 34, column.width, column.align));
+  columns.slice(0, 3).forEach((column) => cellText(ctx, column.label, column.x, tableY + 43, column.width, column.align));
+  terms.forEach((term, termIndex) => {
+    const column = columns[termIndex + 3];
+    cellText(ctx, column.label, column.x, tableY + 28, column.width, column.align);
+    ctx.font = "700 13px Arial, sans-serif";
+    ctx.fillStyle = "#d6b66c";
+    cellText(ctx, `ดอก ${formatInterestRate(model.rate[term.key])}`, column.x, tableY + 52, column.width, column.align);
+    ctx.font = "700 16px Arial, sans-serif";
+    ctx.fillStyle = "#d8d8dc";
+  });
 
   model.rows.forEach((row, index) => {
     const y = tableY + headerH + index * rowH;
@@ -168,14 +180,8 @@ export function drawCalculatorQuote(
     ctx.fillStyle = "#c8c7cb";
     cellText(ctx, wholeMoney(row.financeAmount), columns[2].x, y + 34, columns[2].width, "right");
     terms.forEach((term, termIndex) => {
-      const active = selected && term.key === model.selectedTermKey;
-      if (term.key === model.selectedTermKey) {
-        ctx.fillStyle = selected ? "#6f303e" : "#343035";
-        roundRect(ctx, columns[termIndex + 3].x - 8, y + 8, columns[termIndex + 3].width + 12, rowH - 16, 10);
-        ctx.fill();
-      }
-      ctx.fillStyle = active ? "#f4cf8b" : "#ffffff";
-      ctx.font = active ? "900 18px Arial, sans-serif" : "700 17px Arial, sans-serif";
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "700 17px Arial, sans-serif";
       cellText(ctx, payment(row.payments[term.key]), columns[termIndex + 3].x, y + 34, columns[termIndex + 3].width, "right");
     });
   });
@@ -321,4 +327,8 @@ function wholeMoney(value: number) {
 
 function payment(value: number) {
   return value ? wholeMoney(value) : "-";
+}
+
+function formatInterestRate(value: number | null) {
+  return value === null ? "-" : `${(value * 100).toFixed(2)}%`;
 }
