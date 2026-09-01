@@ -34,6 +34,11 @@ try {
       `horizontal overflow at ${width}px (${dimensions.scrollWidth}/${dimensions.clientWidth})`
     );
     if (width === 390) {
+      assert.equal(
+        await page.getByRole("button", { name: "84 งวด", exact: true }).getAttribute("aria-pressed"),
+        "true",
+        "84 months must be selected by default"
+      );
       await page.getByTestId("calculator-quote-preview").screenshot({ path: path.join(artifactDir, "calculator-rough-quote-fallback.png") });
       await page.getByRole("textbox", { name: "รุ่นรถ" }).fill("TOYOTA HILUX REVO 2.4 MID AT");
       await page.getByRole("textbox", { name: "ปีรถ" }).fill("2020");
@@ -65,6 +70,36 @@ try {
       await page.screenshot({ path: path.join(artifactDir, "calculator-preview-mobile-390-local.png"), fullPage: true });
       const png = await page.getByLabel("ตัวอย่างรูปค่างวด BIG CAR").evaluate((canvas) => canvas.toDataURL("image/png"));
       await writeFile(path.join(artifactDir, "bigcar-installment-export-fallback.png"), Buffer.from(png.split(",")[1], "base64"));
+      const debugPng = await page.getByLabel("ตัวอย่างรูปค่างวด BIG CAR").evaluate((canvas) => {
+        const debug = document.createElement("canvas");
+        debug.width = canvas.width;
+        debug.height = canvas.height;
+        const ctx = debug.getContext("2d");
+        ctx.drawImage(canvas, 0, 0);
+        const widths = [120, 160, 160, 136, 136, 136, 136];
+        let left = 48;
+        const centers = widths.map((cellWidth) => {
+          const center = left + cellWidth / 2;
+          left += cellWidth;
+          return center;
+        });
+        ctx.strokeStyle = "rgba(0,229,255,0.75)";
+        ctx.fillStyle = "#00e5ff";
+        ctx.lineWidth = 1;
+        centers.forEach((centerX) => {
+          ctx.beginPath();
+          ctx.moveTo(centerX + 0.5, 538);
+          ctx.lineTo(centerX + 0.5, 1204);
+          ctx.stroke();
+          [574, ...Array.from({ length: 11 }, (_, index) => 637 + index * 54)].forEach((centerY) => {
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        });
+        return debug.toDataURL("image/png");
+      });
+      await writeFile(path.join(artifactDir, "calculator-grid-debug-centers.png"), Buffer.from(debugPng.split(",")[1], "base64"));
     }
     await page.close();
   }

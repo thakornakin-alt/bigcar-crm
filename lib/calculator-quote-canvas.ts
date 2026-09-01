@@ -57,13 +57,13 @@ export type CalculatorQuoteGrid = {
 };
 
 const GRID_COLUMN_SPECS: ReadonlyArray<{ key: CalculatorQuoteGridColumnKey; baseWidth: number }> = [
-  { key: "down", baseWidth: 132 },
-  { key: "downPayment", baseWidth: 164 },
-  { key: "financeAmount", baseWidth: 164 },
-  { key: "months48", baseWidth: 131 },
-  { key: "months60", baseWidth: 131 },
-  { key: "months72", baseWidth: 131 },
-  { key: "months84", baseWidth: 131 }
+  { key: "down", baseWidth: 120 },
+  { key: "downPayment", baseWidth: 160 },
+  { key: "financeAmount", baseWidth: 160 },
+  { key: "months48", baseWidth: 136 },
+  { key: "months60", baseWidth: 136 },
+  { key: "months72", baseWidth: 136 },
+  { key: "months84", baseWidth: 136 }
 ];
 
 const GRID_BASE_WIDTH = GRID_COLUMN_SPECS.reduce((sum, column) => sum + column.baseWidth, 0);
@@ -71,15 +71,13 @@ const GRID_BASE_WIDTH = GRID_COLUMN_SPECS.reduce((sum, column) => sum + column.b
 export function createCalculatorQuoteGrid(rowCount: number): CalculatorQuoteGrid {
   const x = 48;
   const y = 538;
-  const width = 984;
+  const width = GRID_BASE_WIDTH;
   const headerHeight = 72;
   const rowHeight = 54;
   let cursor = x;
-  const columns = GRID_COLUMN_SPECS.map((spec, index) => {
+  const columns = GRID_COLUMN_SPECS.map((spec) => {
     const left = cursor;
-    const right = index === GRID_COLUMN_SPECS.length - 1
-      ? x + width
-      : left + (spec.baseWidth / GRID_BASE_WIDTH) * width;
+    const right = left + spec.baseWidth;
     cursor = right;
     return { key: spec.key, x: left, width: right - left, left, right, center: left + (right - left) / 2 };
   });
@@ -107,7 +105,7 @@ export function drawCalculatorQuote(
   ctx.scale(scale, scale);
 
   const selectedRow = model.rows.find((row) => row.label === model.selectedDownLabel) || model.rows[0];
-  const selectedTerm = terms.find((term) => term.key === model.selectedTermKey) || terms[2];
+  const selectedTerm = terms.find((term) => term.key === model.selectedTermKey) || terms[3];
   const selectedPayment = selectedRow?.payments[model.selectedTermKey] || 0;
   const selectedInterestRate = model.rate[model.selectedTermKey];
   const hasVehicleTitle = Boolean(model.carModel.trim());
@@ -158,7 +156,7 @@ export function drawCalculatorQuote(
   ctx.fill();
   ctx.fillStyle = "#741f2c";
   ctx.font = "800 17px Arial, sans-serif";
-  ctx.fillText("ผ่อนประมาณ", 756, 210);
+  ctx.fillText("ผ่อนเริ่มต้น", 756, 210);
   ctx.fillStyle = "#8f2637";
   ctx.font = "900 43px Arial, sans-serif";
   ctx.fillText(`${wholeMoney(selectedPayment)}`, 756, 270);
@@ -223,34 +221,36 @@ export function drawCalculatorQuote(
 function drawInstallmentGrid(ctx: CanvasRenderingContext2D, model: CalculatorQuoteModel) {
   const grid = createCalculatorQuoteGrid(model.rows.length);
   const [downCell, downPaymentCell, financeCell, ...termCells] = grid.columns;
-  const cellPadding = 18;
 
   card(ctx, grid.x, grid.y, grid.width, grid.height, 22, "#222226");
   ctx.save();
   roundRect(ctx, grid.x, grid.y, grid.width, grid.height, 22);
   ctx.clip();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
 
   ctx.fillStyle = "#303036";
   ctx.fillRect(grid.x, grid.y, grid.width, grid.headerHeight);
 
   ctx.fillStyle = "#d8d8dc";
   ctx.font = "700 16px Arial, sans-serif";
-  drawGridText(ctx, downCell, "ดาวน์", grid.y + 43, "left", cellPadding);
-  drawGridText(ctx, downPaymentCell, "เงินดาวน์", grid.y + 43, "right", cellPadding);
-  drawGridText(ctx, financeCell, "ยอดจัด", grid.y + 43, "right", cellPadding);
+  const headerCenterY = grid.y + grid.headerHeight / 2;
+  drawGridText(ctx, downCell, "ดาวน์", headerCenterY);
+  drawGridText(ctx, downPaymentCell, "เงินดาวน์", headerCenterY);
+  drawGridText(ctx, financeCell, "ยอดจัด", headerCenterY);
   terms.forEach((term, termIndex) => {
     const cell = termCells[termIndex];
-    drawGridText(ctx, cell, term.label, grid.y + 28, "center", cellPadding);
+    drawGridText(ctx, cell, term.label, grid.y + 26);
     ctx.fillStyle = "#d6b66c";
     ctx.font = "700 13px Arial, sans-serif";
-    drawGridText(ctx, cell, `ดอก ${formatInterestRate(model.rate[term.key])}`, grid.y + 52, "center", cellPadding);
+    drawGridText(ctx, cell, `ดอก ${formatInterestRate(model.rate[term.key])}`, grid.y + 50);
     ctx.fillStyle = "#d8d8dc";
     ctx.font = "700 16px Arial, sans-serif";
   });
 
   model.rows.forEach((row, rowIndex) => {
     const rowTop = grid.y + grid.headerHeight + rowIndex * grid.rowHeight;
-    const baseline = rowTop + 34;
+    const rowCenterY = rowTop + grid.rowHeight / 2;
     const selected = row.label === model.selectedDownLabel;
     ctx.fillStyle = selected ? "#4b222b" : rowIndex % 2 === 0 ? "#26262a" : "#202024";
     ctx.fillRect(grid.x, rowTop, grid.width, grid.rowHeight);
@@ -261,24 +261,36 @@ function drawInstallmentGrid(ctx: CanvasRenderingContext2D, model: CalculatorQuo
 
     ctx.fillStyle = "#ffffff";
     ctx.font = selected ? "800 17px Arial, sans-serif" : "700 17px Arial, sans-serif";
-    drawGridText(ctx, downCell, row.label, baseline, "left", cellPadding);
-    drawGridText(ctx, downPaymentCell, wholeMoney(row.downPayment), baseline, "right", cellPadding);
+    drawGridText(ctx, downCell, row.label, rowCenterY);
+    drawGridText(ctx, downPaymentCell, wholeMoney(row.downPayment), rowCenterY);
     ctx.fillStyle = "#c8c7cb";
-    drawGridText(ctx, financeCell, wholeMoney(row.financeAmount), baseline, "right", cellPadding);
+    drawGridText(ctx, financeCell, wholeMoney(row.financeAmount), rowCenterY);
     ctx.fillStyle = "#ffffff";
     ctx.font = "700 17px Arial, sans-serif";
     terms.forEach((term, termIndex) => {
-      drawGridText(ctx, termCells[termIndex], payment(row.payments[term.key]), baseline, "right", cellPadding);
+      drawGridText(ctx, termCells[termIndex], payment(row.payments[term.key]), rowCenterY);
     });
   });
 
-  ctx.strokeStyle = "rgba(255,255,255,0.12)";
+  ctx.strokeStyle = "rgba(255,255,255,0.14)";
   ctx.lineWidth = 1;
   ctx.beginPath();
   grid.columns.slice(1).forEach((cell) => {
     ctx.moveTo(cell.left + 0.5, grid.y);
     ctx.lineTo(cell.left + 0.5, grid.y + grid.height);
   });
+  for (let rowBoundary = 0; rowBoundary <= model.rows.length; rowBoundary += 1) {
+    const boundaryY = grid.y + grid.headerHeight + rowBoundary * grid.rowHeight + 0.5;
+    ctx.moveTo(grid.x, boundaryY);
+    ctx.lineTo(grid.x + grid.width, boundaryY);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,0.16)";
+  ctx.lineWidth = 1;
+  roundRect(ctx, grid.x + 0.5, grid.y + 0.5, grid.width - 1, grid.height - 1, 22);
   ctx.stroke();
   ctx.restore();
 }
@@ -287,14 +299,9 @@ function drawGridText(
   ctx: CanvasRenderingContext2D,
   cell: CalculatorQuoteGridCell,
   text: string,
-  baseline: number,
-  align: "left" | "center" | "right",
-  padding: number
+  centerY: number
 ) {
-  ctx.textAlign = align;
-  const anchorX = align === "left" ? cell.left + padding : align === "right" ? cell.right - padding : cell.center;
-  ctx.fillText(text, anchorX, baseline);
-  ctx.textAlign = "left";
+  ctx.fillText(text, cell.center, centerY);
 }
 
 function drawAvatar(ctx: CanvasRenderingContext2D, image: HTMLImageElement | null, profile: CalculatorQuoteProfile, x: number, y: number, size: number) {

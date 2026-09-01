@@ -88,7 +88,7 @@ export default function CalculatorPage() {
   const [carColor, setCarColor] = useState("");
   const [mileage, setMileage] = useState("");
   const [selectedDownLabel, setSelectedDownLabel] = useState("20%");
-  const [selectedTermKey, setSelectedTermKey] = useState<(typeof terms)[number]["key"]>("months72");
+  const [selectedTermKey, setSelectedTermKey] = useState<(typeof terms)[number]["key"]>("months84");
   const [carPrice, setCarPrice] = useState("684000");
   const [specialDownPayment, setSpecialDownPayment] = useState("");
   const [loading, setLoading] = useState(true);

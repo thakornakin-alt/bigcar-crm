@@ -41,7 +41,7 @@ test("Preview and PNG export use the same model and canvas renderer", () => {
 });
 
 test("commercial export hierarchy and required disclaimer remain", () => {
-  for (const copy of ["รถคันที่คุณสนใจ", "ราคารถ", "ผ่อนประมาณ", "เปรียบเทียบค่างวด", "สอบถามรายละเอียดและนัดดูรถ"]) {
+  for (const copy of ["รถคันที่คุณสนใจ", "ราคารถ", "ผ่อนเริ่มต้น", "เปรียบเทียบค่างวด", "สอบถามรายละเอียดและนัดดูรถ"]) {
     assert.ok(renderer.includes(copy), `missing hierarchy copy: ${copy}`);
   }
   assert.match(renderer, /ค่างวดเป็นการประมาณการ อัตราและผลอนุมัติขึ้นอยู่กับเงื่อนไขของสถาบันการเงิน/);
@@ -54,7 +54,7 @@ test("actual vehicle title and professional rough-quote fallback are explicit", 
 });
 
 test("selected payment hero shows the selected term rate while row emphasis remains authoritative", () => {
-  assert.match(renderer, /ผ่อนประมาณ/);
+  assert.match(renderer, /ผ่อนเริ่มต้น/);
   assert.match(renderer, /บาท\/เดือน/);
   assert.match(renderer, /ดาวน์ \$\{selectedRow\?\.label \|\| "-"\} · \$\{selectedTerm\.months\} งวด/);
   assert.match(renderer, /const selectedInterestRate = model\.rate\[model\.selectedTermKey\]/);
@@ -82,6 +82,13 @@ test("selected term no longer creates a special installment-column pill", () => 
 test("true grid contains exactly seven contiguous rectangles that sum to table width", () => {
   const grid = createCalculatorQuoteGrid(11);
   assert.equal(grid.columns.length, 7);
+  assert.deepEqual(grid.columns.map((cell) => cell.width), [120, 160, 160, 136, 136, 136, 136]);
+  grid.columns.forEach((cell) => {
+    assert.ok(Number.isInteger(cell.left));
+    assert.ok(Number.isInteger(cell.right));
+    assert.ok(Number.isInteger(cell.width));
+    assert.ok(Number.isInteger(cell.center));
+  });
   assert.equal(grid.columns[0].left, grid.x);
   assert.equal(grid.columns.at(-1).right, grid.x + grid.width);
   for (let index = 1; index < grid.columns.length; index += 1) {
@@ -96,21 +103,36 @@ test("all term cells are equal width and every table layer consumes the same gri
   const termWidths = grid.columns.slice(3).map((cell) => cell.width);
   termWidths.forEach((width) => assert.equal(width, termWidths[0]));
   assert.match(renderer, /const \[downCell, downPaymentCell, financeCell, \.\.\.termCells\] = grid\.columns/);
-  assert.match(renderer, /drawGridText\(ctx, cell, term\.label, grid\.y \+ 28, "center", cellPadding\)/);
-  assert.match(renderer, /drawGridText\(ctx, cell, `ดอก \$\{formatInterestRate\(model\.rate\[term\.key\]\)\}`, grid\.y \+ 52, "center", cellPadding\)/);
-  assert.match(renderer, /drawGridText\(ctx, termCells\[termIndex\], payment\(row\.payments\[term\.key\]\), baseline, "right", cellPadding\)/);
-  assert.match(renderer, /const anchorX = align === "left" \? cell\.left \+ padding : align === "right" \? cell\.right - padding : cell\.center/);
+  assert.match(renderer, /drawGridText\(ctx, cell, term\.label, grid\.y \+ 26\)/);
+  assert.match(renderer, /drawGridText\(ctx, cell, `ดอก \$\{formatInterestRate\(model\.rate\[term\.key\]\)\}`, grid\.y \+ 50\)/);
+  assert.match(renderer, /drawGridText\(ctx, termCells\[termIndex\], payment\(row\.payments\[term\.key\]\), rowCenterY\)/);
+  assert.match(renderer, /ctx\.fillText\(text, cell\.center, centerY\)/);
+  const tableRenderer = renderer.slice(renderer.indexOf("function drawInstallmentGrid"), renderer.indexOf("function drawGridText"));
+  assert.doesNotMatch(tableRenderer, /"left"|"right"|cellPadding|cell\.right/);
 });
 
-test("separators and row backgrounds derive only from the true grid", () => {
-  assert.match(renderer, /ctx\.strokeStyle = "rgba\(255,255,255,0\.12\)"/);
+test("full vertical, horizontal and outer grid borders derive only from the true grid", () => {
+  assert.match(renderer, /ctx\.strokeStyle = "rgba\(255,255,255,0\.14\)"/);
   assert.match(renderer, /grid\.columns\.slice\(1\)\.forEach\(\(cell\) => \{/);
   assert.match(renderer, /ctx\.moveTo\(cell\.left \+ 0\.5, grid\.y\)/);
+  assert.match(renderer, /for \(let rowBoundary = 0; rowBoundary <= model\.rows\.length; rowBoundary \+= 1\)/);
+  assert.match(renderer, /grid\.y \+ grid\.headerHeight \+ rowBoundary \* grid\.rowHeight \+ 0\.5/);
+  assert.match(renderer, /ctx\.strokeStyle = "rgba\(255,255,255,0\.16\)"/);
   assert.match(renderer, /ctx\.fillRect\(grid\.x, rowTop, grid\.width, grid\.rowHeight\)/);
   assert.match(renderer, /ctx\.fillRect\(grid\.x, rowTop, 5, grid\.rowHeight\)/);
 });
 
+test("every body value is centered horizontally and vertically in its real cell", () => {
+  assert.match(renderer, /ctx\.textAlign = "center"/);
+  assert.match(renderer, /ctx\.textBaseline = "middle"/);
+  assert.match(renderer, /const rowCenterY = rowTop \+ grid\.rowHeight \/ 2/);
+  for (const cellName of ["downCell", "downPaymentCell", "financeCell"]) {
+    assert.match(renderer, new RegExp(`drawGridText\\(ctx, ${cellName}, [^\\n]+, rowCenterY\\)`));
+  }
+});
+
 test("Calculator UI keeps all four hero-term selectors with the required label", () => {
+  assert.match(page, /useState<\(typeof terms\)\[number\]\["key"\]>\("months84"\)/);
   assert.match(page, /เลือกงวดสำหรับยอดผ่อนด้านบน/);
   assert.match(page, /onClick=\{\(\) => setSelectedTermKey\(term\.key\)\}/);
   assert.match(page, /aria-pressed=\{selectedTermKey === term\.key\}/);
