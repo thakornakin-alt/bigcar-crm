@@ -56,6 +56,15 @@ export type CalculatorQuoteGrid = {
   columns: CalculatorQuoteGridCell[];
 };
 
+export type OpticallyCenteredTextPosition = {
+  x: number;
+  y: number;
+  visibleLeft: number;
+  visibleRight: number;
+  visibleTop: number;
+  visibleBottom: number;
+};
+
 const GRID_COLUMN_SPECS: ReadonlyArray<{ key: CalculatorQuoteGridColumnKey; baseWidth: number }> = [
   { key: "down", baseWidth: 120 },
   { key: "downPayment", baseWidth: 160 },
@@ -82,6 +91,29 @@ export function createCalculatorQuoteGrid(rowCount: number): CalculatorQuoteGrid
     return { key: spec.key, x: left, width: right - left, left, right, center: left + (right - left) / 2 };
   });
   return { x, y, width, headerHeight, rowHeight, height: headerHeight + rowHeight * rowCount, columns };
+}
+
+export function measureOpticallyCenteredText(
+  ctx: Pick<CanvasRenderingContext2D, "measureText">,
+  cell: CalculatorQuoteGridCell,
+  text: string,
+  centerY: number
+): OpticallyCenteredTextPosition {
+  const metrics = ctx.measureText(text);
+  const left = Number.isFinite(metrics.actualBoundingBoxLeft) ? metrics.actualBoundingBoxLeft : 0;
+  const right = Number.isFinite(metrics.actualBoundingBoxRight) ? metrics.actualBoundingBoxRight : metrics.width;
+  const ascent = Number.isFinite(metrics.actualBoundingBoxAscent) ? metrics.actualBoundingBoxAscent : 0;
+  const descent = Number.isFinite(metrics.actualBoundingBoxDescent) ? metrics.actualBoundingBoxDescent : 0;
+  const x = cell.center - (right - left) / 2;
+  const y = centerY + (ascent - descent) / 2;
+  return {
+    x,
+    y,
+    visibleLeft: x - left,
+    visibleRight: x + right,
+    visibleTop: y - ascent,
+    visibleBottom: y + descent
+  };
 }
 
 export async function loadCalculatorQuoteAssets(profile: CalculatorQuoteProfile): Promise<QuoteAssets> {
@@ -226,8 +258,6 @@ function drawInstallmentGrid(ctx: CanvasRenderingContext2D, model: CalculatorQuo
   ctx.save();
   roundRect(ctx, grid.x, grid.y, grid.width, grid.height, 22);
   ctx.clip();
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
 
   ctx.fillStyle = "#303036";
   ctx.fillRect(grid.x, grid.y, grid.width, grid.headerHeight);
@@ -301,7 +331,10 @@ function drawGridText(
   text: string,
   centerY: number
 ) {
-  ctx.fillText(text, cell.center, centerY);
+  const position = measureOpticallyCenteredText(ctx, cell, text, centerY);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(text, position.x, position.y);
 }
 
 function drawAvatar(ctx: CanvasRenderingContext2D, image: HTMLImageElement | null, profile: CalculatorQuoteProfile, x: number, y: number, size: number) {

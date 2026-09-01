@@ -70,7 +70,10 @@ try {
       await page.screenshot({ path: path.join(artifactDir, "calculator-preview-mobile-390-local.png"), fullPage: true });
       const png = await page.getByLabel("ตัวอย่างรูปค่างวด BIG CAR").evaluate((canvas) => canvas.toDataURL("image/png"));
       await writeFile(path.join(artifactDir, "bigcar-installment-export-fallback.png"), Buffer.from(png.split(",")[1], "base64"));
-      const debugPng = await page.getByLabel("ตัวอย่างรูปค่างวด BIG CAR").evaluate((canvas) => {
+      const bodyRows = await page.getByTestId("calculator-values-table").locator("tbody tr").evaluateAll((rows) =>
+        rows.map((row) => Array.from(row.querySelectorAll("td"), (cell) => cell.textContent?.trim() || ""))
+      );
+      const debugResult = await page.getByLabel("ตัวอย่างรูปค่างวด BIG CAR").evaluate((canvas, bodyRows) => {
         const debug = document.createElement("canvas");
         debug.width = canvas.width;
         debug.height = canvas.height;
@@ -83,23 +86,53 @@ try {
           left += cellWidth;
           return center;
         });
-        ctx.strokeStyle = "rgba(0,229,255,0.75)";
-        ctx.fillStyle = "#00e5ff";
+        ctx.strokeStyle = "rgba(0,229,255,0.8)";
         ctx.lineWidth = 1;
         centers.forEach((centerX) => {
           ctx.beginPath();
           ctx.moveTo(centerX + 0.5, 538);
           ctx.lineTo(centerX + 0.5, 1204);
           ctx.stroke();
-          [574, ...Array.from({ length: 11 }, (_, index) => 637 + index * 54)].forEach((centerY) => {
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
-            ctx.fill();
-          });
         });
-        return debug.toDataURL("image/png");
-      });
-      await writeFile(path.join(artifactDir, "calculator-grid-debug-centers.png"), Buffer.from(debugPng.split(",")[1], "base64"));
+        let maxHorizontalError = 0;
+        let maxVerticalError = 0;
+        let markerCount = 0;
+        const markVisibleCenter = (columnIndex, text, centerY, font) => {
+          ctx.font = font;
+          const metrics = ctx.measureText(text);
+          const leftBound = Number.isFinite(metrics.actualBoundingBoxLeft) ? metrics.actualBoundingBoxLeft : 0;
+          const rightBound = Number.isFinite(metrics.actualBoundingBoxRight) ? metrics.actualBoundingBoxRight : metrics.width;
+          const ascent = Number.isFinite(metrics.actualBoundingBoxAscent) ? metrics.actualBoundingBoxAscent : 0;
+          const descent = Number.isFinite(metrics.actualBoundingBoxDescent) ? metrics.actualBoundingBoxDescent : 0;
+          const originX = centers[columnIndex] - (rightBound - leftBound) / 2;
+          const originY = centerY + (ascent - descent) / 2;
+          const glyphCenterX = ((originX - leftBound) + (originX + rightBound)) / 2;
+          const glyphCenterY = ((originY - ascent) + (originY + descent)) / 2;
+          maxHorizontalError = Math.max(maxHorizontalError, Math.abs(glyphCenterX - centers[columnIndex]));
+          maxVerticalError = Math.max(maxVerticalError, Math.abs(glyphCenterY - centerY));
+          ctx.fillStyle = "#ff304f";
+          ctx.beginPath();
+          ctx.arc(glyphCenterX, glyphCenterY, 3, 0, Math.PI * 2);
+          ctx.fill();
+          markerCount += 1;
+        };
+        ["ดาวน์", "เงินดาวน์", "ยอดจัด"].forEach((text, index) => markVisibleCenter(index, text, 574, "700 16px Arial"));
+        ["48 งวด", "60 งวด", "72 งวด", "84 งวด"].forEach((text, index) => markVisibleCenter(index + 3, text, 564, "700 16px Arial"));
+        ["ดอก 2.79%", "ดอก 3.09%", "ดอก 3.99%", "ดอก 4.49%"].forEach((text, index) =>
+          markVisibleCenter(index + 3, text, 588, "700 13px Arial")
+        );
+        bodyRows.forEach((row, rowIndex) => {
+          row.forEach((text, columnIndex) => markVisibleCenter(columnIndex, text, 637 + rowIndex * 54, "700 16px Arial"));
+        });
+        return { png: debug.toDataURL("image/png"), maxHorizontalError, maxVerticalError, markerCount };
+      }, bodyRows);
+      assert.ok(debugResult.maxHorizontalError < 1e-6, `debug glyph X error ${debugResult.maxHorizontalError}`);
+      assert.ok(debugResult.maxVerticalError < 1e-6, `debug glyph Y error ${debugResult.maxVerticalError}`);
+      assert.equal(debugResult.markerCount, 88, "every header, rate, and body cell must have a glyph-center marker");
+      await writeFile(
+        path.join(artifactDir, "calculator-grid-debug-centers.png"),
+        Buffer.from(debugResult.png.split(",")[1], "base64")
+      );
     }
     await page.close();
   }

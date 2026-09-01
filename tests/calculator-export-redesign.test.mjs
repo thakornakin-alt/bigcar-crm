@@ -13,7 +13,7 @@ const compiledRenderer = ts.transpileModule(renderer, {
 }).outputText;
 const rendererModule = { exports: {} };
 new Function("exports", "module", "require", compiledRenderer)(rendererModule.exports, rendererModule, () => ({}));
-const { createCalculatorQuoteGrid } = rendererModule.exports;
+const { createCalculatorQuoteGrid, measureOpticallyCenteredText } = rendererModule.exports;
 
 test("installment formula and 48/60/72/84 term contract remain unchanged", () => {
   assert.match(page, /\(\(financeAmount \* rate \* years \+ financeAmount\) \/ months\) \* 1\.07/);
@@ -106,7 +106,8 @@ test("all term cells are equal width and every table layer consumes the same gri
   assert.match(renderer, /drawGridText\(ctx, cell, term\.label, grid\.y \+ 26\)/);
   assert.match(renderer, /drawGridText\(ctx, cell, `ดอก \$\{formatInterestRate\(model\.rate\[term\.key\]\)\}`, grid\.y \+ 50\)/);
   assert.match(renderer, /drawGridText\(ctx, termCells\[termIndex\], payment\(row\.payments\[term\.key\]\), rowCenterY\)/);
-  assert.match(renderer, /ctx\.fillText\(text, cell\.center, centerY\)/);
+  assert.match(renderer, /const position = measureOpticallyCenteredText\(ctx, cell, text, centerY\)/);
+  assert.match(renderer, /ctx\.fillText\(text, position\.x, position\.y\)/);
   const tableRenderer = renderer.slice(renderer.indexOf("function drawInstallmentGrid"), renderer.indexOf("function drawGridText"));
   assert.doesNotMatch(tableRenderer, /"left"|"right"|cellPadding|cell\.right/);
 });
@@ -122,13 +123,40 @@ test("full vertical, horizontal and outer grid borders derive only from the true
   assert.match(renderer, /ctx\.fillRect\(grid\.x, rowTop, 5, grid\.rowHeight\)/);
 });
 
-test("every body value is centered horizontally and vertically in its real cell", () => {
-  assert.match(renderer, /ctx\.textAlign = "center"/);
-  assert.match(renderer, /ctx\.textBaseline = "middle"/);
+test("every table value uses actual glyph bounds for optical horizontal and vertical centering", () => {
+  assert.match(renderer, /ctx\.textAlign = "left"/);
+  assert.match(renderer, /ctx\.textBaseline = "alphabetic"/);
+  assert.match(renderer, /metrics\.actualBoundingBoxLeft/);
+  assert.match(renderer, /metrics\.actualBoundingBoxRight/);
+  assert.match(renderer, /metrics\.actualBoundingBoxAscent/);
+  assert.match(renderer, /metrics\.actualBoundingBoxDescent/);
   assert.match(renderer, /const rowCenterY = rowTop \+ grid\.rowHeight \/ 2/);
   for (const cellName of ["downCell", "downPaymentCell", "financeCell"]) {
     assert.match(renderer, new RegExp(`drawGridText\\(ctx, ${cellName}, [^\\n]+, rowCenterY\\)`));
   }
+});
+
+test("optical helper puts asymmetric visible glyph bounds exactly on each cell center", () => {
+  const grid = createCalculatorQuoteGrid(11);
+  const samples = ["0", "0%", "34,200", "684,000", "16,949", "11,451", "10,079", "9,161", "342,000"];
+  const ctx = {
+    measureText(text) {
+      const width = text.length * 9;
+      return {
+        width,
+        actualBoundingBoxLeft: text.includes("%") ? 1.25 : 2.5,
+        actualBoundingBoxRight: width - (text.includes(",") ? 4.25 : 1.5),
+        actualBoundingBoxAscent: 12,
+        actualBoundingBoxDescent: 4
+      };
+    }
+  };
+  samples.forEach((text, index) => {
+    const cell = grid.columns[index % grid.columns.length];
+    const position = measureOpticallyCenteredText(ctx, cell, text, 637);
+    assert.ok(Math.abs((position.visibleLeft + position.visibleRight) / 2 - cell.center) < 1e-9, text);
+    assert.ok(Math.abs((position.visibleTop + position.visibleBottom) / 2 - 637) < 1e-9, text);
+  });
 });
 
 test("Calculator UI keeps all four hero-term selectors with the required label", () => {
