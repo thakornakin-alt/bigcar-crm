@@ -1,12 +1,19 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import ts from "typescript";
 
 const page = await readFile(new URL("../app/calculator/page.tsx", import.meta.url), "utf8");
 const preview = await readFile(new URL("../app/calculator/CalculatorQuotePreview.tsx", import.meta.url), "utf8");
 const renderer = await readFile(new URL("../lib/calculator-quote-canvas.ts", import.meta.url), "utf8");
 const profile = await readFile(new URL("../lib/user-profile.ts", import.meta.url), "utf8");
 const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+const compiledRenderer = ts.transpileModule(renderer, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+}).outputText;
+const rendererModule = { exports: {} };
+new Function("exports", "module", "require", compiledRenderer)(rendererModule.exports, rendererModule, () => ({}));
+const { createCalculatorQuoteGrid } = rendererModule.exports;
 
 test("installment formula and 48/60/72/84 term contract remain unchanged", () => {
   assert.match(page, /\(\(financeAmount \* rate \* years \+ financeAmount\) \/ months\) \* 1\.07/);
@@ -61,30 +68,52 @@ test("all installment headers render their actual model rates with a safe null f
   assert.match(renderer, /terms\.forEach\(\(term, termIndex\) => \{/);
   assert.match(renderer, /`ดอก \$\{formatInterestRate\(model\.rate\[term\.key\]\)\}`/);
   assert.match(renderer, /value === null \? "-" : `\$\{\(value \* 100\)\.toFixed\(2\)\}%`/);
-  assert.match(renderer, /const headerH = 72/);
+  assert.match(renderer, /const headerHeight = 72/);
 });
 
 test("selected term no longer creates a special installment-column pill", () => {
-  const tableRows = renderer.slice(renderer.indexOf("model.rows.forEach"), renderer.indexOf("const profileTop"));
-  assert.doesNotMatch(tableRows, /term\.key === model\.selectedTermKey/);
-  assert.doesNotMatch(tableRows, /columns\[termIndex \+ 3\]\.x - 8/);
-  assert.doesNotMatch(tableRows, /const active = selected/);
+  const tableRenderer = renderer.slice(renderer.indexOf("function drawInstallmentGrid"), renderer.indexOf("function drawGridText"));
+  assert.doesNotMatch(tableRenderer, /selectedTermKey/);
+  assert.doesNotMatch(tableRenderer, /roundRect\([^\n]*term/);
+  assert.doesNotMatch(tableRenderer, /const active = selected/);
   assert.match(renderer, /ctx\.fillStyle = selected \? "#4b222b"/);
 });
 
-test("installment columns share one equal-width grid with centered headers and aligned values", () => {
-  assert.match(renderer, /const termColumnWidth = 125/);
-  assert.match(renderer, /x: tableContentX \+ 436 \+ termIndex \* termColumnWidth/);
-  assert.match(renderer, /width: termColumnWidth/);
-  assert.match(renderer, /align: "center" as const/);
-  assert.match(renderer, /cellText\(ctx, payment\(row\.payments\[term\.key\]\), columns\[termIndex \+ 3\]\.x, y \+ 34, columns\[termIndex \+ 3\]\.width, "right"\)/);
+test("true grid contains exactly seven contiguous rectangles that sum to table width", () => {
+  const grid = createCalculatorQuoteGrid(11);
+  assert.equal(grid.columns.length, 7);
+  assert.equal(grid.columns[0].left, grid.x);
+  assert.equal(grid.columns.at(-1).right, grid.x + grid.width);
+  for (let index = 1; index < grid.columns.length; index += 1) {
+    assert.equal(grid.columns[index - 1].right, grid.columns[index].left, `gap or overlap before column ${index}`);
+  }
+  assert.equal(grid.columns.reduce((sum, cell) => sum + cell.width, 0), grid.width);
+  assert.equal(grid.height, grid.headerHeight + grid.rowHeight * 11);
 });
 
-test("subtle vertical separators use the exact shared column boundaries", () => {
-  assert.match(renderer, /const columnBoundaries = columns\.slice\(1\)\.map\(\(column\) => column\.x\)/);
+test("all term cells are equal width and every table layer consumes the same grid cells", () => {
+  const grid = createCalculatorQuoteGrid(11);
+  const termWidths = grid.columns.slice(3).map((cell) => cell.width);
+  termWidths.forEach((width) => assert.equal(width, termWidths[0]));
+  assert.match(renderer, /const \[downCell, downPaymentCell, financeCell, \.\.\.termCells\] = grid\.columns/);
+  assert.match(renderer, /drawGridText\(ctx, cell, term\.label, grid\.y \+ 28, "center", cellPadding\)/);
+  assert.match(renderer, /drawGridText\(ctx, cell, `ดอก \$\{formatInterestRate\(model\.rate\[term\.key\]\)\}`, grid\.y \+ 52, "center", cellPadding\)/);
+  assert.match(renderer, /drawGridText\(ctx, termCells\[termIndex\], payment\(row\.payments\[term\.key\]\), baseline, "right", cellPadding\)/);
+  assert.match(renderer, /const anchorX = align === "left" \? cell\.left \+ padding : align === "right" \? cell\.right - padding : cell\.center/);
+});
+
+test("separators and row backgrounds derive only from the true grid", () => {
   assert.match(renderer, /ctx\.strokeStyle = "rgba\(255,255,255,0\.12\)"/);
-  assert.match(renderer, /ctx\.moveTo\(boundaryX \+ 0\.5, tableY \+ 1\)/);
-  assert.match(renderer, /ctx\.lineTo\(boundaryX \+ 0\.5, tableY \+ headerH \+ rowH \* model\.rows\.length - 1\)/);
+  assert.match(renderer, /grid\.columns\.slice\(1\)\.forEach\(\(cell\) => \{/);
+  assert.match(renderer, /ctx\.moveTo\(cell\.left \+ 0\.5, grid\.y\)/);
+  assert.match(renderer, /ctx\.fillRect\(grid\.x, rowTop, grid\.width, grid\.rowHeight\)/);
+  assert.match(renderer, /ctx\.fillRect\(grid\.x, rowTop, 5, grid\.rowHeight\)/);
+});
+
+test("Calculator UI keeps all four hero-term selectors with the required label", () => {
+  assert.match(page, /เลือกงวดสำหรับยอดผ่อนด้านบน/);
+  assert.match(page, /onClick=\{\(\) => setSelectedTermKey\(term\.key\)\}/);
+  assert.match(page, /aria-pressed=\{selectedTermKey === term\.key\}/);
 });
 
 test("edge labels stay inside the 56px export safe area", () => {

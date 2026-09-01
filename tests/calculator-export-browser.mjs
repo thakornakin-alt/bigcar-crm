@@ -39,6 +39,28 @@ try {
       await page.getByRole("textbox", { name: "ปีรถ" }).fill("2020");
       await page.getByRole("textbox", { name: "สีรถ" }).fill("ขาว");
       await page.getByRole("textbox", { name: "เลขไมล์" }).fill("68,000 กม.");
+      for (const downLabel of ["0%", "20%", "50%"]) {
+        await page.getByRole("button", { name: downLabel, exact: true }).first().click();
+        let tableBaseline = "";
+        for (const months of [48, 60, 72, 84]) {
+          await page.getByRole("button", { name: `${months} งวด`, exact: true }).click();
+          await page.waitForTimeout(150);
+          const tableImage = await page.getByLabel("ตัวอย่างรูปค่างวด BIG CAR").evaluate((canvas) => {
+            const crop = document.createElement("canvas");
+            crop.width = 984;
+            crop.height = 666;
+            crop.getContext("2d").drawImage(canvas, 48, 538, 984, 666, 0, 0, 984, 666);
+            return crop.toDataURL("image/png");
+          });
+          if (!tableBaseline) tableBaseline = tableImage;
+          else assert.equal(tableImage, tableBaseline, `table geometry/style changed for ${downLabel} down at ${months} months`);
+        }
+        const png = await page.getByLabel("ตัวอย่างรูปค่างวด BIG CAR").evaluate((canvas) => canvas.toDataURL("image/png"));
+        await writeFile(
+          path.join(artifactDir, `calculator-grid-down-${downLabel.replace("%", "")}.png`),
+          Buffer.from(png.split(",")[1], "base64")
+        );
+      }
       await page.getByTestId("calculator-quote-preview").screenshot({ path: path.join(artifactDir, "calculator-fallback-no-avatar-qr.png") });
       await page.screenshot({ path: path.join(artifactDir, "calculator-preview-mobile-390-local.png"), fullPage: true });
       const png = await page.getByLabel("ตัวอย่างรูปค่างวด BIG CAR").evaluate((canvas) => canvas.toDataURL("image/png"));

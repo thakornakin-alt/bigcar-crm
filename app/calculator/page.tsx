@@ -300,18 +300,21 @@ export default function CalculatorPage() {
               <h2 className="mt-1 text-xl font-black text-white">ภาพค่างวด BIG CAR</h2>
               <p className="mt-1 text-sm text-soft">เลือกแถวดาวน์และจำนวนงวดจากตาราง ภาพที่เห็นคือภาพเดียวกับ PNG</p>
             </div>
-            <div className="flex flex-wrap gap-2" aria-label="เลือกจำนวนงวด">
-              {terms.map((term) => (
-                <button
-                  key={term.key}
-                  type="button"
-                  onClick={() => setSelectedTermKey(term.key)}
-                  aria-pressed={selectedTermKey === term.key}
-                  className={`min-h-10 rounded-full border px-3 text-sm font-bold ${selectedTermKey === term.key ? "border-brand bg-brand text-white" : "border-white/10 text-white"}`}
-                >
-                  {term.label} งวด
-                </button>
-              ))}
+            <div>
+              <p className="mb-2 text-xs font-semibold text-soft">เลือกงวดสำหรับยอดผ่อนด้านบน</p>
+              <div className="flex flex-wrap gap-2" aria-label="เลือกจำนวนงวด">
+                {terms.map((term) => (
+                  <button
+                    key={term.key}
+                    type="button"
+                    onClick={() => setSelectedTermKey(term.key)}
+                    aria-pressed={selectedTermKey === term.key}
+                    className={`min-h-10 rounded-full border px-3 text-sm font-bold ${selectedTermKey === term.key ? "border-brand bg-brand text-white" : "border-white/10 text-white"}`}
+                  >
+                    {term.label} งวด
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
           <CalculatorQuotePreview ref={quotePreviewRef} model={quoteModel} />
