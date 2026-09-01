@@ -142,14 +142,18 @@ export function drawCalculatorQuote(
   ctx.fillRect(tableX, tableY, tableW, headerH);
   ctx.restore();
 
+  const tableContentX = 72;
+  const termColumnWidth = 125;
   const columns = [
-    { x: 72, width: 108, label: "ดาวน์", align: "left" as const },
-    { x: 190, width: 150, label: "เงินดาวน์", align: "right" as const },
-    { x: 354, width: 150, label: "ยอดจัด", align: "right" as const },
-    { x: 518, width: 112, label: "48 งวด", align: "right" as const },
-    { x: 646, width: 112, label: "60 งวด", align: "right" as const },
-    { x: 774, width: 112, label: "72 งวด", align: "right" as const },
-    { x: 902, width: 102, label: "84 งวด", align: "right" as const }
+    { x: tableContentX, width: 108, label: "ดาวน์", align: "left" as const },
+    { x: tableContentX + 108, width: 164, label: "เงินดาวน์", align: "right" as const },
+    { x: tableContentX + 272, width: 164, label: "ยอดจัด", align: "right" as const },
+    ...terms.map((term, termIndex) => ({
+      x: tableContentX + 436 + termIndex * termColumnWidth,
+      width: termColumnWidth,
+      label: term.label,
+      align: "center" as const
+    }))
   ];
   ctx.font = "700 16px Arial, sans-serif";
   ctx.fillStyle = "#d8d8dc";
@@ -185,6 +189,18 @@ export function drawCalculatorQuote(
       cellText(ctx, payment(row.payments[term.key]), columns[termIndex + 3].x, y + 34, columns[termIndex + 3].width, "right");
     });
   });
+
+  const columnBoundaries = columns.slice(1).map((column) => column.x);
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,0.12)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  columnBoundaries.forEach((boundaryX) => {
+    ctx.moveTo(boundaryX + 0.5, tableY + 1);
+    ctx.lineTo(boundaryX + 0.5, tableY + headerH + rowH * model.rows.length - 1);
+  });
+  ctx.stroke();
+  ctx.restore();
 
   const profileTop = 1250;
   card(ctx, 48, profileTop, 984, 236, 24, "#faf8f5");
@@ -276,9 +292,9 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: n
   ctx.closePath();
 }
 
-function cellText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, width: number, align: "left" | "right") {
+function cellText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, width: number, align: "left" | "center" | "right") {
   ctx.textAlign = align;
-  ctx.fillText(text, align === "right" ? x + width : x, y);
+  ctx.fillText(text, align === "right" ? x + width : align === "center" ? x + width / 2 : x, y);
   ctx.textAlign = "left";
 }
 

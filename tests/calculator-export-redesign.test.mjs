@@ -72,6 +72,21 @@ test("selected term no longer creates a special installment-column pill", () => 
   assert.match(renderer, /ctx\.fillStyle = selected \? "#4b222b"/);
 });
 
+test("installment columns share one equal-width grid with centered headers and aligned values", () => {
+  assert.match(renderer, /const termColumnWidth = 125/);
+  assert.match(renderer, /x: tableContentX \+ 436 \+ termIndex \* termColumnWidth/);
+  assert.match(renderer, /width: termColumnWidth/);
+  assert.match(renderer, /align: "center" as const/);
+  assert.match(renderer, /cellText\(ctx, payment\(row\.payments\[term\.key\]\), columns\[termIndex \+ 3\]\.x, y \+ 34, columns\[termIndex \+ 3\]\.width, "right"\)/);
+});
+
+test("subtle vertical separators use the exact shared column boundaries", () => {
+  assert.match(renderer, /const columnBoundaries = columns\.slice\(1\)\.map\(\(column\) => column\.x\)/);
+  assert.match(renderer, /ctx\.strokeStyle = "rgba\(255,255,255,0\.12\)"/);
+  assert.match(renderer, /ctx\.moveTo\(boundaryX \+ 0\.5, tableY \+ 1\)/);
+  assert.match(renderer, /ctx\.lineTo\(boundaryX \+ 0\.5, tableY \+ headerH \+ rowH \* model\.rows\.length - 1\)/);
+});
+
 test("edge labels stay inside the 56px export safe area", () => {
   assert.match(renderer, /ctx\.fillText\("ข้อเสนอค่างวด", 1016, 82\)/);
   assert.match(renderer, /ctx\.fillText\("BIG CAR", 56, 1570\)/);
