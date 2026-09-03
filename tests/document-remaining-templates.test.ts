@@ -61,6 +61,21 @@ test("transport printed slots without AcroForm use audited overlays", async () =
   assert.match(generator, /templateId === "transport-transfer-request"/);
 });
 
+test("power and transfer outputs replace template page two with source page index one", async () => {
+  const generator = await readFile(new URL("../lib/documents-v2/generator.ts", import.meta.url), "utf8");
+  assert.match(generator, /"power-of-attorney": "power-of-attorney-original-full\.pdf"/);
+  assert.match(generator, /"transport-transfer-request": "transport-transfer-request-original-full\.pdf"/);
+  assert.match(generator, /pdf\.copyPages\(sourcePdf, \[1\]\)/);
+  assert.match(generator, /while \(pdf\.getPageCount\(\) > 1\) pdf\.removePage\(pdf\.getPageCount\(\) - 1\)/);
+  assert.match(generator, /pdf\.addPage\(originalPageTwo\)/);
+
+  for (const fileName of ["power-of-attorney-original-full.pdf", "transport-transfer-request-original-full.pdf"]) {
+    const bytes = await readFile(new URL(`../public/document-templates/${fileName}`, import.meta.url));
+    const source = await PDFDocument.load(bytes);
+    assert.equal(source.getPageCount(), 2, fileName);
+  }
+});
+
 test("transport sale price uses strict money normalization and preserves decimals", () => {
   assert.deepEqual(normalizeDocumentValueRecord({ transfer_sale_price: "504,000.50" }), { transfer_sale_price: "504,000.50" });
   assert.throws(() => normalizeDocumentValueRecord({ transfer_sale_price: "1,2,3" }), /รูปแบบจำนวนเงิน/);

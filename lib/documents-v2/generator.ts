@@ -426,6 +426,27 @@ function drawVehicleDeliveryIdCardImage(placement: Awaited<ReturnType<typeof pre
   });
 }
 
+const ORIGINAL_PAGE_TWO_BY_TEMPLATE: Partial<Record<DocumentV2TemplateId, string>> = {
+  "power-of-attorney": "power-of-attorney-original-full.pdf",
+  "transport-transfer-request": "transport-transfer-request-original-full.pdf"
+};
+
+async function replaceWithOriginalSourcePageTwo(pdf: PDFDocument, templateId?: DocumentV2TemplateId) {
+  if (!templateId) return;
+  const sourceFileName = ORIGINAL_PAGE_TWO_BY_TEMPLATE[templateId];
+  if (!sourceFileName) return;
+
+  const sourceBytes = await readFile(path.join(process.cwd(), "public/document-templates", sourceFileName));
+  const sourcePdf = await PDFDocument.load(sourceBytes, { ignoreEncryption: true });
+  if (sourcePdf.getPageCount() < 2) {
+    throw new Error(`Original PDF must contain source page index 1: ${sourceFileName}`);
+  }
+
+  const [originalPageTwo] = await pdf.copyPages(sourcePdf, [1]);
+  while (pdf.getPageCount() > 1) pdf.removePage(pdf.getPageCount() - 1);
+  pdf.addPage(originalPageTwo);
+}
+
 export async function generateDocumentV2(data: DocumentV2Data, templateId?: string): Promise<Uint8Array> {
   throw new Error("internal: use generateDocumentV2WithBytes");
 }
@@ -494,5 +515,6 @@ export async function generateDocumentV2WithBytes(
 
   form.flatten();
   drawVehicleDeliveryIdCardImage(vehicleDeliveryIdCardImage);
+  await replaceWithOriginalSourcePageTwo(pdf, templateId);
   return pdf.save();
 }
