@@ -1604,6 +1604,12 @@ export function DocumentGeneratorV2() {
         const fileNames = getDocumentImageFileNames(templateId, currentFileName, pageNumbers);
         const pageBlobs: Blob[] = [];
         for (const pageNumber of pageNumbers) {
+          if (templateId === "power-of-attorney" && pageNumber === 2) {
+            const staticPageResponse = await fetch("/document-templates/power-of-attorney-original-page-2.png");
+            if (!staticPageResponse.ok) throw new Error("ไม่พบรูปหน้าคำเตือนของหนังสือมอบอำนาจ");
+            pageBlobs.push(await staticPageResponse.blob());
+            continue;
+          }
           const page = await finalPdf.getPage(pageNumber);
           const viewport = page.getViewport({ scale: 3 });
           const canvas = document.createElement("canvas");

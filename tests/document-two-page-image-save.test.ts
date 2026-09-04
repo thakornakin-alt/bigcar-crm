@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { createCanvas, loadImage } from "@napi-rs/canvas";
 import {
   getDocumentImageFileNames,
   getDocumentImagePageNumbers,
@@ -62,7 +63,7 @@ test("unsupported multi-file share returns false for the two-download fallback",
   assert.equal(shareCalled, false);
 });
 
-test("Documents V2 renders page 1 and page 2 from the final generated PDF at the existing scale", async () => {
+test("Documents V2 renders selected final-PDF pages at the existing scale", async () => {
   const source = await readFile(new URL("../components/documents/DocumentGeneratorV2.tsx", import.meta.url), "utf8");
   assert.match(source, /const finalPdfBlob = await pdfResponse\.blob\(\)/);
   assert.match(source, /getDocumentImagePageNumbers\(templateId, finalPdf\.numPages\)/);
@@ -71,4 +72,28 @@ test("Documents V2 renders page 1 and page 2 from the final generated PDF at the
   assert.match(source, /page\.getViewport\(\{ scale: 3 \}\)/);
   assert.match(source, /canvas\.toBlob\(resolve, "image\/png"\)/);
   assert.match(source, /downloadUrls\.forEach\(\(url, index\) => downloadObjectUrl\(url, fileNames\[index\]\)\)/);
+});
+
+test("Power of Attorney page 2 uses the original static raster and contains visible dark pixels", async () => {
+  const source = await readFile(new URL("../components/documents/DocumentGeneratorV2.tsx", import.meta.url), "utf8");
+  assert.match(source, /templateId === "power-of-attorney" && pageNumber === 2/);
+  assert.match(source, /fetch\("\/document-templates\/power-of-attorney-original-page-2\.png"\)/);
+  assert.match(source, /pageBlobs\.push\(await staticPageResponse\.blob\(\)\);\s*continue;/);
+
+  const pngBytes = await readFile(new URL("../public/document-templates/power-of-attorney-original-page-2.png", import.meta.url));
+  const image = await loadImage(pngBytes);
+  assert.equal(image.width, 2479);
+  assert.equal(image.height, 3502);
+  const canvas = createCanvas(image.width, image.height);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(image, 0, 0);
+  const pixels = ctx.getImageData(0, 0, image.width, image.height).data;
+  let nonWhite = 0;
+  let dark = 0;
+  for (let index = 0; index < pixels.length; index += 4) {
+    if (pixels[index] < 250 || pixels[index + 1] < 250 || pixels[index + 2] < 250) nonWhite += 1;
+    if (pixels[index] < 128 && pixels[index + 1] < 128 && pixels[index + 2] < 128) dark += 1;
+  }
+  assert.ok(nonWhite > 150_000, `non-white pixels ${nonWhite}`);
+  assert.ok(dark > 100_000, `dark pixels ${dark}`);
 });

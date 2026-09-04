@@ -23,7 +23,19 @@ await page.addInitScript(() => {
       const summary = await Promise.all((files || []).map(async (file) => {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const bitmap = await createImageBitmap(file);
-        return { name: file.name, type: file.type, size: file.size, signature: Array.from(bytes.slice(0, 8)), width: bitmap.width, height: bitmap.height };
+        const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)))
+          .map((value) => value.toString(16).padStart(2, "0")).join("").toUpperCase();
+        const sample = document.createElement("canvas");
+        sample.width = 320;
+        sample.height = Math.round(320 * bitmap.height / bitmap.width);
+        const sampleContext = sample.getContext("2d");
+        sampleContext.drawImage(bitmap, 0, 0, sample.width, sample.height);
+        const pixels = sampleContext.getImageData(0, 0, sample.width, sample.height).data;
+        let nonWhite = 0;
+        for (let index = 0; index < pixels.length; index += 4) {
+          if (pixels[index] < 250 || pixels[index + 1] < 250 || pixels[index + 2] < 250) nonWhite += 1;
+        }
+        return { name: file.name, type: file.type, size: file.size, signature: Array.from(bytes.slice(0, 8)), width: bitmap.width, height: bitmap.height, digest, nonWhite };
       }));
       window.__documentShareCalls.push(summary);
     }
@@ -141,7 +153,11 @@ for (const [index, expectedCount] of [2, 2, 1].entries()) {
     if (file.type !== "image/png" || file.size <= 0) throw new Error(`invalid PNG ${JSON.stringify(file)}`);
     if (file.signature.join(",") !== "137,80,78,71,13,10,26,10") throw new Error(`invalid PNG signature ${file.name}`);
     if (file.width <= 0 || file.height <= 0) throw new Error(`invalid PNG dimensions ${file.name}`);
+    if (file.nonWhite < 500) throw new Error(`blank or near-blank PNG ${file.name}: ${file.nonWhite}`);
   }
+}
+if (shareCalls[1][1].digest !== "95AAD576757F6B74F9FE51D0E98B0837FF592129FE462340B5885EE8A68F223E") {
+  throw new Error(`Power page 2 did not use the static source asset: ${shareCalls[1][1].digest}`);
 }
 for (const files of shareCalls.slice(0, 2)) {
   if (!files[0].name.endsWith("-page-1.png") || !files[1].name.endsWith("-page-2.png")) {
