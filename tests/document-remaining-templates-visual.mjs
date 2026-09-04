@@ -14,6 +14,21 @@ const sequence = [];
 
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+await page.addInitScript(() => {
+  window.__documentShareCalls = [];
+  Object.defineProperty(navigator, "canShare", { configurable: true, value: ({ files }) => Array.isArray(files) && files.length > 0 });
+  Object.defineProperty(navigator, "share", {
+    configurable: true,
+    value: async ({ files }) => {
+      const summary = await Promise.all((files || []).map(async (file) => {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const bitmap = await createImageBitmap(file);
+        return { name: file.name, type: file.type, size: file.size, signature: Array.from(bytes.slice(0, 8)), width: bitmap.width, height: bitmap.height };
+      }));
+      window.__documentShareCalls.push(summary);
+    }
+  });
+});
 const consoleErrors = [];
 page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
 page.on("request", (request) => {
@@ -93,6 +108,12 @@ await page.getByRole("button", { name: "แก้ไขข้อมูลเอ�
 const transportSaveSequence = sequence.slice(transportSaveStart);
 if (transportSaveSequence[0] !== "PUT override" || transportSaveSequence[1] !== "POST generate") throw new Error(`transport sequence ${JSON.stringify(transportSaveSequence)}`);
 await downloadAndVerify("transport-transfer", ["03", "รถยนต์นั่งส่วนบุคคล", "เบนซิน", "504,000.50"]);
+await page.getByRole("button", { name: "แชร์/บันทึกรูป" }).click();
+await page.waitForFunction(() => window.__documentShareCalls.length === 1);
+
+await selectTemplate("power-of-attorney");
+await page.getByRole("button", { name: "แชร์/บันทึกรูป" }).click();
+await page.waitForFunction(() => window.__documentShareCalls.length === 2);
 
 await selectTemplate("vehicle-delivery-document");
 const deliveryInput = (label) => page.locator("label").filter({ hasText: label }).locator("input").last();
@@ -110,6 +131,24 @@ await page.getByRole("button", { name: "แก้ไขข้อมูลเอ�
 const deliverySaveSequence = sequence.slice(deliverySaveStart);
 if (deliverySaveSequence[0] !== "PUT override" || deliverySaveSequence[1] !== "POST generate") throw new Error(`delivery sequence ${JSON.stringify(deliverySaveSequence)}`);
 await downloadAndVerify("vehicle-delivery", ["0123456789012", "0917785117", "00123"]);
+await page.getByRole("button", { name: "แชร์/บันทึกรูป" }).click();
+await page.waitForFunction(() => window.__documentShareCalls.length === 3);
+const shareCalls = await page.evaluate(() => window.__documentShareCalls);
+for (const [index, expectedCount] of [2, 2, 1].entries()) {
+  const files = shareCalls[index];
+  if (files.length !== expectedCount) throw new Error(`share ${index} expected ${expectedCount} files, got ${files.length}`);
+  for (const file of files) {
+    if (file.type !== "image/png" || file.size <= 0) throw new Error(`invalid PNG ${JSON.stringify(file)}`);
+    if (file.signature.join(",") !== "137,80,78,71,13,10,26,10") throw new Error(`invalid PNG signature ${file.name}`);
+    if (file.width <= 0 || file.height <= 0) throw new Error(`invalid PNG dimensions ${file.name}`);
+  }
+}
+for (const files of shareCalls.slice(0, 2)) {
+  if (!files[0].name.endsWith("-page-1.png") || !files[1].name.endsWith("-page-2.png")) {
+    throw new Error(`two-page filenames invalid ${JSON.stringify(files.map((file) => file.name))}`);
+  }
+}
+if (/page-[12]\.png$/.test(shareCalls[2][0].name)) throw new Error("single-page template filename changed");
 
 const responsive = {};
 for (const width of [360, 390, 430, 768, 1440]) {
@@ -120,5 +159,5 @@ for (const width of [360, 390, 430, 768, 1440]) {
 }
 const overlay = await page.locator("[data-nextjs-dialog]").count();
 if (overlay) throw new Error("Next.js error overlay detected");
-console.log(JSON.stringify({ transportSaveSequence, deliverySaveSequence, responsive, consoleErrors, pdfVerified: true }));
+console.log(JSON.stringify({ transportSaveSequence, deliverySaveSequence, responsive, consoleErrors, pdfVerified: true, shareCalls }));
 await browser.close();

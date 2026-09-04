@@ -20,6 +20,11 @@ import type { VehicleDeliveryOcrFields } from "@/lib/documents-v2/vehicle-delive
 import { formatDocumentMoney, identifierText, parseDocumentMoney, salesContractOverrideData } from "@/lib/documents/value-integrity";
 import { loadThaiAddressDataset, validateThaiAddressSelection, type ThaiAddressMode } from "@/lib/documents-v2/thai-address";
 import { filterDocumentSalesReports } from "@/lib/documents-v2/report-search";
+import {
+  getDocumentImageFileNames,
+  getDocumentImagePageNumbers,
+  shareDocumentImageFiles
+} from "@/lib/documents-v2/image-share";
 
 type FieldItem = { name: string; type: string };
 type FieldsDebug = {
@@ -1578,13 +1583,49 @@ export function DocumentGeneratorV2() {
       let currentBlob = pngSourceKey === previewSourceKey ? pngBlob : null;
       let currentUrl = pngSourceKey === previewSourceKey ? pngUrl : "";
       let currentFileName = pngFileName;
+      let currentPdfUrl = previewUrl;
       if (!currentBlob) {
         const refreshed = await refreshDocumentPreviews(true, editableData || sampleData, undefined, previewSourceKey || `${templateId}::${selectedReportId}::share-${Date.now()}`);
         currentBlob = refreshed?.nextPngBlob || null;
         currentUrl = refreshed?.nextPngUrl || "";
         currentFileName = refreshed?.fileName || pngFileName;
+        currentPdfUrl = refreshed?.pdfUrl || previewUrl;
       }
       if (!currentBlob) throw new Error("image preparation failed");
+      const isTwoPageImageExport = templateId === "power-of-attorney" || templateId === "transport-transfer-request";
+      if (isTwoPageImageExport) {
+        const pdfResponse = await fetch(currentPdfUrl);
+        if (!pdfResponse.ok) throw new Error("final PDF unavailable");
+        const finalPdfBlob = await pdfResponse.blob();
+        const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as any;
+        pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+        const finalPdf = await pdfjs.getDocument({ data: new Uint8Array(await finalPdfBlob.arrayBuffer()) }).promise;
+        const pageNumbers = getDocumentImagePageNumbers(templateId, finalPdf.numPages);
+        const fileNames = getDocumentImageFileNames(templateId, currentFileName, pageNumbers);
+        const pageBlobs: Blob[] = [];
+        for (const pageNumber of pageNumbers) {
+          const page = await finalPdf.getPage(pageNumber);
+          const viewport = page.getViewport({ scale: 3 });
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Canvas ไม่พร้อม");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          const pageBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+          if (!pageBlob) throw new Error("แปลง PNG ไม่สำเร็จ");
+          pageBlobs.push(pageBlob);
+        }
+        const files = pageBlobs.map((blob, index) => new File([blob], fileNames[index], { type: "image/png" }));
+        if (await shareDocumentImageFiles(navigator, files, "เอกสาร BIG CAR CRM")) return;
+        const downloadUrls = pageBlobs.map((blob) => URL.createObjectURL(blob));
+        downloadUrls.forEach((url, index) => downloadObjectUrl(url, fileNames[index]));
+        window.setTimeout(() => downloadUrls.forEach((url) => URL.revokeObjectURL(url)), 1000);
+        setError("อุปกรณ์นี้ไม่รองรับการแชร์หลายรูป ระบบดาวน์โหลดรูปทั้ง 2 หน้าให้แล้ว");
+        return;
+      }
       const file = new File([currentBlob], currentFileName, { type: "image/png" });
       const nav = navigator as Navigator & {
         canShare?: (data: { files?: File[] }) => boolean;
