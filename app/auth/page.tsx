@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, ReactNode, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LockKeyhole, Mail, Phone, UserPlus } from "lucide-react";
@@ -19,6 +19,15 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [registeredEmail, setRegisteredEmail] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("registered") === "1") {
+      setRegisteredEmail(String(params.get("email") || ""));
+      setMessage("สมัครสมาชิกสำเร็จ กรุณาเข้าสู่ระบบ");
+    }
+  }, []);
 
   async function submit(endpoint: string, payload: Record<string, unknown>, redirect = true) {
     setLoading(true);
@@ -117,11 +126,14 @@ export default function AuthPage() {
         <SectionCard title={mode === "login" ? "Login" : "Register"} icon={mode === "login" ? <LockKeyhole size={18} /> : <UserPlus size={18} />}>
           {mode === "login" || !canRegister ? (
             <form onSubmit={handleLogin} className="grid gap-3">
-              <TextInput name="email" label="Email" type="email" icon={<Mail size={18} className="text-brand" />} placeholder="big@example.com" />
+              <TextInput name="email" label="Email" type="email" icon={<Mail size={18} className="text-brand" />} placeholder="big@example.com" defaultValue={registeredEmail} />
               <TextInput name="password" label="Password" type="password" icon={<LockKeyhole size={18} className="text-brand" />} placeholder="••••••••" />
               <button disabled={loading} className="flex min-h-12 items-center justify-center rounded-lg bg-brand px-4 font-black text-ink disabled:opacity-60">
                 {loading ? "กำลังเข้า..." : "เข้าใช้โปรไฟล์นี้"}
               </button>
+              <p className="text-center text-sm font-semibold text-soft">
+                ยังไม่มีบัญชี? <Link href="/register" className="font-black text-brand hover:underline">สมัครสมาชิก</Link>
+              </p>
             </form>
           ) : (
             <form onSubmit={handleRegister} className="grid gap-3">
@@ -182,7 +194,8 @@ function TextInput({
   icon,
   required,
   inputMode,
-  autoComplete
+  autoComplete,
+  defaultValue
 }: {
   name: string;
   label: string;
@@ -192,13 +205,14 @@ function TextInput({
   required?: boolean;
   inputMode?: "text" | "tel" | "email" | "numeric";
   autoComplete?: string;
+  defaultValue?: string;
 }) {
   return (
     <label className="block">
       <span className="text-sm font-bold text-white">{label}</span>
       <div className="mt-2 flex min-h-12 items-center gap-2 rounded-lg border border-line bg-[#0b0d11] px-3 text-white">
         {icon}
-        <input name={name} type={type} inputMode={inputMode} autoComplete={autoComplete} required={required} className={inputClass} placeholder={placeholder || label} />
+        <input name={name} type={type} inputMode={inputMode} autoComplete={autoComplete} required={required} defaultValue={defaultValue} className={inputClass} placeholder={placeholder || label} />
       </div>
     </label>
   );

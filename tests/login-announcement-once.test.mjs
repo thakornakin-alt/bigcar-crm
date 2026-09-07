@@ -11,10 +11,10 @@ test("login announcement uses one stable versioned localStorage key", () => {
   assert.doesNotMatch(loginPage, /7\s*day|7\s*วัน|expiresAt|setTimeout\([^)]*604800/i);
 });
 
-test("all announcement exits store seen state and registration uses the existing route", () => {
+test("all announcement exits store seen state and registration uses the public registration route", () => {
   assert.match(loginPage, /onClick=\{closeAnnouncement\}[\s\S]*?aria-label="ปิดประกาศ"/);
   assert.match(loginPage, /onClick=\{closeAnnouncement\}[\s\S]*?ไว้ทีหลัง/);
-  assert.match(loginPage, /function openRegistration\(\)[\s\S]*?closeAnnouncement\(\);[\s\S]*?router\.push\("\/auth"\)/);
+  assert.match(loginPage, /function openRegistration\(\)[\s\S]*?closeAnnouncement\(\);[\s\S]*?router\.push\("\/register"\)/);
 });
 
 test("announcement remains UI-only and does not change authentication requests", () => {
