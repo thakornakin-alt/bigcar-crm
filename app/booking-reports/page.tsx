@@ -17,13 +17,12 @@ import {
   Search
 } from "lucide-react";
 import { buildDefaultBookingSubject, renderBookingReport } from "@/lib/booking-report";
-import { renderBookingReportPreview } from "@/lib/booking-report-preview";
 import { NativeAppHeader, NativeAppShell, NativeBadge, NativeButton, SectionCard, TopMenuButton } from "@/app/components/ui";
 import { bookingLineGroupStorageKey, defaultSystemSettings, readSystemSettings } from "@/lib/client-settings";
 import { normalizeCarYear } from "@/lib/format";
 import { BookingReportOcrScanner } from "@/components/booking-reports/BookingReportOcrScanner";
 import { useSalesProfile } from "@/lib/use-sales-profile";
-import { appendSalesProfileSignature } from "@/lib/sales-profile-signature";
+import { appendBookingGmailSignature, appendBookingLineSignature } from "@/lib/sales-profile-signature";
 import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, DriveAttachment, DriveUploadResult, LineGroup, SalesUser, StockVehicle } from "@/lib/types";
 import { formatThaiReportDate } from "@/lib/booking-report-display";
 
@@ -209,14 +208,12 @@ export default function BookingReportsPage() {
   const [confirmExceptionalCreate, setConfirmExceptionalCreate] = useState(false);
   const [eligibleSalesUsers, setEligibleSalesUsers] = useState<SalesUser[]>([]);
   const [selectedOwnerUserId, setSelectedOwnerUserId] = useState("");
-  const reportText = useMemo(
-    () => appendSalesProfileSignature(renderBookingReport({ ...form, reportText: "" }), salesProfile),
-    [form, salesProfile]
-  );
-  const previewText = useMemo(
-    () => renderBookingReportPreview({ ...form, reportText: "" }),
+  const reportBody = useMemo(
+    () => renderBookingReport({ ...form, reportText: "" }),
     [form]
   );
+  const gmailBody = useMemo(() => appendBookingGmailSignature(reportBody, salesProfile), [reportBody, salesProfile]);
+  const lineBody = useMemo(() => appendBookingLineSignature(reportBody, salesProfile), [reportBody, salesProfile]);
   const companyWarning = form.buyerType === "company" && attachmentFiles.companyCertificate.length === 0;
   const canSelectOwner = salesProfile?.role === "admin" || salesProfile?.role === "super_admin";
   const selectedOwner = useMemo(
@@ -458,7 +455,7 @@ export default function BookingReportsPage() {
       emailSubject: buildDefaultBookingSubject(form),
       year: normalizeCarYear(form.year),
       attachments: buildAttachments(),
-      reportText,
+      reportText: reportBody,
       salespersonUserId: canSelectOwner ? selectedOwnerUserId || undefined : salesProfile?.id,
       salespersonDisplayName: undefined,
       status: "draft"
@@ -605,7 +602,7 @@ export default function BookingReportsPage() {
           to: form.emailTo,
           cc: form.emailCc,
           bcc: form.emailBcc,
-          body: reportText,
+          body: gmailBody,
           attachments: attachments
             .filter((attachment) => attachment.fileId)
             .map((attachment) => ({ fileId: attachment.fileId, name: attachment.name }))
@@ -628,7 +625,7 @@ export default function BookingReportsPage() {
     setMessage("");
 
     try {
-      await navigator.clipboard.writeText(previewText);
+      await navigator.clipboard.writeText(reportBody);
       setMessage("คัดลอก Preview รายงานแล้ว");
     } catch {
       setError("คัดลอกไม่สำเร็จ กรุณาเลือกข้อความใน Preview แล้ว copy เอง");
@@ -644,13 +641,13 @@ export default function BookingReportsPage() {
 
     try {
       if (!selectedLineGroupId) throw new Error("กรุณาเลือกกลุ่ม LINE ก่อนส่ง");
-      if (!reportText.trim()) throw new Error("ยังไม่มีข้อความรายงานจองสำหรับส่ง LINE");
+      if (!lineBody.trim()) throw new Error("ยังไม่มีข้อความรายงานจองสำหรับส่ง LINE");
 
       await readJson("/api/line/test-send", {
         method: "POST",
         body: JSON.stringify({
           groupId: selectedLineGroupId,
-          message: reportText
+          message: lineBody
         })
       });
       setMessage("ส่งข้อความรายงานจองเข้า LINE แล้ว กำลังจัดการรูปแนบ...");
@@ -920,7 +917,7 @@ export default function BookingReportsPage() {
               </button>
             </div>
             <pre className="max-h-[56vh] overflow-auto whitespace-pre-wrap rounded-lg border border-line bg-[#0b0d11] p-3 text-sm leading-7 text-white">
-              {previewText}
+              {reportBody}
             </pre>
             <div className="mt-3 grid gap-2">
               <label className="block">
@@ -944,7 +941,7 @@ export default function BookingReportsPage() {
               <NativeButton
                 type="button"
                 onClick={sendLineReport}
-                disabled={sendingLine || !selectedLineGroupId || !reportText.trim()}
+                disabled={sendingLine || !selectedLineGroupId || !lineBody.trim()}
                 className="w-full"
               >
                 {sendingLine ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}

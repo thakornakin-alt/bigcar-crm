@@ -22,3 +22,11 @@ export function appendSalesProfileSignature(reportText: string, user: SalesUser 
   if (!signature) return reportText;
   return [reportText.trim(), "", signature].join("\n");
 }
+
+export function appendBookingGmailSignature(reportBody: string, user: SalesUser | null | undefined) {
+  return appendSalesProfileSignature(reportBody, user);
+}
+
+export function appendBookingLineSignature(reportBody: string, user: SalesUser | null | undefined) {
+  return appendSalesProfileSignature(reportBody, user);
+}

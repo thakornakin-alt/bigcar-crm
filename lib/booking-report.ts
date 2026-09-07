@@ -1,5 +1,5 @@
-import type { BookingReportInput } from "@/lib/types";
-import { normalizeCarYear } from "@/lib/format";
+import type { BookingReportInput } from "./types.ts";
+import { normalizeCarYear } from "./format.ts";
 
 function money(value: string) {
   const numeric = Number(String(value || "").replace(/,/g, ""));
@@ -39,6 +39,7 @@ export function renderBookingReport(input: BookingReportInput) {
     `กรรมสิทธิ์ : ${input.ownership}`,
     `Project : ${input.project}`,
     `Campaign : ${input.campaign}`,
+    "",
     `*เงื่อนไข*`,
     "",
     input.conditions,
