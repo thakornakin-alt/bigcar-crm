@@ -17,6 +17,7 @@ import {
   Search
 } from "lucide-react";
 import { buildDefaultBookingSubject, renderBookingReport } from "@/lib/booking-report";
+import { renderBookingReportPreview } from "@/lib/booking-report-preview";
 import { NativeAppHeader, NativeAppShell, NativeBadge, NativeButton, SectionCard, TopMenuButton } from "@/app/components/ui";
 import { bookingLineGroupStorageKey, defaultSystemSettings, readSystemSettings } from "@/lib/client-settings";
 import { normalizeCarYear } from "@/lib/format";
@@ -211,6 +212,10 @@ export default function BookingReportsPage() {
   const reportText = useMemo(
     () => appendSalesProfileSignature(renderBookingReport({ ...form, reportText: "" }), salesProfile),
     [form, salesProfile]
+  );
+  const previewText = useMemo(
+    () => renderBookingReportPreview({ ...form, reportText: "" }),
+    [form]
   );
   const companyWarning = form.buyerType === "company" && attachmentFiles.companyCertificate.length === 0;
   const canSelectOwner = salesProfile?.role === "admin" || salesProfile?.role === "super_admin";
@@ -623,7 +628,7 @@ export default function BookingReportsPage() {
     setMessage("");
 
     try {
-      await navigator.clipboard.writeText(reportText);
+      await navigator.clipboard.writeText(previewText);
       setMessage("คัดลอก Preview รายงานแล้ว");
     } catch {
       setError("คัดลอกไม่สำเร็จ กรุณาเลือกข้อความใน Preview แล้ว copy เอง");
@@ -915,7 +920,7 @@ export default function BookingReportsPage() {
               </button>
             </div>
             <pre className="max-h-[56vh] overflow-auto whitespace-pre-wrap rounded-lg border border-line bg-[#0b0d11] p-3 text-sm leading-7 text-white">
-              {reportText}
+              {previewText}
             </pre>
             <div className="mt-3 grid gap-2">
               <label className="block">
