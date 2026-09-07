@@ -25,6 +25,13 @@ import { useSalesProfile } from "@/lib/use-sales-profile";
 import { appendBookingGmailSignature, appendBookingLineSignature } from "@/lib/sales-profile-signature";
 import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, BuyerType, CustomerLookup, DriveAttachment, DriveUploadResult, LineGroup, SalesUser, StockVehicle } from "@/lib/types";
 import { formatThaiReportDate } from "@/lib/booking-report-display";
+import {
+  blankBookingFinanceSigning,
+  calculateFinanceAmountBeforeVat,
+  formatFinanceMoney,
+  renderBookingFinanceSigningPreview,
+  type BookingFinanceSigningInput
+} from "@/lib/booking-finance-signing";
 
 type BookingDuplicatePrompt = {
   status: "duplicate_booking_confirmation_required";
@@ -43,6 +50,7 @@ type BookingDuplicatePrompt = {
 const defaultEmailTo = "RDDUsedcarBooked@segroup.co.th";
 const defaultEmailCc = "rongsarit.s@tgh.co.th";
 const defaultTeamName = "พี่ลีฟ";
+const financeDraftStorageKey = "bigcar-booking-finance-signing-draft-v1";
 
 function todayInBangkok() {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -203,11 +211,14 @@ export default function BookingReportsPage() {
   const [lineGroups, setLineGroups] = useState<LineGroup[]>([]);
   const [selectedLineGroupId, setSelectedLineGroupId] = useState("");
   const [sendingLine, setSendingLine] = useState(false);
+  const [savingFinance, setSavingFinance] = useState(false);
   const [duplicatePrompt, setDuplicatePrompt] = useState<BookingDuplicatePrompt | null>(null);
   const [pendingCreate, setPendingCreate] = useState<{ report: BookingReportInput; requestId: string } | null>(null);
   const [confirmExceptionalCreate, setConfirmExceptionalCreate] = useState(false);
   const [eligibleSalesUsers, setEligibleSalesUsers] = useState<SalesUser[]>([]);
   const [selectedOwnerUserId, setSelectedOwnerUserId] = useState("");
+  const [stockVehicle, setStockVehicle] = useState<Pick<StockVehicle, "plate" | "salePrice"> | null>(null);
+  const [finance, setFinance] = useState<BookingFinanceSigningInput>(blankBookingFinanceSigning);
   const reportBody = useMemo(
     () => renderBookingReport({ ...form, reportText: "" }),
     [form]
@@ -225,6 +236,26 @@ export default function BookingReportsPage() {
     : form.paymentType.includes("ไฟแนนซ์") || form.paymentType.toLowerCase().includes("finance")
       ? "finance"
       : "unset";
+  const financeOwner = canSelectOwner ? selectedOwner : salesProfile;
+  const financeAmount = useMemo(
+    () => calculateFinanceAmountBeforeVat(stockVehicle?.salePrice, finance.downPayment),
+    [finance.downPayment, stockVehicle?.salePrice]
+  );
+  const financePreview = useMemo(
+    () => renderBookingFinanceSigningPreview({
+      finance,
+      customerName: form.customerName,
+      plate: form.plate,
+      brand: form.brand,
+      model: form.model,
+      year: form.year,
+      teamName: form.teamName,
+      owner: financeOwner,
+      fallbackSaleName: form.saleName,
+      stockVehicle
+    }),
+    [finance, financeOwner, form.brand, form.customerName, form.model, form.plate, form.saleName, form.teamName, form.year, stockVehicle]
+  );
 
   useEffect(() => {
     const settings = readSystemSettings();
@@ -289,6 +320,58 @@ export default function BookingReportsPage() {
   }, []);
 
   useEffect(() => {
+    const saved = window.localStorage.getItem(financeDraftStorageKey);
+    if (!saved) return;
+    try {
+      const parsed = JSON.parse(saved) as {
+        finance?: Partial<BookingFinanceSigningInput>;
+        paymentType?: string;
+        savedReportId?: string;
+      };
+      setFinance({ ...blankBookingFinanceSigning, ...(parsed.finance || {}) });
+      if (parsed.paymentType === "ไฟแนนซ์") setForm((current) => ({ ...current, paymentType: "ไฟแนนซ์" }));
+      if (parsed.savedReportId) {
+        setSavedReportId(parsed.savedReportId);
+        readJson<{ metadata: (BookingFinanceSigningInput & { stockPrice: string; stockPlate: string }) | null }>(
+          `/api/booking-reports/finance-signing?bookingReportId=${encodeURIComponent(parsed.savedReportId)}`
+        ).then(({ metadata }) => {
+          if (!metadata) return;
+          setFinance({
+            financeCompany: metadata.financeCompany,
+            signingLocation: metadata.signingLocation,
+            occupation: metadata.occupation,
+            employmentDuration: metadata.employmentDuration,
+            income: metadata.income,
+            creditStatus: metadata.creditStatus,
+            downPayment: metadata.downPayment
+          });
+          setStockVehicle(metadata.stockPrice ? { plate: metadata.stockPlate, salePrice: metadata.stockPrice } : null);
+          if (metadata.stockPlate) setForm((current) => ({ ...current, plate: current.plate || metadata.stockPlate }));
+        }).catch(() => undefined);
+      }
+    } catch {
+      window.localStorage.removeItem(financeDraftStorageKey);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (paymentMode !== "finance") return;
+    const current = window.localStorage.getItem(financeDraftStorageKey);
+    let draftId = "";
+    try {
+      draftId = current ? String((JSON.parse(current) as { draftId?: string }).draftId || "") : "";
+    } catch {
+      draftId = "";
+    }
+    window.localStorage.setItem(financeDraftStorageKey, JSON.stringify({
+      draftId: draftId || crypto.randomUUID(),
+      finance,
+      paymentType: "ไฟแนนซ์",
+      savedReportId
+    }));
+  }, [finance, paymentMode, savedReportId]);
+
+  useEffect(() => {
     if (selectedLineGroupId) {
       window.localStorage.setItem(bookingLineGroupStorageKey, selectedLineGroupId);
     }
@@ -305,7 +388,11 @@ export default function BookingReportsPage() {
 
   useEffect(() => {
     const plate = form.plate.trim();
-    if (plate.length < 3) return;
+    if (plate.length < 3) {
+      setStockVehicle(null);
+      return;
+    }
+    setStockVehicle(null);
 
     const timeout = window.setTimeout(async () => {
       setLookupStatus("กำลังค้นหาสต๊อกจากทะเบียน...");
@@ -315,6 +402,7 @@ export default function BookingReportsPage() {
         );
 
         if (data.vehicle) {
+          setStockVehicle(data.vehicle);
           setForm((current) => fillIfEmpty(current, data.vehicle as StockVehicle));
           setLookupStatus(
             data.warning
@@ -322,6 +410,7 @@ export default function BookingReportsPage() {
               : `พบข้อมูลสต๊อกทะเบียน ${plate} และเติมช่องที่ว่างแล้ว`
           );
         } else {
+          setStockVehicle(null);
           setLookupStatus(
             data.warning
               ? `ค้นสต๊อกไม่สำเร็จ: ${data.warning}`
@@ -329,6 +418,7 @@ export default function BookingReportsPage() {
           );
         }
       } catch {
+        setStockVehicle(null);
         setLookupStatus(`ค้นสต๊อกไม่สำเร็จสำหรับทะเบียน ${plate} แต่ฟอร์มยังใช้งานได้`);
       }
     }, 550);
@@ -368,6 +458,37 @@ export default function BookingReportsPage() {
 
   function updateMoney(field: keyof BookingReportInput, value: string) {
     setForm((current) => ({ ...current, [field]: numericOnly(value) }));
+  }
+
+  function updateFinance(field: keyof BookingFinanceSigningInput, value: string) {
+    setFinance((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateFinanceMoney(field: "income" | "downPayment", value: string) {
+    const normalized = value.replace(/,/g, "").trim();
+    setFinance((current) => ({ ...current, [field]: /^\d*$/.test(normalized) ? normalized : value }));
+  }
+
+  async function persistFinanceMetadata(reportId: string, plate: string) {
+    return readJson("/api/booking-reports/finance-signing", {
+      method: "POST",
+      body: JSON.stringify({ bookingReportId: reportId, plate, ...finance })
+    });
+  }
+
+  async function saveFinanceMetadataOnly() {
+    if (!savedReportId) return;
+    setSavingFinance(true);
+    setError("");
+    setMessage("");
+    try {
+      await persistFinanceMetadata(savedReportId, form.plate);
+      setMessage("บันทึกข้อมูลส่งงานเซ็นไฟแนนซ์แล้ว โดยไม่บันทึกรายงานจองซ้ำ");
+    } catch (financeError) {
+      setError(financeError instanceof Error ? financeError.message : "บันทึกข้อมูลส่งงานเซ็นไฟแนนซ์ไม่สำเร็จ");
+    } finally {
+      setSavingFinance(false);
+    }
   }
 
   function updateBuyerType(value: BuyerType) {
@@ -501,6 +622,15 @@ export default function BookingReportsPage() {
         body: JSON.stringify({ report: savedPayload, requestId, confirmationToken })
       });
       setSavedReportId(data.report.id);
+      if (payload.paymentType.includes("ไฟแนนซ์") || payload.paymentType.toLowerCase().includes("finance")) {
+        try {
+          await persistFinanceMetadata(data.report.id, payload.plate);
+        } catch (financeError) {
+          uploadWarning = financeError instanceof Error
+            ? `บันทึกรายงานจองแล้ว แต่ข้อมูลส่งงานเซ็นไฟแนนซ์ยังเก็บไว้ในเครื่อง: ${financeError.message}`
+            : "บันทึกรายงานจองแล้ว แต่ข้อมูลส่งงานเซ็นไฟแนนซ์ยังเก็บไว้ในเครื่อง";
+        }
+      }
       setDuplicatePrompt(null);
       setPendingCreate(null);
       setConfirmExceptionalCreate(false);
@@ -818,6 +948,53 @@ export default function BookingReportsPage() {
             <PaymentWorkflowHint mode={paymentMode} />
           </SectionCard>
 
+          {paymentMode === "finance" && (
+            <SectionCard title="ข้อมูลส่งงานเซ็นไฟแนนซ์" icon={<FileText size={18} />}>
+              <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+                <Field label="ไฟแนนซ์" value={finance.financeCompany} onChange={(value) => updateFinance("financeCompany", value)} placeholder="เช่น กสิกร / กรุงศรี / TISCO" />
+                <Field label="สถานที่นัดเซ็น" value={finance.signingLocation} onChange={(value) => updateFinance("signingLocation", value)} />
+                <Field label="อาชีพ" value={finance.occupation} onChange={(value) => updateFinance("occupation", value)} />
+                <Field label="อายุงาน" value={finance.employmentDuration} onChange={(value) => updateFinance("employmentDuration", value)} />
+                <Field label="รายได้" value={formatFinanceMoney(finance.income) || finance.income} onChange={(value) => updateFinanceMoney("income", value)} inputMode="numeric" />
+                <label className="block min-w-0">
+                  <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">ลูกค้ามีเครดิตหรือไม่</span>
+                  <select
+                    value={finance.creditStatus}
+                    onChange={(event) => updateFinance("creditStatus", event.target.value)}
+                    className="min-h-12 w-full min-w-0 rounded-lg border border-line bg-[#0b0d11] px-3 text-base text-white outline-none focus:border-brand"
+                  >
+                    <option value="">เลือกสถานะเครดิต</option>
+                    <option value="มี">มี</option>
+                    <option value="ไม่มี">ไม่มี</option>
+                    <option value="ไม่ทราบ">ไม่ทราบ</option>
+                  </select>
+                </label>
+                <Field label="เงินดาวน์" value={formatFinanceMoney(finance.downPayment) || finance.downPayment} onChange={(value) => updateFinanceMoney("downPayment", value)} inputMode="numeric" />
+                <Field
+                  label="ยอดจัด (ก่อน VAT)"
+                  value={financeAmount.amount === null ? "" : formatFinanceMoney(financeAmount.amount)}
+                  onChange={() => undefined}
+                  readOnly
+                  placeholder={financeAmount.error || "คำนวณจากราคาสต๊อก - เงินดาวน์"}
+                />
+              </div>
+              <p className={`rounded-lg border px-3 py-2 text-xs leading-5 ${financeAmount.error ? "border-amber-400/35 bg-amber-950/25 text-amber-100" : "border-line bg-[#0b0d11] text-soft"}`}>
+                {financeAmount.error || `ใช้ราคาจาก Stock ${formatFinanceMoney(stockVehicle?.salePrice)} บาท เป็นฐานคำนวณ โดยไม่มี VAT หรือดอกเบี้ย`}
+              </p>
+              {savedReportId && (
+                <button
+                  type="button"
+                  onClick={saveFinanceMetadataOnly}
+                  disabled={savingFinance}
+                  className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-brand/50 bg-[#0b0d11] px-4 font-bold text-brand disabled:opacity-60 sm:w-auto"
+                >
+                  {savingFinance ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                  {savingFinance ? "กำลังบันทึก..." : "บันทึกข้อมูลไฟแนนซ์"}
+                </button>
+              )}
+            </SectionCard>
+          )}
+
           <SectionCard title="การตลาดและ Sale" icon={<Mail size={18} />}>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="แหล่งที่มา" value={form.source} onChange={(value) => update("source", value)} />
@@ -919,6 +1096,17 @@ export default function BookingReportsPage() {
             <pre className="max-h-[56vh] overflow-auto whitespace-pre-wrap rounded-lg border border-line bg-[#0b0d11] p-3 text-sm leading-7 text-white">
               {reportBody}
             </pre>
+            {paymentMode === "finance" && (
+              <div className="mt-4 min-w-0">
+                <div className="mb-2">
+                  <h2 className="text-lg font-bold text-white">Preview ส่งงานเซ็นไฟแนนซ์</h2>
+                  <p className="text-xs text-soft">ข้อมูลส่วนนี้เพิ่มเติมจากรายงานการจอง และยังบันทึก Booking ได้แม้กรอกไม่ครบ</p>
+                </div>
+                <pre className="max-h-[56vh] overflow-auto whitespace-pre-wrap rounded-lg border border-brand/30 bg-[#0b0d11] p-3 text-sm leading-7 text-white">
+                  {financePreview}
+                </pre>
+              </div>
+            )}
             <div className="mt-3 grid gap-2">
               <label className="block">
                 <span className="mb-1.5 block text-sm font-semibold text-[#dce2eb]">ส่งเข้า LINE กลุ่ม</span>
