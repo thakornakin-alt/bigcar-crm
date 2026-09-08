@@ -16,7 +16,13 @@ const EMPTY: Store = { version: 1, records: {} };
 
 export async function getBookingFinanceMetadata(bookingReportId: string) {
   const snapshot = await readJsonStoreSnapshot(FILE, EMPTY);
-  return snapshot.data.records[bookingReportId] || null;
+  const record = snapshot.data.records[bookingReportId];
+  if (!record) return null;
+  return {
+    ...record,
+    financePrice: record.financePrice || record.stockPrice || "",
+    financePriceSource: record.financePriceSource || (record.stockPrice ? "stock" : "")
+  };
 }
 
 export async function saveBookingFinanceMetadata(record: BookingFinanceMetadata) {

@@ -41,15 +41,22 @@ export async function POST(request: Request) {
     const reports = await searchBookingReports(bookingReportId);
     const booking = reports.find((report) => report.id === bookingReportId);
     if (!booking) return NextResponse.json({ error: "ไม่พบรายงานจอง" }, { status: 404 });
+    const existingMetadata = await getBookingFinanceMetadata(bookingReportId);
     const stock = await lookupStockByPlateDetailed(booking.plate);
     const credit = clean(body.creditStatus);
     const creditStatus: BookingFinanceCreditStatus = ["มี", "ไม่มี", "ไม่ทราบ"].includes(credit) ? credit as BookingFinanceCreditStatus : "";
+    const financePrice = clean(body.financePrice);
+    const requestedSource = clean(body.financePriceSource);
+    const stockPrice = clean(stock.vehicle?.salePrice) || clean(existingMetadata?.stockPrice);
+    const financePriceSource = financePrice
+      ? requestedSource === "stock" && financePrice === stockPrice ? "stock" : "manual"
+      : "";
     const now = new Date().toISOString();
     const metadata = await saveBookingFinanceMetadata({
       ...blankBookingFinanceSigning,
       bookingReportId,
       ownerUserId: ownership.ownerUserId,
-      stockPrice: clean(stock.vehicle?.salePrice),
+      stockPrice,
       stockPlate: clean(stock.vehicle?.plate || booking.plate),
       financeCompany: clean(body.financeCompany),
       signingLocation: clean(body.signingLocation),
@@ -57,6 +64,8 @@ export async function POST(request: Request) {
       employmentDuration: clean(body.employmentDuration),
       income: clean(body.income),
       creditStatus,
+      financePrice,
+      financePriceSource,
       downPayment: clean(body.downPayment),
       createdAt: now,
       updatedAt: now

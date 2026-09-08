@@ -27,6 +27,7 @@ import type { BookingAttachment, BookingAttachmentCategory, BookingReportInput, 
 import { formatThaiReportDate } from "@/lib/booking-report-display";
 import {
   blankBookingFinanceSigning,
+  autofillFinancePriceFromStock,
   calculateFinanceAmountBeforeVat,
   formatFinanceMoney,
   renderBookingFinanceSigningPreview,
@@ -238,8 +239,8 @@ export default function BookingReportsPage() {
       : "unset";
   const financeOwner = canSelectOwner ? selectedOwner : salesProfile;
   const financeAmount = useMemo(
-    () => calculateFinanceAmountBeforeVat(stockVehicle?.salePrice, finance.downPayment),
-    [finance.downPayment, stockVehicle?.salePrice]
+    () => calculateFinanceAmountBeforeVat(finance.financePrice, finance.downPayment),
+    [finance.downPayment, finance.financePrice]
   );
   const financePreview = useMemo(
     () => renderBookingFinanceSigningPreview({
@@ -339,6 +340,8 @@ export default function BookingReportsPage() {
             employmentDuration: metadata.employmentDuration,
             income: metadata.income,
             creditStatus: metadata.creditStatus,
+            financePrice: metadata.financePrice || metadata.stockPrice || "",
+            financePriceSource: metadata.financePriceSource || (metadata.stockPrice ? "stock" : ""),
             downPayment: metadata.downPayment
           });
           setStockVehicle(metadata.stockPrice ? { plate: metadata.stockPlate, salePrice: metadata.stockPrice } : null);
@@ -349,6 +352,10 @@ export default function BookingReportsPage() {
       window.localStorage.removeItem(financeDraftStorageKey);
     }
   }, []);
+
+  useEffect(() => {
+    setFinance((current) => autofillFinancePriceFromStock(current, stockVehicle?.salePrice));
+  }, [stockVehicle?.salePrice]);
 
   useEffect(() => {
     if (paymentMode !== "finance") return;
@@ -460,9 +467,13 @@ export default function BookingReportsPage() {
     setFinance((current) => ({ ...current, [field]: value }));
   }
 
-  function updateFinanceMoney(field: "income" | "downPayment", value: string) {
+  function updateFinanceMoney(field: "income" | "downPayment" | "financePrice", value: string) {
     const normalized = value.replace(/,/g, "").trim();
-    setFinance((current) => ({ ...current, [field]: /^\d*$/.test(normalized) ? normalized : value }));
+    setFinance((current) => ({
+      ...current,
+      [field]: /^\d*$/.test(normalized) ? normalized : value,
+      ...(field === "financePrice" ? { financePriceSource: "manual" as const } : {})
+    }));
   }
 
   async function persistFinanceMetadata(reportId: string, plate: string) {
@@ -965,17 +976,28 @@ export default function BookingReportsPage() {
                     <option value="ไม่ทราบ">ไม่ทราบ</option>
                   </select>
                 </label>
+                <div className="min-w-0">
+                  <Field
+                    label="ราคารถสำหรับจัดไฟแนนซ์"
+                    value={formatFinanceMoney(finance.financePrice) || finance.financePrice}
+                    onChange={(value) => updateFinanceMoney("financePrice", value)}
+                    inputMode="numeric"
+                  />
+                  <p className="mt-1 text-xs text-soft">
+                    แหล่งข้อมูล: {finance.financePriceSource === "stock" ? "จากสต็อก" : finance.financePriceSource === "manual" ? "กรอกเอง" : "ยังไม่ระบุ"}
+                  </p>
+                </div>
                 <Field label="เงินดาวน์" value={formatFinanceMoney(finance.downPayment) || finance.downPayment} onChange={(value) => updateFinanceMoney("downPayment", value)} inputMode="numeric" />
                 <Field
                   label="ยอดจัด (ก่อน VAT)"
                   value={financeAmount.amount === null ? "" : formatFinanceMoney(financeAmount.amount)}
                   onChange={() => undefined}
                   readOnly
-                  placeholder={financeAmount.error || "คำนวณจากราคาสต๊อก - เงินดาวน์"}
+                  placeholder={financeAmount.error || "ราคารถสำหรับจัดไฟแนนซ์ - เงินดาวน์"}
                 />
               </div>
               <p className={`rounded-lg border px-3 py-2 text-xs leading-5 ${financeAmount.error ? "border-amber-400/35 bg-amber-950/25 text-amber-100" : "border-line bg-[#0b0d11] text-soft"}`}>
-                {financeAmount.error || `ใช้ราคาจาก Stock ${formatFinanceMoney(stockVehicle?.salePrice)} บาท เป็นฐานคำนวณ โดยไม่มี VAT หรือดอกเบี้ย`}
+                {financeAmount.error || `ใช้ราคารถสำหรับจัดไฟแนนซ์ ${formatFinanceMoney(finance.financePrice)} บาท เป็นฐานคำนวณ โดยไม่มี VAT หรือดอกเบี้ย`}
               </p>
               {savedReportId && (
                 <button

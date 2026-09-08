@@ -9,6 +9,8 @@ export type BookingFinanceSigningInput = {
   employmentDuration: string;
   income: string;
   creditStatus: BookingFinanceCreditStatus;
+  financePrice: string;
+  financePriceSource: "" | "stock" | "manual";
   downPayment: string;
 };
 
@@ -19,6 +21,8 @@ export const blankBookingFinanceSigning: BookingFinanceSigningInput = {
   employmentDuration: "",
   income: "",
   creditStatus: "",
+  financePrice: "",
+  financePriceSource: "",
   downPayment: ""
 };
 
@@ -34,14 +38,22 @@ export function formatFinanceMoney(value: unknown): string {
   return parsed === null || !Number.isFinite(parsed) ? "" : new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(parsed);
 }
 
-export function calculateFinanceAmountBeforeVat(stockPrice: unknown, downPayment: unknown) {
-  const stock = parseFinanceMoney(stockPrice);
+export function autofillFinancePriceFromStock(finance: BookingFinanceSigningInput, stockPrice: unknown) {
+  if (finance.financePrice.trim() || finance.financePriceSource === "manual") return finance;
+  const parsed = parseFinanceMoney(stockPrice);
+  if (parsed === null) return finance;
+  return { ...finance, financePrice: String(parsed), financePriceSource: "stock" as const };
+}
+
+export function calculateFinanceAmountBeforeVat(financePrice: unknown, downPayment: unknown) {
+  const price = parseFinanceMoney(financePrice);
   const down = parseFinanceMoney(downPayment);
-  if (stock === null) return { amount: null, error: "ไม่พบราคาจากสต๊อก" };
+  if (String(financePrice ?? "").trim() === "") return { amount: null, error: "กรุณาระบุราคารถสำหรับจัดไฟแนนซ์" };
+  if (price === null) return { amount: null, error: "กรุณากรอกราคารถสำหรับจัดไฟแนนซ์เป็นตัวเลข" };
   if (String(downPayment ?? "").trim() === "") return { amount: null, error: "" };
   if (down === null) return { amount: null, error: "กรุณากรอกเงินดาวน์เป็นตัวเลข" };
-  if (down > stock) return { amount: null, error: "เงินดาวน์ต้องไม่มากกว่าราคาจากสต๊อก" };
-  return { amount: stock - down, error: "" };
+  if (down > price) return { amount: null, error: "เงินดาวน์ต้องไม่มากกว่าราคารถสำหรับจัดไฟแนนซ์" };
+  return { amount: price - down, error: "" };
 }
 
 function salesName(user: Pick<SalesUser, "firstName" | "lastName" | "nickname"> | null, fallback: string) {
@@ -65,11 +77,10 @@ export function renderBookingFinanceSigningPreview(input: {
   teamName: string;
   owner: Pick<SalesUser, "firstName" | "lastName" | "nickname" | "branch"> | null;
   fallbackSaleName: string;
-  stockVehicle: Pick<StockVehicle, "salePrice"> | null;
+  stockVehicle?: Pick<StockVehicle, "salePrice"> | null;
 }) {
-  const stockPrice = parseFinanceMoney(input.stockVehicle?.salePrice);
-  const financeAmount = calculateFinanceAmountBeforeVat(input.stockVehicle?.salePrice, input.finance.downPayment);
-  const unavailable = "ไม่พบราคาจากสต๊อก";
+  const financePrice = parseFinanceMoney(input.finance.financePrice);
+  const financeAmount = calculateFinanceAmountBeforeVat(input.finance.financePrice, input.finance.downPayment);
   return [
     "ส่งงานเซ็นไฟแนนซ์",
     `ไฟแนนซ์ : ${input.finance.financeCompany}`,
@@ -90,7 +101,7 @@ export function renderBookingFinanceSigningPreview(input: {
     `ปี : ${input.year}`,
     "ดีลเลอร์ : อาคเนย์แคปปิตอล",
     "",
-    `ราคาขาย : ${stockPrice === null ? unavailable : formatFinanceMoney(stockPrice)}`,
+    `ราคาขาย : ${financePrice === null ? "" : formatFinanceMoney(financePrice)}`,
     `เงินดาวน์ : ${formatFinanceMoney(input.finance.downPayment)}`,
     `ยอดจัด (ก่อน VAT) : ${financeAmount.amount === null ? (financeAmount.error || "") : formatFinanceMoney(financeAmount.amount)}`,
     "",

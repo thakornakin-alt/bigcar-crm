@@ -25,12 +25,19 @@ try {
     await page.getByRole("button", { name: "ไฟแนนซ์", exact: true }).click();
     await page.getByLabel("ทะเบียนรถ").fill("กก 1234");
     await page.waitForTimeout(700);
-    for (const label of ["ไฟแนนซ์", "สถานที่นัดเซ็น", "อาชีพ", "อายุงาน", "รายได้", "เงินดาวน์", "ยอดจัด (ก่อน VAT)"]) {
+    for (const label of ["ไฟแนนซ์", "สถานที่นัดเซ็น", "อาชีพ", "อายุงาน", "รายได้", "ราคารถสำหรับจัดไฟแนนซ์", "เงินดาวน์", "ยอดจัด (ก่อน VAT)"]) {
       assert(await page.getByLabel(label, { exact: true }).count() === 1, `${label} visible at ${width}px`);
     }
     assert(await page.getByRole("combobox", { name: "ลูกค้ามีเครดิตหรือไม่", exact: true }).count() === 1, `credit selector visible at ${width}px`);
+    assert((await page.getByLabel("ราคารถสำหรับจัดไฟแนนซ์", { exact: true }).inputValue()) === "389,000", "finance price auto-fills from Stock");
+    assert(await page.getByText("แหล่งข้อมูล: จากสต็อก", { exact: true }).count() === 1, "Stock source is visible");
+    await page.getByLabel("ราคารถสำหรับจัดไฟแนนซ์", { exact: true }).fill("350000");
+    assert(await page.getByText("แหล่งข้อมูล: กรอกเอง", { exact: true }).count() === 1, "manual source is visible after edit");
     await page.getByLabel("เงินดาวน์", { exact: true }).fill("50000");
-    assert((await page.getByLabel("ยอดจัด (ก่อน VAT)", { exact: true }).inputValue()) === "339,000", "finance amount uses Stock price");
+    assert((await page.getByLabel("ยอดจัด (ก่อน VAT)", { exact: true }).inputValue()) === "300,000", "finance amount uses manual finance price");
+    await page.reload({ waitUntil: "networkidle" });
+    assert((await page.getByLabel("ราคารถสำหรับจัดไฟแนนซ์", { exact: true }).inputValue()) === "350,000", "manual finance price survives reload");
+    assert(await page.getByText("แหล่งข้อมูล: กรอกเอง", { exact: true }).count() === 1, "Stock lookup does not overwrite persisted manual value");
     assert(await page.getByText("Preview ส่งงานเซ็นไฟแนนซ์", { exact: true }).count() === 1, "finance preview visible");
     const layout = await page.evaluate(() => ({ viewport: innerWidth, root: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
     assert(layout.root <= width && layout.body <= width, `no horizontal overflow at ${width}px: ${JSON.stringify(layout)}`);

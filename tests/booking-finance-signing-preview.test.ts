@@ -3,19 +3,31 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   blankBookingFinanceSigning,
+  autofillFinancePriceFromStock,
   calculateFinanceAmountBeforeVat,
   renderBookingFinanceSigningPreview
 } from "../lib/booking-finance-signing.ts";
 
 const root = new URL("../", import.meta.url);
 
-test("finance amount follows Stock salePrice minus entered down payment without VAT", () => {
+test("finance amount follows editable finance price minus entered down payment without VAT", () => {
   assert.deepEqual(calculateFinanceAmountBeforeVat("389000", "50000"), { amount: 339000, error: "" });
   assert.deepEqual(calculateFinanceAmountBeforeVat("389000", "0"), { amount: 389000, error: "" });
   assert.equal(calculateFinanceAmountBeforeVat("389000", "500000").amount, null);
   assert.match(calculateFinanceAmountBeforeVat("389000", "500000").error, /มากกว่า/);
-  assert.deepEqual(calculateFinanceAmountBeforeVat("", "0"), { amount: null, error: "ไม่พบราคาจากสต๊อก" });
+  assert.deepEqual(calculateFinanceAmountBeforeVat("", "0"), { amount: null, error: "กรุณาระบุราคารถสำหรับจัดไฟแนนซ์" });
   assert.equal(calculateFinanceAmountBeforeVat("", "").amount, null);
+  assert.match(calculateFinanceAmountBeforeVat("not-a-price", "0").error, /เป็นตัวเลข/);
+  assert.deepEqual(calculateFinanceAmountBeforeVat("350000", "50000"), { amount: 300000, error: "" });
+});
+
+test("Stock auto-fill is one-time and a manual finance price is never overwritten", () => {
+  const auto = autofillFinancePriceFromStock(blankBookingFinanceSigning, "389,000");
+  assert.equal(auto.financePrice, "389000");
+  assert.equal(auto.financePriceSource, "stock");
+  const manual = { ...auto, financePrice: "350000", financePriceSource: "manual" as const };
+  assert.deepEqual(autofillFinancePriceFromStock(manual, "400000"), manual);
+  assert.deepEqual(autofillFinancePriceFromStock({ ...blankBookingFinanceSigning, financePriceSource: "manual" }, "400000"), { ...blankBookingFinanceSigning, financePriceSource: "manual" });
 });
 
 test("finance preview reuses Booking, canonical owner and Stock values in the approved order", () => {
@@ -28,6 +40,8 @@ test("finance preview reuses Booking, canonical owner and Stock values in the ap
       employmentDuration: "5 ปี",
       income: "45000",
       creditStatus: "มี",
+      financePrice: "389000",
+      financePriceSource: "stock",
       downPayment: "50000"
     },
     customerName: "ลูกค้าทดสอบ",
@@ -57,21 +71,21 @@ test("finance preview reuses Booking, canonical owner and Stock values in the ap
   }
 });
 
-test("missing Stock price never falls back to finalPrice or zero", () => {
+test("missing finance price stays blank and never falls back to finalPrice or zero", () => {
   const output = renderBookingFinanceSigningPreview({
     finance: { ...blankBookingFinanceSigning, downPayment: "10000" },
     customerName: "", plate: "", brand: "", model: "", year: "", teamName: "", owner: null,
     fallbackSaleName: "", stockVehicle: null
   });
-  assert.match(output, /ราคาขาย : ไม่พบราคาจากสต๊อก/);
-  assert.match(output, /ยอดจัด \(ก่อน VAT\) : ไม่พบราคาจากสต๊อก/);
+  assert.match(output, /ราคาขาย :\s*\n/);
+  assert.match(output, /ยอดจัด \(ก่อน VAT\) : กรุณาระบุราคารถสำหรับจัดไฟแนนซ์/);
   assert.doesNotMatch(output, /finalPrice|1\.07|ยอดจัด \(ก่อน VAT\) : 0/);
 });
 
-test("Booking UI gates seven inputs and preview on existing finance payment mode", async () => {
+test("Booking UI gates eight inputs and preview on existing finance payment mode", async () => {
   const page = await readFile(new URL("../app/booking-reports/page.tsx", import.meta.url), "utf8");
   assert.match(page, /paymentMode === "finance"/);
-  for (const label of ["ไฟแนนซ์", "สถานที่นัดเซ็น", "อาชีพ", "อายุงาน", "รายได้", "ลูกค้ามีเครดิตหรือไม่", "เงินดาวน์"]) {
+  for (const label of ["ไฟแนนซ์", "สถานที่นัดเซ็น", "อาชีพ", "อายุงาน", "รายได้", "ลูกค้ามีเครดิตหรือไม่", "ราคารถสำหรับจัดไฟแนนซ์", "เงินดาวน์"]) {
     assert.match(page, new RegExp(label));
   }
   assert.match(page, /Preview ส่งงานเซ็นไฟแนนซ์/);
@@ -87,7 +101,8 @@ test("finance metadata is keyed by stable bookingReportId and canonical Stock lo
   assert.match(route, /getCaseOwnership\("booking", bookingReportId\)/);
   assert.match(route, /reports\.find\(\(report\) => report\.id === bookingReportId\)/);
   assert.match(route, /lookupStockByPlateDetailed\(booking\.plate\)/);
-  assert.match(route, /stockPrice: clean\(stock\.vehicle\?\.salePrice\)/);
+  assert.match(route, /const stockPrice = clean\(stock\.vehicle\?\.salePrice\) \|\| clean\(existingMetadata\?\.stockPrice\)/);
+  assert.match(route, /financePriceSource/);
   assert.doesNotMatch(route, /body\.finalPrice|body\.salePrice/);
 });
 
