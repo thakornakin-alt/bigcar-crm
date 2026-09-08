@@ -58,11 +58,11 @@ test("approved user, password-reset, and Booking Draft actions are protected", (
   assert.doesNotMatch(code.match(/function isProtectedAuthAction_\([^\r\n]+/)[0], /saveSalesReport|saveBookingReport|listStockVehicles/);
 });
 
-test("Booking Draft router consumes only the verified payload and enforces central recipients", () => {
+test("Booking Draft router consumes only the verified payload and validates supplied recipients with safe defaults", () => {
   assert.match(code, /createBookingEmailDraft\(p\|\|\{\}\)/);
-  assert.match(code, /function createBookingEmailDraft[^\n]+RDDUsedcarBooked@segroup\.co\.th/);
-  assert.match(code, /function createBookingEmailDraft[^\n]+rongsarit\.s@tgh\.co\.th/);
-  assert.doesNotMatch(code.match(/function createBookingEmailDraft\([^\r\n]+/)[0], /input\.to|input\.cc|input\.bcc/);
+  assert.match(code, /bookingDraftEmailList_\(input\.to,"RDDUsedcarBooked@segroup\.co\.th","To"\)/);
+  assert.match(code, /bookingDraftEmailList_\(input\.cc,"rongsarit\.s@tgh\.co\.th","CC"\)/);
+  assert.match(code, /bookingDraftEmailList_\(input\.bcc,"","BCC"\)/);
 });
 
 test("unsigned Booking Draft is rejected and signed fixture reaches the contract without Gmail", () => {

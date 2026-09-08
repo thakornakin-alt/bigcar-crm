@@ -4,6 +4,7 @@ import type { EmailDraftInput } from "@/lib/types";
 import { requireWritableUser, RequestAuthError } from "@/lib/request-user";
 import { maskEmail, resolveEmailRoute } from "@/lib/email-routing";
 import { finalizeNotification, notificationFingerprint, notificationKey, reserveNotification } from "@/lib/email-notification-idempotency";
+import { resolveBookingDraftRecipients } from "@/lib/booking-draft-recipients";
 
 export const dynamic = "force-dynamic";
 
@@ -31,11 +32,15 @@ export async function POST(request: Request) {
     await requireWritableUser();
     const payload = clean(await request.json());
     if (!payload.reportId || !payload.subject || !payload.body) return NextResponse.json({ error: "Report, subject and body are required" }, { status: 400 });
+    const recipients = resolveBookingDraftRecipients(payload);
+    if (recipients.status === "invalid") {
+      return NextResponse.json({ error: "รูปแบบอีเมลผู้รับไม่ถูกต้อง" }, { status: 400 });
+    }
+    payload.to = recipients.to;
+    payload.cc = recipients.cc;
+    payload.bcc = recipients.bcc;
     const route = await resolveEmailRoute({ eventType: "booking_report_draft", entityId: payload.reportId });
     if (route.status !== "resolved" || !route.recipient) return NextResponse.json({ error: "unresolved_email_route", reason: route.reason }, { status: 409 });
-    payload.to = route.recipient.to;
-    payload.cc = route.recipient.cc;
-    payload.bcc = route.recipient.bcc;
     const key = notificationKey(route.eventType, payload.reportId, payload.to);
     const reservation = await reserveNotification(key, notificationFingerprint(payload));
     if (!reservation.created && reservation.record.status === "sent") return NextResponse.json({ result: reservation.record.result, idempotentReplay: true }, { status: 200 });
