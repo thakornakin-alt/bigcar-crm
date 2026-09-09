@@ -13,49 +13,43 @@ test("Booking Draft defaults remain safe", () => {
   assert.equal(resolveBookingDraftRecipients({ to: "" }).status, "resolved");
 });
 
-test("explicit To, CC and BCC are preserved", () => {
+test("browser recipient overrides are ignored", () => {
   assert.deepEqual(resolveBookingDraftRecipients({
     to: "Thakornakin@gmail.com",
     cc: "team@example.com",
     bcc: "audit@example.com"
   }), {
     status: "resolved",
-    to: "Thakornakin@gmail.com",
-    cc: "team@example.com",
-    bcc: "audit@example.com"
+    to: "RDDUsedcarBooked@segroup.co.th",
+    cc: "rongsarit.s@tgh.co.th",
+    bcc: ""
   });
 });
 
-test("invalid recipient syntax is rejected", () => {
-  assert.equal(resolveBookingDraftRecipients({ to: "not-an-email" }).status, "invalid");
-  assert.equal(resolveBookingDraftRecipients({ to: "valid@example.com", cc: "invalid" }).status, "invalid");
-  assert.equal(resolveBookingDraftRecipients({ to: "valid@example.com", bcc: "invalid" }).status, "invalid");
-});
-
-test("client restores saved recipient before defaults and exposes editable recipient fields", async () => {
+test("client removes legacy saved recipients and displays fixed routing", async () => {
   const page = await readFile(new URL("../app/booking-reports/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /saved\.emailTo\?\.trim\(\) \|\| settings\.bookingEmailTo \|\| defaultEmailTo/);
-  assert.match(page, /saved\.emailCc !== undefined \? saved\.emailCc/);
-  assert.match(page, /Field label="To" type="email" value=\{form\.emailTo\}/);
-  assert.match(page, /Field label="CC" type="email" value=\{form\.emailCc\}/);
-  assert.match(page, /Field label="BCC" type="email" value=\{form\.emailBcc\}/);
+  assert.match(page, /localStorage\.removeItem\("bigcar-booking-email"\)/);
+  assert.doesNotMatch(page, /Field label="To"/);
+  assert.doesNotMatch(page, /Field label="CC"/);
+  assert.doesNotMatch(page, /Field label="BCC"/);
+  assert.match(page, /Draft owner:<\/span> thakornakin@gmail\.com/);
 });
 
-test("server keeps auth, owner routing and explicit recipient contract", async () => {
+test("server keeps auth and overwrites browser recipients from the fixed route", async () => {
   const route = await readFile(new URL("../app/api/email/booking-draft/route.ts", import.meta.url), "utf8");
   assert.match(route, /requireWritableUser\(\)/);
   assert.match(route, /resolveEmailRoute\(\{ eventType: "booking_report_draft"/);
-  assert.match(route, /payload\.to = recipients\.to/);
-  assert.doesNotMatch(route, /payload\.to = route\.recipient\.to/);
+  assert.match(route, /payload\.to = route\.recipient\.to/);
+  assert.match(route, /payload\.cc = route\.recipient\.cc/);
+  assert.match(route, /payload\.bcc = ""/);
 });
 
-test("Apps Script validates input recipients, keeps defaults and signed action", async () => {
+test("Apps Script enforces fixed recipients and keeps Sales Draft unchanged", async () => {
   const code = await readFile(new URL("../google-apps-script/Code.gs", import.meta.url), "utf8");
   const mirror = await readFile(new URL("../google-apps-script/Code.compact.gs", import.meta.url), "utf8");
   assert.equal(code, mirror);
-  assert.match(code, /bookingDraftEmailList_\(input\.to,"RDDUsedcarBooked@segroup\.co\.th","To"\)/);
-  assert.match(code, /bookingDraftEmailList_\(input\.cc,"rongsarit\.s@tgh\.co\.th","CC"\)/);
-  assert.match(code, /bookingDraftEmailList_\(input\.bcc,"","BCC"\)/);
+  assert.match(code, /function createBookingEmailDraft\(input\)\{var to="RDDUsedcarBooked@segroup\.co\.th",cc="rongsarit\.s@tgh\.co\.th",bcc=""/);
   assert.match(code, /isProtectedAuthAction_\(action\).*createBookingEmailDraft/);
   assert.match(code, /updateBookingEmailStatus\([^\n]+to,cc,bcc/);
+  assert.match(code, /function createSalesEmailDraft\(input\)\{var to=String\(input\.to/);
 });

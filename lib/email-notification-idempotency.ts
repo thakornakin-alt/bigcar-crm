@@ -41,3 +41,27 @@ export async function finalizeNotification(key: string, status: "sent" | "failed
   }
   throw new Error("EMAIL_NOTIFICATION_FINALIZE_CONFLICT");
 }
+
+export async function rearmNotification(
+  key: string,
+  fingerprint: string,
+  expectedStatus: "sent" | "failed"
+) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const snapshot = await readJsonStoreSnapshot(FILE, EMPTY);
+    const existing = snapshot.data.events[key];
+    if (!existing) throw new Error("EMAIL_NOTIFICATION_RESERVATION_MISSING");
+    if (existing.fingerprint !== fingerprint) throw new Error("EMAIL_NOTIFICATION_IDEMPOTENCY_CONFLICT");
+    if (existing.status !== expectedStatus) return { rearmed: false as const, record: existing };
+    const nextRecord: EventRecord = {
+      ...existing,
+      status: "pending",
+      result: undefined,
+      updatedAt: new Date().toISOString()
+    };
+    const next = { version: 1 as const, events: { ...snapshot.data.events, [key]: nextRecord } };
+    const saved = await compareAndSwapJsonStore(FILE, next, snapshot.revision);
+    if (saved.updated) return { rearmed: true as const, record: nextRecord };
+  }
+  throw new Error("EMAIL_NOTIFICATION_REARM_CONFLICT");
+}

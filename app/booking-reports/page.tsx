@@ -260,21 +260,13 @@ export default function BookingReportsPage() {
 
   useEffect(() => {
     const settings = readSystemSettings();
-    const latest = window.localStorage.getItem("bigcar-booking-email");
-    let saved: Partial<Pick<BookingReportInput, "emailTo" | "emailCc" | "emailBcc">> = {};
-    if (latest) {
-      try {
-        saved = JSON.parse(latest) as Pick<BookingReportInput, "emailTo" | "emailCc" | "emailBcc">;
-      } catch {
-        window.localStorage.removeItem("bigcar-booking-email");
-      }
-    }
+    window.localStorage.removeItem("bigcar-booking-email");
     setForm((current) => ({
       ...current,
       teamName: current.teamName || settings.defaultTeamName || defaultSystemSettings.defaultTeamName,
-      emailTo: saved.emailTo?.trim() || settings.bookingEmailTo || defaultEmailTo,
-      emailCc: saved.emailCc !== undefined ? saved.emailCc : settings.bookingEmailCc || defaultEmailCc,
-      emailBcc: saved.emailBcc !== undefined ? saved.emailBcc : ""
+      emailTo: defaultEmailTo,
+      emailCc: defaultEmailCc,
+      emailBcc: ""
     }));
   }, []);
 
@@ -722,23 +714,14 @@ export default function BookingReportsPage() {
         setUploadedAttachments(uploadResult.attachments);
       }
 
-      window.localStorage.setItem(
-        "bigcar-booking-email",
-        JSON.stringify({
-          emailTo: form.emailTo,
-          emailCc: form.emailCc,
-          emailBcc: form.emailBcc
-        })
-      );
-
       const data = await readJson<{ result: { draftUrl: string } }>("/api/email/booking-draft", {
         method: "POST",
         body: JSON.stringify({
           reportId: savedReportId,
           subject: buildDefaultBookingSubject(form),
-          to: form.emailTo,
-          cc: form.emailCc,
-          bcc: form.emailBcc,
+          to: defaultEmailTo,
+          cc: defaultEmailCc,
+          bcc: "",
           body: gmailBody,
           attachments: attachments
             .filter((attachment) => attachment.fileId)
@@ -1047,12 +1030,11 @@ export default function BookingReportsPage() {
               ผู้ส่ง: Gmail กลางของ BIG CAR CRM · เจ้าของเคสในรายงาน: {selectedOwner ? `${selectedOwner.firstName} ${selectedOwner.lastName}`.trim() : salesProfile ? `${salesProfile.firstName} ${salesProfile.lastName}`.trim() : "ระบบจะตรวจจาก CRM Login"} · สร้างเป็น Draft เท่านั้น
             </p>
             <Field label="หัวข้ออีเมล" value={buildDefaultBookingSubject(form)} onChange={() => undefined} />
-            <div className="grid min-w-0 gap-3">
-              <Field label="To" type="email" value={form.emailTo} onChange={(value) => update("emailTo", value)} placeholder={defaultEmailTo} />
-              <Field label="CC" type="email" value={form.emailCc} onChange={(value) => update("emailCc", value)} placeholder={defaultEmailCc} />
-              <Field label="BCC" type="email" value={form.emailBcc} onChange={(value) => update("emailBcc", value)} placeholder="ไม่บังคับ" />
+            <div className="grid min-w-0 gap-2 rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm leading-6 text-[#dce2eb]">
+              <p><span className="text-soft">To:</span> RDDUsedcarBooked@segroup.co.th</p>
+              <p><span className="text-soft">CC:</span> rongsarit.s@tgh.co.th</p>
+              <p><span className="text-soft">Draft owner:</span> thakornakin@gmail.com</p>
             </div>
-            <p className="rounded-lg border border-line bg-[#0b0d11] px-3 py-2 text-xs text-soft">ค่าเริ่มต้น To: RDDUsedcarBooked@segroup.co.th · CC: rongsarit.s@tgh.co.th และระบบจะจำค่าที่เลือกไว้ใน browser นี้</p>
             <button
               type="button"
               onClick={createEmailDraft}

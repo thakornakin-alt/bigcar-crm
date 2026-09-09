@@ -53,16 +53,35 @@ function envelope(action, payload, secret, timestamp = Date.now(), nonce = "a".r
 test("Apps Script mirrors remain byte-equivalent", () => assert.equal(code, mirror));
 
 test("approved user, password-reset, and Booking Draft actions are protected", () => {
-  for (const action of ["loginSalesUser", "registerSalesUser", "listSalesUsers", "updateSalesUser", "sendPasswordResetEmail", "createBookingEmailDraft"])
+  for (const action of ["loginSalesUser", "registerSalesUser", "listSalesUsers", "updateSalesUser", "sendPasswordResetEmail", "createBookingEmailDraft", "bookingEmailDraftExists"])
     assert.match(code, new RegExp(`isProtectedAuthAction_[^\\n]+${action}`));
   assert.doesNotMatch(code.match(/function isProtectedAuthAction_\([^\r\n]+/)[0], /saveSalesReport|saveBookingReport|listStockVehicles/);
 });
 
-test("Booking Draft router consumes only the verified payload and validates supplied recipients with safe defaults", () => {
+test("Booking Draft router consumes verified payload and enforces fixed recipients", () => {
   assert.match(code, /createBookingEmailDraft\(p\|\|\{\}\)/);
-  assert.match(code, /bookingDraftEmailList_\(input\.to,"RDDUsedcarBooked@segroup\.co\.th","To"\)/);
-  assert.match(code, /bookingDraftEmailList_\(input\.cc,"rongsarit\.s@tgh\.co\.th","CC"\)/);
-  assert.match(code, /bookingDraftEmailList_\(input\.bcc,"","BCC"\)/);
+  assert.match(code, /function createBookingEmailDraft\(input\)\{var to="RDDUsedcarBooked@segroup\.co\.th",cc="rongsarit\.s@tgh\.co\.th",bcc=""/);
+});
+
+test("Booking Draft existence check is signed and distinguishes present from missing without creating Gmail", () => {
+  const helper = extract("bookingEmailDraftExists");
+  const context = { GmailApp: { getDrafts: () => [{ getId: () => "DRAFT-1" }] } };
+  vm.runInNewContext(helper, context);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.bookingEmailDraftExists({ draftId: "DRAFT-1" }))), { draftId: "DRAFT-1", exists: true });
+  assert.deepEqual(JSON.parse(JSON.stringify(context.bookingEmailDraftExists({ draftId: "MISSING" }))), { draftId: "MISSING", exists: false });
+  assert.throws(() => context.bookingEmailDraftExists({}), /Booking Draft ID is required/);
+});
+
+test("unsigned Booking Draft existence check is rejected", () => {
+  const context = boundary();
+  context.parseRequestBody = (event) => event.body;
+  context.jsonResponse = (value) => value;
+  context.getErrorMessage = (error) => String(error?.message || error || "");
+  context.bookingEmailDraftExists = () => { throw new Error("must not execute"); };
+  vm.runInNewContext([extract("isProtectedAuthAction_"), extract("doPost")].join("\n"), context);
+  const result = context.doPost({ body: { action: "bookingEmailDraftExists", draftId: "DRAFT-1" } });
+  assert.equal(result.ok, false);
+  assert.equal(result.error, "unauthorized_application_request");
 });
 
 test("unsigned Booking Draft is rejected and signed fixture reaches the contract without Gmail", () => {

@@ -54,6 +54,7 @@ type AppsScriptAction =
   | "uploadDriveFiles"
   | "createSalesEmailDraft"
   | "createBookingEmailDraft"
+  | "bookingEmailDraftExists"
   | "getStaffList"
   | "lookupByPlate"
   | "lookupBookingByPlate"
@@ -83,7 +84,7 @@ const RETRYABLE_READ_ACTIONS = new Set<AppsScriptAction>([
   "list", "listInterestRates", "searchBookingReports", "listReportHistory", "getStaffList",
   "lookupByPlate", "lookupBookingByPlate", "lookupBookingListCommissionGroup", "listActivityLogs",
   "listLineGroups", "listLineWebhookLogs", "listSalesUsers", "lookupStockByPlate", "listStockVehicles",
-  "lookupCustomerById", "getStockImportStatus"
+  "lookupCustomerById", "getStockImportStatus", "bookingEmailDraftExists"
 ]);
 
 const SIGNED_APPS_SCRIPT_ACTIONS = new Set<AppsScriptAction>([
@@ -92,7 +93,8 @@ const SIGNED_APPS_SCRIPT_ACTIONS = new Set<AppsScriptAction>([
   "listSalesUsers",
   "updateSalesUser",
   "sendPasswordResetEmail",
-  "createBookingEmailDraft"
+  "createBookingEmailDraft",
+  "bookingEmailDraftExists"
 ]);
 
 function canonicalJson(value: unknown): string {
@@ -504,6 +506,11 @@ export async function createSalesEmailDraft(input: EmailDraftInput) {
 
 export async function createBookingEmailDraft(input: EmailDraftInput) {
   const data = await callAppsScript<{ result: EmailDraftResult }>("createBookingEmailDraft", input);
+  return data.result;
+}
+
+export async function bookingEmailDraftExists(draftId: string) {
+  const data = await callAppsScript<{ result: { draftId: string; exists: boolean } }>("bookingEmailDraftExists", { draftId });
   return data.result;
 }
 

@@ -18,11 +18,11 @@ test("actor and owner stay separate when another user opens a case", async () =>
   assert.doesNotMatch(source, /requireWritableUser.*ownerUserId/);
 });
 
-test("Booking draft API preserves validated Booking UI recipients", async () => {
+test("Booking draft API enforces the central fixed Booking route", async () => {
   const source = await read("app/api/email/booking-draft/route.ts");
-  assert.match(source, /resolveBookingDraftRecipients\(payload\)/);
-  assert.match(source, /payload\.to = recipients\.to/);
-  assert.doesNotMatch(source, /payload\.to = route\.recipient\.to/);
+  assert.match(source, /payload\.to = route\.recipient\.to/);
+  assert.match(source, /payload\.cc = route\.recipient\.cc/);
+  assert.match(source, /payload\.bcc = ""/);
   assert.match(source, /unresolved_email_route/);
 });
 
