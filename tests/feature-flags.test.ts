@@ -14,3 +14,28 @@ test("RDD flags are opt-in and only literal true enables them", () => {
   assert.equal(getRddFeatureFlags({} as unknown as NodeJS.ProcessEnv).commissionRealWrites, false);
   assert.equal(getRddFeatureFlags({ COMMISSION_REAL_WRITES_ENABLED: "true" } as unknown as NodeJS.ProcessEnv).commissionRealWrites, true);
 });
+
+test("workspace tracker preview enables its shell and controlled editing without changing production defaults", () => {
+  const preview = getRddFeatureFlags({
+    VERCEL_ENV: "preview",
+    VERCEL_GIT_COMMIT_REF: "codex/workspace-line-tracker"
+  } as unknown as NodeJS.ProcessEnv);
+  assert.equal(preview.shell, true);
+  assert.equal(preview.workspaceReadOnly, true);
+  assert.equal(preview.workspaceEdit, true);
+
+  const production = getRddFeatureFlags({
+    VERCEL_ENV: "production",
+    VERCEL_GIT_COMMIT_REF: "codex/workspace-line-tracker"
+  } as unknown as NodeJS.ProcessEnv);
+  assert.equal(production.shell, false);
+  assert.equal(production.workspaceReadOnly, false);
+  assert.equal(production.workspaceEdit, false);
+
+  const explicitlyDisabled = getRddFeatureFlags({
+    VERCEL_ENV: "preview",
+    VERCEL_GIT_COMMIT_REF: "codex/workspace-line-tracker",
+    RDD_WORKSPACE_EDIT_ENABLED: "false"
+  } as unknown as NodeJS.ProcessEnv);
+  assert.equal(explicitlyDisabled.workspaceEdit, false);
+});
