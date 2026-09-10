@@ -3,7 +3,7 @@ import { incrementRecordVersion, normalizeWorkspaceRecord } from "@/lib/rdd-work
 import type { BookingDeliveryRecord } from "@/lib/types";
 import type { SalesUser } from "@/lib/types";
 import { RDD_DELIVERY_LOCATIONS, type RddWorkspaceChanges, type RddWorkspaceEditableField } from "@/lib/rdd-workspace-fields";
-import { isRddCaseStatus, isRddPurchaseType, isStatusValidForPurchaseType } from "@/lib/rdd-phase3b";
+import { RDD_CASE_STATUS_LABELS, isRddCaseStatus, isRddPurchaseType, isStatusValidForPurchaseType } from "@/lib/rdd-phase3b";
 import { isPrepEnum } from "@/lib/rdd-phase3c";
 
 const storeFile = "booking-delivery.json";
@@ -125,9 +125,13 @@ export async function updateRddWorkspaceRecord(input: {
     .filter((key) => String(current[key] || "") !== input.changes[key]);
   if (!changedFields.length) throw new RddWorkspaceWriteError(400, "ไม่มีข้อมูลที่เปลี่ยนแปลง");
 
+  const canonicalWorkflowStatus = input.changes.caseStatus && isRddCaseStatus(input.changes.caseStatus)
+    ? RDD_CASE_STATUS_LABELS[input.changes.caseStatus]
+    : undefined;
   const next = normalizeWorkspaceRecord({
     ...current,
     ...input.changes,
+    ...(canonicalWorkflowStatus ? { workflowStatus: canonicalWorkflowStatus } : {}),
     ...(input.changes.garageReturned === true && current.garageReturned !== true ? { garageReturnedAt: input.now || new Date().toISOString() } : {}),
     updatedAt: input.now || new Date().toISOString()
   });
