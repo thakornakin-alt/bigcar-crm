@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 import { BookingDeliveryWorkspaceClient } from "@/components/rdd/booking-delivery-workspace-client";
 import { currentBangkokMonth } from "@/lib/booking-delivery-v2";
 import { getRddFeatureFlags } from "@/lib/feature-flags";
@@ -12,7 +11,6 @@ const scopeValues = new Set<OwnershipScope>(["all", "mine", "unassigned"]);
 
 export default function BookingDeliveryWorkspacePage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
   const flags = getRddFeatureFlags();
-  if (!flags.shell && !flags.workspaceReadOnly && !flags.workspaceEdit) notFound();
   const current = currentBangkokMonth();
   const pending = typeof searchParams?.pending === "string" && pendingValues.has(searchParams.pending as RddReminderKind) ? searchParams.pending as RddReminderKind : "all";
   const scope = typeof searchParams?.scope === "string" && scopeValues.has(searchParams.scope as OwnershipScope) ? searchParams.scope as OwnershipScope : "all";
