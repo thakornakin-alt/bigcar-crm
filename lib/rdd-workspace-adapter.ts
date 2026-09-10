@@ -9,10 +9,20 @@ export function actorOwnerName(user: BookingDeliveryActor) {
 }
 
 export function normalizeWorkspaceRecord(record: BookingDeliveryRecord): BookingDeliveryRecord {
+  // Legacy Booking Delivery rows can pre-date ownerUserId while still carrying the
+  // CRM salesperson identity captured by Booking/Sales Report. Reuse that exact
+  // user id as the ownership fallback; never infer ownership from plate or names.
+  const ownerUserId = String(record.ownerUserId || "").trim()
+    || String(record.salespersonUserId || "").trim()
+    || undefined;
+  const ownerName = String(record.ownerName || "").trim()
+    || (ownerUserId ? String(record.salespersonDisplayName || "").trim() : "")
+    || undefined;
+
   return {
     ...record,
-    ownerUserId: String(record.ownerUserId || "").trim() || undefined,
-    ownerName: String(record.ownerName || "").trim() || undefined,
+    ownerUserId,
+    ownerName,
     collaboratorUserIds: Array.isArray(record.collaboratorUserIds)
       ? record.collaboratorUserIds.map((id) => String(id || "").trim()).filter(Boolean)
       : undefined,
