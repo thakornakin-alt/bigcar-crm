@@ -17,7 +17,7 @@ export async function PATCH(request: Request) {
     }
     const actor = await requireWritableUser();
     const input = validateRddWorkspacePatchBody(await request.json());
-    const result = await updateRddWorkspaceRecord(input);
+    const result = await updateRddWorkspaceRecord({ ...input, actor });
 
     try {
       const activity = await appendRddActivity(actor, {

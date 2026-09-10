@@ -12,7 +12,7 @@ const secret = "rdd-phase3a-write-contract-secret-with-safe-length";
 function token(role, id = `user-${role}`) {
   const now = Date.now();
   const user = { id, email: `${role}@example.test`, firstName: role, lastName: "Test", nickname: role, phone: "", lineId: "", lineQrUrl: "", avatarUrl: "", position: "", branch: "", role, locked: false, createdAt: "", updatedAt: "" };
-  const payload = Buffer.from(JSON.stringify({ user, iat: now, exp: now + 120_000 })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ user, sessionVersion: 1, iat: now, exp: now + 120_000 })).toString("base64url");
   return `${payload}.${createHmac("sha256", secret).update(payload).digest("base64url")}`;
 }
 
@@ -47,10 +47,10 @@ async function stop(child) {
   await new Promise((resolve) => { child.once("exit", resolve); setTimeout(resolve, 5000); });
 }
 
-async function patch(baseUrl, body, role) {
+async function patch(baseUrl, body, role, userId) {
   return fetch(`${baseUrl}/api/booking-delivery-workspace`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json", ...(role ? { Cookie: `bigcar_sales_profile=${token(role)}` } : {}) },
+    headers: { "Content-Type": "application/json", ...(role ? { Cookie: `bigcar_sales_profile=${token(role, userId)}` } : {}) },
     body: JSON.stringify(body)
   });
 }
@@ -59,7 +59,11 @@ test("Phase 3A narrow write contract, roles, CAS, QA safety and activity", { tim
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "rdd-phase3a-"));
   const original = { id: "CASE-1", bookingId: "BK-1", plate: "กข 1234", customerName: "ลูกค้า", status: "ยอดจอง", workflowStatus: "รอส่งมอบ", deliveryLocation: "", financeCaseNote: "เดิม", saleName: "เซลล์", ownerUserId: "owner-other", qaTestRecord: undefined, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", recordVersion: 1 };
   const qa = { ...original, id: "CASE-QA", bookingId: "BK-QA", plate: "QA", qaTestRecord: true };
-  await writeFile(path.join(dataDir, "booking-delivery.json"), JSON.stringify({ records: [original, qa] }, null, 2));
+  const unassigned = { ...original, id: "CASE-UNASSIGNED", bookingId: "BK-UNASSIGNED", plate: "UNASSIGNED", ownerUserId: "" };
+  await writeFile(path.join(dataDir, "booking-delivery.json"), JSON.stringify({ records: [original, qa, unassigned] }, null, 2));
+  await writeFile(path.join(dataDir, "auth-credentials-v2.json"), JSON.stringify({
+    credentials: Object.fromEntries(["user-sales", "owner-other", "sales-other", "user-viewer", "user-admin", "user-super_admin"].map((userId) => [userId, { userId, sessionVersion: 1 }]))
+  }));
   const server = await startServer(dataDir, true);
   try {
     const get = await fetch(`${server.baseUrl}/api/booking-delivery?scope=all`, { headers: { Cookie: `bigcar_sales_profile=${token("sales")}` } });
@@ -82,13 +86,32 @@ test("Phase 3A narrow write contract, roles, CAS, QA safety and activity", { tim
     });
 
     let currentRevision = initial.revision;
-    for (const role of ["sales", "admin", "super_admin"]) {
-      await t.test(`${role} may update an allowlisted field regardless of owner`, async () => {
+    await t.test("sales may update only their own stable owner case", async () => {
+      const response = await patch(server.baseUrl, { id: "CASE-1", expectedRevision: currentRevision, changes: { financeCaseNote: "หมายเหตุ sales" } }, "sales", "owner-other");
+      const body = await response.json();
+      assert.equal(response.status, 200);
+      assert.equal(body.record.ownerUserId, "owner-other");
+      currentRevision = body.revision;
+    });
+
+    await t.test("sales cannot update another salesperson or unassigned case", async () => {
+      const forbidden = await patch(server.baseUrl, { id: "CASE-1", expectedRevision: currentRevision, changes: { financeCaseNote: "ห้ามแก้" } }, "sales", "sales-other");
+      assert.equal(forbidden.status, 403);
+      const unassignedForbidden = await patch(server.baseUrl, { id: "CASE-UNASSIGNED", expectedRevision: currentRevision, changes: { financeCaseNote: "ห้ามยึดเคส" } }, "sales", "sales-other");
+      assert.equal(unassignedForbidden.status, 403);
+      const stored = JSON.parse(await readFile(path.join(dataDir, "booking-delivery.json"), "utf8"));
+      assert.equal(stored.records[0].financeCaseNote, "หมายเหตุ sales");
+      assert.equal(stored.records[2].ownerUserId, "");
+    });
+
+    for (const role of ["admin", "super_admin"]) {
+      await t.test(`${role} may update an allowlisted field and retains owner`, async () => {
         const value = `หมายเหตุ ${role}`;
         const response = await patch(server.baseUrl, { id: "CASE-1", expectedRevision: currentRevision, changes: { financeCaseNote: value } }, role);
         const body = await response.json();
         assert.equal(response.status, 200);
         assert.equal(body.record.financeCaseNote, value);
+        assert.equal(body.record.ownerUserId, "owner-other");
         assert.equal(body.record.plate, original.plate);
         assert.ok(body.activityEventId);
         currentRevision = body.revision;
@@ -96,7 +119,7 @@ test("Phase 3A narrow write contract, roles, CAS, QA safety and activity", { tim
     }
 
     await t.test("stale revision returns 409 and cannot overwrite", async () => {
-      const response = await patch(server.baseUrl, { id: "CASE-1", expectedRevision: initial.revision, changes: { financeCaseNote: "ข้อมูลเก่า" } }, "sales");
+      const response = await patch(server.baseUrl, { id: "CASE-1", expectedRevision: initial.revision, changes: { financeCaseNote: "ข้อมูลเก่า" } }, "sales", "owner-other");
       assert.equal(response.status, 409);
       const stored = JSON.parse(await readFile(path.join(dataDir, "booking-delivery.json"), "utf8"));
       assert.equal(stored.records[0].financeCaseNote, "หมายเหตุ super_admin");
@@ -125,9 +148,9 @@ test("Phase 3A narrow write contract, roles, CAS, QA safety and activity", { tim
         { deliveryLocation: "สถานที่อื่น" },
         { deliveryLocationNote: "บ้านลูกค้า" }
       ]) {
-        assert.equal((await patch(server.baseUrl, { id: "CASE-1", expectedRevision: currentRevision, changes }, "sales")).status, 400);
+        assert.equal((await patch(server.baseUrl, { id: "CASE-1", expectedRevision: currentRevision, changes }, "sales", "owner-other")).status, 400);
       }
-      const response = await patch(server.baseUrl, { id: "CASE-1", expectedRevision: currentRevision, changes: { purchaseType: "finance", caseStatus: "approved_waiting_delivery", deliveryDate: "2026-08-17", deliveryTime: "14:30", deliveryLocation: "นอกสถานที่", deliveryLocationNote: "บ้านลูกค้า" } }, "sales");
+      const response = await patch(server.baseUrl, { id: "CASE-1", expectedRevision: currentRevision, changes: { purchaseType: "finance", caseStatus: "approved_waiting_delivery", deliveryDate: "2026-08-17", deliveryTime: "14:30", deliveryLocation: "นอกสถานที่", deliveryLocationNote: "บ้านลูกค้า" } }, "sales", "owner-other");
       const body = await response.json();
       assert.equal(response.status, 200);
       assert.equal(body.record.purchaseType, "finance");
@@ -138,7 +161,7 @@ test("Phase 3A narrow write contract, roles, CAS, QA safety and activity", { tim
       assert.equal(body.record.plate, original.plate);
       currentRevision = body.revision;
 
-      const delivered = await patch(server.baseUrl, { id: "CASE-1", expectedRevision: currentRevision, changes: { caseStatus: "delivered" } }, "sales");
+      const delivered = await patch(server.baseUrl, { id: "CASE-1", expectedRevision: currentRevision, changes: { caseStatus: "delivered" } }, "sales", "owner-other");
       const deliveredBody = await delivered.json();
       assert.equal(delivered.status, 200);
       assert.equal(deliveredBody.record.caseStatus, "delivered");
@@ -153,6 +176,7 @@ test("Phase 3A narrow write contract, roles, CAS, QA safety and activity", { tim
 test("edit feature flag disables the workspace write endpoint", { timeout: 120_000 }, async () => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "rdd-phase3a-off-"));
   await writeFile(path.join(dataDir, "booking-delivery.json"), JSON.stringify({ records: [] }));
+  await writeFile(path.join(dataDir, "auth-credentials-v2.json"), JSON.stringify({ credentials: { "user-admin": { userId: "user-admin", sessionVersion: 1 } } }));
   const server = await startServer(dataDir, false);
   try {
     const response = await patch(server.baseUrl, { id: "x", expectedRevision: "x", changes: { financeCaseNote: "x" } }, "admin");

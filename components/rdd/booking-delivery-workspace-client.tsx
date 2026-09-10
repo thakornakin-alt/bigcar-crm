@@ -16,7 +16,7 @@ import {
   type RddPurchaseType,
   type RddReminderKind
 } from "@/lib/rdd-phase2";
-import { filterByOwnership, type OwnershipScope } from "@/lib/rdd-ownership";
+import { filterByOwnership, recordOwnerId, type OwnershipScope } from "@/lib/rdd-ownership";
 import type { BookingDeliveryRecord } from "@/lib/types";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import { resolveCaseDocumentManifest } from "@/lib/rdd-case-documents";
@@ -235,7 +235,7 @@ export function BookingDeliveryWorkspaceClient({
         </>
       )}
 
-      {selected && <WorkspaceDetail record={selected} revision={revision} editEnabled={editEnabled && user?.role !== "viewer"} onClose={() => setSelectedId("")} onSaved={replaceRecord} />}
+      {selected && <WorkspaceDetail record={selected} revision={revision} editEnabled={editEnabled && user?.role !== "viewer" && (user?.role === "admin" || user?.role === "super_admin" || recordOwnerId(selected) === user?.id)} onClose={() => setSelectedId("")} onSaved={replaceRecord} />}
 
       <style jsx>{`
         .workspace-select { min-height: 48px; border-radius: 16px; border: 1px solid rgba(255,255,255,.12); background: #111114; padding: 0 12px; color: white; font-size: 13px; font-weight: 800; min-width: 0; width: 100%; }
@@ -353,7 +353,7 @@ function WorkspaceDetail({ record, revision, editEnabled, onClose, onSaved }: {
       <aside data-testid="workspace-detail-panel" className="absolute inset-y-0 right-0 w-full overflow-y-auto border-l border-white/10 bg-[#0c0c0f] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl sm:max-w-xl sm:p-6">
         <div className="flex items-start justify-between gap-3">
           <div><p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#d6b66c]">{editing ? "Edit case" : "Case detail"}</p><h2 className="mt-2 text-2xl font-black text-white">{record.plate || "ไม่ระบุทะเบียน"}</h2><p className="mt-1 text-sm text-white/48">{record.customerName || "ไม่ระบุลูกค้า"}</p></div>
-          <div className="flex gap-2">{canEdit && !editing && <button data-testid="workspace-edit-button" type="button" onClick={startEdit} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#d6b66c]/35 bg-[#d6b66c]/10 px-3 text-sm font-black text-[#f6df9d]"><Pencil size={16} />แก้ไข</button>}<button type="button" aria-label="ปิดรายละเอียด" onClick={requestClose} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-white/12 bg-white/5 text-white"><X size={20} /></button></div>
+          <div className="flex gap-2">{canEdit && !editing && <button data-testid="workspace-edit-button" type="button" onClick={startEdit} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#d6b66c] px-3 text-sm font-black text-[#17120a]"><Pencil size={16} />แก้ไขงาน</button>}<button type="button" aria-label="ปิดรายละเอียด" onClick={requestClose} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-white/12 bg-white/5 text-white"><X size={20} /></button></div>
         </div>
         <div className="mt-5 flex items-center gap-2"><RddStatusChip record={record} />{record.qaTestRecord === true && <QaBadge />}</div>
         {record.qaTestRecord === true && <p data-testid="workspace-qa-read-only" className="mt-3 rounded-xl border border-fuchsia-300/20 bg-fuchsia-300/8 px-3 py-2 text-sm font-bold text-fuchsia-100">ข้อมูล TEST/QA เป็นแบบอ่านอย่างเดียว</p>}
@@ -364,7 +364,8 @@ function WorkspaceDetail({ record, revision, editEnabled, onClose, onSaved }: {
         <DetailGroup title="Booking" items={[["Booking ID", record.bookingId], ["วันที่จอง", thaiDate(record.bookingDate)], ["ราคาตั้ง", money(record.salePrice)], ["ราคาขาย", money(record.finalPrice)], ["ส่วนลด", money(record.centralDiscount)]]} />
         {editing ? (
           <section data-testid="workspace-edit-fields" className="mt-3 rounded-2xl border border-[#d6b66c]/25 bg-[#d6b66c]/[0.05] p-3 sm:mt-5 sm:p-4">
-            <h3 className="font-black text-white">ข้อมูลที่แก้ไขได้</h3>
+            <h3 className="font-black text-white">ข้อมูลติดตามงาน</h3>
+            <h4 className="mt-3 text-sm font-black text-white">สถานะงาน</h4>
             <div data-testid="delivery-date-time-controls" className="mt-3 grid grid-cols-2 gap-3">
               <label className="block text-xs font-black text-[#d6b66c]">ประเภทซื้อ
                 <select data-testid="purchase-type-select" value={draft.purchaseType} onChange={(event) => {
@@ -383,7 +384,8 @@ function WorkspaceDetail({ record, revision, editEnabled, onClose, onSaved }: {
               </label>
             </div>
             {workflowError && <p data-testid="workflow-validation-error" className="mt-2 text-xs font-bold text-amber-200">{workflowError}</p>}
-            <div className="mt-3 grid grid-cols-2 gap-2.5">
+            <h4 className="mt-4 border-t border-white/10 pt-3 text-sm font-black text-white">นัดส่งมอบ</h4>
+            <div className="mt-2 grid grid-cols-2 gap-2.5">
               <label className="block text-xs font-black text-[#d6b66c]">วันนัดส่งมอบ<input aria-label="วันนัดส่งมอบ" type="date" value={draft.deliveryDate} onChange={(event) => setDraft((current) => ({ ...current, deliveryDate: event.target.value }))} className="mt-1 min-h-11 w-full rounded-xl border border-white/12 bg-[#111114] px-2 text-sm text-white" /></label>
               <label className="block text-xs font-black text-[#d6b66c]">เวลานัดส่งมอบ<input aria-label="เวลานัดส่งมอบ" type="time" value={draft.deliveryTime} onChange={(event) => setDraft((current) => ({ ...current, deliveryTime: event.target.value }))} className="mt-1 min-h-11 w-full rounded-xl border border-white/12 bg-[#111114] px-2 text-sm text-white" /></label>
             </div>
@@ -399,9 +401,10 @@ function WorkspaceDetail({ record, revision, editEnabled, onClose, onSaved }: {
               </select>
             </label>
             {draft.deliveryLocation === "นอกสถานที่" && <label className="mt-3 block text-xs font-black text-[#d6b66c]">รายละเอียดนอกสถานที่<textarea aria-label="รายละเอียดนอกสถานที่" maxLength={300} value={draft.deliveryLocationNote} onChange={(event) => setDraft((current) => ({ ...current, deliveryLocationNote: event.target.value }))} rows={3} className="mt-1 w-full rounded-xl border border-white/12 bg-[#111114] p-3 text-sm leading-5 text-white outline-none focus:border-[#d6b66c]" /></label>}
-            <h4 className="mt-4 border-t border-white/10 pt-3 text-sm font-black text-white">เตรียมรถ</h4>
+            <h4 className="mt-4 border-t border-white/10 pt-3 text-sm font-black text-white">รถเข้าอู่ / รถกลับ</h4>
             <label className="mt-2 flex min-h-11 items-center gap-3 text-sm font-bold text-white"><input type="checkbox" checked={draft.garageRequired === true} onChange={(event) => setDraft((current) => ({ ...current, garageRequired: event.target.checked }))} className="h-5 w-5 accent-[#d6b66c]" />ส่งอู่</label>
             {draft.garageRequired === true && <div data-testid="garage-controls" className="grid grid-cols-2 gap-2.5"><label className="col-span-2 text-xs font-black text-[#d6b66c]">อู่/สถานที่<input value={draft.garageName} maxLength={200} onChange={(event) => setDraft((current) => ({ ...current, garageName: event.target.value }))} className="mt-1 min-h-11 w-full rounded-xl border border-white/12 bg-[#111114] px-3 text-white" /></label><label className="text-xs font-black text-[#d6b66c]">วันที่ส่งจริง<input type="date" value={draft.garageSentAt} onChange={(event) => setDraft((current) => ({ ...current, garageSentAt: event.target.value }))} className="mt-1 min-h-11 w-full rounded-xl border border-white/12 bg-[#111114] px-2 text-white" /></label><label className="text-xs font-black text-[#d6b66c]">วันที่คาดว่ารถกลับ<input type="date" value={draft.garageExpectedReturnDate} onChange={(event) => setDraft((current) => ({ ...current, garageExpectedReturnDate: event.target.value }))} className="mt-1 min-h-11 w-full rounded-xl border border-white/12 bg-[#111114] px-2 text-white" /></label><label className="col-span-2 flex min-h-11 items-center gap-3 text-sm font-bold text-white"><input type="checkbox" checked={draft.garageReturned === true} onChange={(event) => setDraft((current) => ({ ...current, garageReturned: event.target.checked }))} className="h-5 w-5 accent-emerald-400" />รถกลับแล้ว</label></div>}
+            <h4 className="mt-4 border-t border-white/10 pt-3 text-sm font-black text-white">งานเตรียมรถ</h4>
             <div data-testid="prep-status-controls" className="mt-2 grid grid-cols-2 gap-2.5">
               <PrepSelect label="ล้างรถ" field="washStatus" value={draft.washStatus} values={RDD_WASH_STATUSES} labels={RDD_PREP_LABELS.washStatus} onChange={(value) => setDraft((current) => ({ ...current, washStatus: value as WorkspaceDraft["washStatus"] }))} />
               <PrepSelect label="ลอกสติ๊กเกอร์" field="stickerStatus" value={draft.stickerStatus} values={RDD_STICKER_STATUSES} labels={RDD_PREP_LABELS.stickerStatus} onChange={(value) => setDraft((current) => ({ ...current, stickerStatus: value as WorkspaceDraft["stickerStatus"] }))} />
@@ -410,7 +413,8 @@ function WorkspaceDetail({ record, revision, editEnabled, onClose, onSaved }: {
               <PrepSelect label="ภาษี" field="taxStatus" value={draft.taxStatus} values={RDD_TAX_STATUSES} labels={RDD_PREP_LABELS.taxStatus} onChange={(value) => setDraft((current) => ({ ...current, taxStatus: value as WorkspaceDraft["taxStatus"] }))} />
               <PrepSelect label="ประกัน" field="insuranceStatus" value={draft.insuranceStatus} values={RDD_INSURANCE_STATUSES} labels={RDD_PREP_LABELS.insuranceStatus} onChange={(value) => setDraft((current) => ({ ...current, insuranceStatus: value as WorkspaceDraft["insuranceStatus"] }))} />
             </div>
-            <label className="mt-3 block text-xs font-black text-[#d6b66c]">หมายเหตุ<textarea data-testid="workspace-note-textarea" aria-label="หมายเหตุ" maxLength={1000} value={draft.financeCaseNote} onChange={(event) => setDraft((current) => ({ ...current, financeCaseNote: event.target.value }))} rows={3} className="mt-1 max-h-56 min-h-[4.75rem] w-full resize-y overflow-auto rounded-xl border border-white/12 bg-[#111114] p-3 text-sm leading-5 text-white outline-none focus:border-[#d6b66c]" /></label>
+            <h4 className="mt-4 border-t border-white/10 pt-3 text-sm font-black text-white">หมายเหตุ</h4>
+            <label className="mt-2 block text-xs font-black text-[#d6b66c]">หมายเหตุ / งานที่ต้องติดตาม<textarea data-testid="workspace-note-textarea" aria-label="หมายเหตุ / งานที่ต้องติดตาม" maxLength={1000} value={draft.financeCaseNote} onChange={(event) => setDraft((current) => ({ ...current, financeCaseNote: event.target.value }))} rows={3} className="mt-1 max-h-56 min-h-[4.75rem] w-full resize-y overflow-auto rounded-xl border border-white/12 bg-[#111114] p-3 text-base leading-5 text-white outline-none focus:border-[#d6b66c] sm:text-sm" /></label>
             <p className="mt-1 text-right text-[11px] text-white/35">{draft.financeCaseNote.length}/1,000</p>
           </section>
         ) : <><DetailGroup title="ไฟแนนซ์" items={[["ส่งเคสแล้ว", record.financeCaseSubmitted ? "ใช่" : "—"], ["เวลาส่งเคส", thaiDate(record.financeCaseSubmittedAt, true)], ["หมายเหตุ", record.financeCaseNote || "—"]]} /><DetailGroup title="ส่งมอบ" items={[["วันนัดส่ง", thaiDate(record.deliveryDate)], ["เวลานัด", record.deliveryTime], ["สถานที่", record.deliveryLocation], ["รายละเอียดสถานที่", record.deliveryLocation === "นอกสถานที่" ? record.deliveryLocationNote : ""]]} /><PrepReadSection record={record} /></>}
@@ -434,7 +438,7 @@ function QaBadge() {
 }
 
 function PrepFilter({ value, onChange, className, short = false }: { value: "all" | RddReminderKind; onChange: (value: "all" | RddReminderKind) => void; className: string; short?: boolean }) {
-  const options: Array<["all" | RddReminderKind, string]> = [["all", short ? "งานค้าง" : "งานค้างทั้งหมด"], ["prep_pending", "มีงานค้าง"], ["prep_none", "ไม่มีงานค้าง"], ["garage", "อู่"], ["wash", "ล้างรถ"], ["sticker", "สติ๊กเกอร์"], ["oil", "น้ำมันเครื่อง"], ["battery", "แบตเตอรี่"], ["tax", "ภาษี"], ["insurance", "ประกัน"], ["delivery_today", "ส่งวันนี้"], ["delivery_tomorrow", "ส่งพรุ่งนี้"], ["delivery_overdue", "เลยกำหนด"]];
+  const options: Array<["all" | RddReminderKind, string]> = [["all", short ? "งานค้าง" : "งานค้างทั้งหมด"], ["prep_pending", "มีงานเตรียมรถค้าง"], ["prep_none", "ไม่มีงานค้าง"], ["garage_return_due", "รถใกล้ถึงกำหนดกลับ"], ["garage", "อู่"], ["wash", "ล้างรถ"], ["sticker", "สติ๊กเกอร์"], ["oil", "น้ำมันเครื่อง"], ["battery", "แบตเตอรี่"], ["tax", "ภาษี"], ["insurance", "ประกัน"], ["delivery_today", "งานส่งมอบวันนี้"], ["delivery_tomorrow", "ส่งพรุ่งนี้"], ["delivery_overdue", "เลยกำหนดส่งมอบ"]];
   return <select aria-label={short ? "งานค้างแบบย่อ" : "งานค้าง"} value={value} onChange={(event) => onChange(event.target.value as "all" | RddReminderKind)} className={className}>{options.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>;
 }
 
