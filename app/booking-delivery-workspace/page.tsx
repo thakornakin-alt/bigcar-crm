@@ -11,7 +11,8 @@ const pendingValues = new Set<RddReminderKind>(["delivery_today", "delivery_tomo
 const scopeValues = new Set<OwnershipScope>(["all", "mine", "unassigned"]);
 
 export default function BookingDeliveryWorkspacePage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
-  if (!getRddFeatureFlags().workspaceReadOnly) notFound();
+  const flags = getRddFeatureFlags();
+  if (!flags.shell && !flags.workspaceReadOnly && !flags.workspaceEdit) notFound();
   const current = currentBangkokMonth();
   const pending = typeof searchParams?.pending === "string" && pendingValues.has(searchParams.pending as RddReminderKind) ? searchParams.pending as RddReminderKind : "all";
   const scope = typeof searchParams?.scope === "string" && scopeValues.has(searchParams.scope as OwnershipScope) ? searchParams.scope as OwnershipScope : "all";
@@ -19,5 +20,5 @@ export default function BookingDeliveryWorkspacePage({ searchParams }: { searchP
   const search = typeof searchParams?.search === "string" ? searchParams.search : "";
   const caseId = typeof searchParams?.caseId === "string" ? searchParams.caseId : "";
   const month = typeof searchParams?.month === "string" ? searchParams.month : "";
-  return <BookingDeliveryWorkspaceClient editEnabled={getRddFeatureFlags().workspaceEdit} currentYear={current.year} currentMonth={current.month} initialPending={pending} initialScope={scope} initialStatus={status} initialSearch={search} initialMonth={month} initialCaseId={caseId} />;
+  return <BookingDeliveryWorkspaceClient editEnabled={flags.workspaceEdit} currentYear={current.year} currentMonth={current.month} initialPending={pending} initialScope={scope} initialStatus={status} initialSearch={search} initialMonth={month} initialCaseId={caseId} />;
 }
