@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { LineWebhookEvent, replyLineText, verifyLineSignature } from "@/lib/line";
 import { saveLineGroup, saveLineWebhookLog } from "@/lib/apps-script";
+import { saveStoredLineGroup } from "@/lib/line-group-store";
 import { applyLineReservationCommands } from "@/lib/line-reservations";
 import { handleRddLineTrackerMessage, isRddLineTrackerCommand, rememberRddLineWebhook, wasRddLineWebhookProcessed } from "@/lib/rdd-line-tracker";
 
@@ -64,6 +65,10 @@ export async function POST(request: Request) {
     })
     .filter((group): group is { groupId: string; type: string; name: string; lastSeenAt: string } => Boolean(group));
 
+  // CRM persistent storage is the primary registry. Keep Apps Script as a best-effort legacy mirror.
+  await Promise.all(groupsToSave.map((group) => saveStoredLineGroup(group))).catch((error) => {
+    console.error("line_group_store_failed", error instanceof Error ? error.message : error);
+  });
   void Promise.all(groupsToSave.map((group) => saveLineGroup(group))).catch(() => undefined);
 
   for (const event of events) {
