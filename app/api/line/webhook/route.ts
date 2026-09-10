@@ -7,12 +7,17 @@ import { handleRddLineTrackerMessage, isRddLineTrackerCommand, rememberRddLineWe
 
 export const dynamic = "force-dynamic";
 
-const trackerQuickReplies = ["ล้างรถ", "ลอกสติ๊กเกอร์", "น้ำมันเครื่อง", "แบตเตอรี่", "ส่งอู่", "รถกลับ", "ภาษี", "ประกัน"].map((label) => ({ label, text: `งานล่าสุด ${label}` }));
+const trackerTasks = ["ล้างรถ", "ลอกสติ๊กเกอร์", "น้ำมันเครื่อง", "แบตเตอรี่", "ส่งอู่", "รถกลับ", "ภาษี", "ประกัน"];
 
-function quickRepliesForTracker(inputText: string) {
-  const text = String(inputText || "").trim();
-  if (/^\d+$/.test(text) || /^ติดตาม\s+/i.test(text)) return trackerQuickReplies;
-  return [];
+function quickRepliesForResolvedCase(reply: string) {
+  const firstLine = String(reply || "").split("\n")[0]?.trim() || "";
+  const match = firstLine.match(/^ติดตาม\s+(.+?)\s+·\s+(.+)$/);
+  if (!match) return [];
+  const plate = match[1].trim();
+  const customer = match[2].trim();
+  if (!plate || !customer || customer === "-") return [];
+  const caseQuery = `${plate} ${customer}`;
+  return trackerTasks.map((label) => ({ label, text: `งาน ${caseQuery} ${label}` }));
 }
 
 export async function GET() { return NextResponse.json({ ok: true, message: "Big Car CRM LINE webhook is ready" }); }
@@ -38,7 +43,7 @@ export async function POST(request: Request) {
         const reply = await handleRddLineTrackerMessage({ text: messageText, sourceGroupId, sourceUserId: event.source?.userId });
         if (reply) {
           if (event.webhookEventId) await rememberRddLineWebhook(event.webhookEventId);
-          const quickReplies = quickRepliesForTracker(messageText);
+          const quickReplies = quickRepliesForResolvedCase(reply);
           if (event.replyToken) {
             if (quickReplies.length) await replyLineTextWithQuickReplies(event.replyToken, reply, quickReplies);
             else await replyLineText(event.replyToken, reply);
