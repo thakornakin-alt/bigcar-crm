@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { RouteAwareShell } from "@/app/components/route-aware-shell";
+import { LineReservationAutoRefresh } from "@/app/components/LineReservationAutoRefresh";
 import { getRddFeatureFlags } from "@/lib/feature-flags";
 
 export const metadata: Metadata = {
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="th">
       <body>
+        <LineReservationAutoRefresh />
         <RouteAwareShell rddShellEnabled={flags.shell} workspaceEnabled={flags.workspaceReadOnly} commissionEnabled={flags.commissionPreview}>{children}</RouteAwareShell>
       </body>
     </html>
