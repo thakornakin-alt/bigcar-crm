@@ -2,6 +2,9 @@ import { createHmac, timingSafeEqual } from "crypto";
 
 export type LineWebhookEvent = {
   type: string;
+  webhookEventId?: string;
+  replyToken?: string;
+  timestamp?: number;
   message?: {
     type?: string;
     text?: string;
@@ -91,6 +94,22 @@ export async function pushLineText(to: string, text: string) {
   return true;
 }
 
+export async function replyLineText(replyToken: string, text: string) {
+  const token = String(replyToken || "").trim();
+  if (!token) throw new Error("LINE_REPLY_TOKEN_MISSING");
+  if (process.env.LINE_TEST_DISABLE_SEND === "true") return true;
+  const response = await lineFetch("https://api.line.me/v2/bot/message/reply", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${getLineToken()}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ replyToken: token, messages: [{ type: "text", text: String(text || "").slice(0, 5000) }] })
+  }, LINE_WRITE_TIMEOUT_MS);
+  if (!response.ok) throw new Error(`LINE_UPSTREAM_HTTP_${response.status}`);
+  return true;
+}
+
 export async function pushLineReport(to: string, text: string, attachments: LineReportAttachment[] = []) {
   const imageAttachments = attachments
     .filter((attachment) => attachment.fileId && attachment.type.startsWith("image/"))
@@ -176,6 +195,7 @@ async function pushLineMessagesInChunks(to: string, messages: LinePushMessage[])
 }
 
 async function pushLineMessages(to: string, messages: LinePushMessage[]) {
+  if (process.env.LINE_TEST_DISABLE_SEND === "true") return true;
   const response = await lineFetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
     headers: {

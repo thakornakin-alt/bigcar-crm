@@ -13,6 +13,7 @@ const ADMIN_APIS = [
 const PUBLIC_APIS = ["/api/auth/login", "/api/auth/me", "/api/auth/self-register", "/api/auth/forgot-password", "/api/auth/reset-password", "/api/site-admin/login"];
 const EXTERNAL_APIS = [
   "/api/line/webhook",
+  "/api/cron/rdd-line-reminders",
   "/api/realtime-booking/gmail-oauth/callback",
   "/api/realtime-booking/gmail-webhook",
   "/api/internal/password-reset-email-sender-check"

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { LineWebhookEvent, verifyLineSignature } from "@/lib/line";
+import { LineWebhookEvent, replyLineText, verifyLineSignature } from "@/lib/line";
 import { saveLineGroup, saveLineWebhookLog } from "@/lib/apps-script";
 import { applyLineReservationCommands } from "@/lib/line-reservations";
+import { handleRddLineTrackerMessage, isRddLineTrackerCommand, rememberRddLineWebhook, wasRddLineWebhookProcessed } from "@/lib/rdd-line-tracker";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +70,29 @@ export async function POST(request: Request) {
     const messageText = String(event.message?.text || "").trim();
     if (!messageText) continue;
     const sourceGroupId = event.source?.groupId || event.source?.roomId || "";
+    if (isRddLineTrackerCommand(messageText)) {
+      try {
+        if (event.webhookEventId && await wasRddLineWebhookProcessed(event.webhookEventId)) continue;
+        const reply = await handleRddLineTrackerMessage({
+          text: messageText,
+          sourceGroupId,
+          sourceUserId: event.source?.userId
+        });
+        if (reply) {
+          if (event.webhookEventId) await rememberRddLineWebhook(event.webhookEventId);
+          if (event.replyToken) await replyLineText(event.replyToken, reply);
+          else if (sourceGroupId) {
+            const { pushLineText } = await import("@/lib/line");
+            await pushLineText(sourceGroupId, reply);
+          }
+          continue;
+        }
+      } catch (error) {
+        const reply = error instanceof Error ? error.message : "อัปเดตงานไม่สำเร็จ กรุณาลองใหม่";
+        if (event.replyToken) await replyLineText(event.replyToken, reply).catch(() => undefined);
+        continue;
+      }
+    }
     await applyLineReservationCommands([
       {
         text: messageText,

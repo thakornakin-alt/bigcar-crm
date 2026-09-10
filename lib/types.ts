@@ -271,7 +271,7 @@ export type RddActivityEvent = {
   action: string;
   targetType: string;
   targetId: string;
-  source: "web" | "api" | "system";
+  source: "web" | "api" | "line" | "system";
   requestId?: string;
   before?: Record<string, unknown>;
   after?: Record<string, unknown>;
@@ -464,12 +464,12 @@ export type BookingDeliveryRecord = {
   garageExpectedReturnDate?: string;
   garageReturned?: boolean;
   garageReturnedAt?: string;
-  washStatus?: "not_ordered" | "ordered_waiting" | "completed";
-  stickerStatus?: "not_checked" | "no_sticker" | "ordered_waiting" | "completed";
-  oilStatus?: "no_change" | "change_waiting" | "changed";
-  batteryStatus?: "not_checked" | "good" | "ordered_waiting" | "replaced";
-  taxStatus?: "not_checked" | "valid" | "renewal_ordered";
-  insuranceStatus?: "not_discussed" | "with_us" | "customer_self";
+  washStatus?: "not_ordered" | "ordered_waiting" | "completed" | "blocked";
+  stickerStatus?: "not_checked" | "no_sticker" | "ordered_waiting" | "completed" | "blocked";
+  oilStatus?: "no_change" | "change_waiting" | "changed" | "blocked";
+  batteryStatus?: "not_checked" | "good" | "ordered_waiting" | "replaced" | "blocked";
+  taxStatus?: "not_checked" | "valid" | "renewal_ordered" | "blocked";
+  insuranceStatus?: "not_discussed" | "with_us" | "customer_self" | "blocked";
   ownerUserId?: string;
   ownerName?: string;
   collaboratorUserIds?: string[];

@@ -7,6 +7,8 @@ import {
   updateRddWorkspaceRecord,
   validateRddWorkspacePatchBody
 } from "@/lib/rdd-workspace-write";
+import { notifyRddLineWebUpdate } from "@/lib/rdd-line-tracker";
+import { profileActivityName } from "@/lib/user-profile";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +21,8 @@ export async function PATCH(request: Request) {
     const input = validateRddWorkspacePatchBody(await request.json());
     const result = await updateRddWorkspaceRecord({ ...input, actor });
 
+    let activityEventId = "";
+    const warnings: string[] = [];
     try {
       const activity = await appendRddActivity(actor, {
         action: "booking_delivery_updated",
@@ -29,16 +33,24 @@ export async function PATCH(request: Request) {
         after: result.after,
         metadata: { changedFields: result.changedFields }
       });
-      return NextResponse.json({ record: result.record, revision: result.revision, activityEventId: activity.id });
+      activityEventId = activity.id;
     } catch (activityError) {
       console.error("[rdd-workspace] activity append failed after business update", activityError);
-      return NextResponse.json({
-        record: result.record,
-        revision: result.revision,
-        partialSuccess: true,
-        warning: "บันทึกข้อมูลแล้ว แต่บันทึก Activity ไม่สำเร็จ"
-      }, { status: 207 });
+      warnings.push("บันทึกข้อมูลแล้ว แต่บันทึก Activity ไม่สำเร็จ");
     }
+    try {
+      await notifyRddLineWebUpdate(result.record, result.changedFields, result.after, profileActivityName(actor));
+    } catch (lineError) {
+      console.error("[rdd-workspace] LINE notification failed after business update", lineError);
+      warnings.push("บันทึกข้อมูลแล้ว แต่แจ้งกลุ่ม LINE ไม่สำเร็จ");
+    }
+    return NextResponse.json({
+      record: result.record,
+      revision: result.revision,
+      activityEventId: activityEventId || undefined,
+      partialSuccess: warnings.length > 0 || undefined,
+      warning: warnings.join(" · ") || undefined
+    }, { status: warnings.length ? 207 : 200 });
   } catch (error) {
     if (error instanceof RequestAuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof RddWorkspaceWriteError) {
