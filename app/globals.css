@@ -46,62 +46,308 @@
   --rdd-shell-gutter: clamp(0.75rem, 2vw, 1.5rem);
 }
 
-* { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
-body { min-height: 100vh; margin: 0; background: #07080a; color: var(--bigcar-text); font-family: "BigCar UI", Tahoma, "Leelawadee UI", "Noto Sans Thai", Arial, sans-serif; text-rendering: optimizeLegibility; }
-button, input, textarea { font: inherit; }
-input, textarea { font-size: 16px; }
-button:disabled { cursor: not-allowed; opacity: 0.55; }
-::selection { background: rgba(214, 182, 108, 0.35); }
+* {
+  box-sizing: border-box;
+}
 
-.bigcar-crm-shell { min-height: 100svh; overflow-x: clip; background: radial-gradient(circle at 14% -8%, rgba(214, 182, 108, 0.105), transparent 26rem), radial-gradient(circle at 88% 4%, rgba(246, 223, 157, 0.045), transparent 22rem), linear-gradient(180deg, #07080a 0%, #0a0b0e 46%, #07080a 100%); color: var(--bigcar-text); }
-.bigcar-crm-shell :where(a, button, input, textarea, select, [tabindex]):focus-visible { outline: 2px solid rgba(214, 182, 108, 0.72); outline-offset: 2px; }
-.bigcar-crm-shell :where(input, textarea, select) { border-color: var(--bigcar-border); background-color: rgba(5, 6, 8, 0.72); color: var(--bigcar-text); transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease; }
-.bigcar-crm-shell :where(input, textarea, select):focus { border-color: rgba(214, 182, 108, 0.68); box-shadow: 0 0 0 3px rgba(214, 182, 108, 0.1); }
-.bigcar-crm-shell :where(input, textarea)::placeholder { color: var(--bigcar-text-muted); opacity: 0.82; }
-.bigcar-crm-shell :where(input, textarea, select):disabled { background-color: rgba(255, 255, 255, 0.025); color: #747983; }
-.bigcar-crm-shell .text-brand, .bigcar-crm-shell [class*="text-brand/"] { color: var(--bigcar-gold-soft) !important; }
-.bigcar-crm-shell .bg-brand { background-color: var(--bigcar-gold) !important; }
-.bigcar-crm-shell [class*="bg-brand/"] { background-color: rgba(214, 182, 108, 0.11) !important; }
-.bigcar-crm-shell .border-brand, .bigcar-crm-shell [class*="border-brand/"] { border-color: rgba(214, 182, 108, 0.48) !important; }
-.bigcar-crm-shell [class*="hover:border-brand"]:hover, .bigcar-crm-shell [class*="focus:border-brand"]:focus, .bigcar-crm-shell [class*="focus-within:border-brand"]:focus-within { border-color: rgba(214, 182, 108, 0.72) !important; }
-.bigcar-crm-shell .bg-panel { background-color: var(--bigcar-bg-elevated) !important; }
-.bigcar-crm-shell .border-line { border-color: var(--bigcar-border) !important; }
-.bigcar-crm-shell .text-soft { color: var(--bigcar-text-secondary) !important; }
-.bigcar-crm-shell table { font-variant-numeric: tabular-nums; }
-.bigcar-crm-shell :where(th) { color: var(--bigcar-gold-soft); font-weight: 800; letter-spacing: 0.01em; }
-.bigcar-crm-shell :where(dialog, [role="dialog"]) { scrollbar-color: rgba(214, 182, 108, 0.35) transparent; }
-.crm-page { position: relative; isolation: isolate; }
-.crm-page::before { position: absolute; inset: 0.25rem 1rem auto; z-index: -1; height: 1px; content: ""; background: linear-gradient(90deg, transparent, rgba(214, 182, 108, 0.28), transparent); }
-.rdd-crm-shell { min-height: 100vh; --brand: var(--rdd-maroon-600); }
-.rdd-crm-shell > main, .rdd-crm-shell > nav { width: min(calc(100% - (2 * var(--rdd-shell-gutter))), var(--rdd-shell-max-width)); margin-inline: auto; }
-.calculator-preview-card { overflow: hidden; border-color: color-mix(in srgb, var(--rdd-maroon-600) 40%, transparent); background: linear-gradient(145deg, rgba(143, 38, 55, 0.13), rgba(20, 20, 22, 0.96) 38%); }
-.calculator-quote-frame { position: relative; width: min(100%, 780px); margin-inline: auto; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 1.25rem; background: #171719; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.34); }
-.calculator-quote-canvas { display: block; width: 100%; height: auto; aspect-ratio: 1080 / 1600; }
-.calculator-quote-loading { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; background: #171719; color: #f1ece6; font-weight: 700; }
-.stock-bigcar-brand { --stock-brand-gold: var(--bigcar-gold); --stock-brand-gold-soft: var(--bigcar-gold-soft); background: var(--bigcar-bg); box-shadow: 0 0 0 100vmax var(--bigcar-bg); clip-path: inset(0 -100vmax); }
-.stock-bigcar-brand .stock-brand-surface { border-radius: 1rem; background: rgba(255, 255, 255, 0.045); box-shadow: 0 24px 90px rgba(0, 0, 0, 0.3); }
-.stock-bigcar-brand .text-brand, .stock-bigcar-brand [class*="text-brand/"] { color: var(--stock-brand-gold-soft) !important; }
-.stock-bigcar-brand .bg-brand { background-color: var(--stock-brand-gold) !important; }
-.stock-bigcar-brand [class*="bg-brand/"] { background-color: rgba(214, 182, 108, 0.12) !important; }
-.stock-bigcar-brand .border-brand, .stock-bigcar-brand [class*="border-brand/"] { border-color: rgba(214, 182, 108, 0.48) !important; }
-.stock-bigcar-brand .accent-brand { accent-color: var(--stock-brand-gold); }
-.stock-bigcar-brand [class*="hover:border-brand"]:hover, .stock-bigcar-brand [class*="focus:border-brand"]:focus, .stock-bigcar-brand [class*="focus-within:border-brand"]:focus-within { border-color: rgba(214, 182, 108, 0.7) !important; }
-.documents-bigcar-brand { --documents-brand-gold: var(--bigcar-gold); --documents-brand-gold-soft: var(--bigcar-gold-soft); background: var(--bigcar-bg); box-shadow: 0 0 0 100vmax var(--bigcar-bg); clip-path: inset(0 -100vmax); }
-.documents-bigcar-brand .documents-brand-surface { background: rgba(255, 255, 255, 0.045); box-shadow: 0 24px 90px rgba(0, 0, 0, 0.3); }
-.documents-bigcar-brand .documents-brand-kicker, .documents-bigcar-brand .documents-step-label { color: var(--documents-brand-gold-soft); }
-.documents-bigcar-brand .documents-brand-input { transition: border-color 120ms ease, box-shadow 120ms ease; }
-.documents-bigcar-brand .documents-brand-input:focus { border-color: rgba(214, 182, 108, 0.72); box-shadow: 0 0 0 3px rgba(214, 182, 108, 0.12); }
-.documents-bigcar-brand input:focus, .documents-bigcar-brand textarea:focus, .documents-bigcar-brand select:focus { border-color: rgba(214, 182, 108, 0.72); outline: none; }
-.documents-bigcar-brand .documents-case-summary { background: linear-gradient(135deg, rgba(214, 182, 108, 0.1), rgba(255, 255, 255, 0.025)); }
-.documents-bigcar-brand button[class*="bg-emerald-500"], .documents-bigcar-brand a[class*="bg-emerald-500"] { background-color: var(--documents-brand-gold) !important; color: #17120a !important; }
-.documents-bigcar-brand [class*="text-emerald-300"], .documents-bigcar-brand [class*="text-emerald-100"] { color: var(--documents-brand-gold-soft) !important; }
-.documents-bigcar-brand [class*="border-emerald"] { border-color: rgba(214, 182, 108, 0.48) !important; }
+html {
+  scroll-behavior: smooth;
+}
 
-/* LINE Auto Reservation V2: red translucent card/row is the signal; keep vehicle details visible. */
-.line-reserved-stock-card { background: linear-gradient(145deg, rgba(127, 29, 29, 0.62), rgba(69, 10, 10, 0.54)) !important; border-color: rgba(248, 113, 113, 0.88) !important; box-shadow: inset 6px 0 0 rgba(239, 68, 68, 0.96), 0 16px 42px rgba(0,0,0,.22) !important; }
-.line-reserved-stock-row > td { background: rgba(254, 202, 202, 0.72) !important; }
-.line-reservation-status-hidden { display: none !important; }
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: #07080a;
+  color: var(--bigcar-text);
+  font-family: "BigCar UI", Tahoma, "Leelawadee UI", "Noto Sans Thai", Arial, sans-serif;
+  text-rendering: optimizeLegibility;
+}
 
-@media (max-width: 640px) { .bigcar-crm-shell { padding-bottom: env(safe-area-inset-bottom); } .bigcar-crm-shell :where(input, textarea, select) { font-size: 16px; } .rdd-crm-shell > nav { border-radius: 0 0 1rem 1rem; } }
-@media (prefers-reduced-motion: reduce) { .bigcar-crm-shell *, .bigcar-crm-shell *::before, .bigcar-crm-shell *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+input,
+textarea {
+  font-size: 16px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+::selection {
+  background: rgba(214, 182, 108, 0.35);
+}
+
+.bigcar-crm-shell {
+  min-height: 100svh;
+  overflow-x: clip;
+  background:
+    radial-gradient(circle at 14% -8%, rgba(214, 182, 108, 0.105), transparent 26rem),
+    radial-gradient(circle at 88% 4%, rgba(246, 223, 157, 0.045), transparent 22rem),
+    linear-gradient(180deg, #07080a 0%, #0a0b0e 46%, #07080a 100%);
+  color: var(--bigcar-text);
+}
+
+.bigcar-crm-shell :where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid rgba(214, 182, 108, 0.72);
+  outline-offset: 2px;
+}
+
+.bigcar-crm-shell :where(input, textarea, select) {
+  border-color: var(--bigcar-border);
+  background-color: rgba(5, 6, 8, 0.72);
+  color: var(--bigcar-text);
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.bigcar-crm-shell :where(input, textarea, select):focus {
+  border-color: rgba(214, 182, 108, 0.68);
+  box-shadow: 0 0 0 3px rgba(214, 182, 108, 0.1);
+}
+
+.bigcar-crm-shell :where(input, textarea)::placeholder {
+  color: var(--bigcar-text-muted);
+  opacity: 0.82;
+}
+
+.bigcar-crm-shell :where(input, textarea, select):disabled {
+  background-color: rgba(255, 255, 255, 0.025);
+  color: #747983;
+}
+
+.bigcar-crm-shell .text-brand,
+.bigcar-crm-shell [class*="text-brand/"] {
+  color: var(--bigcar-gold-soft) !important;
+}
+
+.bigcar-crm-shell .bg-brand {
+  background-color: var(--bigcar-gold) !important;
+}
+
+.bigcar-crm-shell [class*="bg-brand/"] {
+  background-color: rgba(214, 182, 108, 0.11) !important;
+}
+
+.bigcar-crm-shell .border-brand,
+.bigcar-crm-shell [class*="border-brand/"] {
+  border-color: rgba(214, 182, 108, 0.48) !important;
+}
+
+.bigcar-crm-shell [class*="hover:border-brand"]:hover,
+.bigcar-crm-shell [class*="focus:border-brand"]:focus,
+.bigcar-crm-shell [class*="focus-within:border-brand"]:focus-within {
+  border-color: rgba(214, 182, 108, 0.72) !important;
+}
+
+.bigcar-crm-shell .bg-panel {
+  background-color: var(--bigcar-bg-elevated) !important;
+}
+
+.bigcar-crm-shell .border-line {
+  border-color: var(--bigcar-border) !important;
+}
+
+.bigcar-crm-shell .text-soft {
+  color: var(--bigcar-text-secondary) !important;
+}
+
+.bigcar-crm-shell table {
+  font-variant-numeric: tabular-nums;
+}
+
+.bigcar-crm-shell :where(th) {
+  color: var(--bigcar-gold-soft);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.bigcar-crm-shell :where(dialog, [role="dialog"]) {
+  scrollbar-color: rgba(214, 182, 108, 0.35) transparent;
+}
+
+.crm-page {
+  position: relative;
+  isolation: isolate;
+}
+
+.crm-page::before {
+  position: absolute;
+  inset: 0.25rem 1rem auto;
+  z-index: -1;
+  height: 1px;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(214, 182, 108, 0.28), transparent);
+}
+
+.rdd-crm-shell {
+  min-height: 100vh;
+  --brand: var(--rdd-maroon-600);
+}
+
+.rdd-crm-shell > main,
+.rdd-crm-shell > nav {
+  width: min(calc(100% - (2 * var(--rdd-shell-gutter))), var(--rdd-shell-max-width));
+  margin-inline: auto;
+}
+
+.calculator-preview-card {
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--rdd-maroon-600) 40%, transparent);
+  background: linear-gradient(145deg, rgba(143, 38, 55, 0.13), rgba(20, 20, 22, 0.96) 38%);
+}
+
+.calculator-quote-frame {
+  position: relative;
+  width: min(100%, 780px);
+  margin-inline: auto;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 1.25rem;
+  background: #171719;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
+}
+
+.calculator-quote-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1080 / 1600;
+}
+
+.calculator-quote-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  background: #171719;
+  color: #f1ece6;
+  font-weight: 700;
+}
+
+/* Stock Export keeps the CRM workflow while borrowing the public BIG CAR RDD palette. */
+.stock-bigcar-brand {
+  --stock-brand-gold: var(--bigcar-gold);
+  --stock-brand-gold-soft: var(--bigcar-gold-soft);
+  background: var(--bigcar-bg);
+  box-shadow: 0 0 0 100vmax var(--bigcar-bg);
+  clip-path: inset(0 -100vmax);
+}
+
+.stock-bigcar-brand .stock-brand-surface {
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.3);
+}
+
+.stock-bigcar-brand .text-brand,
+.stock-bigcar-brand [class*="text-brand/"] {
+  color: var(--stock-brand-gold-soft) !important;
+}
+
+.stock-bigcar-brand .bg-brand {
+  background-color: var(--stock-brand-gold) !important;
+}
+
+.stock-bigcar-brand [class*="bg-brand/"] {
+  background-color: rgba(214, 182, 108, 0.12) !important;
+}
+
+.stock-bigcar-brand .border-brand,
+.stock-bigcar-brand [class*="border-brand/"] {
+  border-color: rgba(214, 182, 108, 0.48) !important;
+}
+
+.stock-bigcar-brand .accent-brand {
+  accent-color: var(--stock-brand-gold);
+}
+
+.stock-bigcar-brand [class*="hover:border-brand"]:hover,
+.stock-bigcar-brand [class*="focus:border-brand"]:focus,
+.stock-bigcar-brand [class*="focus-within:border-brand"]:focus-within {
+  border-color: rgba(214, 182, 108, 0.7) !important;
+}
+
+/* Documents V2 shares the audited BIG CAR website palette while retaining CRM density. */
+.documents-bigcar-brand {
+  --documents-brand-gold: var(--bigcar-gold);
+  --documents-brand-gold-soft: var(--bigcar-gold-soft);
+  background: var(--bigcar-bg);
+  box-shadow: 0 0 0 100vmax var(--bigcar-bg);
+  clip-path: inset(0 -100vmax);
+}
+
+.documents-bigcar-brand .documents-brand-surface {
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.3);
+}
+
+.documents-bigcar-brand .documents-brand-kicker,
+.documents-bigcar-brand .documents-step-label {
+  color: var(--documents-brand-gold-soft);
+}
+
+.documents-bigcar-brand .documents-brand-input {
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.documents-bigcar-brand .documents-brand-input:focus {
+  border-color: rgba(214, 182, 108, 0.72);
+  box-shadow: 0 0 0 3px rgba(214, 182, 108, 0.12);
+}
+
+.documents-bigcar-brand input:focus,
+.documents-bigcar-brand textarea:focus,
+.documents-bigcar-brand select:focus {
+  border-color: rgba(214, 182, 108, 0.72);
+  outline: none;
+}
+
+.documents-bigcar-brand .documents-case-summary {
+  background: linear-gradient(135deg, rgba(214, 182, 108, 0.1), rgba(255, 255, 255, 0.025));
+}
+
+.documents-bigcar-brand button[class*="bg-emerald-500"],
+.documents-bigcar-brand a[class*="bg-emerald-500"] {
+  background-color: var(--documents-brand-gold) !important;
+  color: #17120a !important;
+}
+
+.documents-bigcar-brand [class*="text-emerald-300"],
+.documents-bigcar-brand [class*="text-emerald-100"] {
+  color: var(--documents-brand-gold-soft) !important;
+}
+
+.documents-bigcar-brand [class*="border-emerald"] {
+  border-color: rgba(214, 182, 108, 0.48) !important;
+}
+
+@media (max-width: 640px) {
+  .bigcar-crm-shell {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .bigcar-crm-shell :where(input, textarea, select) {
+    font-size: 16px;
+  }
+
+  .rdd-crm-shell > nav {
+    border-radius: 0 0 1rem 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bigcar-crm-shell *,
+  .bigcar-crm-shell *::before,
+  .bigcar-crm-shell *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
