@@ -1,81 +1,18 @@
 import { createHmac, timingSafeEqual } from "crypto";
-
-export type LineWebhookEvent = {
-  type: string;
-  webhookEventId?: string;
-  replyToken?: string;
-  timestamp?: number;
-  message?: { type?: string; text?: string };
-  source?: { type?: string; groupId?: string; roomId?: string; userId?: string };
-};
-
-type LineQuickReplyItem = { label: string; text: string };
-type LineTextMessage = { type: "text"; text: string; quickReply?: { items: Array<{ type: "action"; action: { type: "message"; label: string; text: string } }> } };
-type LinePushMessage = LineTextMessage | { type: "image"; originalContentUrl: string; previewImageUrl: string };
-
-const LINE_READ_TIMEOUT_MS = 6000;
-const LINE_WRITE_TIMEOUT_MS = 10000;
-
-async function lineFetch(url: string, init: RequestInit, timeoutMs: number) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try { return await fetch(url, { ...init, signal: controller.signal }); }
-  catch (error) {
-    if (controller.signal.aborted) throw new Error("LINE_TIMEOUT");
-    throw new Error("LINE_NETWORK_ERROR");
-  } finally { clearTimeout(timer); }
-}
-
-export type LineReportAttachment = { name: string; type: string; url?: string; fileId?: string };
-
-function getLineSecret() { const secret = process.env.LINE_CHANNEL_SECRET; if (!secret) throw new Error("Missing environment variable: LINE_CHANNEL_SECRET"); return secret; }
-function getLineToken() { const token = process.env.LINE_CHANNEL_ACCESS_TOKEN; if (!token) throw new Error("Missing environment variable: LINE_CHANNEL_ACCESS_TOKEN"); return token; }
-
-export function verifyLineSignature(body: string, signature: string | null) {
-  if (!signature) return false;
-  const expected = createHmac("sha256", getLineSecret()).update(body).digest("base64");
-  const actualBuffer = Buffer.from(signature); const expectedBuffer = Buffer.from(expected);
-  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
-}
-
-export function getLineConfigStatus() { return { hasChannelId: Boolean(process.env.LINE_CHANNEL_ID), hasChannelSecret: Boolean(process.env.LINE_CHANNEL_SECRET), hasChannelAccessToken: Boolean(process.env.LINE_CHANNEL_ACCESS_TOKEN), webhookUrl: "https://bigcar-crm.vercel.app/api/line/webhook" }; }
-
-export async function getLineGroupName(groupId: string) {
-  try {
-    const response = await lineFetch(`https://api.line.me/v2/bot/group/${encodeURIComponent(groupId)}/summary`, { headers: { Authorization: `Bearer ${getLineToken()}` }, cache: "no-store" }, LINE_READ_TIMEOUT_MS);
-    if (!response.ok) return "";
-    const data = (await response.json()) as { groupName?: string }; return String(data.groupName || "");
-  } catch { return ""; }
-}
-
-function makeTextMessage(text: string, quickReplies: LineQuickReplyItem[] = []): LineTextMessage {
-  const message: LineTextMessage = { type: "text", text: String(text || "").slice(0, 5000) };
-  const items = quickReplies.slice(0, 13).filter((item) => item.label && item.text).map((item) => ({ type: "action" as const, action: { type: "message" as const, label: item.label.slice(0, 20), text: item.text.slice(0, 300) } }));
-  if (items.length) message.quickReply = { items };
-  return message;
-}
-
-export async function pushLineText(to: string, text: string) { await pushLineMessages(to, [makeTextMessage(text)]); return true; }
-export async function pushLineTextWithQuickReplies(to: string, text: string, quickReplies: LineQuickReplyItem[]) { await pushLineMessages(to, [makeTextMessage(text, quickReplies)]); return true; }
-
-export async function replyLineText(replyToken: string, text: string) { return replyLineTextWithQuickReplies(replyToken, text, []); }
-export async function replyLineTextWithQuickReplies(replyToken: string, text: string, quickReplies: LineQuickReplyItem[]) {
-  const token = String(replyToken || "").trim(); if (!token) throw new Error("LINE_REPLY_TOKEN_MISSING"); if (process.env.LINE_TEST_DISABLE_SEND === "true") return true;
-  const response = await lineFetch("https://api.line.me/v2/bot/message/reply", { method: "POST", headers: { Authorization: `Bearer ${getLineToken()}`, "Content-Type": "application/json" }, body: JSON.stringify({ replyToken: token, messages: [makeTextMessage(text, quickReplies)] }) }, LINE_WRITE_TIMEOUT_MS);
-  if (!response.ok) throw new Error(`LINE_UPSTREAM_HTTP_${response.status}`); return true;
-}
-
-export async function pushLineReport(to: string, text: string, attachments: LineReportAttachment[] = []) {
-  const imageAttachments = attachments.filter((attachment) => attachment.fileId && attachment.type.startsWith("image/")).map((attachment) => { const imageUrl = buildDriveLineImageUrl(attachment.fileId || ""); return { attachment, message: { type: "image", originalContentUrl: imageUrl, previewImageUrl: imageUrl } satisfies LinePushMessage }; });
-  const fileLinks = attachments.filter((attachment) => !attachment.type.startsWith("image/") && attachment.url).map((attachment) => `${attachment.name}: ${attachment.url}`);
-  const firstText = fileLinks.length ? `${text}\n\nไฟล์แนบอื่น:\n${fileLinks.join("\n")}` : text; await pushLineMessages(to, [makeTextMessage(firstText)]);
-  let imageCount = 0; const failedImageLinks: string[] = [];
-  for (const image of imageAttachments) { try { await pushLineMessages(to, [image.message]); imageCount += 1; } catch { if (image.attachment.url) failedImageLinks.push(`${image.attachment.name}: ${image.attachment.url}`); } }
-  if (failedImageLinks.length) await pushLineMessagesInChunks(to, chunkTextLines("LINE ส่งรูปบางไฟล์ไม่สำเร็จ เปิดดูจากลิงก์นี้แทน:\n", failedImageLinks).map((lineText) => makeTextMessage(lineText)));
-  return { imageCount, failedImageCount: failedImageLinks.length, linkCount: fileLinks.length + failedImageLinks.length, messageCount: 1 + imageCount + failedImageLinks.length };
-}
-
-function buildDriveLineImageUrl(fileId: string) { return `https://lh3.googleusercontent.com/d/${encodeURIComponent(fileId)}=s1600`; }
-function chunkTextLines(prefix: string, lines: string[]) { const chunks: string[] = []; let current = prefix; for (const line of lines) { const next = `${current}${current.endsWith("\n") ? "" : "\n"}${line}`; if (next.length > 4500) { chunks.push(current); current = `${prefix}${line}`; } else current = next; } if (current.trim()) chunks.push(current); return chunks; }
-async function pushLineMessagesInChunks(to: string, messages: LinePushMessage[]) { let sent = 0; for (let index = 0; index < messages.length; index += 5) { const chunk = messages.slice(index, index + 5); await pushLineMessages(to, chunk); sent += chunk.length; } return sent; }
-async function pushLineMessages(to: string, messages: LinePushMessage[]) { if (process.env.LINE_TEST_DISABLE_SEND === "true") return true; const response = await lineFetch("https://api.line.me/v2/bot/message/push", { method: "POST", headers: { Authorization: `Bearer ${getLineToken()}`, "Content-Type": "application/json" }, body: JSON.stringify({ to, messages }) }, LINE_WRITE_TIMEOUT_MS); if (!response.ok) throw new Error(`LINE_UPSTREAM_HTTP_${response.status}`); return true; }
+export type LineWebhookEvent={type:string;webhookEventId?:string;replyToken?:string;timestamp?:number;message?:{type?:string;text?:string};source?:{type?:string;groupId?:string;roomId?:string;userId?:string}};
+export type LineQuickReplyItem={label:string;text?:string;uri?:string};
+type LineAction={type:"message";label:string;text:string}|{type:"uri";label:string;uri:string};
+type LineTextMessage={type:"text";text:string;quickReply?:{items:Array<{type:"action";action:LineAction}>}};
+type LinePushMessage=LineTextMessage|{type:"image";originalContentUrl:string;previewImageUrl:string};
+const LINE_READ_TIMEOUT_MS=6000,LINE_WRITE_TIMEOUT_MS=10000;
+async function lineFetch(url:string,init:RequestInit,timeoutMs:number){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);try{return await fetch(url,{...init,signal:controller.signal})}catch{if(controller.signal.aborted)throw new Error("LINE_TIMEOUT");throw new Error("LINE_NETWORK_ERROR")}finally{clearTimeout(timer)}}
+export type LineReportAttachment={name:string;type:string;url?:string;fileId?:string};
+function getLineSecret(){const secret=process.env.LINE_CHANNEL_SECRET;if(!secret)throw new Error("Missing environment variable: LINE_CHANNEL_SECRET");return secret}function getLineToken(){const token=process.env.LINE_CHANNEL_ACCESS_TOKEN;if(!token)throw new Error("Missing environment variable: LINE_CHANNEL_ACCESS_TOKEN");return token}
+export function verifyLineSignature(body:string,signature:string|null){if(!signature)return false;const expected=createHmac("sha256",getLineSecret()).update(body).digest("base64"),actualBuffer=Buffer.from(signature),expectedBuffer=Buffer.from(expected);return actualBuffer.length===expectedBuffer.length&&timingSafeEqual(actualBuffer,expectedBuffer)}
+export function getLineConfigStatus(){return{hasChannelId:Boolean(process.env.LINE_CHANNEL_ID),hasChannelSecret:Boolean(process.env.LINE_CHANNEL_SECRET),hasChannelAccessToken:Boolean(process.env.LINE_CHANNEL_ACCESS_TOKEN),webhookUrl:"https://bigcar-crm.vercel.app/api/line/webhook"}}
+export async function getLineGroupName(groupId:string){try{const response=await lineFetch(`https://api.line.me/v2/bot/group/${encodeURIComponent(groupId)}/summary`,{headers:{Authorization:`Bearer ${getLineToken()}`},cache:"no-store"},LINE_READ_TIMEOUT_MS);if(!response.ok)return"";const data=await response.json() as {groupName?:string};return String(data.groupName||"")}catch{return""}}
+function makeTextMessage(text:string,quickReplies:LineQuickReplyItem[]=[]):LineTextMessage{const message:LineTextMessage={type:"text",text:String(text||"").slice(0,5000)};const items=quickReplies.slice(0,13).filter(item=>item.label&&(item.text||item.uri)).map(item=>({type:"action" as const,action:item.uri?{type:"uri" as const,label:item.label.slice(0,20),uri:item.uri.slice(0,1000)}:{type:"message" as const,label:item.label.slice(0,20),text:String(item.text||"").slice(0,300)}}));if(items.length)message.quickReply={items};return message}
+export async function pushLineText(to:string,text:string){await pushLineMessages(to,[makeTextMessage(text)]);return true}export async function pushLineTextWithQuickReplies(to:string,text:string,quickReplies:LineQuickReplyItem[]){await pushLineMessages(to,[makeTextMessage(text,quickReplies)]);return true}
+export async function replyLineText(replyToken:string,text:string){return replyLineTextWithQuickReplies(replyToken,text,[])}export async function replyLineTextWithQuickReplies(replyToken:string,text:string,quickReplies:LineQuickReplyItem[]){const token=String(replyToken||"").trim();if(!token)throw new Error("LINE_REPLY_TOKEN_MISSING");if(process.env.LINE_TEST_DISABLE_SEND==="true")return true;const response=await lineFetch("https://api.line.me/v2/bot/message/reply",{method:"POST",headers:{Authorization:`Bearer ${getLineToken()}`,"Content-Type":"application/json"},body:JSON.stringify({replyToken:token,messages:[makeTextMessage(text,quickReplies)]})},LINE_WRITE_TIMEOUT_MS);if(!response.ok)throw new Error(`LINE_UPSTREAM_HTTP_${response.status}`);return true}
+export async function pushLineReport(to:string,text:string,attachments:LineReportAttachment[]=[]){const imageAttachments=attachments.filter(a=>a.fileId&&a.type.startsWith("image/")).map(attachment=>{const imageUrl=buildDriveLineImageUrl(attachment.fileId||"");return{attachment,message:{type:"image",originalContentUrl:imageUrl,previewImageUrl:imageUrl} satisfies LinePushMessage}}),fileLinks=attachments.filter(a=>!a.type.startsWith("image/")&&a.url).map(a=>`${a.name}: ${a.url}`),firstText=fileLinks.length?`${text}\n\nไฟล์แนบอื่น:\n${fileLinks.join("\n")}`:text;await pushLineMessages(to,[makeTextMessage(firstText)]);let imageCount=0;const failedImageLinks:string[]=[];for(const image of imageAttachments){try{await pushLineMessages(to,[image.message]);imageCount++}catch{if(image.attachment.url)failedImageLinks.push(`${image.attachment.name}: ${image.attachment.url}`)}}if(failedImageLinks.length)await pushLineMessagesInChunks(to,chunkTextLines("LINE ส่งรูปบางไฟล์ไม่สำเร็จ เปิดดูจากลิงก์นี้แทน:\n",failedImageLinks).map(makeTextMessage));return{imageCount,failedImageCount:failedImageLinks.length,linkCount:fileLinks.length+failedImageLinks.length,messageCount:1+imageCount+failedImageLinks.length}}
+function buildDriveLineImageUrl(fileId:string){return`https://lh3.googleusercontent.com/d/${encodeURIComponent(fileId)}=s1600`}function chunkTextLines(prefix:string,lines:string[]){const chunks:string[]=[];let current=prefix;for(const line of lines){const next=`${current}${current.endsWith("\n")?"":"\n"}${line}`;if(next.length>4500){chunks.push(current);current=`${prefix}${line}`}else current=next}if(current.trim())chunks.push(current);return chunks}async function pushLineMessagesInChunks(to:string,messages:LinePushMessage[]){let sent=0;for(let index=0;index<messages.length;index+=5){const chunk=messages.slice(index,index+5);await pushLineMessages(to,chunk);sent+=chunk.length}return sent}async function pushLineMessages(to:string,messages:LinePushMessage[]){if(process.env.LINE_TEST_DISABLE_SEND==="true")return true;const response=await lineFetch("https://api.line.me/v2/bot/message/push",{method:"POST",headers:{Authorization:`Bearer ${getLineToken()}`,"Content-Type":"application/json"},body:JSON.stringify({to,messages})},LINE_WRITE_TIMEOUT_MS);if(!response.ok)throw new Error(`LINE_UPSTREAM_HTTP_${response.status}`);return true}
