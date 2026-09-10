@@ -19,8 +19,10 @@ function enabledForWorkspacePreview(value: string | undefined, previewEnabled: b
 }
 
 export function getRddFeatureFlags(env: NodeJS.ProcessEnv = process.env): RddFeatureFlags {
+  const previewRef = String(env.VERCEL_GIT_COMMIT_REF || "");
   const workspacePreview = env.VERCEL_ENV === "preview"
-    && env.VERCEL_GIT_COMMIT_REF === "codex/workspace-line-tracker";
+    && (previewRef === "codex/workspace-line-tracker"
+      || previewRef === "feat/line-stock-reservation-v2");
   return {
     shell: enabledForWorkspacePreview(env.RDD_SHELL_ENABLED, workspacePreview),
     authEnforcement: enabled(env.RDD_AUTH_ENFORCEMENT_ENABLED),
