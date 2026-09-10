@@ -22,7 +22,7 @@ export function getRddFeatureFlags(env: NodeJS.ProcessEnv = process.env): RddFea
   const previewRef = String(env.VERCEL_GIT_COMMIT_REF || "");
   const workspacePreview = env.VERCEL_ENV === "preview"
     && (previewRef === "codex/workspace-line-tracker"
-      || previewRef === "feat/line-stock-reservation-v2");
+      || previewRef === "fix/workspace-edit-v2");
   return {
     shell: enabledForWorkspacePreview(env.RDD_SHELL_ENABLED, workspacePreview),
     authEnforcement: enabled(env.RDD_AUTH_ENFORCEMENT_ENABLED),
