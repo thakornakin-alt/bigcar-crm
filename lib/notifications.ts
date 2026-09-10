@@ -59,7 +59,7 @@ export async function listCrmNotifications() {
       customerName: record.customerName || "-",
       owner: "รอส่งมอบ",
       detail: missing.slice(0, 3).join(" / "),
-      href: "/vehicle-prep",
+      href: `/booking-delivery-workspace?search=${encodeURIComponent(record.plate || record.customerName)}`,
       priority: "normal"
     });
   }

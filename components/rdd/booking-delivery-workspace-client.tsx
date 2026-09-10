@@ -25,7 +25,7 @@ import { RDD_CASE_STATUS_LABELS, RDD_PURCHASE_TYPE_LABELS, isStatusValidForPurch
 import { derivePrepReminder, prepStatusForRecord, RDD_PREP_LABELS, RDD_WASH_STATUSES, RDD_STICKER_STATUSES, RDD_OIL_STATUSES, RDD_BATTERY_STATUSES, RDD_TAX_STATUSES, RDD_INSURANCE_STATUSES } from "@/lib/rdd-phase3c";
 
 const monthNames = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
-const statusOptions: Array<"all" | RddDisplayStatus> = ["all", "ยอดจองทั้งหมด", "รอจัดไฟแนนซ์", "รอผลไฟแนนซ์", "รอส่งมอบ", "อนุมัติ / รอส่งมอบ", "ตัดยอดแล้ว / รอส่งมอบ", "ลูกค้าชะลอการดำเนินการ", "ส่งมอบแล้ว", "ยกเลิก", "ไม่ระบุ"];
+const statusOptions: Array<"all" | RddDisplayStatus> = ["all", "ยอดจองทั้งหมด", "รอจัดไฟแนนซ์", "รอผลไฟแนนซ์", "รอส่งมอบทั้งหมด", "รอส่งมอบ", "อนุมัติ / รอส่งมอบ", "ตัดยอดแล้ว / รอส่งมอบ", "ลูกค้าชะลอการดำเนินการ", "ส่งมอบแล้ว", "ยกเลิก", "ไม่ระบุ"];
 
 function thaiDate(value: unknown, includeTime = false) {
   const parsed = parseBusinessDate(value);
