@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { GlobalNav } from "@/app/components/ui";
+import { LineReservationAutoRefresh } from "@/app/components/LineReservationAutoRefresh";
 
 export const metadata: Metadata = {
   title: "Big Car CRM",
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="th">
       <body>
         <GlobalNav />
+        <LineReservationAutoRefresh />
         {children}
       </body>
     </html>
