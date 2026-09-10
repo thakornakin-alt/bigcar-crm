@@ -16,7 +16,7 @@ import {
   type RddPurchaseType,
   type RddReminderKind
 } from "@/lib/rdd-phase2";
-import { filterByOwnership, recordOwnerId, type OwnershipScope } from "@/lib/rdd-ownership";
+import { filterByOwnership, type OwnershipScope } from "@/lib/rdd-ownership";
 import type { BookingDeliveryRecord } from "@/lib/types";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import { resolveCaseDocumentManifest } from "@/lib/rdd-case-documents";
@@ -235,7 +235,7 @@ export function BookingDeliveryWorkspaceClient({
         </>
       )}
 
-      {selected && <WorkspaceDetail record={selected} revision={revision} workspaceEditEnabled={editEnabled} editEnabled={editEnabled && user?.role !== "viewer" && (user?.role === "admin" || user?.role === "super_admin" || recordOwnerId(selected) === user?.id)} onClose={() => setSelectedId("")} onSaved={replaceRecord} />}
+      {selected && <WorkspaceDetail record={selected} revision={revision} workspaceEditEnabled={editEnabled} editEnabled={editEnabled && Boolean(user) && user?.role !== "viewer"} onClose={() => setSelectedId("")} onSaved={replaceRecord} />}
 
       <style jsx>{`
         .workspace-select { min-height: 48px; border-radius: 16px; border: 1px solid rgba(255,255,255,.12); background: #111114; padding: 0 12px; color: white; font-size: 13px; font-weight: 800; min-width: 0; width: 100%; }
