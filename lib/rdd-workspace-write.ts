@@ -68,7 +68,7 @@ export function validateRddWorkspaceChanges(input: unknown): RddWorkspaceChanges
     if (key === "financeCaseNote" && value.length > 1000) {
       throw new RddWorkspaceWriteError(400, "หมายเหตุไฟแนนซ์ต้องไม่เกิน 1,000 ตัวอักษร");
     }
-    if (key === "deliveryLocationNote" && value.length > 300) throw new RddWorkspaceWriteError(400, "รายละเอียดนอกสถานที่ต้องไม่เกิน 300 ตัวอักษร");
+    if (key === "deliveryLocationNote" && value.length > 300) throw new RddWorkspaceWriteError(400, "รายละเอียดสถานที่ใช้ได้ไม่เกิน 300 ตัวอักษร");
     if (key === "garageName" && value.length > 200) throw new RddWorkspaceWriteError(400, "ชื่ออู่ต้องไม่เกิน 200 ตัวอักษร");
     if (key !== "caseStatus" && key.endsWith("Status") && !isPrepEnum(key, value)) throw new RddWorkspaceWriteError(400, `${key} ไม่อยู่ในรายการที่อนุญาต`);
     Object.assign(changes, { [key]: value });
@@ -126,7 +126,7 @@ export async function updateRddWorkspaceRecord(input: {
   if (!changedFields.length) throw new RddWorkspaceWriteError(400, "ไม่มีข้อมูลที่เปลี่ยนแปลง");
 
   const canonicalWorkflowStatus = input.changes.caseStatus && isRddCaseStatus(input.changes.caseStatus)
-    ? RDD_CASE_STATUS_LABELS[input.changes.caseStatus]
+    ? RDD_CASE_STATUS_LABELS[input.changes.caseStatus] as BookingDeliveryRecord["workflowStatus"]
     : undefined;
   const next = normalizeWorkspaceRecord({
     ...current,
