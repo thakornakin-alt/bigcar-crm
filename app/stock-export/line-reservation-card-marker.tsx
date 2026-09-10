@@ -13,10 +13,11 @@ function syncLineReservationCards(root: ParentNode = document) {
 
     card.dataset.lineReservation = "true";
     card.classList.add("line-reserved-stock-card");
-    label.textContent = "LINE จองแล้ว";
+
+    // LINE Reservation is indicated by the translucent red card only.
+    // Do not add a replacement status label; keep the vehicle details unchanged.
     const badge = label.parentElement;
-    badge?.classList.remove("border-amber-300/30", "bg-amber-300/10", "text-amber-100");
-    badge?.classList.add("border-red-400/60", "bg-red-500/20", "text-red-100");
+    badge?.remove();
   });
 }
 
