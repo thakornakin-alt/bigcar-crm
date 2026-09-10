@@ -13,14 +13,21 @@ function enabled(value: string | undefined) {
   return value === "true";
 }
 
+function enabledForWorkspacePreview(value: string | undefined, previewEnabled: boolean) {
+  if (value !== undefined) return enabled(value);
+  return previewEnabled;
+}
+
 export function getRddFeatureFlags(env: NodeJS.ProcessEnv = process.env): RddFeatureFlags {
+  const workspacePreview = env.VERCEL_ENV === "preview"
+    && env.VERCEL_GIT_COMMIT_REF === "codex/workspace-line-tracker";
   return {
-    shell: enabled(env.RDD_SHELL_ENABLED),
+    shell: enabledForWorkspacePreview(env.RDD_SHELL_ENABLED, workspacePreview),
     authEnforcement: enabled(env.RDD_AUTH_ENFORCEMENT_ENABLED),
     ownerMetadata: enabled(env.RDD_OWNER_METADATA_ENABLED),
     activityV2: enabled(env.RDD_ACTIVITY_V2_ENABLED),
-    workspaceReadOnly: enabled(env.RDD_WORKSPACE_READ_ONLY_ENABLED),
-    workspaceEdit: enabled(env.RDD_WORKSPACE_EDIT_ENABLED),
+    workspaceReadOnly: enabledForWorkspacePreview(env.RDD_WORKSPACE_READ_ONLY_ENABLED, workspacePreview),
+    workspaceEdit: enabledForWorkspacePreview(env.RDD_WORKSPACE_EDIT_ENABLED, workspacePreview),
     commissionPreview: enabled(env.RDD_COMMISSION_PREVIEW_ENABLED),
     commissionRealWrites: enabled(env.COMMISSION_REAL_WRITES_ENABLED)
   };
