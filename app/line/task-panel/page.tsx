@@ -1,5 +1,5 @@
 'use client';
-import { useEffect,useMemo,useState } from 'react';
+import { useEffect,useState } from 'react';
 type Field='washStatus'|'stickerStatus'|'oilStatus'|'batteryStatus'|'taxStatus'|'insuranceStatus';
 type CustomTask={id:string;title:string;done:boolean;createdAt?:string;updatedAt?:string};
 type Task={field:Field;label:string;options:{value:string;label:string}[]};
@@ -11,8 +11,9 @@ const tasks:Task[]=[
 {field:'taxStatus',label:'ภาษี',options:[{value:'not_checked',label:'ยังไม่ตรวจ'},{value:'valid',label:'ไม่ขาด ✓'},{value:'renewal_ordered',label:'สั่งต่อแล้ว'}]},
 {field:'insuranceStatus',label:'ประกัน',options:[{value:'not_discussed',label:'ยังไม่คุย'},{value:'with_us',label:'ทำกับเรา ✓'},{value:'customer_self',label:'ลูกค้าทำเอง'}]}];
 export default function Page(){
- const params=useMemo(()=>typeof window==='undefined'?new URLSearchParams():new URLSearchParams(window.location.search),[]); const [data,setData]=useState<any>(null); const [base,setBase]=useState<Record<string,string>>({}); const [values,setValues]=useState<Record<string,string>>({}); const [custom,setCustom]=useState<CustomTask[]>([]); const [baseCustom,setBaseCustom]=useState<CustomTask[]>([]); const [title,setTitle]=useState(''); const [busy,setBusy]=useState(false); const [message,setMessage]=useState('');
- useEffect(()=>{const q=params.toString();fetch('/api/line/task-panel'+(q?'?'+q:'')).then(async r=>{const j=await r.json();if(!r.ok)throw new Error(j.error||'โหลดไม่สำเร็จ');return j}).then(j=>{setData(j);setBase(j.statuses);setValues(j.statuses);setCustom(j.customTasks||[]);setBaseCustom(j.customTasks||[])}).catch(e=>setMessage(e.message))},[params]);
+ const [query,setQuery]=useState<string|null>(null); const [data,setData]=useState<any>(null); const [base,setBase]=useState<Record<string,string>>({}); const [values,setValues]=useState<Record<string,string>>({}); const [custom,setCustom]=useState<CustomTask[]>([]); const [baseCustom,setBaseCustom]=useState<CustomTask[]>([]); const [title,setTitle]=useState(''); const [busy,setBusy]=useState(false); const [message,setMessage]=useState('');
+ useEffect(()=>{setQuery(window.location.search.replace(/^\?/,''))},[]);
+ useEffect(()=>{if(query===null)return;if(!query){setMessage('ลิงก์เคสไม่ครบ กรุณาเปิดจาก LINE ใหม่');return}fetch('/api/line/task-panel?'+query).then(async r=>{const j=await r.json();if(!r.ok)throw new Error(j.error||'โหลดไม่สำเร็จ');return j}).then(j=>{setData(j);setBase(j.statuses);setValues(j.statuses);setCustom(j.customTasks||[]);setBaseCustom(j.customTasks||[])}).catch(e=>setMessage(e.message))},[query]);
  const changed=tasks.filter(t=>values[t.field]!==base[t.field]).length+(JSON.stringify(custom.map(x=>[x.id,x.title,x.done]))!==JSON.stringify(baseCustom.map(x=>[x.id,x.title,x.done]))?1:0);
  const add=()=>{const v=title.trim();if(!v)return;setCustom(x=>[...x,{id:`new-${Date.now()}`,title:v,done:false}]);setTitle('')};
  const save=async()=>{if(!data||!changed)return;setBusy(true);setMessage('');const changes:any={};tasks.forEach(t=>{if(values[t.field]!==base[t.field])changes[t.field]=values[t.field]});try{const r=await fetch('/api/line/task-panel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:data.id,expectedRevision:data.revision,changes,customTasks:custom})});const j=await r.json();if(!r.ok)throw new Error(j.error||'บันทึกไม่สำเร็จ');setData((d:any)=>({...d,revision:j.revision}));setBase(j.statuses);setValues(j.statuses);setCustom(j.customTasks);setBaseCustom(j.customTasks);setMessage(j.lineSent?'บันทึกแล้ว และแจ้งผลใน LINE เรียบร้อย ✓':'บันทึกแล้ว แต่ส่งข้อความ LINE ไม่สำเร็จ');}catch(e:any){setMessage(e.message)}finally{setBusy(false)}};
