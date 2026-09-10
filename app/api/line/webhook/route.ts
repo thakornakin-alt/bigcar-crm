@@ -8,16 +8,46 @@ import { handleRddLineTrackerMessage, isRddLineTrackerCommand, rememberRddLineWe
 export const dynamic = "force-dynamic";
 
 const trackerTasks = ["ล้างรถ", "ลอกสติ๊กเกอร์", "น้ำมันเครื่อง", "แบตเตอรี่", "ส่งอู่", "รถกลับ", "ภาษี", "ประกัน"];
+const prepBatchTasks = ["ล้างรถ", "ลอกสติ๊กเกอร์", "น้ำมันเครื่อง", "แบตเตอรี่"];
 
-function quickRepliesForResolvedCase(reply: string) {
+function resolvedCaseQuery(reply: string) {
   const firstLine = String(reply || "").split("\n")[0]?.trim() || "";
   const match = firstLine.match(/^ติดตาม\s+(.+?)\s+·\s+(.+)$/);
-  if (!match) return [];
+  if (!match) return "";
   const plate = match[1].trim();
   const customer = match[2].trim();
-  if (!plate || !customer || customer === "-") return [];
-  const caseQuery = `${plate} ${customer}`;
-  return trackerTasks.map((label) => ({ label, text: `งาน ${caseQuery} ${label}` }));
+  if (!plate || !customer || customer === "-") return "";
+  return `${plate} ${customer}`;
+}
+
+function quickRepliesForResolvedCase(reply: string) {
+  const caseQuery = resolvedCaseQuery(reply);
+  if (!caseQuery) return [];
+  return [
+    { label: "4 งานค้าง", text: `งาน ${caseQuery} เตรียมรถทั้งหมด` },
+    { label: "4 งานเสร็จ ✅", text: `งาน ${caseQuery} เตรียมรถทั้งหมด ✅` },
+    ...trackerTasks.map((label) => ({ label, text: `งาน ${caseQuery} ${label}` }))
+  ];
+}
+
+function parsePrepBatch(text: string) {
+  const match = String(text || "").match(/^งาน\s+(.+?)\s+เตรียมรถทั้งหมด(\s+✅)?\s*$/i);
+  if (!match) return null;
+  return { caseQuery: match[1].trim(), done: Boolean(match[2]) };
+}
+
+async function handlePrepBatch(text: string, sourceGroupId: string, sourceUserId?: string) {
+  const batch = parsePrepBatch(text);
+  if (!batch) return null;
+  const suffix = batch.done ? " ✅" : "";
+  const results: string[] = [];
+  for (const task of prepBatchTasks) {
+    const result = await handleRddLineTrackerMessage({ text: `งาน ${batch.caseQuery} ${task}${suffix}`, sourceGroupId, sourceUserId });
+    if (result) results.push(result);
+  }
+  if (!results.length) return null;
+  const status = batch.done ? "เสร็จแล้ว ✅" : "งานค้าง";
+  return `อัปเดตงานเตรียมรถ 4 รายการ: ${status}\n${prepBatchTasks.map((task) => `• ${task}`).join("\n")}`;
 }
 
 export async function GET() { return NextResponse.json({ ok: true, message: "Big Car CRM LINE webhook is ready" }); }
@@ -40,7 +70,8 @@ export async function POST(request: Request) {
     if (isRddLineTrackerCommand(messageText)) {
       try {
         if (event.webhookEventId && await wasRddLineWebhookProcessed(event.webhookEventId)) continue;
-        const reply = await handleRddLineTrackerMessage({ text: messageText, sourceGroupId, sourceUserId: event.source?.userId });
+        const batchReply = await handlePrepBatch(messageText, sourceGroupId, event.source?.userId);
+        const reply = batchReply || await handleRddLineTrackerMessage({ text: messageText, sourceGroupId, sourceUserId: event.source?.userId });
         if (reply) {
           if (event.webhookEventId) await rememberRddLineWebhook(event.webhookEventId);
           const quickReplies = quickRepliesForResolvedCase(reply);
