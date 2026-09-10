@@ -4,17 +4,20 @@ import { saveLineGroup, saveLineWebhookLog } from "@/lib/apps-script";
 import { saveStoredLineGroup } from "@/lib/line-group-store";
 import { applyLineReservationCommands } from "@/lib/line-reservations";
 import { handleRddLineTrackerMessage, isRddLineTrackerCommand, formatRddLineCase, rememberRddLineWebhook, wasRddLineWebhookProcessed } from "@/lib/rdd-line-tracker";
+import { getRddLineSettings } from "@/lib/rdd-line-settings";
 import { listBookingDeliveryRecordsWithRevision } from "@/lib/booking-delivery";
 import { updateRddWorkspaceRecord } from "@/lib/rdd-workspace-write";
 import { appendRddActivity } from "@/lib/rdd-activity";
+import { readJsonStore, writeJsonStore } from "@/lib/json-store";
 import type { RddWorkspaceChanges } from "@/lib/rdd-workspace-fields";
 
 export const dynamic = "force-dynamic";
 
-const trackerTasks = ["ล้างรถ", "ลอกลาย", "น้ำมันเครื่อง", "แบตเตอรี่", "ภาษี", "ประกัน", "ส่งอู่", "รถกลับ"];
-
 type MenuTask = "ล้างรถ" | "ลอกลาย" | "น้ำมันเครื่อง" | "แบตเตอรี่" | "ภาษี" | "ประกัน";
-const menuTasks = new Set<MenuTask>(["ล้างรถ", "ลอกลาย", "น้ำมันเครื่อง", "แบตเตอรี่", "ภาษี", "ประกัน"]);
+type Draft = { caseQuery: string; changes: RddWorkspaceChanges; labels: Record<string, string>; createdAt: string };
+const trackerTasks = ["ล้างรถ", "ลอกลาย", "น้ำมันเครื่อง", "แบตเตอรี่", "ภาษี", "ประกัน"] as MenuTask[];
+const menuTasks = new Set<MenuTask>(trackerTasks);
+const draftFile = "rdd-line-multi-edit-drafts.json";
 
 const taskOptions: Record<MenuTask, Array<{ label: string; value: string; changes: RddWorkspaceChanges }>> = {
   "ล้างรถ": [
@@ -51,102 +54,68 @@ const taskOptions: Record<MenuTask, Array<{ label: string; value: string; change
   ]
 };
 
-function resolvedCaseQuery(reply: string) {
-  const firstLine = String(reply || "").split("\n")[0]?.trim() || "";
-  const match = firstLine.match(/^ติดตาม\s+(.+?)\s+·\s+(.+)$/);
-  if (!match) return "";
-  const plate = match[1].trim(); const customer = match[2].trim();
-  if (!plate || !customer || customer === "-") return "";
-  return `${plate} ${customer}`;
+function key(groupId: string, userId?: string) { return `${groupId}:${userId || "group"}`; }
+async function getDraft(groupId: string, userId?: string) {
+  const store = await readJsonStore<Record<string, Draft>>(draftFile, {}); const k = key(groupId, userId); const draft = store[k];
+  if (draft && Date.now() - Date.parse(draft.createdAt) <= 30 * 60 * 1000) return draft;
+  if (draft) { delete store[k]; await writeJsonStore(draftFile, store); } return null;
 }
-
+async function putDraft(groupId: string, userId: string | undefined, draft: Draft | null) {
+  const store = await readJsonStore<Record<string, Draft>>(draftFile, {}); const k = key(groupId, userId);
+  if (draft) store[k] = draft; else delete store[k]; await writeJsonStore(draftFile, store);
+}
+function resolvedCaseQuery(reply: string) {
+  const firstLine = String(reply || "").split("\n")[0]?.trim() || ""; const match = firstLine.match(/^ติดตาม\s+(.+?)\s+·\s+(.+)$/);
+  if (!match) return ""; const plate = match[1].trim(); const customer = match[2].trim(); return !plate || !customer || customer === "-" ? "" : `${plate} ${customer}`;
+}
 function mainQuickReplies(reply: string) {
   const caseQuery = resolvedCaseQuery(reply); if (!caseQuery) return [];
-  return trackerTasks.map((label) => ({ label, text: menuTasks.has(label as MenuTask) ? `เมนูงาน|${caseQuery}|${label}` : `งาน ${caseQuery} ${label}` }));
+  return [{ label: "✏️ แก้หลายงาน", text: `เริ่มหลายงาน|${caseQuery}` }, ...trackerTasks.map(label => ({ label, text: `เมนูงาน|${caseQuery}|${label}` }))];
 }
-
-function parseMenu(text: string) {
-  const parts = String(text || "").split("|");
-  if (parts[0] !== "เมนูงาน" || parts.length !== 3 || !menuTasks.has(parts[2] as MenuTask)) return null;
-  return { caseQuery: parts[1].trim(), task: parts[2] as MenuTask };
+function draftQuickReplies(caseQuery: string) {
+  return [...trackerTasks.map(label => ({ label, text: `ร่างเมนู|${caseQuery}|${label}` })), { label: "✅ บันทึกทั้งหมด", text: `บันทึกร่าง|${caseQuery}` }, { label: "↩️ ยกเลิก", text: `ยกเลิกร่าง|${caseQuery}` }];
 }
-function parseStatus(text: string) {
-  const parts = String(text || "").split("|");
-  if (parts[0] !== "สถานะงาน" || parts.length !== 4 || !menuTasks.has(parts[2] as MenuTask)) return null;
-  return { caseQuery: parts[1].trim(), task: parts[2] as MenuTask, value: parts[3] };
-}
+function parse3(text: string, prefix: string) { const p = text.split("|"); return p[0] === prefix && p.length === 3 && menuTasks.has(p[2] as MenuTask) ? { caseQuery: p[1].trim(), task: p[2] as MenuTask } : null; }
+function parse4(text: string, prefix: string) { const p = text.split("|"); return p[0] === prefix && p.length === 4 && menuTasks.has(p[2] as MenuTask) ? { caseQuery: p[1].trim(), task: p[2] as MenuTask, value: p[3] } : null; }
 function normalize(value: unknown) { return String(value || "").normalize("NFKC").toLowerCase().replace(/[^0-9a-zก-๙]/g, ""); }
 async function findExactCase(caseQuery: string) {
-  const snapshot = await listBookingDeliveryRecordsWithRevision();
-  const records = snapshot.records.filter((record) => {
-    const plate = normalize(record.plate); const name = normalize(record.customerName); const q = normalize(caseQuery);
-    return plate && name && q.includes(plate) && q.includes(name);
-  });
+  const snapshot = await listBookingDeliveryRecordsWithRevision(); const q = normalize(caseQuery);
+  const records = snapshot.records.filter(record => { const plate = normalize(record.plate); const name = normalize(record.customerName); return plate && name && q.includes(plate) && q.includes(name); });
   return { snapshot, record: records.length === 1 ? records[0] : null };
 }
-async function handleMenu(text: string) {
-  const menu = parseMenu(text); if (!menu) return null;
-  const { record } = await findExactCase(menu.caseQuery); if (!record) return { reply: "ไม่พบเคส หรือพบมากกว่า 1 เคส กรุณาพิมพ์ติดตามทะเบียนใหม่", quickReplies: [] };
-  const reply = `${record.plate} · ${record.customerName}\nเลือกสถานะ: ${menu.task}`;
-  const quickReplies = [
-    ...taskOptions[menu.task].map((option) => ({ label: option.label, text: `สถานะงาน|${menu.caseQuery}|${menu.task}|${option.value}` })),
-    { label: "← กลับเมนูงาน", text: `ดูเคส|${menu.caseQuery}` }
-  ];
-  return { reply, quickReplies };
+function draftSummary(draft: Draft) {
+  const items = Object.entries(draft.labels); return items.length ? `กำลังแก้ไข ${items.length} งาน:\n${items.map(([task, label]) => `• ${task}: ${label}`).join("\n")}\n\nเลือกงานต่อ หรือกด ✅ บันทึกทั้งหมด` : "โหมดแก้หลายงาน\nเลือกงานที่ต้องการอัปเดต แล้วค่อยกด ✅ บันทึกทั้งหมด";
 }
-async function handleStatus(text: string, sourceGroupId: string, sourceUserId?: string) {
-  const status = parseStatus(text); if (!status) return null;
-  const option = taskOptions[status.task].find((item) => item.value === status.value); if (!option) return null;
-  const { snapshot, record } = await findExactCase(status.caseQuery); if (!record) return { reply: "ไม่พบเคส หรือพบมากกว่า 1 เคส กรุณาพิมพ์ติดตามทะเบียนใหม่", quickReplies: [] };
-  const result = await updateRddWorkspaceRecord({ id: record.id, expectedRevision: snapshot.revision, changes: option.changes, actor: { id: `line:${sourceUserId || sourceGroupId}`, role: "sales" } });
-  await appendRddActivity(null, { action: "booking_delivery_updated", targetType: "booking_delivery", targetId: result.record.id, source: "line", before: result.before, after: result.after, metadata: { changedFields: result.changedFields, lineUserId: sourceUserId || "", lineGroupId: sourceGroupId } }).catch(() => undefined);
-  const latest = formatRddLineCase(result.record);
-  return { reply: `อัปเดต ${status.task}: ${option.label}\n\n${latest}`, quickReplies: mainQuickReplies(latest) };
+async function handleContinuous(text: string, groupId: string, userId?: string) {
+  const start = text.match(/^เริ่มหลายงาน\|(.+)$/); if (start) { const draft: Draft = { caseQuery: start[1], changes: {}, labels: {}, createdAt: new Date().toISOString() }; await putDraft(groupId, userId, draft); return { reply: draftSummary(draft), quickReplies: draftQuickReplies(draft.caseQuery) }; }
+  const draftMenu = parse3(text, "ร่างเมนู"); if (draftMenu) { const draft = await getDraft(groupId, userId); if (!draft || draft.caseQuery !== draftMenu.caseQuery) return { reply: "โหมดแก้หลายงานหมดอายุ กรุณาเปิดเคสใหม่", quickReplies: [] }; return { reply: `${draftSummary(draft)}\n\nเลือกสถานะ: ${draftMenu.task}`, quickReplies: [...taskOptions[draftMenu.task].map(o => ({ label: o.label, text: `ร่างสถานะ|${draft.caseQuery}|${draftMenu.task}|${o.value}` })), { label: "← กลับ", text: `ดูร่าง|${draft.caseQuery}` }] }; }
+  const draftStatus = parse4(text, "ร่างสถานะ"); if (draftStatus) { const draft = await getDraft(groupId, userId); const option = taskOptions[draftStatus.task].find(o => o.value === draftStatus.value); if (!draft || !option || draft.caseQuery !== draftStatus.caseQuery) return { reply: "โหมดแก้หลายงานหมดอายุ กรุณาเปิดเคสใหม่", quickReplies: [] }; draft.changes = { ...draft.changes, ...option.changes }; draft.labels[draftStatus.task] = option.label; draft.createdAt = new Date().toISOString(); await putDraft(groupId, userId, draft); return { reply: draftSummary(draft), quickReplies: draftQuickReplies(draft.caseQuery) }; }
+  const viewDraft = text.match(/^ดูร่าง\|(.+)$/); if (viewDraft) { const draft = await getDraft(groupId, userId); if (!draft || draft.caseQuery !== viewDraft[1]) return { reply: "โหมดแก้หลายงานหมดอายุ กรุณาเปิดเคสใหม่", quickReplies: [] }; return { reply: draftSummary(draft), quickReplies: draftQuickReplies(draft.caseQuery) }; }
+  const cancel = text.match(/^ยกเลิกร่าง\|(.+)$/); if (cancel) { await putDraft(groupId, userId, null); return { reply: "ยกเลิกการแก้ไขแล้ว ไม่มีข้อมูลถูกเปลี่ยน", quickReplies: [] }; }
+  const save = text.match(/^บันทึกร่าง\|(.+)$/); if (save) { const draft = await getDraft(groupId, userId); if (!draft || draft.caseQuery !== save[1]) return { reply: "โหมดแก้หลายงานหมดอายุ กรุณาเปิดเคสใหม่", quickReplies: [] }; if (!Object.keys(draft.changes).length) return { reply: "ยังไม่ได้เลือกงานที่จะอัปเดต", quickReplies: draftQuickReplies(draft.caseQuery) }; const { snapshot, record } = await findExactCase(draft.caseQuery); if (!record) return { reply: "ไม่พบเคส กรุณาพิมพ์ติดตามทะเบียนใหม่", quickReplies: [] }; const result = await updateRddWorkspaceRecord({ id: record.id, expectedRevision: snapshot.revision, changes: draft.changes, actor: { id: `line:${userId || groupId}`, role: "sales" } }); await appendRddActivity(null, { action: "booking_delivery_updated", targetType: "booking_delivery", targetId: result.record.id, source: "line", before: result.before, after: result.after, metadata: { changedFields: result.changedFields, lineUserId: userId || "", lineGroupId: groupId, multiEdit: true } }).catch(() => undefined); await putDraft(groupId, userId, null); const latest = formatRddLineCase(result.record); return { reply: `บันทึกทั้งหมด ${Object.keys(draft.labels).length} งานเรียบร้อย ✅\n\n${latest}`, quickReplies: mainQuickReplies(latest) }; }
+  const menu = parse3(text, "เมนูงาน"); if (menu) { const { record } = await findExactCase(menu.caseQuery); if (!record) return { reply: "ไม่พบเคส กรุณาพิมพ์ติดตามทะเบียนใหม่", quickReplies: [] }; return { reply: `${record.plate} · ${record.customerName}\nเลือกสถานะ: ${menu.task}`, quickReplies: taskOptions[menu.task].map(o => ({ label: o.label, text: `สถานะงาน|${menu.caseQuery}|${menu.task}|${o.value}` })) }; }
+  const status = parse4(text, "สถานะงาน"); if (status) { const option = taskOptions[status.task].find(o => o.value === status.value); if (!option) return null; const { snapshot, record } = await findExactCase(status.caseQuery); if (!record) return { reply: "ไม่พบเคส กรุณาพิมพ์ติดตามทะเบียนใหม่", quickReplies: [] }; const result = await updateRddWorkspaceRecord({ id: record.id, expectedRevision: snapshot.revision, changes: option.changes, actor: { id: `line:${userId || groupId}`, role: "sales" } }); const latest = formatRddLineCase(result.record); return { reply: `อัปเดต ${status.task}: ${option.label}\n\n${latest}`, quickReplies: mainQuickReplies(latest) }; }
+  return null;
 }
-async function handleView(text: string) {
-  const match = String(text || "").match(/^ดูเคส\|(.+)$/); if (!match) return null;
-  const { record } = await findExactCase(match[1]); if (!record) return { reply: "ไม่พบเคส กรุณาพิมพ์ติดตามทะเบียนใหม่", quickReplies: [] };
-  const reply = formatRddLineCase(record); return { reply, quickReplies: mainQuickReplies(reply) };
-}
-function isContinuousCommand(text: string) { return /^(?:เมนูงาน|สถานะงาน|ดูเคส)\|/.test(String(text || "")); }
+function isContinuousCommand(text: string) { return /^(?:เริ่มหลายงาน|ร่างเมนู|ร่างสถานะ|ดูร่าง|บันทึกร่าง|ยกเลิกร่าง|เมนูงาน|สถานะงาน)\|/.test(text); }
 
 export async function GET() { return NextResponse.json({ ok: true, message: "Big Car CRM LINE webhook is ready" }); }
-
 export async function POST(request: Request) {
-  const body = await request.text(); const signature = request.headers.get("x-line-signature"); const receivedAt = new Date().toISOString();
-  let signatureValid = false; let webhookError = ""; let events: LineWebhookEvent[] = []; let sourceSummary = "";
+  const body = await request.text(); const signature = request.headers.get("x-line-signature"); const receivedAt = new Date().toISOString(); let signatureValid = false; let webhookError = ""; let events: LineWebhookEvent[] = []; let sourceSummary = "";
   try { signatureValid = verifyLineSignature(body, signature); } catch (error) { webhookError = error instanceof Error ? error.message : "Unable to verify LINE signature"; }
-  try { const payload = JSON.parse(body) as { events?: LineWebhookEvent[] }; events = Array.isArray(payload.events) ? payload.events : []; sourceSummary = events.map((event) => { const source = event.source; return [event.type, source?.type, source?.groupId || source?.roomId || source?.userId].filter(Boolean).join(":"); }).join(", "); } catch (error) { webhookError = webhookError || (error instanceof Error ? error.message : "Invalid LINE webhook JSON"); }
-  void saveLineWebhookLog({ receivedAt, signatureValid: signatureValid ? "yes" : "no", eventCount: String(events.length), source: sourceSummary, error: webhookError }).catch(() => undefined);
-  if (!signatureValid) return NextResponse.json({ ok: false, error: "Invalid LINE signature" }, { status: 401 });
-
-  const groupsToSave = events.map((event) => { const sourceType = event.source?.type || ""; const groupId = event.source?.groupId || event.source?.roomId || ""; if (!groupId || (sourceType !== "group" && sourceType !== "room")) return null; return { groupId, type: sourceType, name: `${sourceType} ${groupId.slice(-6)}`, lastSeenAt: new Date().toISOString() }; }).filter((group): group is { groupId: string; type: string; name: string; lastSeenAt: string } => Boolean(group));
-  await Promise.all(groupsToSave.map((group) => saveStoredLineGroup(group))).catch((error) => console.error("line_group_store_failed", error instanceof Error ? error.message : error));
-  void Promise.all(groupsToSave.map((group) => saveLineGroup(group))).catch(() => undefined);
-
+  try { const payload = JSON.parse(body) as { events?: LineWebhookEvent[] }; events = Array.isArray(payload.events) ? payload.events : []; sourceSummary = events.map(event => [event.type, event.source?.type, event.source?.groupId || event.source?.roomId || event.source?.userId].filter(Boolean).join(":")).join(", "); } catch (error) { webhookError = webhookError || (error instanceof Error ? error.message : "Invalid LINE webhook JSON"); }
+  void saveLineWebhookLog({ receivedAt, signatureValid: signatureValid ? "yes" : "no", eventCount: String(events.length), source: sourceSummary, error: webhookError }).catch(() => undefined); if (!signatureValid) return NextResponse.json({ ok: false, error: "Invalid LINE signature" }, { status: 401 });
+  const groupsToSave = events.map(event => { const type = event.source?.type || ""; const groupId = event.source?.groupId || event.source?.roomId || ""; return !groupId || (type !== "group" && type !== "room") ? null : { groupId, type, name: `${type} ${groupId.slice(-6)}`, lastSeenAt: new Date().toISOString() }; }).filter((g): g is { groupId: string; type: string; name: string; lastSeenAt: string } => Boolean(g));
+  await Promise.all(groupsToSave.map(g => saveStoredLineGroup(g))).catch(() => undefined); void Promise.all(groupsToSave.map(g => saveLineGroup(g))).catch(() => undefined);
   for (const event of events) {
-    const messageText = String(event.message?.text || "").trim(); if (!messageText) continue;
-    const sourceGroupId = event.source?.groupId || event.source?.roomId || "";
+    const messageText = String(event.message?.text || "").trim(); if (!messageText) continue; const sourceGroupId = event.source?.groupId || event.source?.roomId || "";
     if (isRddLineTrackerCommand(messageText) || isContinuousCommand(messageText)) {
       try {
         if (event.webhookEventId && await wasRddLineWebhookProcessed(event.webhookEventId)) continue;
         let reply = ""; let quickReplies: Array<{ label: string; text: string }> = [];
-        const continuous = await handleMenu(messageText) || await handleStatus(messageText, sourceGroupId, event.source?.userId) || await handleView(messageText);
-        if (continuous) { reply = continuous.reply; quickReplies = continuous.quickReplies; }
-        else {
-          const trackerReply = await handleRddLineTrackerMessage({ text: messageText, sourceGroupId, sourceUserId: event.source?.userId });
-          if (trackerReply) { reply = trackerReply; quickReplies = mainQuickReplies(trackerReply); }
-        }
-        if (reply) {
-          if (event.webhookEventId) await rememberRddLineWebhook(event.webhookEventId);
-          if (event.replyToken) {
-            if (quickReplies.length) await replyLineTextWithQuickReplies(event.replyToken, reply, quickReplies); else await replyLineText(event.replyToken, reply);
-          } else if (sourceGroupId) {
-            const { pushLineText, pushLineTextWithQuickReplies } = await import("@/lib/line");
-            if (quickReplies.length) await pushLineTextWithQuickReplies(sourceGroupId, reply, quickReplies); else await pushLineText(sourceGroupId, reply);
-          }
-          continue;
-        }
+        if (isContinuousCommand(messageText)) { const settings = await getRddLineSettings(); if (settings.enabled && settings.groupId && settings.groupId === sourceGroupId) { const result = await handleContinuous(messageText, sourceGroupId, event.source?.userId); if (result) { reply = result.reply; quickReplies = result.quickReplies; } } }
+        else { const trackerReply = await handleRddLineTrackerMessage({ text: messageText, sourceGroupId, sourceUserId: event.source?.userId }); if (trackerReply) { reply = trackerReply; quickReplies = mainQuickReplies(trackerReply); } }
+        if (reply) { if (event.webhookEventId) await rememberRddLineWebhook(event.webhookEventId); if (event.replyToken) { if (quickReplies.length) await replyLineTextWithQuickReplies(event.replyToken, reply, quickReplies); else await replyLineText(event.replyToken, reply); } else if (sourceGroupId) { const { pushLineText, pushLineTextWithQuickReplies } = await import("@/lib/line"); if (quickReplies.length) await pushLineTextWithQuickReplies(sourceGroupId, reply, quickReplies); else await pushLineText(sourceGroupId, reply); } continue; }
       } catch (error) { const reply = error instanceof Error ? error.message : "อัปเดตงานไม่สำเร็จ กรุณาลองใหม่"; if (event.replyToken) await replyLineText(event.replyToken, reply).catch(() => undefined); continue; }
     }
     await applyLineReservationCommands([{ text: messageText, sourceGroupId, receivedAt: new Date().toISOString() }]).catch(() => undefined);
