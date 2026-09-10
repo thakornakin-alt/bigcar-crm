@@ -17,57 +17,70 @@ type LineReservationStore = {
   byPlate: Record<string, LineReservationRecord>;
 };
 
-function normalizePlateForMatch(value: string) {
+function cleanPlateDisplay(value: string) {
   return String(value || "")
+    .replace(/\b(?:กทม|กรุงเทพ(?:มหานคร)?)\b/gi, "")
+    .replace(/[,:;|]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizePlateForMatch(value: string) {
+  return cleanPlateDisplay(value)
     .toUpperCase()
     .replace(/[.\-_/\\\s]+/g, "")
     .trim();
 }
 
+function looksLikeThaiPlate(value: string) {
+  const normalized = normalizePlateForMatch(value);
+  if (!normalized || normalized.length > 12) return false;
+  return /\d/.test(normalized) && /[ก-ฮ]/.test(normalized);
+}
+
+function extractPlateCandidates(value: string) {
+  const withoutBangkok = String(value || "").replace(/\b(?:กทม|กรุงเทพ(?:มหานคร)?)\b/gi, " ");
+  const candidates = withoutBangkok.match(/[0-9ก-ฮ]{1,4}(?:\s*[-–—]?\s*)[0-9ก-ฮ]{1,7}/g) || [];
+  return candidates
+    .map(cleanPlateDisplay)
+    .filter(looksLikeThaiPlate);
+}
+
 export function parseReserveAction(text: string): { action: LineReservationAction; plate: string } | null {
-  const cleaned = String(text || "").trim();
-  if (!cleaned) return null;
-
-  const normalizeCommandPlate = (value: string) =>
-    String(value || "")
-      .replace(/^(?:ทะเบียน(?:รถ)?|plate|license\s*plate)\s*[:：-]?\s*/i, "")
-      .trim();
-
-  const reservePatterns = [
-    /(?:^|\s)(?:ติดจอง|จองทะเบียน|จอง|#?reserve)\s*(?:ทะเบียน(?:รถ)?|plate|license\s*plate)?\s*[:：-]?\s*(.+)$/i
-  ];
-  for (const pattern of reservePatterns) {
-    const match = cleaned.match(pattern);
-    if (match?.[1]) {
-      const plate = normalizeCommandPlate(match[1]);
-      if (plate) return { action: "reserve", plate };
-    }
-  }
-
-  const unreservePatterns = [
-    /(?:^|\s)(?:ยกเลิกจองทะเบียน|ปล่อยจองทะเบียน|ยกเลิก|ปล่อยจอง|#?unreserve)\s*(?:ทะเบียน(?:รถ)?|plate|license\s*plate)?\s*[:：-]?\s*(.+)$/i
-  ];
-  for (const pattern of unreservePatterns) {
-    const match = cleaned.match(pattern);
-    if (match?.[1]) {
-      const plate = normalizeCommandPlate(match[1]);
-      if (plate) return { action: "unreserve", plate };
-    }
-  }
-
-  return null;
+  return parseLineReservationCommands(text)[0] || null;
 }
 
 export function parseLineReservationCommands(text: string): Array<{
   action: LineReservationAction;
   plate: string;
 }> {
-  return String(text || "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => parseReserveAction(line))
-    .filter((item): item is { action: LineReservationAction; plate: string } => Boolean(item));
+  const cleaned = String(text || "").trim();
+  if (!cleaned) return [];
+
+  const results: Array<{ action: LineReservationAction; plate: string }> = [];
+  const seen = new Set<string>();
+  const add = (action: LineReservationAction, plate: string) => {
+    const display = cleanPlateDisplay(plate);
+    const key = `${action}:${normalizePlateForMatch(display)}`;
+    if (!looksLikeThaiPlate(display) || seen.has(key)) return;
+    seen.add(key);
+    results.push({ action, plate: display });
+  };
+
+  const commandPattern = /(?:^|\n)\s*(ยกเลิกจองทะเบียน|ปล่อยจองทะเบียน|ยกเลิก|ปล่อยจอง|#?unreserve|ติดจอง|จองทะเบียน|จอง|#?reserve)\s*(?:ทะเบียน(?:รถ)?|plate|license\s*plate)?\s*[:：-]?\s*([^\n\r]+)/gi;
+  for (const match of cleaned.matchAll(commandPattern)) {
+    const command = String(match[1] || "").toLowerCase();
+    const action: LineReservationAction = /ยกเลิก|ปล่อย|unreserve/.test(command) ? "unreserve" : "reserve";
+    extractPlateCandidates(match[2] || "").forEach((plate) => add(action, plate));
+  }
+
+  // ข้อความขายจาก LINE group: รองรับ "ทะเบียนรถ : ...", ช่องว่าง, กทม และหลายทะเบียนในข้อความเดียว
+  const registrationPattern = /(?:^|\n)\s*ทะเบียน(?:รถ)?\s*[:：-]?\s*([^\n\r]+)/gi;
+  for (const match of cleaned.matchAll(registrationPattern)) {
+    extractPlateCandidates(match[1] || "").forEach((plate) => add("reserve", plate));
+  }
+
+  return results;
 }
 
 async function readStore() {
@@ -108,13 +121,7 @@ export async function applyLineReservationCommand(input: {
   sourceGroupId?: string;
   receivedAt?: string;
 }) {
-  return applyLineReservationCommands([
-    {
-      text: input.text,
-      sourceGroupId: input.sourceGroupId,
-      receivedAt: input.receivedAt
-    }
-  ]);
+  return applyLineReservationCommands([input]);
 }
 
 export async function applyLineReservationCommands(
@@ -146,13 +153,7 @@ export async function applyLineReservationCommands(
   if (!parsedCommands.length) return null;
 
   const store = await readStore();
-
-  const applied: Array<{
-    action: LineReservationAction;
-    plate: string;
-    plateNormalized: string;
-    active: boolean;
-  }> = [];
+  const applied: Array<{ action: LineReservationAction; plate: string; plateNormalized: string; active: boolean }> = [];
 
   for (const parsed of parsedCommands) {
     const plateNormalized = normalizePlateForMatch(parsed.plate);
@@ -168,18 +169,10 @@ export async function applyLineReservationCommands(
       sourceText: parsed.sourceText
     };
     store.byPlate[plateNormalized] = { ...current, ...record };
-    applied.push({
-      action: parsed.action,
-      plate: parsed.plate,
-      plateNormalized,
-      active: record.active
-    });
+    applied.push({ action: parsed.action, plate: parsed.plate, plateNormalized, active: record.active });
   }
 
   if (!applied.length) return null;
-
   await writeStore(store);
-
   return applied.length === 1 ? applied[0] : { applied };
 }
-
