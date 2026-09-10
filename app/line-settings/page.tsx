@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { ArrowLeft, CheckCircle2, Loader2, MessageCircle, Pencil, RefreshCcw, Save, Send } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Link2, Loader2, MessageCircle, Pencil, RefreshCcw, Save, Send } from "lucide-react";
 import { PageContainer, PageTitle, SectionCard, TopMenuButton } from "@/app/components/ui";
 import type { LineGroup, LineWebhookLog } from "@/lib/types";
 
@@ -29,6 +29,8 @@ export default function LineSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [savingName, setSavingName] = useState(false);
+  const [savingTracker, setSavingTracker] = useState(false);
+  const [tracker, setTracker] = useState({ groupId: "", enabled: false, reminderEnabled: false, reminderHourBangkok: 8 });
   const [lineStatus, setLineStatus] = useState<{
     config: { hasChannelId: boolean; hasChannelSecret: boolean; hasChannelAccessToken: boolean; webhookUrl: string };
     logs: LineWebhookLog[];
@@ -36,13 +38,33 @@ export default function LineSettingsPage() {
 
   async function loadGroups() {
     setError("");
-    const [data, statusData] = await Promise.all([
+    const [data, statusData, trackerData] = await Promise.all([
       api<{ groups: LineGroup[] }>("/api/line/groups"),
-      api<{ config: { hasChannelId: boolean; hasChannelSecret: boolean; hasChannelAccessToken: boolean; webhookUrl: string }; logs: LineWebhookLog[] }>("/api/line/status")
+      api<{ config: { hasChannelId: boolean; hasChannelSecret: boolean; hasChannelAccessToken: boolean; webhookUrl: string }; logs: LineWebhookLog[] }>("/api/line/status"),
+      api<{ settings: { groupId: string; enabled: boolean; reminderEnabled: boolean; reminderHourBangkok: number } }>("/api/line/rdd-settings")
     ]);
     setGroups(data.groups);
     setLineStatus(statusData);
+    setTracker(trackerData.settings);
     setSelectedGroupId((current) => current || data.groups[0]?.groupId || "");
+  }
+
+  async function saveTracker() {
+    setSavingTracker(true);
+    setError("");
+    setStatus("");
+    try {
+      const data = await api<{ settings: typeof tracker }>("/api/line/rdd-settings", {
+        method: "PUT",
+        body: JSON.stringify(tracker)
+      });
+      setTracker(data.settings);
+      setStatus("บันทึกกลุ่มติดตามงานรถแล้ว");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "บันทึกกลุ่มติดตามงานรถไม่สำเร็จ");
+    } finally {
+      setSavingTracker(false);
+    }
   }
 
   useEffect(() => {
@@ -207,6 +229,37 @@ export default function LineSettingsPage() {
               ยังไม่พบกลุ่ม LINE ให้ตั้ง webhook แล้วเชิญ OA เข้ากลุ่มก่อน
             </p>
           )}
+        </SectionCard>
+
+        <SectionCard title="เชื่อม Workspace กับ LINE" icon={<Link2 size={18} />}>
+          <p className="text-sm leading-6 text-soft">เลือกกลุ่มเฉพาะสำหรับติดตามงานรถ ข้อความกลุ่มนี้จะแยกจากระบบจองรถเดิม</p>
+          <select
+            value={tracker.groupId}
+            onChange={(event) => setTracker((current) => ({ ...current, groupId: event.target.value, enabled: event.target.value ? current.enabled : false }))}
+            className="min-h-12 w-full rounded-lg border border-line bg-[#0b0d11] px-3 text-white"
+          >
+            <option value="">ยังไม่เลือกกลุ่ม</option>
+            {groups.map((group) => <option key={group.groupId} value={group.groupId}>{group.name || group.groupId}</option>)}
+          </select>
+          <label className="flex min-h-11 items-center gap-3 text-sm font-semibold text-white">
+            <input type="checkbox" checked={tracker.enabled} disabled={!tracker.groupId} onChange={(event) => setTracker((current) => ({ ...current, enabled: event.target.checked }))} className="h-5 w-5 accent-emerald-400" />
+            เปิดรับคำสั่งและแจ้งอัปเดตงานรถ
+          </label>
+          <label className="flex min-h-11 items-center gap-3 text-sm font-semibold text-white">
+            <input type="checkbox" checked={tracker.reminderEnabled} disabled={!tracker.groupId || !tracker.enabled} onChange={(event) => setTracker((current) => ({ ...current, reminderEnabled: event.target.checked }))} className="h-5 w-5 accent-emerald-400" />
+            ส่งสรุปงานค้างทุกวัน เวลา 08:00 น.
+          </label>
+          <div className="rounded-lg border border-line bg-[#0b0d11] p-3 text-sm leading-6 text-soft">
+            <p className="font-semibold text-white">คำสั่งที่ใช้ในกลุ่ม</p>
+            <p>ติดตาม 3405</p>
+            <p>งาน 3405 ล้างรถ</p>
+            <p>งาน 3405 ล้างรถ ✅</p>
+            <p>งาน 3405 ล้างรถ ❌</p>
+          </div>
+          <button type="button" onClick={saveTracker} disabled={savingTracker || !tracker.groupId} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 font-bold text-ink disabled:opacity-60">
+            {savingTracker ? <Loader2 size={20} className="animate-spin" /> : <Save size={18} />}
+            บันทึกการเชื่อม Workspace
+          </button>
         </SectionCard>
 
         <SectionCard title="ส่งข้อความทดสอบ" icon={<Send size={18} />}>

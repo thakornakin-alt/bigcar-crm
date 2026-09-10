@@ -17,7 +17,7 @@ export default function BackOfficeCalendarPage() {
         title="ปฏิทินงานหลังบ้าน"
         subtitle="ใช้สำหรับงานเตรียมรถ งานอู่ เคลม ลอกลาย รถกลับ และนัดรับรถ ไม่ปนกับงานลูกค้า"
         actions={
-          <TopMenuButton href="/vehicle-prep" icon={<Wrench size={18} />} variant="primary">
+          <TopMenuButton href="/booking-delivery-workspace?status=รอส่งมอบทั้งหมด" icon={<Wrench size={18} />} variant="primary">
             รอส่งมอบ
           </TopMenuButton>
         }

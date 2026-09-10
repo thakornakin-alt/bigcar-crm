@@ -16,7 +16,7 @@ import {
   type RddPurchaseType,
   type RddReminderKind
 } from "@/lib/rdd-phase2";
-import { filterByOwnership, recordOwnerId, type OwnershipScope } from "@/lib/rdd-ownership";
+import { filterByOwnership, type OwnershipScope } from "@/lib/rdd-ownership";
 import type { BookingDeliveryRecord } from "@/lib/types";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import { resolveCaseDocumentManifest } from "@/lib/rdd-case-documents";
@@ -25,7 +25,7 @@ import { RDD_CASE_STATUS_LABELS, RDD_PURCHASE_TYPE_LABELS, isStatusValidForPurch
 import { derivePrepReminder, prepStatusForRecord, RDD_PREP_LABELS, RDD_WASH_STATUSES, RDD_STICKER_STATUSES, RDD_OIL_STATUSES, RDD_BATTERY_STATUSES, RDD_TAX_STATUSES, RDD_INSURANCE_STATUSES } from "@/lib/rdd-phase3c";
 
 const monthNames = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
-const statusOptions: Array<"all" | RddDisplayStatus> = ["all", "ยอดจองทั้งหมด", "รอจัดไฟแนนซ์", "รอผลไฟแนนซ์", "รอส่งมอบ", "อนุมัติ / รอส่งมอบ", "ตัดยอดแล้ว / รอส่งมอบ", "ลูกค้าชะลอการดำเนินการ", "ส่งมอบแล้ว", "ยกเลิก", "ไม่ระบุ"];
+const statusOptions: Array<"all" | RddDisplayStatus> = ["all", "ยอดจองทั้งหมด", "รอจัดไฟแนนซ์", "รอผลไฟแนนซ์", "รอส่งมอบทั้งหมด", "รอส่งมอบ", "อนุมัติ / รอส่งมอบ", "ตัดยอดแล้ว / รอส่งมอบ", "ลูกค้าชะลอการดำเนินการ", "ส่งมอบแล้ว", "ยกเลิก", "ไม่ระบุ"];
 
 function thaiDate(value: unknown, includeTime = false) {
   const parsed = parseBusinessDate(value);
@@ -189,7 +189,7 @@ export function BookingDeliveryWorkspaceClient({
             <section className="overflow-hidden rounded-[24px] border border-white/10 bg-[#0b0b0e] shadow-[0_20px_60px_rgba(0,0,0,0.26)]">
               <div className="flex items-center justify-between border-b border-white/10 px-3 py-2.5 sm:px-4 sm:py-3">
                 <div><p className="font-black text-white">รายการติดตาม</p><p className="text-xs text-white/45">{visible.length.toLocaleString("th-TH")} รายการ · คลิกเพื่อดูรายละเอียด</p></div>
-                <span className="rounded-full border border-[#d6b66c]/30 bg-[#d6b66c]/10 px-3 py-1 text-xs font-black text-[#f6df9d]">{editEnabled ? "EDIT ENABLED" : "READ ONLY"}</span>
+                <span className="rounded-full border border-[#d6b66c]/30 bg-[#d6b66c]/10 px-3 py-1 text-xs font-black text-[#f6df9d]">{editEnabled ? user ? "EDIT ENABLED" : "LOGIN TO EDIT" : "READ ONLY"}</span>
               </div>
 
               <div className="hidden max-w-full overflow-x-auto lg:block">
@@ -235,7 +235,7 @@ export function BookingDeliveryWorkspaceClient({
         </>
       )}
 
-      {selected && <WorkspaceDetail record={selected} revision={revision} editEnabled={editEnabled && user?.role !== "viewer" && (user?.role === "admin" || user?.role === "super_admin" || recordOwnerId(selected) === user?.id)} onClose={() => setSelectedId("")} onSaved={replaceRecord} />}
+      {selected && <WorkspaceDetail record={selected} revision={revision} workspaceEditEnabled={editEnabled} editEnabled={editEnabled && Boolean(user) && user?.role !== "viewer"} onClose={() => setSelectedId("")} onSaved={replaceRecord} />}
 
       <style jsx>{`
         .workspace-select { min-height: 48px; border-radius: 16px; border: 1px solid rgba(255,255,255,.12); background: #111114; padding: 0 12px; color: white; font-size: 13px; font-weight: 800; min-width: 0; width: 100%; }
@@ -272,9 +272,10 @@ function draftForRecord(record: BookingDeliveryRecord): WorkspaceDraft {
   };
 }
 
-function WorkspaceDetail({ record, revision, editEnabled, onClose, onSaved }: {
+function WorkspaceDetail({ record, revision, workspaceEditEnabled, editEnabled, onClose, onSaved }: {
   record: BookingDeliveryRecord;
   revision: string;
+  workspaceEditEnabled: boolean;
   editEnabled: boolean;
   onClose: () => void;
   onSaved: (record: BookingDeliveryRecord, revision: string) => void;
@@ -356,6 +357,7 @@ function WorkspaceDetail({ record, revision, editEnabled, onClose, onSaved }: {
           <div className="flex gap-2">{canEdit && !editing && <button data-testid="workspace-edit-button" type="button" onClick={startEdit} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#d6b66c] px-3 text-sm font-black text-[#17120a]"><Pencil size={16} />แก้ไขงาน</button>}<button type="button" aria-label="ปิดรายละเอียด" onClick={requestClose} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-white/12 bg-white/5 text-white"><X size={20} /></button></div>
         </div>
         <div className="mt-5 flex items-center gap-2"><RddStatusChip record={record} />{record.qaTestRecord === true && <QaBadge />}</div>
+        {workspaceEditEnabled && !canEdit && <p className="mt-3 rounded-xl border border-[#d6b66c]/25 bg-[#d6b66c]/10 px-3 py-2 text-sm font-bold text-[#f6df9d]">รายการนี้ดูได้ แต่บัญชีปัจจุบันไม่มีสิทธิ์แก้ไข กรุณาเข้าสู่ระบบด้วยเจ้าของเคสหรือผู้ดูแลระบบ</p>}
         {record.qaTestRecord === true && <p data-testid="workspace-qa-read-only" className="mt-3 rounded-xl border border-fuchsia-300/20 bg-fuchsia-300/8 px-3 py-2 text-sm font-bold text-fuchsia-100">ข้อมูล TEST/QA เป็นแบบอ่านอย่างเดียว</p>}
         {message && <p role="status" className={`mt-3 rounded-xl border px-3 py-2 text-sm font-bold ${conflict ? "border-amber-300/25 bg-amber-300/10 text-amber-100" : "border-white/10 bg-white/5 text-white/75"}`}>{message}</p>}
         {conflict && <button data-testid="workspace-load-latest" type="button" onClick={() => { onSaved(conflict.record, conflict.revision); setDraft(draftForRecord(conflict.record)); setConflict(null); setMessage(""); setEditing(false); }} className="mt-2 min-h-11 rounded-xl border border-amber-300/30 px-3 text-sm font-black text-amber-100">โหลดข้อมูลล่าสุด</button>}

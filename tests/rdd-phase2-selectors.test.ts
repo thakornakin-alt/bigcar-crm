@@ -103,6 +103,19 @@ test("month status and purchase filters are deterministic", () => {
   assert.deepEqual(filterRddWorkspaceRecords(fixtures, { year: 2026, month: 6 }).map((item) => item.id), ["unknown-date"]);
 });
 
+test("waiting delivery shortcut groups all operational delivery statuses", () => {
+  const records = [
+    record({ id: "waiting", purchaseType: "cash", caseStatus: "waiting_delivery" }),
+    record({ id: "approved", purchaseType: "finance", caseStatus: "approved_waiting_delivery" }),
+    record({ id: "settled", purchaseType: "cash", caseStatus: "settled_waiting_delivery" }),
+    record({ id: "finance", purchaseType: "finance", caseStatus: "waiting_finance_result" })
+  ];
+  assert.deepEqual(
+    filterRddWorkspaceRecords(records, { year: 2026, month: 8, status: "รอส่งมอบทั้งหมด" }).map((item) => item.id),
+    ["waiting", "approved", "settled"]
+  );
+});
+
 test("Home KPI uses reliable business dates only", () => {
   assert.deepEqual(deriveRddHomeKpis(fixtures, 2026, 8), {
     newBookings: 2,

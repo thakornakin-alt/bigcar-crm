@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { LineWebhookEvent, verifyLineSignature } from "@/lib/line";
+import { LineWebhookEvent, replyLineText, verifyLineSignature } from "@/lib/line";
 import { saveLineGroup, saveLineWebhookLog } from "@/lib/apps-script";
+import { saveStoredLineGroup } from "@/lib/line-group-store";
 import { applyLineReservationCommands } from "@/lib/line-reservations";
+import { handleRddLineTrackerMessage, isRddLineTrackerCommand, rememberRddLineWebhook, wasRddLineWebhookProcessed } from "@/lib/rdd-line-tracker";
 
 export const dynamic = "force-dynamic";
 
@@ -63,12 +65,39 @@ export async function POST(request: Request) {
     })
     .filter((group): group is { groupId: string; type: string; name: string; lastSeenAt: string } => Boolean(group));
 
+  // CRM persistent storage is the primary registry. Keep Apps Script as a best-effort legacy mirror.
+  await Promise.all(groupsToSave.map((group) => saveStoredLineGroup(group))).catch((error) => {
+    console.error("line_group_store_failed", error instanceof Error ? error.message : error);
+  });
   void Promise.all(groupsToSave.map((group) => saveLineGroup(group))).catch(() => undefined);
 
   for (const event of events) {
     const messageText = String(event.message?.text || "").trim();
     if (!messageText) continue;
     const sourceGroupId = event.source?.groupId || event.source?.roomId || "";
+    if (isRddLineTrackerCommand(messageText)) {
+      try {
+        if (event.webhookEventId && await wasRddLineWebhookProcessed(event.webhookEventId)) continue;
+        const reply = await handleRddLineTrackerMessage({
+          text: messageText,
+          sourceGroupId,
+          sourceUserId: event.source?.userId
+        });
+        if (reply) {
+          if (event.webhookEventId) await rememberRddLineWebhook(event.webhookEventId);
+          if (event.replyToken) await replyLineText(event.replyToken, reply);
+          else if (sourceGroupId) {
+            const { pushLineText } = await import("@/lib/line");
+            await pushLineText(sourceGroupId, reply);
+          }
+          continue;
+        }
+      } catch (error) {
+        const reply = error instanceof Error ? error.message : "อัปเดตงานไม่สำเร็จ กรุณาลองใหม่";
+        if (event.replyToken) await replyLineText(event.replyToken, reply).catch(() => undefined);
+        continue;
+      }
+    }
     await applyLineReservationCommands([
       {
         text: messageText,

@@ -10,6 +10,7 @@ export type RddDisplayStatus =
   | "รอจัดไฟแนนซ์"
   | "รอผลไฟแนนซ์"
   | "รอส่งมอบ"
+  | "รอส่งมอบทั้งหมด"
   | "อนุมัติ / รอส่งมอบ"
   | "ตัดยอดแล้ว / รอส่งมอบ"
   | "ลูกค้าชะลอการดำเนินการ"
@@ -136,7 +137,12 @@ export function filterRddWorkspaceRecords(
     if (!recordInRddMonth(record, input.year, input.month)) return false;
     if (!recordMatchesRddSearch(record, input.query || "")) return false;
     if (input.purchaseType && input.purchaseType !== "all" && purchaseTypeForRecord(record) !== input.purchaseType) return false;
-    if (input.status && input.status !== "all" && legacyStatusForRecord(record) !== input.status) return false;
+    if (input.status && input.status !== "all") {
+      const displayStatus = legacyStatusForRecord(record);
+      if (input.status === "รอส่งมอบทั้งหมด") {
+        if (!["รอส่งมอบ", "อนุมัติ / รอส่งมอบ", "ตัดยอดแล้ว / รอส่งมอบ"].includes(displayStatus)) return false;
+      } else if (displayStatus !== input.status) return false;
+    }
     if (input.pending && input.pending !== "all" && !recordMatchesReminder(record, input.pending, input.today || bangkokDateKey())) return false;
     return true;
   });

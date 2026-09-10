@@ -102,11 +102,6 @@ export async function updateRddWorkspaceRecord(input: {
     throw new RddWorkspaceWriteError(matches.length ? 500 : 404, matches.length ? "พบ Booking Delivery ซ้ำในระบบ" : "ไม่พบ Booking Delivery");
   }
   const current = matches[0].record;
-  const isAdmin = input.actor.role === "admin" || input.actor.role === "super_admin";
-  const ownerUserId = String(current.ownerUserId || "").trim();
-  if (!isAdmin && (!ownerUserId || ownerUserId !== input.actor.id)) {
-    throw new RddWorkspaceWriteError(403, "ไม่มีสิทธิ์แก้ไขเคสของพนักงานขายคนอื่น");
-  }
   if (snapshot.revision !== input.expectedRevision) {
     throw new RddWorkspaceWriteError(409, "ข้อมูลเคสนี้มีการเปลี่ยนแปลงจากผู้ใช้อื่น", {
       record: normalizeWorkspaceRecord(current), revision: snapshot.revision

@@ -129,7 +129,7 @@ const globalNavItems = [
   { href: "/booking-reports", label: "รายงานจอง", icon: FileText },
   { href: "/sales-reports", label: "รายงานขาย", icon: FileText },
   { href: "/booking-delivery", label: "ยอดจองทั้งหมด", icon: ClipboardCheck },
-  { href: "/vehicle-prep", label: "รอส่งมอบ", icon: Wrench },
+  { href: "/booking-delivery-workspace?status=รอส่งมอบทั้งหมด", label: "รอส่งมอบ", icon: Wrench },
   { href: "/leads", label: "ลูกค้ามุ่งหวัง", icon: Users },
   { href: "/finance-approval", label: "รอผลไฟแนนซ์", icon: UploadCloud },
   { href: "/calendar", label: "ปฏิทิน", icon: CalendarDays },
@@ -153,9 +153,10 @@ export function GlobalNav({ workspaceEnabled = false, commissionEnabled = false 
   const homeHref = workspaceEnabled ? "/rdd-home" : "/dashboard";
 
   function isActive(href: string) {
-    if (href === "/") return pathname === "/";
-    if (href.startsWith("/#")) return false;
-    return pathname === href || pathname.startsWith(`${href}/`);
+    const hrefPath = href.split("?")[0];
+    if (hrefPath === "/") return pathname === "/";
+    if (hrefPath.startsWith("/#")) return false;
+    return pathname === hrefPath || pathname.startsWith(`${hrefPath}/`);
   }
 
   return (

@@ -203,7 +203,7 @@ export default function FinanceApprovalPage() {
               {loading ? <Loader2 size={17} className="animate-spin text-brand" /> : <RefreshCw size={17} className="text-brand" />}
               Refresh
             </button>
-            <TopMenuButton href="/vehicle-prep" icon={<CheckCircle2 size={18} />} variant="primary">
+            <TopMenuButton href="/booking-delivery-workspace?status=รอส่งมอบทั้งหมด" icon={<CheckCircle2 size={18} />} variant="primary">
               รอส่งมอบ
             </TopMenuButton>
           </>

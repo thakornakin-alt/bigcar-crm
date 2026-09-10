@@ -13,6 +13,8 @@ test("Phase 3C canonical pending and terminal states", () => {
   assert.equal(derivePrepReminder(base, "2026-08-11").pendingPrepCount, 6);
   const done = record({ washStatus: "completed", stickerStatus: "no_sticker", oilStatus: "no_change", batteryStatus: "good", taxStatus: "renewal_ordered", insuranceStatus: "customer_self" });
   assert.equal(derivePrepReminder(done, "2026-08-11").pendingPrepCount, 0);
+  const blocked = record({ washStatus: "blocked", batteryStatus: "blocked" });
+  assert.equal(derivePrepReminder(blocked, "2026-08-11").pendingPrepCount, 2);
 });
 
 test("garage reminder priority and returned behavior", () => {
@@ -55,4 +57,5 @@ test("server validates Phase 3C enums, booleans and dates", () => {
   assert.throws(() => validateRddWorkspaceChanges({ taxStatus: "finished" }), /ไม่อยู่ในรายการ/);
   assert.throws(() => validateRddWorkspaceChanges({ garageReturned: "yes" }), /boolean/);
   assert.throws(() => validateRddWorkspaceChanges({ garageSentAt: "15\/08\/2026" }), /YYYY-MM-DD/);
+  assert.deepEqual(validateRddWorkspaceChanges({ washStatus: "blocked" }), { washStatus: "blocked" });
 });

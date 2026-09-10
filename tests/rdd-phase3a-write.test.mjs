@@ -86,7 +86,7 @@ test("Phase 3A narrow write contract, roles, CAS, QA safety and activity", { tim
     });
 
     let currentRevision = initial.revision;
-    await t.test("sales may update only their own stable owner case", async () => {
+    await t.test("sales may update a stable workspace case", async () => {
       const response = await patch(server.baseUrl, { id: "CASE-1", expectedRevision: currentRevision, changes: { financeCaseNote: "หมายเหตุ sales" } }, "sales", "owner-other");
       const body = await response.json();
       assert.equal(response.status, 200);
@@ -94,14 +94,22 @@ test("Phase 3A narrow write contract, roles, CAS, QA safety and activity", { tim
       currentRevision = body.revision;
     });
 
-    await t.test("sales cannot update another salesperson or unassigned case", async () => {
-      const forbidden = await patch(server.baseUrl, { id: "CASE-1", expectedRevision: currentRevision, changes: { financeCaseNote: "ห้ามแก้" } }, "sales", "sales-other");
-      assert.equal(forbidden.status, 403);
-      const unassignedForbidden = await patch(server.baseUrl, { id: "CASE-UNASSIGNED", expectedRevision: currentRevision, changes: { financeCaseNote: "ห้ามยึดเคส" } }, "sales", "sales-other");
-      assert.equal(unassignedForbidden.status, 403);
+    await t.test("sales may update another salesperson or an unassigned case without changing ownership", async () => {
+      const otherOwner = await patch(server.baseUrl, { id: "CASE-1", expectedRevision: currentRevision, changes: { financeCaseNote: "ทีมช่วยแก้" } }, "sales", "sales-other");
+      const otherOwnerBody = await otherOwner.json();
+      assert.equal(otherOwner.status, 200);
+      assert.equal(otherOwnerBody.record.ownerUserId, "owner-other");
+      currentRevision = otherOwnerBody.revision;
+
+      const unassigned = await patch(server.baseUrl, { id: "CASE-UNASSIGNED", expectedRevision: currentRevision, changes: { financeCaseNote: "ทีมช่วยแก้เคสยังไม่ระบุ" } }, "sales", "sales-other");
+      const unassignedBody = await unassigned.json();
+      assert.equal(unassigned.status, 200);
+      assert.equal(unassignedBody.record.ownerUserId, undefined);
+      currentRevision = unassignedBody.revision;
+
       const stored = JSON.parse(await readFile(path.join(dataDir, "booking-delivery.json"), "utf8"));
-      assert.equal(stored.records[0].financeCaseNote, "หมายเหตุ sales");
-      assert.equal(stored.records[2].ownerUserId, "");
+      assert.equal(stored.records[0].financeCaseNote, "ทีมช่วยแก้");
+      assert.equal(stored.records[2].ownerUserId, undefined);
     });
 
     for (const role of ["admin", "super_admin"]) {
