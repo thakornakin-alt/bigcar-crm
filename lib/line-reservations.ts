@@ -20,7 +20,15 @@ type LineReservationStore = {
 function normalizePlateForMatch(value: string) {
   return String(value || "")
     .toUpperCase()
+    .replace(/\s*(?:กทม\.?|กรุงเทพ(?:มหานคร)?)\s*$/i, "")
     .replace(/[.\-_/\\\s]+/g, "")
+    .trim();
+}
+
+function cleanPlateValue(value: string) {
+  return String(value || "")
+    .replace(/^(?:ทะเบียน(?:รถ)?|plate|license\s*plate)\s*[:：-]?\s*/i, "")
+    .replace(/\s*(?:กทม\.?|กรุงเทพ(?:มหานคร)?)\s*$/i, "")
     .trim();
 }
 
@@ -28,18 +36,13 @@ export function parseReserveAction(text: string): { action: LineReservationActio
   const cleaned = String(text || "").trim();
   if (!cleaned) return null;
 
-  const normalizeCommandPlate = (value: string) =>
-    String(value || "")
-      .replace(/^(?:ทะเบียน(?:รถ)?|plate|license\s*plate)\s*[:：-]?\s*/i, "")
-      .trim();
-
   const reservePatterns = [
     /(?:^|\s)(?:ติดจอง|จองทะเบียน|จอง|#?reserve)\s*(?:ทะเบียน(?:รถ)?|plate|license\s*plate)?\s*[:：-]?\s*(.+)$/i
   ];
   for (const pattern of reservePatterns) {
     const match = cleaned.match(pattern);
     if (match?.[1]) {
-      const plate = normalizeCommandPlate(match[1]);
+      const plate = cleanPlateValue(match[1]);
       if (plate) return { action: "reserve", plate };
     }
   }
@@ -50,7 +53,7 @@ export function parseReserveAction(text: string): { action: LineReservationActio
   for (const pattern of unreservePatterns) {
     const match = cleaned.match(pattern);
     if (match?.[1]) {
-      const plate = normalizeCommandPlate(match[1]);
+      const plate = cleanPlateValue(match[1]);
       if (plate) return { action: "unreserve", plate };
     }
   }
@@ -58,16 +61,49 @@ export function parseReserveAction(text: string): { action: LineReservationActio
   return null;
 }
 
+function looksLikeBookingForm(text: string) {
+  const signals = [
+    /(?:ชื่อ(?:-นามสกุล)?|ชื่อลูกค้า)\s*[:：]/i,
+    /ช่องทางขาย\s*[:：]/i,
+    /ราคา(?:มาตรฐาน|ตั้งขาย|ขาย|รถ)?\s*[:：]/i,
+    /(?:เซลล์|ผู้ขาย|sale)\s*[:：]/i,
+    /(?:มัดจำ|ยอดจอง)\s*[:：]/i
+  ];
+  return signals.some((pattern) => pattern.test(text));
+}
+
+function parseBookingFormPlates(text: string) {
+  if (!looksLikeBookingForm(text)) return [];
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .map((line) => line.match(/^ทะเบียน\s*รถ\s*[:：-]\s*(.+)$/i)?.[1] || "")
+    .map(cleanPlateValue)
+    .filter(Boolean)
+    .map((plate) => ({ action: "reserve" as const, plate }));
+}
+
 export function parseLineReservationCommands(text: string): Array<{
   action: LineReservationAction;
   plate: string;
 }> {
-  return String(text || "")
+  const sourceText = String(text || "");
+  const explicitCommands = sourceText
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => parseReserveAction(line))
     .filter((item): item is { action: LineReservationAction; plate: string } => Boolean(item));
+
+  const bookingFormCommands = parseBookingFormPlates(sourceText);
+  const combined = [...explicitCommands, ...bookingFormCommands];
+  const seen = new Set<string>();
+  return combined.filter((item) => {
+    const key = `${item.action}:${normalizePlateForMatch(item.plate)}`;
+    if (!normalizePlateForMatch(item.plate) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 async function readStore() {
@@ -182,4 +218,3 @@ export async function applyLineReservationCommands(
 
   return applied.length === 1 ? applied[0] : { applied };
 }
-
