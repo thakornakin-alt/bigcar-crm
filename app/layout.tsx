@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
+import "./line-reservation-v2.css";
 import { RouteAwareShell } from "@/app/components/route-aware-shell";
 import { LineReservationAutoRefresh } from "@/app/components/LineReservationAutoRefresh";
 import { getRddFeatureFlags } from "@/lib/feature-flags";
