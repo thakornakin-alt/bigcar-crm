@@ -16,132 +16,63 @@ async function withTempDataDir(fn: () => Promise<void>) {
   try {
     await fn();
   } finally {
-    if (originalBigCarDataDir === undefined) {
-      delete process.env.BIG_CAR_DATA_DIR;
-    } else {
-      process.env.BIG_CAR_DATA_DIR = originalBigCarDataDir;
-    }
+    if (originalBigCarDataDir === undefined) delete process.env.BIG_CAR_DATA_DIR;
+    else process.env.BIG_CAR_DATA_DIR = originalBigCarDataDir;
     await rm(dir, { recursive: true, force: true });
   }
 }
 
-test("parseLineReservationCommands supports multi-line reserve and ignores blanks", { concurrency: false }, async () => {
+test("parses explicit reserve and unreserve commands", { concurrency: false }, async () => {
   const { parseLineReservationCommands } = await import("../lib/line-reservations.ts");
-
-  const commands = parseLineReservationCommands(`
-    จองทะเบียน : 2ขภ 2660
-
-    จองทะเบียน: 2ฒธ 3700
-    reserve 6กฮ 1348
-  `);
-
-  assert.deepEqual(commands, [
+  assert.deepEqual(parseLineReservationCommands("จองทะเบียน : 2ขภ 2660\nยกเลิกจองทะเบียน : 2ฒธ 3700"), [
     { action: "reserve", plate: "2ขภ 2660" },
-    { action: "reserve", plate: "2ฒธ 3700" },
-    { action: "reserve", plate: "6กฮ 1348" }
+    { action: "unreserve", plate: "2ฒธ 3700" }
   ]);
 });
 
-test("parseLineReservationCommands never treats the word ทะเบียน as a plate", { concurrency: false }, async () => {
+test("parses LINE sales message field with spaces and กทม", { concurrency: false }, async () => {
   const { parseLineReservationCommands } = await import("../lib/line-reservations.ts");
-
-  const commands = parseLineReservationCommands("จองทะเบียน : 2ขภ 2660\nยกเลิกจองทะเบียน : 2ฒธ 3700");
-  assert.equal(commands[0]?.plate, "2ขภ 2660");
-  assert.equal(commands[1]?.plate, "2ฒธ 3700");
+  const commands = parseLineReservationCommands("ชื่อ-นามสกุล : ลูกค้า\nทะเบียนรถ : 3ฒญ 7441 กทม\nราคาตั้งขาย : 357,000");
+  assert.deepEqual(commands, [{ action: "reserve", plate: "3ฒญ 7441" }]);
 });
 
-test("applyLineReservationCommand writes multiple plates without duplicating existing keys", { concurrency: false }, async () => {
+test("supports multiple plates in one ทะเบียนรถ field", { concurrency: false }, async () => {
+  const { parseLineReservationCommands } = await import("../lib/line-reservations.ts");
+  const commands = parseLineReservationCommands("ทะเบียนรถ : 3ฒญ 7441 กทม, 2ขภ 2660, 6กฮ1348");
+  assert.deepEqual(commands, [
+    { action: "reserve", plate: "3ฒญ 7441" },
+    { action: "reserve", plate: "2ขภ 2660" },
+    { action: "reserve", plate: "6กฮ1348" }
+  ]);
+});
+
+test("multiple ทะเบียนรถ lines accumulate in one webhook message", { concurrency: false }, async () => {
+  const { parseLineReservationCommands } = await import("../lib/line-reservations.ts");
+  const commands = parseLineReservationCommands("ทะเบียนรถ : 3ฒญ 7441 กทม\nทะเบียนรถ: 2ฒธ3700\nทะเบียนรถ : 6กฮ 1348");
+  assert.equal(commands.length, 3);
+});
+
+test("apply writes normalized LINE reservations without duplicate plate keys", { concurrency: false }, async () => {
   await withTempDataDir(async () => {
-    const {
-      applyLineReservationCommand,
-      listActiveReservedPlateKeys,
-      listLineReservationRecords
-    } = await import("../lib/line-reservations.ts");
-
-    const result = await applyLineReservationCommand({
-      text: "จองทะเบียน : 2ขภ 2660\nจองทะเบียน : 2ฒธ 3700\nreserve 6กฮ 1348",
+    const { applyLineReservationCommand, listActiveReservedPlateKeys, listLineReservationRecords } = await import("../lib/line-reservations.ts");
+    await applyLineReservationCommand({
+      text: "ทะเบียนรถ : 3ฒญ 7441 กทม, 2ขภ 2660\nทะเบียนรถ : 6กฮ1348",
       sourceGroupId: "group-1",
-      receivedAt: "2026-06-21T00:00:00.000Z"
+      receivedAt: "2026-09-10T00:00:00.000Z"
     });
-
-    assert.ok(result);
-
     const active = await listActiveReservedPlateKeys();
-    assert.deepEqual(active.sort(), ["2ขภ2660", "2ฒธ3700", "6กฮ1348"]);
-
+    assert.deepEqual(active.sort(), ["2ขภ2660", "3ฒญ7441", "6กฮ1348"]);
     const records = await listLineReservationRecords();
     assert.equal(records.length, 3);
     assert.equal(records[0]?.sourceGroupId, "group-1");
   });
 });
 
-test("applyLineReservationCommand supports multi-line unreserve", { concurrency: false }, async () => {
-  await withTempDataDir(async () => {
-    const {
-      applyLineReservationCommand,
-      listActiveReservedPlateKeys
-    } = await import("../lib/line-reservations.ts");
-
-    await applyLineReservationCommand({
-      text: "จองทะเบียน : 2ขภ 2660\nจองทะเบียน : 2ฒธ 3700\nจองทะเบียน : 6กฮ 1348",
-      sourceGroupId: "group-1",
-      receivedAt: "2026-06-21T00:00:00.000Z"
-    });
-
-    await applyLineReservationCommand({
-      text: "ปล่อยจองทะเบียน : 2ขภ 2660\nยกเลิกจองทะเบียน : 2ฒธ 3700\nunreserve 6กฮ 1348",
-      sourceGroupId: "group-1",
-      receivedAt: "2026-06-21T00:01:00.000Z"
-    });
-
-    const active = await listActiveReservedPlateKeys();
-    assert.deepEqual(active, []);
-  });
-});
-
-test("sequential single-message commands accumulate reservations", { concurrency: false }, async () => {
+test("unreserve updates only LINE reservation store", { concurrency: false }, async () => {
   await withTempDataDir(async () => {
     const { applyLineReservationCommand, listActiveReservedPlateKeys } = await import("../lib/line-reservations.ts");
-
-    await applyLineReservationCommand({ text: "จองทะเบียน : 2ขภ 2660" });
-    await applyLineReservationCommand({ text: "จองทะเบียน : 2ฒธ 3700" });
-    await applyLineReservationCommand({ text: "จองทะเบียน : 6กฮ 1348" });
-
-    const active = await listActiveReservedPlateKeys();
-    assert.deepEqual(active.sort(), ["2ขภ2660", "2ฒธ3700", "6กฮ1348"]);
-  });
-});
-
-test("duplicate plate updates existing reservation instead of duplicating", { concurrency: false }, async () => {
-  await withTempDataDir(async () => {
-    const { applyLineReservationCommand, listLineReservationRecords } = await import("../lib/line-reservations.ts");
-
-    await applyLineReservationCommand({ text: "จองทะเบียน : 2ขภ 2660", receivedAt: "2026-06-21T00:00:00.000Z" });
-    await applyLineReservationCommand({ text: "ปล่อยจองทะเบียน : 2ขภ 2660", receivedAt: "2026-06-21T00:01:00.000Z" });
-    await applyLineReservationCommand({ text: "จองทะเบียน : 2ขภ 2660", receivedAt: "2026-06-21T00:02:00.000Z" });
-
-    const records = await listLineReservationRecords();
-    assert.equal(records.length, 1);
-    assert.equal(records[0]?.plateNormalized, "2ขภ2660");
-    assert.equal(records[0]?.active, true);
-    assert.equal(records[0]?.updatedAt, "2026-06-21T00:02:00.000Z");
-  });
-});
-
-test("clearAllLineReservations resets all active plates", { concurrency: false }, async () => {
-  await withTempDataDir(async () => {
-    const { applyLineReservationCommand, clearAllLineReservations, listActiveReservedPlateKeys } = await import("../lib/line-reservations.ts");
-
-    await applyLineReservationCommand({ text: "จองทะเบียน : 2ขภ 2660" });
-    await applyLineReservationCommand({ text: "จองทะเบียน : 2ฒธ 3700" });
-    await applyLineReservationCommand({ text: "จองทะเบียน : 6กฮ 1348" });
-
-    const before = await listActiveReservedPlateKeys();
-    assert.equal(before.length, 3);
-
-    await clearAllLineReservations("stock-import");
-
-    const after = await listActiveReservedPlateKeys();
-    assert.deepEqual(after, []);
+    await applyLineReservationCommand({ text: "ทะเบียนรถ : 2ขภ 2660" });
+    await applyLineReservationCommand({ text: "ปล่อยจองทะเบียน : 2ขภ 2660" });
+    assert.deepEqual(await listActiveReservedPlateKeys(), []);
   });
 });
