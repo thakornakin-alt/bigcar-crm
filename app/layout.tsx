@@ -18,10 +18,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   const flags = getRddFeatureFlags();
+  const workspaceEnabled = flags.workspaceReadOnly || flags.workspaceEdit;
   return (
     <html lang="th">
       <body>
-        <RouteAwareShell rddShellEnabled={flags.shell} workspaceEnabled={flags.workspaceReadOnly} commissionEnabled={flags.commissionPreview}>{children}</RouteAwareShell>
+        <RouteAwareShell rddShellEnabled={flags.shell} workspaceEnabled={workspaceEnabled} commissionEnabled={flags.commissionPreview}>{children}</RouteAwareShell>
       </body>
     </html>
   );
