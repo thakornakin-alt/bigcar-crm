@@ -3,23 +3,109 @@
 import { useEffect } from "react";
 
 function normalizePlate(value: string) {
-  return String(value || "")
-    .normalize("NFKC")
-    .toUpperCase()
-    .replace(/\s*(?:กทม\.?|กรุงเทพ(?:มหานคร)?)\s*$/i, "")
-    .replace(/[.\-_/\\\s]+/g, "")
-    .trim();
+  return String(value || "").normalize("NFKC").toUpperCase().replace(/\s*(?:กทม\.?|กรุงเทพ(?:มหานคร)?)\s*$/i, "").replace(/[.\-_/\\\s]+/g, "").trim();
+}
+
+type CanvasState = {
+  lastRect?: { x: number; y: number; w: number; h: number };
+  reservedRow?: { y: number; h: number; plateX: number; plateW: number; plate: string };
+};
+
+let activePlateKeys = new Set<string>();
+let canvasPatched = false;
+const canvasStates = new WeakMap<CanvasRenderingContext2D, CanvasState>();
+
+function installCanvasReservationPatch() {
+  if (canvasPatched || typeof window === "undefined" || typeof CanvasRenderingContext2D === "undefined") return;
+  canvasPatched = true;
+  const proto = CanvasRenderingContext2D.prototype;
+  const originalFillRect = proto.fillRect;
+  const originalStrokeRect = proto.strokeRect;
+  const originalFillText = proto.fillText;
+
+  proto.fillRect = function (x: number, y: number, w: number, h: number) {
+    const state = canvasStates.get(this) || {};
+    state.lastRect = { x, y, w, h };
+    canvasStates.set(this, state);
+    const row = state.reservedRow;
+    if (row && Math.abs(y - row.y) < 1 && Math.abs(h - row.h) < 1) {
+      const previous = this.fillStyle;
+      this.fillStyle = "#fee2e2";
+      originalFillRect.call(this, x, y, w, h);
+      this.fillStyle = previous;
+      return;
+    }
+    originalFillRect.call(this, x, y, w, h);
+  };
+
+  proto.strokeRect = function (x: number, y: number, w: number, h: number) {
+    const state = canvasStates.get(this);
+    const row = state?.reservedRow;
+    if (row && Math.abs(y - row.y) < 1 && Math.abs(h - row.h) < 1) {
+      const previous = this.strokeStyle;
+      this.strokeStyle = "#ef4444";
+      originalStrokeRect.call(this, x, y, w, h);
+      this.strokeStyle = previous;
+      return;
+    }
+    originalStrokeRect.call(this, x, y, w, h);
+  };
+
+  proto.fillText = function (text: string, x: number, y: number, maxWidth?: number) {
+    const value = String(text || "");
+    const normalized = normalizePlate(value);
+    const state = canvasStates.get(this) || {};
+
+    if (activePlateKeys.has(normalized) && state.lastRect && state.lastRect.h >= 40) {
+      const cell = state.lastRect;
+      state.reservedRow = { y: cell.y, h: cell.h, plateX: cell.x, plateW: cell.w, plate: value };
+      canvasStates.set(this, state);
+      const previousFill = this.fillStyle;
+      const previousStroke = this.strokeStyle;
+      this.fillStyle = "#fee2e2";
+      originalFillRect.call(this, cell.x, cell.y, cell.w, cell.h);
+      this.strokeStyle = "#ef4444";
+      originalStrokeRect.call(this, cell.x, cell.y, cell.w, cell.h);
+      this.fillStyle = previousFill;
+      this.strokeStyle = previousStroke;
+      if (maxWidth === undefined) originalFillText.call(this, text, x, y);
+      else originalFillText.call(this, text, x, y, maxWidth);
+      return;
+    }
+
+    if (/BOOKING/i.test(value) && state.reservedRow) {
+      const row = state.reservedRow;
+      const previousFill = this.fillStyle;
+      const previousStroke = this.strokeStyle;
+      const previousFont = this.font;
+      const previousAlign = this.textAlign;
+      const previousBaseline = this.textBaseline;
+      this.fillStyle = "#fee2e2";
+      originalFillRect.call(this, row.plateX, row.y, row.plateW, row.h);
+      this.strokeStyle = "#ef4444";
+      originalStrokeRect.call(this, row.plateX, row.y, row.plateW, row.h);
+      this.fillStyle = "#111827";
+      this.font = "700 18px Arial, Tahoma, sans-serif";
+      this.textAlign = "left";
+      this.textBaseline = "middle";
+      originalFillText.call(this, row.plate, row.plateX + 12, row.y + row.h / 2, Math.max(20, row.plateW - 24));
+      this.fillStyle = previousFill;
+      this.strokeStyle = previousStroke;
+      this.font = previousFont;
+      this.textAlign = previousAlign;
+      this.textBaseline = previousBaseline;
+      return;
+    }
+
+    if (maxWidth === undefined) originalFillText.call(this, text, x, y);
+    else originalFillText.call(this, text, x, y, maxWidth);
+  };
 }
 
 function plateFromRow(row: HTMLElement) {
   const firstCell = row.querySelector<HTMLElement>("td");
   if (!firstCell) return "";
-  const text = String(firstCell.textContent || "")
-    .replace(/📅?\s*BOOKING/gi, " ")
-    .replace(/ติดจองรอคอนเฟิร์ม/g, " ")
-    .trim();
-  const candidate = text.split(/\n/).map((v) => v.trim()).find(Boolean) || text;
-  return normalizePlate(candidate);
+  return normalizePlate(String(firstCell.textContent || "").replace(/📅?\s*BOOKING/gi, " ").replace(/ติดจองรอคอนเฟิร์ม/g, " ").trim());
 }
 
 function removeReservationBadges(root: HTMLElement) {
@@ -34,23 +120,21 @@ async function syncLineReservationCards() {
     const response = await fetch("/api/line/reservations", { cache: "no-store" });
     if (!response.ok) return;
     const data = await response.json() as { activePlates?: string[] };
-    const active = new Set((data.activePlates || []).map(normalizePlate).filter(Boolean));
-    if (!active.size) return;
+    activePlateKeys = new Set((data.activePlates || []).map(normalizePlate).filter(Boolean));
+    installCanvasReservationPatch();
+    if (!activePlateKeys.size) return;
 
-    // Normal stock cards.
     document.querySelectorAll<HTMLElement>(".stock-bigcar-brand article").forEach((card) => {
       const text = normalizePlate(card.textContent || "");
-      const matched = Array.from(active).some((plate) => text.includes(plate));
-      if (!matched) return;
+      if (!Array.from(activePlateKeys).some((plate) => text.includes(plate))) return;
       card.dataset.lineReservation = "true";
       card.classList.add("line-reserved-stock-card");
       removeReservationBadges(card);
     });
 
-    // Export renderer v4 uses table rows rather than article cards.
     document.querySelectorAll<HTMLElement>("table tbody tr").forEach((row) => {
       const plate = plateFromRow(row);
-      if (!plate || !active.has(plate)) return;
+      if (!plate || !activePlateKeys.has(plate)) return;
       row.dataset.lineReservation = "true";
       row.classList.add("line-reserved-stock-row");
       removeReservationBadges(row);
@@ -62,14 +146,12 @@ async function syncLineReservationCards() {
 
 export default function LineReservationCardMarker() {
   useEffect(() => {
+    installCanvasReservationPatch();
     let queued = false;
     const schedule = () => {
       if (queued) return;
       queued = true;
-      window.setTimeout(() => {
-        queued = false;
-        void syncLineReservationCards();
-      }, 80);
+      window.setTimeout(() => { queued = false; void syncLineReservationCards(); }, 80);
     };
     void syncLineReservationCards();
     const observer = new MutationObserver(schedule);
