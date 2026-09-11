@@ -3,7 +3,7 @@
 import { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Calculator, CalendarDays, Car, CheckSquare, ClipboardCheck, FileText, Home, LayoutDashboard, Menu, Plus, Radio, Rows3, Settings, UploadCloud, Users, Wrench, X } from "lucide-react";
+import { Bell, Calculator, CalendarDays, Car, CheckSquare, FileText, Home, Menu, Plus, Radio, Rows3, Settings, UploadCloud, Users, X } from "lucide-react";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import { profileDisplayName } from "@/lib/user-profile";
 
@@ -128,8 +128,6 @@ const globalNavItems = [
   { href: "/realtime-booking", label: "Realtime Booking", icon: Radio },
   { href: "/booking-reports", label: "รายงานจอง", icon: FileText },
   { href: "/sales-reports", label: "รายงานขาย", icon: FileText },
-  { href: "/booking-delivery", label: "ยอดจองทั้งหมด", icon: ClipboardCheck },
-  { href: "/booking-delivery-workspace?status=รอส่งมอบทั้งหมด", label: "รอส่งมอบ", icon: Wrench },
   { href: "/leads", label: "ลูกค้ามุ่งหวัง", icon: Users },
   { href: "/finance-approval", label: "รอผลไฟแนนซ์", icon: UploadCloud },
   { href: "/calendar", label: "ปฏิทิน", icon: CalendarDays },
@@ -143,14 +141,13 @@ export function GlobalNav({ workspaceEnabled = false, commissionEnabled = false 
   const [open, setOpen] = useState(false);
   const items = workspaceEnabled
     ? [
-        { href: "/rdd-home", label: "RDD Home", icon: LayoutDashboard },
         { href: "/booking-delivery-workspace", label: "Workspace", icon: Rows3 },
         ...(commissionEnabled ? [{ href: "/commission", label: "ค่าคอม", icon: Calculator }] : []),
         ...globalNavItems
       ]
     : globalNavItems;
   const hasOddMenuCount = items.length % 2 === 1;
-  const homeHref = workspaceEnabled ? "/rdd-home" : "/dashboard";
+  const homeHref = "/dashboard";
 
   function isActive(href: string) {
     const hrefPath = href.split("?")[0];
