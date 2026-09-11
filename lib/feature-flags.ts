@@ -22,7 +22,8 @@ export function getRddFeatureFlags(env: NodeJS.ProcessEnv = process.env): RddFea
   const previewRef = String(env.VERCEL_GIT_COMMIT_REF || "");
   const workspacePreview = env.VERCEL_ENV === "preview"
     && (previewRef === "codex/workspace-line-tracker"
-      || previewRef === "fix/workspace-edit-v2");
+      || previewRef === "fix/workspace-edit-v2"
+      || previewRef === "fix/production-navigation-v2");
   const workspaceProduction = env.VERCEL_ENV === "production";
   return {
     shell: enabledForWorkspacePreview(env.RDD_SHELL_ENABLED, workspacePreview),
@@ -31,7 +32,7 @@ export function getRddFeatureFlags(env: NodeJS.ProcessEnv = process.env): RddFea
     activityV2: enabled(env.RDD_ACTIVITY_V2_ENABLED),
     workspaceReadOnly: workspaceProduction ? false : enabledForWorkspacePreview(env.RDD_WORKSPACE_READ_ONLY_ENABLED, workspacePreview),
     workspaceEdit: workspaceProduction ? true : enabledForWorkspacePreview(env.RDD_WORKSPACE_EDIT_ENABLED, workspacePreview),
-    commissionPreview: enabled(env.RDD_COMMISSION_PREVIEW_ENABLED),
+    commissionPreview: enabledForWorkspacePreview(env.RDD_COMMISSION_PREVIEW_ENABLED, workspacePreview),
     commissionRealWrites: enabled(env.COMMISSION_REAL_WRITES_ENABLED)
   };
 }
