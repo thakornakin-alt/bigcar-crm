@@ -10,6 +10,39 @@ import { listVehiclePrepRecords } from "@/lib/vehicle-prep";
 export const dynamic = "force-dynamic";
 const blankMetrics = { leads: 0, newLeadsToday: 0, bookings: 0, financeWaiting: 0, waitingDelivery: 0, delivered: 0, bookingDeliveries: 0, bookingDeliveriesPending: 0, todayEvents: 0 };
 
+type SalesUsers = Awaited<ReturnType<typeof listSalesUsers>>;
+type ReportHistory = Awaited<ReturnType<typeof listReportHistory>>;
+let inFlightSalesUsers: Promise<SalesUsers> | null = null;
+let inFlightAllReports: Promise<ReportHistory> | null = null;
+
+async function listSalesUsersShared() {
+  if (inFlightSalesUsers) {
+    console.info("[dashboard-metrics] join-in-flight", { source: "sales_users" });
+    return inFlightSalesUsers;
+  }
+  const pending = listSalesUsers();
+  inFlightSalesUsers = pending;
+  try {
+    return await pending;
+  } finally {
+    if (inFlightSalesUsers === pending) inFlightSalesUsers = null;
+  }
+}
+
+async function listAllReportsShared() {
+  if (inFlightAllReports) {
+    console.info("[dashboard-metrics] join-in-flight", { source: "report_history" });
+    return inFlightAllReports;
+  }
+  const pending = listReportHistory("", "all");
+  inFlightAllReports = pending;
+  try {
+    return await pending;
+  } finally {
+    if (inFlightAllReports === pending) inFlightAllReports = null;
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const actor = await requireUser();
@@ -20,12 +53,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "ไม่อนุญาตให้ดูข้อมูลของผู้ใช้อื่น" }, { status: 403 });
     }
     const month = normalizeDashboardMonth(url.searchParams.get("month"));
-    const users = await listSalesUsers();
+    const users = await listSalesUsersShared();
     const targetUserId = canSelectUser && requestedUserId ? requestedUserId : actor.id;
     const target = users.find((user) => user.id === targetUserId && !user.locked);
     if (!target) return NextResponse.json({ error: "ไม่พบผู้ใช้ที่เลือก" }, { status: 404 });
     const [leadsResult, reportsResult, prepResult, deliveryResult, ownershipResult] = await Promise.allSettled([
-      listSalesLeads(), listReportHistory("", "all"), listVehiclePrepRecords(), listBookingDeliveryRecords(), listCaseOwnership()
+      listSalesLeads(), listAllReportsShared(), listVehiclePrepRecords(), listBookingDeliveryRecords(), listCaseOwnership()
     ]);
     const failures: string[] = [];
     if (leadsResult.status === "rejected") failures.push("leads");
