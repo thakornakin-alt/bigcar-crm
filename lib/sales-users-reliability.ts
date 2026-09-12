@@ -31,7 +31,14 @@ async function persistSnapshot(users: SalesUser[]) {
   }
 }
 
-export async function listSalesUsersReliable() {
+export async function listSalesUsersReliable(options: { preferRecentSnapshot?: boolean } = {}) {
+  if (options.preferRecentSnapshot) {
+    const snapshot = await readRecentSnapshot();
+    if (snapshot) {
+      console.info("sales_users.authoritative_snapshot_hit", { capturedAt: snapshot.capturedAt, maxAgeMs: MAX_FALLBACK_AGE_MS });
+      return snapshot.users;
+    }
+  }
   if (inFlight) {
     console.info("[sales-users] join-in-flight");
     return inFlight;
