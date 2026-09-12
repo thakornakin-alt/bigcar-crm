@@ -9,6 +9,10 @@ export const dynamic = "force-dynamic";
 const STOCK_LIST_MIN_COMPLETE_LIMIT = 1000;
 const STOCK_LIST_MAX_LIMIT = 5000;
 
+type StockListData = Awaited<ReturnType<typeof listStockVehicles>>;
+type StockReadResult = Awaited<ReturnType<typeof readStockWithBoundedRetry<StockListData>>>;
+const inFlightStockReads = new Map<string, Promise<StockReadResult>>();
+
 function text(value: unknown) {
   return String(value ?? "").trim();
 }
@@ -37,6 +41,23 @@ function normalizeStockVehicle(vehicle: StockVehicle) {
   };
 }
 
+async function readStockOncePerRequestKey(query: string, limit: number) {
+  const key = `${query}\u0000${limit}`;
+  const existing = inFlightStockReads.get(key);
+  if (existing) {
+    console.info("[stock-list-read] join-in-flight", { query: Boolean(query), effectiveLimit: limit });
+    return existing;
+  }
+
+  const pending = readStockWithBoundedRetry(() => listStockVehicles({ query, limit }));
+  inFlightStockReads.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    if (inFlightStockReads.get(key) === pending) inFlightStockReads.delete(key);
+  }
+}
+
 export async function GET(request: Request) {
   const requestStartedAt = Date.now();
   try {
@@ -45,7 +66,7 @@ export async function GET(request: Request) {
     const requestedLimit = Number(searchParams.get("limit"));
     const requestedOrDefault = Number.isFinite(requestedLimit) && requestedLimit > 0 ? requestedLimit : STOCK_LIST_MIN_COMPLETE_LIMIT;
     const limit = Math.min(Math.max(requestedOrDefault, STOCK_LIST_MIN_COMPLETE_LIMIT), STOCK_LIST_MAX_LIMIT);
-    const { value: data, meta } = await readStockWithBoundedRetry(() => listStockVehicles({ query, limit }));
+    const { value: data, meta } = await readStockOncePerRequestKey(query, limit);
     const vehicles = await mergeStockExtraFields(data.vehicles || []);
     const normalizedVehicles = vehicles.map(normalizeStockVehicle);
     const total = Number(data.total || 0);
