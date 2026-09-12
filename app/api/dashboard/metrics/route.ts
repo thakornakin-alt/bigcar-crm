@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
-import { listReportHistory, listSalesUsers } from "@/lib/apps-script";
+import { listReportHistory } from "@/lib/apps-script";
 import { listBookingDeliveryRecords } from "@/lib/booking-delivery";
 import { listCaseOwnership } from "@/lib/case-ownership";
 import { derivePersonalDashboardMetrics, normalizeDashboardMonth } from "@/lib/dashboard-personal-metrics";
 import { listSalesLeads } from "@/lib/leads";
 import { RequestAuthError, requireUser } from "@/lib/request-user";
+import { listSalesUsersReliable } from "@/lib/sales-users-reliability";
 import { listVehiclePrepRecords } from "@/lib/vehicle-prep";
 
 export const dynamic = "force-dynamic";
 const blankMetrics = { leads: 0, newLeadsToday: 0, bookings: 0, financeWaiting: 0, waitingDelivery: 0, delivered: 0, bookingDeliveries: 0, bookingDeliveriesPending: 0, todayEvents: 0 };
 
-type SalesUsers = Awaited<ReturnType<typeof listSalesUsers>>;
+type SalesUsers = Awaited<ReturnType<typeof listSalesUsersReliable>>;
 type ReportHistory = Awaited<ReturnType<typeof listReportHistory>>;
 let inFlightSalesUsers: Promise<SalesUsers> | null = null;
 let inFlightAllReports: Promise<ReportHistory> | null = null;
@@ -20,7 +21,7 @@ async function listSalesUsersShared() {
     console.info("[dashboard-metrics] join-in-flight", { source: "sales_users" });
     return inFlightSalesUsers;
   }
-  const pending = listSalesUsers();
+  const pending = listSalesUsersReliable();
   inFlightSalesUsers = pending;
   try {
     return await pending;
