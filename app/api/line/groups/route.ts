@@ -17,17 +17,13 @@ function mergeGroups<T extends { groupId: string; lastSeenAt: string }>(...sourc
 
 export async function GET() {
   try {
-    // Supabase is the primary LINE-group store. Do not make the UI wait for the
-    // legacy Apps Script mirror, which can take several seconds or time out.
-    const stored = await listStoredLineGroups();
-    void listLineGroups()
-      .then((legacy) => {
-        const storedIds = new Set(stored.map((group) => group.groupId));
-        const missing = legacy.filter((group) => !storedIds.has(group.groupId));
-        return Promise.all(missing.map((group) => saveStoredLineGroup(group)));
-      })
-      .catch(() => undefined);
-    return NextResponse.json({ groups: mergeGroups(stored) });
+    // Read both stores concurrently so legacy-only groups are never hidden.
+    // Each source may fail independently; the healthy source still serves the UI.
+    const [stored, legacy] = await Promise.all([
+      listStoredLineGroups().catch(() => []),
+      listLineGroups().catch(() => [])
+    ]);
+    return NextResponse.json({ groups: mergeGroups(stored, legacy) });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to load LINE groups" },
