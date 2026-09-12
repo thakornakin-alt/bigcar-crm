@@ -39,7 +39,7 @@ export async function listSalesUsersReliable() {
   const pending = (async () => {
     try {
       const users = await listSalesUsers();
-      void persistSnapshot(users);
+      await persistSnapshot(users);
       return users;
     } catch (error) {
       const snapshot = await readRecentSnapshot();
