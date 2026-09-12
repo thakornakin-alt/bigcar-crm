@@ -262,7 +262,7 @@ async function callAppsScript<T>(action: AppsScriptAction, payload: Record<strin
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify(signedAppsScriptBody(action, payload)),
         cache: "no-store"
-      });
+      }, action === "importStock" ? 45000 : 15000);
       break;
     } catch (error) {
       lastError = error;

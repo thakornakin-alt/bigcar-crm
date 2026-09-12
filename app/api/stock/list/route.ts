@@ -3,6 +3,7 @@ import { listStockVehicles } from "@/lib/apps-script";
 import type { StockVehicle } from "@/lib/types";
 import { mergeStockExtraFields } from "@/lib/stock-extra-fields";
 import { readStockWithBoundedRetry, StockReadFailure, stockReadUserMessage, classifyStockReadError, isRetryableStockReadError } from "@/lib/stock/stock-read-reliability";
+import { readStockImportIntegrity } from "@/lib/stock-import-integrity";
 
 export const dynamic = "force-dynamic";
 
@@ -41,13 +42,17 @@ export async function GET(request: Request) {
     const query = String(searchParams.get("query") || "").trim();
     const limit = Number(searchParams.get("limit") || 250);
     const { value: data, meta } = await readStockWithBoundedRetry(() => listStockVehicles({ query, limit }));
-    const vehicles = await mergeStockExtraFields(data.vehicles || []);
+    const [vehicles, integrity] = await Promise.all([
+      mergeStockExtraFields(data.vehicles || []),
+      readStockImportIntegrity()
+    ]);
     const durationMs = Date.now() - requestStartedAt;
     console.info("[stock-list-read] success", { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts, vehicleCount: vehicles.length });
     return NextResponse.json({
       ...data,
       ok: true,
       vehicles: vehicles.map(normalizeStockVehicle),
+      integrity,
       meta: { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts }
     });
   } catch (error) {

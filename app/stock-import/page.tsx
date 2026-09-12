@@ -35,7 +35,7 @@ type StockStagingItem = {
   previewRows: StockVehicle[];
 };
 
-const chunkSize = 300;
+const maxImportRows = 1000;
 const defaultHeaderRow = 5;
 const hiddenColumnPolicyStorageKey = "bigcar-stock-hidden-column-policy-v1";
 const vinFallbackKey = "__BIGCAR_COL_U";
@@ -290,7 +290,8 @@ export default function StockImportPage() {
   const [headers, setHeaders] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Record<keyof StockVehicle, string>>(detectMapping([]));
   const [headerRow, setHeaderRow] = useState(defaultHeaderRow);
-  const [status, setStatus] = useState<StockImportStatus>({ total: 0, latestImportedAt: "", latestUpdatedAt: "" });
+  const [status, setStatus] = useState<StockImportStatus | null>(null);
+  const [stockStatusError, setStockStatusError] = useState(false);
   const [clearExisting, setClearExisting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [importing, setImporting] = useState(false);
@@ -326,8 +327,11 @@ export default function StockImportPage() {
 
   useEffect(() => {
     api<{ status: StockImportStatus }>("/api/stock/status")
-      .then((data) => setStatus(data.status))
-      .catch(() => undefined);
+      .then((data) => {
+        setStatus(data.status);
+        setStockStatusError(false);
+      })
+      .catch(() => setStockStatusError(true));
     loadStaging();
   }, []);
 
@@ -511,6 +515,11 @@ export default function StockImportPage() {
   async function importRows() {
     if (missingPlate || !parsedRows.length) return;
 
+    if (parsedRows.length > maxImportRows) {
+      setError(`ไฟล์มี ${parsedRows.length.toLocaleString("th-TH")} คัน เกินเพดาน ${maxImportRows.toLocaleString("th-TH")} คัน`);
+      return;
+    }
+
     setImporting(true);
     setError("");
     setMessage("");
@@ -541,38 +550,31 @@ export default function StockImportPage() {
         }
       }
 
-      for (let start = 0; start < parsedRows.length; start += chunkSize) {
-        const chunk = parsedRows.slice(start, start + chunkSize);
-        const data = await api<{ result: StockImportResult }>("/api/stock/import", {
-          method: "POST",
-          body: JSON.stringify({ rows: chunk, sourceName: fileName, clearExisting: clearExisting && start === 0 })
-        });
-        imported += data.result.imported;
-        updated += data.result.updated;
-        skipped += data.result.skipped;
-        clientVinRows += data.result.clientVinRows || 0;
-        clientEngineNoRows += data.result.clientEngineNoRows || 0;
-        clientStatusRows += data.result.clientStatusRows || 0;
-        clientVehicleGroupRows += data.result.clientVehicleGroupRows || 0;
-        clientPdiNoteRows += data.result.clientPdiNoteRows || 0;
-        vinReceived += data.result.vinReceived || 0;
-        vinWritten += data.result.vinWritten || 0;
-        engineNoReceived += data.result.engineNoReceived || 0;
-        engineNoWritten += data.result.engineNoWritten || 0;
-        pdiReceived += data.result.pdiReceived || 0;
-        pdiWritten += data.result.pdiWritten || 0;
-        importedAt = data.result.importedAt || importedAt;
-        setProgress(Math.round(Math.min(((start + chunk.length) / parsedRows.length) * 100, 100)));
-      }
+      const data = await api<{ result: StockImportResult; status: StockImportStatus }>("/api/stock/import", {
+        method: "POST",
+        body: JSON.stringify({ rows: parsedRows, sourceName: fileName, clearExisting })
+      });
+      imported = data.result.imported;
+      updated = data.result.updated;
+      skipped = data.result.skipped;
+      clientVinRows = data.result.clientVinRows || 0;
+      clientEngineNoRows = data.result.clientEngineNoRows || 0;
+      clientStatusRows = data.result.clientStatusRows || 0;
+      clientVehicleGroupRows = data.result.clientVehicleGroupRows || 0;
+      clientPdiNoteRows = data.result.clientPdiNoteRows || 0;
+      vinReceived = data.result.vinReceived || 0;
+      vinWritten = data.result.vinWritten || 0;
+      engineNoReceived = data.result.engineNoReceived || 0;
+      engineNoWritten = data.result.engineNoWritten || 0;
+      pdiReceived = data.result.pdiReceived || 0;
+      pdiWritten = data.result.pdiWritten || 0;
+      importedAt = data.result.importedAt || "";
+      setProgress(100);
 
       setMessage(
         `Import สำเร็จ: เพิ่ม ${imported} / อัปเดต ${updated} / ข้าม ${skipped} / เลขตัวรถ ${clientVinRows} / เลขเครื่อง ${clientEngineNoRows} / สถานะ ${clientStatusRows} / กลุ่มรถยนต์ ${clientVehicleGroupRows} / หมายเหตุ PDI ${clientPdiNoteRows} / Apps Script รับ PDI ${pdiReceived} / เขียน ${pdiWritten} / รับเลขตัวรถ ${vinReceived} / เขียน ${vinWritten} / รับเลขเครื่อง ${engineNoReceived} / เขียน ${engineNoWritten}`
       );
-      setStatus((current) => ({
-        total: clearExisting ? imported : current.total + imported,
-        latestImportedAt: importedAt,
-        latestUpdatedAt: importedAt
-      }));
+      setStatus(data.status);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import ไม่สำเร็จ");
     } finally {
@@ -758,8 +760,11 @@ export default function StockImportPage() {
               สต๊อกล่าสุด
             </h2>
             <div className="grid grid-cols-2 gap-2 text-sm">
-              <Stat label="จำนวนใน StockInventory" value={`${status.total.toLocaleString("th-TH")} คัน`} />
-              <Stat label="Import ล่าสุด" value={status.latestImportedAt || "-"} />
+              <Stat
+                label="จำนวนใน StockInventory"
+                value={status ? `${status.total.toLocaleString("th-TH")} คัน` : stockStatusError ? "โหลดไม่สำเร็จ" : "กำลังโหลด..."}
+              />
+              <Stat label="Import ล่าสุด" value={status?.latestImportedAt || (stockStatusError ? "โหลดไม่สำเร็จ" : "-")} />
             </div>
           </div>
 

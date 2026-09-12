@@ -16,6 +16,7 @@ import type { DriveUploadResult, LineGroup, ReportHistoryItem, StockVehicle } fr
 import { salesLineGroupStorageKey } from "@/lib/client-settings";
 import { useSalesProfile } from "@/lib/use-sales-profile";
 import { hasStockFieldData, realStockFieldLabels, stockRawValue } from "@/lib/stock/stock-field-aliases";
+import type { StockImportIntegrity } from "@/lib/stock-import-integrity";
 
 type StockReadErrorCode = "timeout" | "network_error" | "upstream_http_error" | "invalid_response" | "configuration_error" | "apps_script_action_missing" | "unknown_error";
 
@@ -23,6 +24,7 @@ type StockListResponse = {
   ok: true;
   vehicles: StockVehicle[];
   total: number;
+  integrity: StockImportIntegrity;
   meta?: { durationMs: number; appsScriptDurationMs: number; attempts: number };
 };
 
@@ -342,7 +344,9 @@ function vehicleTitle(vehicle: StockVehicle) {
 }
 
 function stockStatus(vehicle: StockVehicle) {
-  return String(vehicle.status || "").trim();
+  const status = String(vehicle.status || "").trim();
+  if (status.toLocaleLowerCase("en-US") === "จอง_carsub") return "จอง_CarSub";
+  return status;
 }
 
 function VehicleImagePlaceholder({ vehicle }: { vehicle: StockVehicle }) {
@@ -865,6 +869,7 @@ export default function StockExportPage() {
   const [hasSuccessfulStockLoad, setHasSuccessfulStockLoad] = useState(false);
   const [stockDataStale, setStockDataStale] = useState(false);
   const [stockTotal, setStockTotal] = useState(0);
+  const [stockIntegrity, setStockIntegrity] = useState<StockImportIntegrity | null>(null);
   const [lastSuccessfulLoadAt, setLastSuccessfulLoadAt] = useState("");
   const [exporting, setExporting] = useState(false);
   const [sendingLine, setSendingLine] = useState(false);
@@ -1075,7 +1080,11 @@ export default function StockExportPage() {
     [sortedVehicles]
   );
   const hasMoreVehicles = sortedVehicles.length > visibleCount;
-  const stockDataIncomplete = hasSuccessfulStockLoad && stockTotal > vehicles.length;
+  const integrityBlocksExport = !stockIntegrity
+    || stockIntegrity.status !== "complete"
+    || stockIntegrity.expectedTotal !== stockIntegrity.persistedTotal
+    || stockIntegrity.persistedTotal !== stockTotal;
+  const stockDataIncomplete = hasSuccessfulStockLoad && (stockTotal > vehicles.length || integrityBlocksExport);
   const hasRegistrationYear = useMemo(
     () => vehicles.some((vehicle) => Boolean(stockRegistrationYear(vehicle))),
     [vehicles]
@@ -1234,12 +1243,15 @@ export default function StockExportPage() {
       }
       setVehicles(data.vehicles);
       setStockTotal(data.total);
+      setStockIntegrity(data.integrity);
       setHasSuccessfulStockLoad(true);
       setStockDataStale(false);
       setLastSuccessfulLoadAt(new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }));
       setMessage(
         data.vehicles.length < data.total
           ? `ข้อมูลสต๊อกไม่ครบ: โหลดได้ ${data.vehicles.length.toLocaleString("th-TH")} จาก ${data.total.toLocaleString("th-TH")} คัน ระบบปิด Export ไว้ก่อน`
+          : data.integrity.status !== "complete" || data.integrity.expectedTotal !== data.total
+            ? `ยังไม่ยืนยันความครบถ้วนของสต๊อก: ${data.integrity.message} ระบบปิด Export ไว้ก่อน`
           : `โหลดสต๊อกครบ ${data.vehicles.length.toLocaleString("th-TH")} คันแล้ว`
       );
     } catch (err) {
@@ -1624,7 +1636,9 @@ export default function StockExportPage() {
                 : stockLoadError
                   ? hasSuccessfulStockLoad ? "อัปเดตข้อมูลล่าสุดไม่สำเร็จ ข้อมูลที่แสดงยังเป็นชุดก่อนหน้า" : "โหลดข้อมูลสต๊อกไม่สำเร็จ"
                   : stockDataIncomplete
-                    ? `ข้อมูลสต๊อกไม่ครบ โหลดได้ ${vehicles.length.toLocaleString("th-TH")} จาก ${stockTotal.toLocaleString("th-TH")} คัน`
+                    ? stockIntegrity?.status === "complete"
+                      ? `ข้อมูลสต๊อกไม่ครบ โหลดได้ ${vehicles.length.toLocaleString("th-TH")} จาก ${stockTotal.toLocaleString("th-TH")} คัน`
+                      : `ยังไม่ยืนยันความครบถ้วนของสต๊อก${stockIntegrity?.message ? ` · ${stockIntegrity.message}` : ""}`
                     : "ข้อมูลสต๊อกพร้อมใช้งาน"}
             </p>
             {stockLoadError ? <p className="mt-0.5 text-xs opacity-85">{stockLoadError.message}</p> : null}

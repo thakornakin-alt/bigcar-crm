@@ -1,10 +1,15 @@
 import { createHash } from "crypto";
 import * as XLSX from "xlsx";
-import { importStock, listStockVehicles } from "@/lib/apps-script";
+import { getStockImportStatus, importStock, listStockVehicles } from "@/lib/apps-script";
 import { clearAllLineReservations } from "@/lib/line-reservations";
 import { readJsonStore, writeJsonStore } from "@/lib/json-store";
 import { saveStockExtraFields } from "@/lib/stock-extra-fields";
-import type { StockVehicle } from "@/lib/types";
+import type { StockImportResult, StockVehicle } from "@/lib/types";
+import {
+  beginStockImportIntegrity,
+  finishStockImportIntegrity,
+  uniqueStockPlateCount
+} from "@/lib/stock-import-integrity";
 
 export type StockStagingStatus = "Pending" | "Confirmed" | "Rejected" | "Duplicate" | "Ignored" | "Excluded";
 
@@ -175,6 +180,13 @@ function headerMatch(headers: string[], key: keyof StockVehicle) {
 
 function parseFileDate(fileName: string, subject: string, fallback: string) {
   const raw = `${fileName} ${subject}`;
+  const isoMatch = raw.match(/\b(\d{4})[-_/](\d{1,2})[-_/](\d{1,2})\b/);
+  if (isoMatch) {
+    const year = isoMatch[1];
+    const month = isoMatch[2].padStart(2, "0");
+    const day = isoMatch[3].padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
   const match = raw.match(/(\d{1,2})[-_/](\d{1,2})[-_/](\d{2,4})/);
   if (!match) return fallback.slice(0, 10);
   const day = match[1].padStart(2, "0");
@@ -394,8 +406,38 @@ export async function confirmStockStagingItem(id: string, confirmedBy = "CRM Use
   if (item.status === "Confirmed") throw new Error("ไฟล์นี้ Confirm ไปแล้ว");
   if (!item.validation.ok) throw new Error(item.validation.errors.join(", ") || "ไฟล์ไม่ผ่าน validation");
 
-  const result = await importStock({ rows: item.rows, sourceName: item.fileName, clearExisting: true });
-  await saveStockExtraFields(item.rows, { clearExisting: true });
+  if (item.rows.length > 1000) throw new Error("รองรับการ Import สูงสุด 1,000 คันต่อไฟล์");
+  const expectedTotal = uniqueStockPlateCount(item.rows);
+  if (expectedTotal !== item.rows.length) throw new Error(`พบทะเบียนซ้ำในไฟล์ ${item.rows.length - expectedTotal} รายการ`);
+
+  const started = await beginStockImportIntegrity(item.fileName, expectedTotal);
+  let persistedTotal = 0;
+  let result: StockImportResult;
+  let integrityError = "";
+  try {
+    result = await importStock({ rows: item.rows, sourceName: item.fileName, clearExisting: true });
+    const destinationStatus = await getStockImportStatus();
+    persistedTotal = destinationStatus.total;
+    await saveStockExtraFields(item.rows, { clearExisting: true });
+    const integrity = await finishStockImportIntegrity({
+      sourceName: item.fileName,
+      expectedTotal,
+      persistedTotal,
+      startedAt: started.startedAt
+    });
+    if (integrity.status !== "complete") integrityError = integrity.message;
+  } catch (error) {
+    await finishStockImportIntegrity({
+      sourceName: item.fileName,
+      expectedTotal,
+      persistedTotal,
+      startedAt: started.startedAt,
+      error: error instanceof Error ? error.message : "นำเข้าสต๊อกไม่สำเร็จ"
+    }).catch(() => undefined);
+    throw error;
+  }
+  if (integrityError) throw new Error(integrityError);
+
   const clearedReservations = await clearAllLineReservations(`stock-staging-confirm:${item.fileName}`);
   console.log(
     "[stock-staging-confirm-line-reservation-clear]",
