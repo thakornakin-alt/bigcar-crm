@@ -6,6 +6,8 @@ import { readStockWithBoundedRetry, StockReadFailure, stockReadUserMessage, clas
 
 export const dynamic = "force-dynamic";
 
+const STOCK_LIST_SAFE_LIMIT = 5000;
+
 function text(value: unknown) {
   return String(value ?? "").trim();
 }
@@ -39,16 +41,19 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const query = String(searchParams.get("query") || "").trim();
-    const limit = Number(searchParams.get("limit") || 250);
+    const requestedLimit = Number(searchParams.get("limit") || STOCK_LIST_SAFE_LIMIT);
+    // Stock Export historically requested 500 rows. That silently truncated larger inventories.
+    // Keep accepting the legacy query parameter, but never return fewer than the safe full-stock window.
+    const limit = Math.min(Math.max(Number.isFinite(requestedLimit) ? requestedLimit : STOCK_LIST_SAFE_LIMIT, STOCK_LIST_SAFE_LIMIT), STOCK_LIST_SAFE_LIMIT);
     const { value: data, meta } = await readStockWithBoundedRetry(() => listStockVehicles({ query, limit }));
     const vehicles = await mergeStockExtraFields(data.vehicles || []);
     const durationMs = Date.now() - requestStartedAt;
-    console.info("[stock-list-read] success", { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts, vehicleCount: vehicles.length });
+    console.info("[stock-list-read] success", { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts, vehicleCount: vehicles.length, total: data.total, limit });
     return NextResponse.json({
       ...data,
       ok: true,
       vehicles: vehicles.map(normalizeStockVehicle),
-      meta: { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts }
+      meta: { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts, requestedLimit, effectiveLimit: limit }
     });
   } catch (error) {
     const failure = error instanceof StockReadFailure ? error : null;
