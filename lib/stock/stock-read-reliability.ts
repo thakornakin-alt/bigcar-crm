@@ -3,7 +3,7 @@ import { AppsScriptError, type AppsScriptErrorCode } from "../apps-script.ts";
 export type StockReadErrorCode = AppsScriptErrorCode;
 
 export type StockReadAttemptMeta = {
-  attempts: number;
+  routeReadAttempts: number;
   attemptDurationsMs: number[];
   appsScriptDurationMs: number;
 };
@@ -50,9 +50,9 @@ export function stockReadUserMessage(code: StockReadErrorCode) {
   }
 }
 
-// listStockVehicles already has the shared Apps Script bounded retry policy.
-// Do not wrap it in a second retry loop here: nested 2x2 retries can turn a
-// 15-second upstream timeout into roughly a 60-second user wait.
+// listStockVehicles already owns the shared Apps Script bounded retry policy.
+// This helper performs exactly one route-level read. Apps Script's own structured
+// apps_script_request log is the authoritative source for its internal attempt count.
 export async function readStockWithBoundedRetry<T>(
   read: () => Promise<T>,
   options: { now?: () => number } = {}
@@ -62,13 +62,13 @@ export async function readStockWithBoundedRetry<T>(
   try {
     const value = await read();
     const duration = Math.max(0, now() - startedAt);
-    return { value, meta: { attempts: 1, attemptDurationsMs: [duration], appsScriptDurationMs: duration } };
+    return { value, meta: { routeReadAttempts: 1, attemptDurationsMs: [duration], appsScriptDurationMs: duration } };
   } catch (error) {
     const duration = Math.max(0, now() - startedAt);
     const code = classifyStockReadError(error);
     const retryable = isRetryableStockReadError(code);
     throw new StockReadFailure(code, retryable, {
-      attempts: 1,
+      routeReadAttempts: 1,
       attemptDurationsMs: [duration],
       appsScriptDurationMs: duration
     }, stockReadUserMessage(code));
