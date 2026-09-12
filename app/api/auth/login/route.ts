@@ -7,6 +7,12 @@ import { createAuthCredentialV2IfMissing, getAuthCredentialV2, verifyAuthCredent
 
 export const dynamic = "force-dynamic";
 
+function recordLoginActivityWithoutBlocking(user: Parameters<typeof recordActivity>[0], input: Parameters<typeof recordActivity>[1]) {
+  void recordActivity(user, input).catch((error) => {
+    console.warn("auth.login.activity.failed", { reason: error instanceof Error ? error.message : "unknown" });
+  });
+}
+
 export async function POST(request: Request) {
   try {
     assertAuthConfigured();
@@ -36,9 +42,9 @@ export async function POST(request: Request) {
     const response = NextResponse.json({ user });
     setSalesProfileCookie(response, user, credential.sessionVersion);
     if (migrated) {
-      await recordActivity(user, { action: "credential_migrated", targetType: "salesUser", targetId: user.id, source: "api" });
+      recordLoginActivityWithoutBlocking(user, { action: "credential_migrated", targetType: "salesUser", targetId: user.id, source: "api" });
     }
-    await recordActivity(user, {
+    recordLoginActivityWithoutBlocking(user, {
       action: "auth.login",
       targetType: "salesUser",
       targetId: user.id,
