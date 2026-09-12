@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { listSalesUsers, loginSalesUser } from "@/lib/apps-script";
+import { loginSalesUser } from "@/lib/apps-script";
 import { recordActivity } from "@/lib/activity-log";
 import { assertAuthConfigured, setSalesProfileCookie } from "@/lib/auth-session";
 import { mergeStoredSalesProfile, saveSalesProfile } from "@/lib/sales-profile-store";
 import { createAuthCredentialV2IfMissing, getAuthCredentialV2, verifyAuthCredentialV2 } from "@/lib/auth-credentials-v2";
+import { listSalesUsersReliable } from "@/lib/sales-users-reliability";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const email = String(body.email || "").trim().toLowerCase();
     const password = String(body.password || "");
-    const account = (await listSalesUsers()).find((candidate) => String(candidate.email || "").trim().toLowerCase() === email);
+    const account = (await listSalesUsersReliable()).find((candidate) => String(candidate.email || "").trim().toLowerCase() === email);
     if (!account || account.locked) throw new Error("Invalid credentials");
     const existingCredential = await getAuthCredentialV2(account.id);
     let sourceUser = account;
