@@ -24,7 +24,8 @@ export function getRddFeatureFlags(env: NodeJS.ProcessEnv = process.env): RddFea
     && (previewRef === "codex/workspace-line-tracker"
       || previewRef === "fix/workspace-edit-v2"
       || previewRef === "fix/production-navigation-v2"
-      || previewRef === "fix/navigation-cleanup-production");
+      || previewRef === "fix/navigation-cleanup-production"
+      || previewRef === "integration/complete-crm-v1");
   const workspaceProduction = env.VERCEL_ENV === "production";
   return {
     shell: enabledForWorkspacePreview(env.RDD_SHELL_ENABLED, workspacePreview),
