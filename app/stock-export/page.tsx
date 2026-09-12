@@ -35,7 +35,7 @@ type StockListErrorResponse = {
 };
 
 const maxTableItems = 20;
-const stockStatuses = ["รอขาย", "เตรียมส่งลาน", "จอง_Sale", "จอง_Internal", "จอง_รถทดแทน", "ขายแล้ว"];
+const stockExportFetchLimit = 1000;
 const ENABLE_NEW_STOCK_UI = process.env.NEXT_PUBLIC_ENABLE_NEW_STOCK_UI !== "false";
 const USE_STOCK_EXPORT_RENDERER_V2 = true;
 const USE_STOCK_EXPORT_RENDERER_V3 = process.env.NEXT_PUBLIC_STOCK_EXPORT_RENDERER_V3 === "true";
@@ -864,6 +864,7 @@ export default function StockExportPage() {
   const [stockLoadError, setStockLoadError] = useState<StockListErrorResponse | null>(null);
   const [hasSuccessfulStockLoad, setHasSuccessfulStockLoad] = useState(false);
   const [stockDataStale, setStockDataStale] = useState(false);
+  const [stockTotal, setStockTotal] = useState(0);
   const [lastSuccessfulLoadAt, setLastSuccessfulLoadAt] = useState("");
   const [exporting, setExporting] = useState(false);
   const [sendingLine, setSendingLine] = useState(false);
@@ -945,7 +946,7 @@ export default function StockExportPage() {
 
   const statusMatchedVehicles = useMemo(() => {
     return plateMatchedVehicles.filter((vehicle) => {
-      const status = stockStatus(vehicle);
+      const status = stockStatus(vehicle) || "ไม่ระบุ";
       return !selectedStatuses.length || !importedStatusCount || selectedStatuses.includes(status);
     });
   }, [importedStatusCount, plateMatchedVehicles, selectedStatuses]);
@@ -1050,7 +1051,7 @@ export default function StockExportPage() {
   }, [plateMatchedVehicles]);
 
   const statusOptions = useMemo(() => {
-    return stockStatuses.filter((status) => (statusCounts[status] || 0) > 0 || selectedStatuses.includes(status));
+    return uniqueSorted([...Object.keys(statusCounts), ...selectedStatuses]);
   }, [selectedStatuses, statusCounts]);
 
   const vehicleGroupOptions = useMemo(() => {
@@ -1074,6 +1075,7 @@ export default function StockExportPage() {
     [sortedVehicles]
   );
   const hasMoreVehicles = sortedVehicles.length > visibleCount;
+  const stockDataIncomplete = hasSuccessfulStockLoad && stockTotal > vehicles.length;
   const hasRegistrationYear = useMemo(
     () => vehicles.some((vehicle) => Boolean(stockRegistrationYear(vehicle))),
     [vehicles]
@@ -1222,7 +1224,7 @@ export default function StockExportPage() {
     setMessage("");
 
     try {
-      const response = await fetch("/api/stock/list?limit=500", { cache: "no-store" });
+      const response = await fetch(`/api/stock/list?limit=${stockExportFetchLimit}`, { cache: "no-store" });
       const data = await response.json() as StockListResponse | StockListErrorResponse | null;
       if (!response.ok || !data || data.ok !== true) {
         const failure = data?.ok === false ? data : { ok: false as const, errorCode: "unknown_error" as const, message: "โหลดข้อมูลสต๊อกไม่สำเร็จ กรุณาลองใหม่", retryable: true };
@@ -1231,10 +1233,15 @@ export default function StockExportPage() {
         return;
       }
       setVehicles(data.vehicles);
+      setStockTotal(data.total);
       setHasSuccessfulStockLoad(true);
       setStockDataStale(false);
       setLastSuccessfulLoadAt(new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }));
-      setMessage(`โหลดสต๊อก ${data.total.toLocaleString("th-TH")} คันแล้ว`);
+      setMessage(
+        data.vehicles.length < data.total
+          ? `ข้อมูลสต๊อกไม่ครบ: โหลดได้ ${data.vehicles.length.toLocaleString("th-TH")} จาก ${data.total.toLocaleString("th-TH")} คัน ระบบปิด Export ไว้ก่อน`
+          : `โหลดสต๊อกครบ ${data.vehicles.length.toLocaleString("th-TH")} คันแล้ว`
+      );
     } catch (err) {
       setStockLoadError({ ok: false, errorCode: "network_error", message: "เชื่อมต่อข้อมูลสต๊อกไม่สำเร็จ กรุณาลองใหม่", retryable: true });
       setStockDataStale(hasSuccessfulStockLoad);
@@ -1429,6 +1436,9 @@ export default function StockExportPage() {
   }
 
   async function createStockExportFiles(format: ExportFormat): Promise<StockExportFileBundle> {
+    if (stockDataIncomplete) {
+      throw new Error(`ข้อมูลสต๊อกไม่ครบ โหลดได้ ${vehicles.length.toLocaleString("th-TH")} จาก ${stockTotal.toLocaleString("th-TH")} คัน กรุณาอัปเดตข้อมูลก่อน Export`);
+    }
     if (!exportVehicles.length) throw new Error("ยังไม่มีรถตามตัวกรองสำหรับ Export");
     const canvas = canvasRef.current;
     if (!canvas) throw new Error("Canvas is not ready");
@@ -1516,6 +1526,9 @@ export default function StockExportPage() {
     setMessage("");
 
     try {
+      if (stockDataIncomplete) {
+        throw new Error(`ข้อมูลสต๊อกไม่ครบ โหลดได้ ${vehicles.length.toLocaleString("th-TH")} จาก ${stockTotal.toLocaleString("th-TH")} คัน กรุณาอัปเดตข้อมูลก่อน Copy`);
+      }
       if (!exportVehicles.length) throw new Error("ยังไม่มีรถตามตัวกรองสำหรับ Copy");
       const canvas = canvasRef.current;
       if (!canvas) throw new Error("Canvas is not ready");
@@ -1593,22 +1606,29 @@ export default function StockExportPage() {
         className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[22px] border px-4 py-3 text-sm shadow-[0_14px_38px_rgba(0,0,0,0.16)] ${
           stockLoadError
             ? hasSuccessfulStockLoad ? "border-amber-400/40 bg-amber-950/30 text-amber-100" : "border-red-400/40 bg-red-950/30 text-red-100"
-            : loading ? "border-sky-400/30 bg-sky-950/25 text-sky-100" : "border-emerald-400/30 bg-emerald-950/20 text-emerald-100"
+            : loading
+              ? "border-sky-400/30 bg-sky-950/25 text-sky-100"
+              : stockDataIncomplete
+                ? "border-amber-400/40 bg-amber-950/30 text-amber-100"
+                : "border-emerald-400/30 bg-emerald-950/20 text-emerald-100"
         }`}
         aria-live="polite"
-        data-stock-state={stockLoadError ? hasSuccessfulStockLoad ? "stale" : "error" : loading ? stockLoadMode : "ready"}
+        data-stock-state={stockLoadError ? hasSuccessfulStockLoad ? "stale" : "error" : loading ? stockLoadMode : stockDataIncomplete ? "incomplete" : "ready"}
       >
         <div className="flex min-w-0 items-start gap-2">
-          {loading ? <Loader2 size={18} className="mt-0.5 shrink-0 animate-spin" /> : stockLoadError ? <AlertTriangle size={18} className="mt-0.5 shrink-0" /> : <CheckCircle2 size={18} className="mt-0.5 shrink-0" />}
+          {loading ? <Loader2 size={18} className="mt-0.5 shrink-0 animate-spin" /> : stockLoadError || stockDataIncomplete ? <AlertTriangle size={18} className="mt-0.5 shrink-0" /> : <CheckCircle2 size={18} className="mt-0.5 shrink-0" />}
           <div>
             <p className="font-semibold">
               {loading
                 ? hasSuccessfulStockLoad ? stockLoadMode === "retry" ? "กำลังลองใหม่..." : "กำลังอัปเดต..." : "กำลังโหลดข้อมูลสต๊อก..."
                 : stockLoadError
                   ? hasSuccessfulStockLoad ? "อัปเดตข้อมูลล่าสุดไม่สำเร็จ ข้อมูลที่แสดงยังเป็นชุดก่อนหน้า" : "โหลดข้อมูลสต๊อกไม่สำเร็จ"
-                  : "ข้อมูลสต๊อกพร้อมใช้งาน"}
+                  : stockDataIncomplete
+                    ? `ข้อมูลสต๊อกไม่ครบ โหลดได้ ${vehicles.length.toLocaleString("th-TH")} จาก ${stockTotal.toLocaleString("th-TH")} คัน`
+                    : "ข้อมูลสต๊อกพร้อมใช้งาน"}
             </p>
             {stockLoadError ? <p className="mt-0.5 text-xs opacity-85">{stockLoadError.message}</p> : null}
+            {stockDataIncomplete ? <p className="mt-0.5 text-xs font-medium">ระบบปิดการเซฟและส่ง LINE ไว้ก่อน เพื่อไม่ให้ได้รูปสต๊อกที่ขาดรถ</p> : null}
             {stockDataStale ? <p className="mt-1 text-xs font-medium">ข้อมูลอาจไม่ใช่ล่าสุด{lastSuccessfulLoadAt ? ` · อัปเดตล่าสุด ${lastSuccessfulLoadAt}` : ""}</p> : null}
             {!loading && !stockLoadError && lastSuccessfulLoadAt ? <p className="mt-0.5 text-xs opacity-75">อัปเดตล่าสุด {lastSuccessfulLoadAt}</p> : null}
           </div>
@@ -1659,7 +1679,7 @@ export default function StockExportPage() {
                 <Search size={18} className="text-brand" />
                 ค้นหาและกรอง
               </h2>
-              <NativeBadge tone="muted">Export Ready</NativeBadge>
+              <NativeBadge tone="muted">{stockDataIncomplete ? "ข้อมูลไม่ครบ" : "Export Ready"}</NativeBadge>
             </div>
             {ENABLE_NEW_STOCK_UI ? (
               <div className="space-y-2 rounded-[22px] border border-white/10 bg-[#080c12]/88 p-2.5 shadow-[0_12px_36px_rgba(0,0,0,0.18)]">
@@ -2020,7 +2040,7 @@ export default function StockExportPage() {
             <NativeButton
               type="button"
               onClick={sendLineStockImages}
-              disabled={sendingLine || exporting || !selectedLineGroupId || !exportVehicles.length}
+              disabled={sendingLine || exporting || stockDataIncomplete || !selectedLineGroupId || !exportVehicles.length}
               className="sm:self-end"
             >
               {sendingLine ? <Loader2 size={20} className="animate-spin" /> : <MessageCircle size={20} />}
@@ -2031,7 +2051,7 @@ export default function StockExportPage() {
             <NativeButton
               type="button"
               onClick={() => exportImage("png")}
-              disabled={exporting || !exportVehicles.length}
+              disabled={exporting || stockDataIncomplete || !exportVehicles.length}
             >
               {exporting ? <Loader2 size={20} className="animate-spin" /> : <Download size={20} />}
               เซฟ PNG {exportPageCount ? `(${exportPageCount.toLocaleString("th-TH")} รูป)` : ""}
@@ -2039,7 +2059,7 @@ export default function StockExportPage() {
             <NativeButton
               type="button"
               onClick={() => exportImage("jpeg")}
-              disabled={exporting || !exportVehicles.length}
+              disabled={exporting || stockDataIncomplete || !exportVehicles.length}
               variant="secondary"
             >
               JPG
@@ -2047,7 +2067,7 @@ export default function StockExportPage() {
             <NativeButton
               type="button"
               onClick={() => exportImage("pdf")}
-              disabled={exporting || !exportVehicles.length}
+              disabled={exporting || stockDataIncomplete || !exportVehicles.length}
               variant="secondary"
             >
               PDF
@@ -2365,11 +2385,11 @@ export default function StockExportPage() {
             <FileImage size={18} />
             Preview
           </NativeButton>
-          <NativeButton type="button" onClick={sendLineStockImages} disabled={sendingLine || exporting || !selectedLineGroupId || !exportVehicles.length} className="flex-1">
+          <NativeButton type="button" onClick={sendLineStockImages} disabled={sendingLine || exporting || stockDataIncomplete || !selectedLineGroupId || !exportVehicles.length} className="flex-1">
             <MessageCircle size={18} />
             ส่ง LINE
           </NativeButton>
-          <NativeButton type="button" onClick={() => exportImage("png")} disabled={exporting || !exportVehicles.length} className="flex-1">
+          <NativeButton type="button" onClick={() => exportImage("png")} disabled={exporting || stockDataIncomplete || !exportVehicles.length} className="flex-1">
             <Download size={18} />
             Export PNG
           </NativeButton>
