@@ -21,7 +21,7 @@ async function listSalesUsersShared() {
     console.info("[dashboard-metrics] join-in-flight", { source: "sales_users" });
     return inFlightSalesUsers;
   }
-  const pending = listSalesUsersReliable();
+  const pending = listSalesUsersReliable({ preferRecentSnapshot: true });
   inFlightSalesUsers = pending;
   try {
     return await pending;
