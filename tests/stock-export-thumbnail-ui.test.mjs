@@ -29,3 +29,18 @@ test("Stock Export reliability and export controls remain present", () => {
   assert.match(page, /sendLineStockImages/);
   assert.match(page, /sortedVehicles\.length/);
 });
+
+test("Stock Export loads the full supported inventory and blocks incomplete exports", () => {
+  assert.match(page, /const stockExportFetchLimit = 1000/);
+  assert.match(page, /\/api\/stock\/list\?limit=\$\{stockExportFetchLimit\}/);
+  assert.match(page, /stockTotal > vehicles\.length/);
+  assert.match(page, /if \(stockDataIncomplete\)/);
+  assert.match(page, /ระบบปิดการเซฟและส่ง LINE ไว้ก่อน/);
+  assert.match(page, /disabled=\{exporting \|\| stockDataIncomplete \|\| !exportVehicles\.length\}/);
+});
+
+test("Stock status filters come from imported column P values instead of a fixed allowlist", () => {
+  assert.doesNotMatch(page, /const stockStatuses\s*=/);
+  assert.match(page, /uniqueSorted\(\[\.\.\.Object\.keys\(statusCounts\), \.\.\.selectedStatuses\]\)/);
+  assert.match(page, /const status = stockStatus\(vehicle\) \|\| "ไม่ระบุ"/);
+});
