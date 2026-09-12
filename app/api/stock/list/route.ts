@@ -13,49 +13,29 @@ type StockListData = Awaited<ReturnType<typeof listStockVehicles>>;
 type StockReadResult = Awaited<ReturnType<typeof readStockWithBoundedRetry<StockListData>>>;
 const inFlightStockReads = new Map<string, Promise<StockReadResult>>();
 
-function text(value: unknown) {
-  return String(value ?? "").trim();
-}
-
+function text(value: unknown) { return String(value ?? "").trim(); }
 function pickValue(row: Record<string, unknown>, keys: string[]) {
-  for (const key of keys) {
-    const value = row[key];
-    if (value !== undefined && value !== null && text(value)) return text(value);
-  }
+  for (const key of keys) { const value = row[key]; if (value !== undefined && value !== null && text(value)) return text(value); }
   return "";
 }
-
 function normalizeStockVehicle(vehicle: StockVehicle) {
   const raw = vehicle as StockVehicle & Record<string, unknown>;
   return {
     ...vehicle,
-    pdiNote:
-      text(vehicle.pdiNote) ||
-      pickValue(raw, ["PdiNote", "PDINote", "pdi", "PDI", "pdi_note", "pdiRemark", "remark", "note", "หมายเหตุ PDI", "หมายเหตุPDI", "หมายเหตุ"]),
-    engineNo:
-      text(vehicle.engineNo) ||
-      pickValue(raw, ["engineNo", "engineNumber", "engine", "Engine", "EngineNo", "Engine No", "Engine No.", "EngineNumber", "Engine Number", "เลขเครื่อง", "เลขเครื่องยนต์", "MotorNo", "Motor No"]),
-    vehicleGroup:
-      text(vehicle.vehicleGroup) ||
-      pickValue(raw, ["VehicleGroup", "vehicle_group", "กลุ่มรถยนต์", "กลุ่มรถ", "กลุ่ม"])
+    pdiNote: text(vehicle.pdiNote) || pickValue(raw, ["PdiNote", "PDINote", "pdi", "PDI", "pdi_note", "pdiRemark", "remark", "note", "หมายเหตุ PDI", "หมายเหตุPDI", "หมายเหตุ"]),
+    engineNo: text(vehicle.engineNo) || pickValue(raw, ["engineNo", "engineNumber", "engine", "Engine", "EngineNo", "Engine No", "Engine No.", "EngineNumber", "Engine Number", "เลขเครื่อง", "เลขเครื่องยนต์", "MotorNo", "Motor No"]),
+    vehicleGroup: text(vehicle.vehicleGroup) || pickValue(raw, ["VehicleGroup", "vehicle_group", "กลุ่มรถยนต์", "กลุ่มรถ", "กลุ่ม"])
   };
 }
 
 async function readStockOncePerRequestKey(query: string, limit: number) {
   const key = `${query}\u0000${limit}`;
   const existing = inFlightStockReads.get(key);
-  if (existing) {
-    console.info("[stock-list-read] join-in-flight", { query: Boolean(query), effectiveLimit: limit });
-    return existing;
-  }
-
+  if (existing) { console.info("[stock-list-read] join-in-flight", { query: Boolean(query), effectiveLimit: limit }); return existing; }
   const pending = readStockWithBoundedRetry(() => listStockVehicles({ query, limit }));
   inFlightStockReads.set(key, pending);
-  try {
-    return await pending;
-  } finally {
-    if (inFlightStockReads.get(key) === pending) inFlightStockReads.delete(key);
-  }
+  try { return await pending; }
+  finally { if (inFlightStockReads.get(key) === pending) inFlightStockReads.delete(key); }
 }
 
 export async function GET(request: Request) {
@@ -73,52 +53,40 @@ export async function GET(request: Request) {
     const completenessCheckApplies = !query && total > 0;
     const complete = !completenessCheckApplies || normalizedVehicles.length >= total;
     const durationMs = Date.now() - requestStartedAt;
+    const readMeta = { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, routeReadAttempts: meta.routeReadAttempts };
 
     if (!complete) {
-      console.error("[stock-list-read] incomplete", {
-        durationMs,
-        appsScriptDurationMs: meta.appsScriptDurationMs,
-        attempts: meta.attempts,
-        vehicleCount: normalizedVehicles.length,
-        total,
-        requestedLimit,
-        effectiveLimit: limit
-      });
-      return NextResponse.json(
-        {
-          ok: false,
-          errorCode: "incomplete_stock_read",
-          message: `ข้อมูลสต๊อกโหลดไม่ครบ ${normalizedVehicles.length.toLocaleString("th-TH")}/${total.toLocaleString("th-TH")} คัน ระบบหยุดการ Export เพื่อป้องกันรถตกหล่น กรุณาลองอัปเดตข้อมูลอีกครั้ง`,
-          retryable: true,
-          meta: { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts, requestedLimit, effectiveLimit: limit, loaded: normalizedVehicles.length, total }
-        },
-        { status: 503 }
-      );
+      console.error("[stock-list-read] incomplete", { ...readMeta, vehicleCount: normalizedVehicles.length, total, requestedLimit, effectiveLimit: limit });
+      return NextResponse.json({
+        ok: false,
+        errorCode: "incomplete_stock_read",
+        message: `ข้อมูลสต๊อกโหลดไม่ครบ ${normalizedVehicles.length.toLocaleString("th-TH")}/${total.toLocaleString("th-TH")} คัน ระบบหยุดการ Export เพื่อป้องกันรถตกหล่น กรุณาลองอัปเดตข้อมูลอีกครั้ง`,
+        retryable: true,
+        meta: { ...readMeta, requestedLimit, effectiveLimit: limit, loaded: normalizedVehicles.length, total }
+      }, { status: 503 });
     }
 
-    console.info("[stock-list-read] success", { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts, vehicleCount: normalizedVehicles.length, total, requestedLimit, effectiveLimit: limit, complete });
+    console.info("[stock-list-read] success", { ...readMeta, vehicleCount: normalizedVehicles.length, total, requestedLimit, effectiveLimit: limit, complete });
     return NextResponse.json({
       ...data,
       ok: true,
       vehicles: normalizedVehicles,
-      meta: { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts, requestedLimit, effectiveLimit: limit, loaded: normalizedVehicles.length, total, complete }
+      meta: { ...readMeta, requestedLimit, effectiveLimit: limit, loaded: normalizedVehicles.length, total, complete }
     });
   } catch (error) {
     const failure = error instanceof StockReadFailure ? error : null;
     const errorCode = failure?.code || classifyStockReadError(error);
     const retryable = failure?.retryable ?? isRetryableStockReadError(errorCode);
     const durationMs = Date.now() - requestStartedAt;
-    const meta = failure?.meta || { attempts: 1, attemptDurationsMs: [durationMs], appsScriptDurationMs: durationMs };
-    console.error("[stock-list-read] failure", { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts, errorCode });
-    return NextResponse.json(
-      {
-        ok: false,
-        errorCode,
-        message: stockReadUserMessage(errorCode),
-        retryable,
-        meta: { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts }
-      },
-      { status: retryable ? 503 : errorCode === "configuration_error" ? 500 : 502 }
-    );
+    const meta = failure?.meta || { routeReadAttempts: 1, attemptDurationsMs: [durationMs], appsScriptDurationMs: durationMs };
+    const readMeta = { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, routeReadAttempts: meta.routeReadAttempts };
+    console.error("[stock-list-read] failure", { ...readMeta, errorCode });
+    return NextResponse.json({
+      ok: false,
+      errorCode,
+      message: stockReadUserMessage(errorCode),
+      retryable,
+      meta: readMeta
+    }, { status: retryable ? 503 : errorCode === "configuration_error" ? 500 : 502 });
   }
 }
