@@ -1,4 +1,4 @@
-import { listSalesUsers } from "@/lib/apps-script";
+import { AppsScriptError, listSalesUsers } from "@/lib/apps-script";
 import { readJsonStore, writeJsonStore } from "@/lib/json-store";
 import type { SalesUser } from "@/lib/types";
 
@@ -12,6 +12,12 @@ function isRecent(snapshot: Snapshot | null) {
   if (!snapshot?.capturedAt || !Array.isArray(snapshot.users)) return false;
   const age = Date.now() - Date.parse(snapshot.capturedAt);
   return Number.isFinite(age) && age >= 0 && age <= MAX_FALLBACK_AGE_MS;
+}
+
+function isTransientAppsScriptFailure(error: unknown) {
+  if (!(error instanceof AppsScriptError)) return false;
+  if (error.code === "timeout" || error.code === "network_error") return true;
+  return error.code === "upstream_http_error" && (!error.status || [502, 503, 504].includes(error.status));
 }
 
 async function readRecentSnapshot() {
@@ -49,6 +55,10 @@ export async function listSalesUsersReliable(options: { preferRecentSnapshot?: b
       await persistSnapshot(users);
       return users;
     } catch (error) {
+      // Never hide configuration, contract, invalid-response, or unknown errors
+      // behind cached authentication data. Fallback is only for short-lived
+      // transport/upstream failures.
+      if (!isTransientAppsScriptFailure(error)) throw error;
       const snapshot = await readRecentSnapshot();
       if (!snapshot) throw error;
       console.warn("sales_users.authoritative_fallback", {
