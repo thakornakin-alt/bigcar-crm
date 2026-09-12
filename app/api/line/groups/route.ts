@@ -17,8 +17,10 @@ function mergeGroups<T extends { groupId: string; lastSeenAt: string }>(...sourc
 
 export async function GET() {
   try {
-    const stored = await listStoredLineGroups().catch(() => []);
-    const legacy = await listLineGroups().catch(() => []);
+    const [stored, legacy] = await Promise.all([
+      listStoredLineGroups().catch(() => []),
+      listLineGroups().catch(() => [])
+    ]);
     return NextResponse.json({ groups: mergeGroups(stored, legacy) });
   } catch (error) {
     return NextResponse.json(
