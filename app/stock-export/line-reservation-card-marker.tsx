@@ -103,9 +103,16 @@ function installCanvasReservationPatch() {
 }
 
 function plateFromRow(row: HTMLElement) {
-  const firstCell = row.querySelector<HTMLElement>("td");
-  if (!firstCell) return "";
-  return normalizePlate(String(firstCell.textContent || "").replace(/📅?\s*BOOKING/gi, " ").replace(/ติดจองรอคอนเฟิร์ม/g, " ").trim());
+  const cells = Array.from(row.querySelectorAll<HTMLElement>("td"));
+  for (const cell of cells) {
+    const text = String(cell.textContent || "").replace(/📅?\s*BOOKING/gi, " ").replace(/ติดจองรอคอนเฟิร์ม/g, " ").trim();
+    const normalized = normalizePlate(text);
+    if (activePlateKeys.has(normalized)) return normalized;
+    for (const plate of activePlateKeys) {
+      if (plate && normalized.includes(plate)) return plate;
+    }
+  }
+  return "";
 }
 
 function removeReservationBadges(root: HTMLElement) {
@@ -115,9 +122,21 @@ function removeReservationBadges(root: HTMLElement) {
   });
 }
 
+function markReservedElement(element: HTMLElement) {
+  element.dataset.lineReservation = "true";
+  element.classList.add("line-reserved-stock-row");
+  element.style.background = "rgba(239, 68, 68, 0.18)";
+  element.style.boxShadow = "inset 4px 0 0 #ef4444";
+  element.querySelectorAll<HTMLElement>("td").forEach((cell) => {
+    cell.style.background = "rgba(254, 226, 226, 0.82)";
+    cell.style.borderColor = "rgba(239, 68, 68, 0.38)";
+  });
+  removeReservationBadges(element);
+}
+
 async function syncLineReservationCards() {
   try {
-    const response = await fetch("/api/line/reservations", { cache: "no-store" });
+    const response = await fetch("/api/line/reservations", { cache: "no-store", credentials: "same-origin" });
     if (!response.ok) return;
     const data = await response.json() as { activePlates?: string[] };
     activePlateKeys = new Set((data.activePlates || []).map(normalizePlate).filter(Boolean));
@@ -129,15 +148,15 @@ async function syncLineReservationCards() {
       if (!Array.from(activePlateKeys).some((plate) => text.includes(plate))) return;
       card.dataset.lineReservation = "true";
       card.classList.add("line-reserved-stock-card");
+      card.style.background = "rgba(239, 68, 68, 0.18)";
+      card.style.boxShadow = "inset 4px 0 0 #ef4444";
       removeReservationBadges(card);
     });
 
     document.querySelectorAll<HTMLElement>("table tbody tr").forEach((row) => {
       const plate = plateFromRow(row);
-      if (!plate || !activePlateKeys.has(plate)) return;
-      row.dataset.lineReservation = "true";
-      row.classList.add("line-reserved-stock-row");
-      removeReservationBadges(row);
+      if (!plate) return;
+      markReservedElement(row);
     });
   } catch {
     // Stock remains usable even if reservation decoration cannot be loaded.
