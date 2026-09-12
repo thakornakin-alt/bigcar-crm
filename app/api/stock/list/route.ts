@@ -47,13 +47,40 @@ export async function GET(request: Request) {
     const limit = Math.min(Math.max(requestedOrDefault, STOCK_LIST_MIN_COMPLETE_LIMIT), STOCK_LIST_MAX_LIMIT);
     const { value: data, meta } = await readStockWithBoundedRetry(() => listStockVehicles({ query, limit }));
     const vehicles = await mergeStockExtraFields(data.vehicles || []);
+    const normalizedVehicles = vehicles.map(normalizeStockVehicle);
+    const total = Number(data.total || 0);
+    const completenessCheckApplies = !query && total > 0;
+    const complete = !completenessCheckApplies || normalizedVehicles.length >= total;
     const durationMs = Date.now() - requestStartedAt;
-    console.info("[stock-list-read] success", { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts, vehicleCount: vehicles.length, requestedLimit, effectiveLimit: limit });
+
+    if (!complete) {
+      console.error("[stock-list-read] incomplete", {
+        durationMs,
+        appsScriptDurationMs: meta.appsScriptDurationMs,
+        attempts: meta.attempts,
+        vehicleCount: normalizedVehicles.length,
+        total,
+        requestedLimit,
+        effectiveLimit: limit
+      });
+      return NextResponse.json(
+        {
+          ok: false,
+          errorCode: "incomplete_stock_read",
+          message: `ข้อมูลสต๊อกโหลดไม่ครบ ${normalizedVehicles.length.toLocaleString("th-TH")}/${total.toLocaleString("th-TH")} คัน ระบบหยุดการ Export เพื่อป้องกันรถตกหล่น กรุณาลองอัปเดตข้อมูลอีกครั้ง`,
+          retryable: true,
+          meta: { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts, requestedLimit, effectiveLimit: limit, loaded: normalizedVehicles.length, total }
+        },
+        { status: 503 }
+      );
+    }
+
+    console.info("[stock-list-read] success", { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts, vehicleCount: normalizedVehicles.length, total, requestedLimit, effectiveLimit: limit, complete });
     return NextResponse.json({
       ...data,
       ok: true,
-      vehicles: vehicles.map(normalizeStockVehicle),
-      meta: { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts, requestedLimit, effectiveLimit: limit }
+      vehicles: normalizedVehicles,
+      meta: { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, attempts: meta.attempts, requestedLimit, effectiveLimit: limit, loaded: normalizedVehicles.length, total, complete }
     });
   } catch (error) {
     const failure = error instanceof StockReadFailure ? error : null;
