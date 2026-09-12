@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { listActiveReservedPlateKeys, listLineReservationRecords } from "@/lib/line-reservations";
+import { listLineReservationRecords } from "@/lib/line-reservations";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const [activePlates, records] = await Promise.all([
-      listActiveReservedPlateKeys(),
-      listLineReservationRecords()
-    ]);
+    // Read the reservation store once. Previously this endpoint read the same
+    // Supabase JSON twice in parallel (once for active plates and once for records).
+    const records = await listLineReservationRecords();
+    const activePlates = records.filter((item) => item.active).map((item) => item.plateNormalized);
     return NextResponse.json({ activePlates, records });
   } catch (error) {
     return NextResponse.json(
@@ -17,4 +17,3 @@ export async function GET() {
     );
   }
 }
-
