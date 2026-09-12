@@ -53,13 +53,14 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "ไม่อนุญาตให้ดูข้อมูลของผู้ใช้อื่น" }, { status: 403 });
     }
     const month = normalizeDashboardMonth(url.searchParams.get("month"));
-    const users = await listSalesUsersShared();
     const targetUserId = canSelectUser && requestedUserId ? requestedUserId : actor.id;
+    const [usersResult, leadsResult, reportsResult, prepResult, deliveryResult, ownershipResult] = await Promise.allSettled([
+      listSalesUsersShared(), listSalesLeads(), listAllReportsShared(), listVehiclePrepRecords(), listBookingDeliveryRecords(), listCaseOwnership()
+    ]);
+    if (usersResult.status === "rejected") throw usersResult.reason;
+    const users = usersResult.value;
     const target = users.find((user) => user.id === targetUserId && !user.locked);
     if (!target) return NextResponse.json({ error: "ไม่พบผู้ใช้ที่เลือก" }, { status: 404 });
-    const [leadsResult, reportsResult, prepResult, deliveryResult, ownershipResult] = await Promise.allSettled([
-      listSalesLeads(), listAllReportsShared(), listVehiclePrepRecords(), listBookingDeliveryRecords(), listCaseOwnership()
-    ]);
     const failures: string[] = [];
     if (leadsResult.status === "rejected") failures.push("leads");
     if (reportsResult.status === "rejected") failures.push("reports");
