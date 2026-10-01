@@ -5,8 +5,8 @@ import { RouteAwareShell } from "@/app/components/route-aware-shell";
 import { getRddFeatureFlags } from "@/lib/feature-flags";
 
 export const metadata: Metadata = {
-  title: "Big Car CRM",
-  description: "Mobile CRM for used car sales teams"
+  title: "BIG CAR Sales Tools",
+  description: "Stock, installment calculator and approval tools"
 };
 
 export const viewport: Viewport = {
