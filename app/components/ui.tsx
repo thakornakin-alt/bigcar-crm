@@ -139,7 +139,7 @@ export function GlobalNav({ workspaceEnabled = false, commissionEnabled = false 
       ]
     : globalNavItems;
   const hasOddMenuCount = items.length % 2 === 1;
-  const homeHref = "/dashboard";
+  const homeHref = "/lite";
 
   function isActive(href: string) {
     const hrefPath = href.split("?")[0];
