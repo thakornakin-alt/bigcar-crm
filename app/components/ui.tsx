@@ -122,18 +122,10 @@ export function HeaderUtilities() {
 }
 
 const globalNavItems = [
-  { href: "/dashboard", label: "หน้าแรก", icon: Home },
+  { href: "/lite", label: "หน้าแรก", icon: Home },
   { href: "/stock-export", label: "สต๊อก", icon: Car },
   { href: "/calculator", label: "ค่างวด", icon: Calculator },
-  { href: "/realtime-booking", label: "Realtime Booking", icon: Radio },
-  { href: "/booking-reports", label: "รายงานจอง", icon: FileText },
-  { href: "/sales-reports", label: "รายงานขาย", icon: FileText },
-  { href: "/leads", label: "ลูกค้ามุ่งหวัง", icon: Users },
-  { href: "/finance-approval", label: "รอผลไฟแนนซ์", icon: UploadCloud },
-  { href: "/calendar", label: "ปฏิทิน", icon: CalendarDays },
-  { href: "/approval-forms", label: "อนุมัติ", icon: CheckSquare },
-  { href: "/documents", label: "เอกสาร", icon: FileText },
-  { href: "/settings", label: "ตั้งค่า", icon: Settings }
+  { href: "/approval-forms", label: "อนุมัติ", icon: CheckSquare }
 ];
 
 export function GlobalNav({ workspaceEnabled = false, commissionEnabled = false }: { workspaceEnabled?: boolean; commissionEnabled?: boolean }) {
