@@ -3,6 +3,7 @@ import { getStockImportStatus, importStock } from "@/lib/apps-script";
 import { clearAllLineReservations } from "@/lib/line-reservations";
 import type { StockVehicle } from "@/lib/types";
 import { saveStockExtraFields } from "@/lib/stock-extra-fields";
+import { markStockSnapshotVersion } from "@/lib/stock/stock-snapshot";
 import {
   beginStockImportIntegrity,
   finishStockImportIntegrity,
@@ -114,6 +115,7 @@ export async function POST(request: Request) {
     }
 
     await saveStockExtraFields(rows, { clearExisting });
+    const stockSnapshotVersion = await markStockSnapshotVersion(sourceName);
     const clearedReservations = await clearAllLineReservations(`stock-import:${sourceName || "manual"}`);
     console.log(
       "[stock-import-line-reservation-clear]",
@@ -136,6 +138,7 @@ export async function POST(request: Request) {
       },
       status: destinationStatus,
       integrity,
+      stockSnapshotVersion,
       lineReservations: {
         cleared: true,
         clearedCount: clearedReservations.clearedCount,
