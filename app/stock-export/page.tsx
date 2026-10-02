@@ -1287,8 +1287,9 @@ export default function StockExportPage() {
         }
       }
 
-      const refreshParam = mode === "refresh" ? "&refresh=1" : "";
-      const response = await fetch(`/api/stock/list?limit=${stockExportFetchLimit}${refreshParam}`, { cache: "no-store" });
+      // User-facing refresh re-reads the persistent snapshot. A full Apps Script
+      // refresh is reserved for Stock import/version changes so routine use stays fast.
+      const response = await fetch(`/api/stock/list?limit=${stockExportFetchLimit}`, { cache: "no-store" });
       const data = await response.json() as StockListResponse | StockListErrorResponse | null;
       if (!response.ok || !data || data.ok !== true) {
         const failure = data?.ok === false ? data : { ok: false as const, errorCode: "unknown_error" as const, message: "โหลดข้อมูลสต๊อกไม่สำเร็จ กรุณาลองใหม่", retryable: true };
