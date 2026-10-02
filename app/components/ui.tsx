@@ -123,8 +123,7 @@ export function HeaderUtilities() {
 
 const globalNavItems = [
   { href: "/stock-export", label: "สต๊อก", icon: Car },
-  { href: "/calculator", label: "ค่างวด", icon: Calculator },
-  { href: "/approval-forms", label: "อนุมัติ", icon: CheckSquare }
+  { href: "/calculator", label: "ค่างวด", icon: Calculator }
 ];
 
 export function GlobalNav({ workspaceEnabled = false, commissionEnabled = false }: { workspaceEnabled?: boolean; commissionEnabled?: boolean }) {
