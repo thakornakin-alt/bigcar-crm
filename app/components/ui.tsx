@@ -122,32 +122,17 @@ export function HeaderUtilities() {
 }
 
 const globalNavItems = [
-  { href: "/dashboard", label: "หน้าแรก", icon: Home },
   { href: "/stock-export", label: "สต๊อก", icon: Car },
   { href: "/calculator", label: "ค่างวด", icon: Calculator },
-  { href: "/realtime-booking", label: "Realtime Booking", icon: Radio },
-  { href: "/booking-reports", label: "รายงานจอง", icon: FileText },
-  { href: "/sales-reports", label: "รายงานขาย", icon: FileText },
-  { href: "/leads", label: "ลูกค้ามุ่งหวัง", icon: Users },
-  { href: "/finance-approval", label: "รอผลไฟแนนซ์", icon: UploadCloud },
-  { href: "/calendar", label: "ปฏิทิน", icon: CalendarDays },
-  { href: "/approval-forms", label: "อนุมัติ", icon: CheckSquare },
-  { href: "/documents", label: "เอกสาร", icon: FileText },
-  { href: "/settings", label: "ตั้งค่า", icon: Settings }
+  { href: "/approval-forms", label: "อนุมัติ", icon: CheckSquare }
 ];
 
 export function GlobalNav({ workspaceEnabled = false, commissionEnabled = false }: { workspaceEnabled?: boolean; commissionEnabled?: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const items = workspaceEnabled
-    ? [
-        { href: "/booking-delivery-workspace", label: "Workspace", icon: Rows3 },
-        ...(commissionEnabled ? [{ href: "/commission", label: "ค่าคอม", icon: Calculator }] : []),
-        ...globalNavItems
-      ]
-    : globalNavItems;
+  const items = globalNavItems;
   const hasOddMenuCount = items.length % 2 === 1;
-  const homeHref = "/dashboard";
+  const homeHref = "/stock-export";
 
   function isActive(href: string) {
     const hrefPath = href.split("?")[0];
@@ -163,7 +148,7 @@ export function GlobalNav({ workspaceEnabled = false, commissionEnabled = false 
           <ProfileIndicator />
         </div>
 
-        <Link data-testid="global-crm-title" href={homeHref} className="justify-self-center whitespace-nowrap text-xs font-black tracking-[0.08em] text-white transition hover:text-brand sm:text-base sm:tracking-[0.14em]" aria-label="BIG CAR CRM หน้าแรก">BIG CAR CRM</Link>
+        <Link data-testid="global-crm-title" href={homeHref} className="justify-self-center whitespace-nowrap text-xs font-black tracking-[0.08em] text-white transition hover:text-brand sm:text-base sm:tracking-[0.14em]" aria-label="RDD SALES HUB">RDD SALES HUB</Link>
 
         <div className="flex items-center justify-self-end gap-1 sm:gap-2">
           <Link href="/notifications" aria-label="แจ้งเตือน" title="แจ้งเตือน" className="flex h-10 w-10 items-center justify-center rounded-xl border border-line/70 bg-[#0b0d11] text-brand transition hover:border-brand/60 hover:text-white sm:h-11 sm:w-11"><Bell size={18} /></Link>
