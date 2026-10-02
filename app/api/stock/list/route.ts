@@ -49,7 +49,8 @@ export async function GET(request: Request) {
     const limit = Math.min(Math.max(requestedOrDefault, STOCK_LIST_MIN_COMPLETE_LIMIT), STOCK_LIST_MAX_LIMIT);
     const metaOnly = searchParams.get("meta") === "1";
     const forceRefresh = searchParams.get("refresh") === "1";
-    // Stale full-stock fallback is intentionally disabled for filtered searches.\n    const allowStaleSnapshotFallback = !query;
+    // Stale full-stock fallback is intentionally disabled for filtered searches.
+    const allowStaleSnapshotFallback = !query;
 
     if (!query) {
       const [snapshot, marker] = await Promise.all([getStockSnapshot(), getStockSnapshotVersion()]);
