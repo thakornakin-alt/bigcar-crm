@@ -6,7 +6,7 @@ import { getRddFeatureFlags } from "@/lib/feature-flags";
 
 export const metadata: Metadata = {
   title: "RDD Sales Hub",
-  description: "RDD sales tools for stock, installments and approvals"
+  description: "RDD sales tools for stock and installment calculations"
 };
 
 export const viewport: Viewport = {
