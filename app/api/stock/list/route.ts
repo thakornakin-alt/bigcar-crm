@@ -49,6 +49,7 @@ export async function GET(request: Request) {
     const limit = Math.min(Math.max(requestedOrDefault, STOCK_LIST_MIN_COMPLETE_LIMIT), STOCK_LIST_MAX_LIMIT);
     const metaOnly = searchParams.get("meta") === "1";
     const forceRefresh = searchParams.get("refresh") === "1";
+    let allowStaleSnapshotFallback = !query;
 
     if (!query) {
       const [snapshot, marker] = await Promise.all([getStockSnapshot(), getStockSnapshotVersion()]);
@@ -126,7 +127,7 @@ export async function GET(request: Request) {
     const readMeta = { durationMs, appsScriptDurationMs: meta.appsScriptDurationMs, routeReadAttempts: meta.routeReadAttempts };
     console.error("[stock-list-read] failure", { ...readMeta, errorCode });
     try {
-      const snapshot = await getStockSnapshot();
+      const snapshot = allowStaleSnapshotFallback ? await getStockSnapshot() : null;
       if (snapshot?.vehicles?.length) {
         return NextResponse.json({
           ok: true,
