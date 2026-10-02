@@ -120,6 +120,8 @@ export async function GET(request: Request) {
       meta: { ...readMeta, requestedLimit, effectiveLimit: limit, loaded: normalizedVehicles.length, total, complete }
     });
   } catch (error) {
+    const { searchParams } = new URL(request.url);
+    const allowStaleSnapshotFallback = !String(searchParams.get("query") || "").trim();
     const failure = error instanceof StockReadFailure ? error : null;
     const errorCode = failure?.code || classifyStockReadError(error);
     const retryable = failure?.retryable ?? isRetryableStockReadError(errorCode);
