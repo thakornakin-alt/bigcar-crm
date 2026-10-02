@@ -23,7 +23,27 @@ type StockListResponse = {
   ok: true;
   vehicles: StockVehicle[];
   total: number;
+  version?: string;
+  sourceName?: string;
+  snapshot?: boolean;
+  stale?: boolean;
   meta?: { durationMs: number; appsScriptDurationMs: number; attempts: number };
+};
+
+type StockMetaResponse = {
+  ok: true;
+  version: string;
+  sourceName?: string;
+  updatedAt?: string;
+  snapshotReady?: boolean;
+};
+
+type BrowserStockCache = {
+  version: string;
+  sourceName?: string;
+  savedAt: string;
+  vehicles: StockVehicle[];
+  total: number;
 };
 
 type StockListErrorResponse = {
@@ -36,6 +56,7 @@ type StockListErrorResponse = {
 
 const maxTableItems = 20;
 const stockExportFetchLimit = 1000;
+const browserStockCacheKey = "bigcar-stock-browser-cache-v1";
 const ENABLE_NEW_STOCK_UI = process.env.NEXT_PUBLIC_ENABLE_NEW_STOCK_UI !== "false";
 const USE_STOCK_EXPORT_RENDERER_V2 = true;
 const USE_STOCK_EXPORT_RENDERER_V3 = process.env.NEXT_PUBLIC_STOCK_EXPORT_RENDERER_V3 === "true";
@@ -1224,6 +1245,50 @@ export default function StockExportPage() {
     setMessage("");
 
     try {
+      if (mode === "initial") {
+        let cached: BrowserStockCache | null = null;
+        try {
+          const raw = window.localStorage.getItem(browserStockCacheKey);
+          cached = raw ? JSON.parse(raw) as BrowserStockCache : null;
+        } catch {
+          cached = null;
+        }
+
+        try {
+          const metaResponse = await fetch("/api/stock/list?meta=1", { cache: "no-store" });
+          const meta = await metaResponse.json() as StockMetaResponse | null;
+          if (
+            metaResponse.ok &&
+            meta?.ok === true &&
+            cached &&
+            cached.version &&
+            cached.version === meta.version &&
+            Array.isArray(cached.vehicles) &&
+            cached.vehicles.length >= cached.total
+          ) {
+            setVehicles(cached.vehicles);
+            setStockTotal(cached.total);
+            setHasSuccessfulStockLoad(true);
+            setStockDataStale(false);
+            setLastSuccessfulLoadAt(new Date(cached.savedAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }));
+            setMessage(`ใช้สต๊อกล่าสุดจากเครื่อง ${cached.vehicles.length.toLocaleString("th-TH")} คัน`);
+            return;
+          }
+        } catch {
+          if (cached && Array.isArray(cached.vehicles) && cached.vehicles.length >= cached.total) {
+            setVehicles(cached.vehicles);
+            setStockTotal(cached.total);
+            setHasSuccessfulStockLoad(true);
+            setStockDataStale(true);
+            setLastSuccessfulLoadAt(new Date(cached.savedAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }));
+            setMessage("เปิดสต๊อกล่าสุดจากเครื่องชั่วคราว เนื่องจากตรวจเวอร์ชันออนไลน์ไม่ได้");
+            return;
+          }
+        }
+      }
+
+      // User-facing refresh re-reads the persistent snapshot. A full Apps Script
+      // refresh is reserved for Stock import/version changes so routine use stays fast.
       const response = await fetch(`/api/stock/list?limit=${stockExportFetchLimit}`, { cache: "no-store" });
       const data = await response.json() as StockListResponse | StockListErrorResponse | null;
       if (!response.ok || !data || data.ok !== true) {
@@ -1234,6 +1299,20 @@ export default function StockExportPage() {
       }
       setVehicles(data.vehicles);
       setStockTotal(data.total);
+      if (data.version) {
+        try {
+          const browserCache: BrowserStockCache = {
+            version: data.version,
+            sourceName: data.sourceName,
+            savedAt: new Date().toISOString(),
+            vehicles: data.vehicles,
+            total: data.total
+          };
+          window.localStorage.setItem(browserStockCacheKey, JSON.stringify(browserCache));
+        } catch {
+          // Browser storage is an optimization only; Stock remains usable without it.
+        }
+      }
       setHasSuccessfulStockLoad(true);
       setStockDataStale(false);
       setLastSuccessfulLoadAt(new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }));
