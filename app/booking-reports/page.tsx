@@ -653,6 +653,10 @@ export default function BookingReportsPage() {
 
   async function saveDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const startedAt = performance.now();
+    let preflightMs = 0;
+    let writeMs = 0;
+    let phase = "preflight";
     setSaving(true);
     setError("");
     setMessage("");
@@ -667,6 +671,7 @@ export default function BookingReportsPage() {
         body: JSON.stringify({ report: payload, requestId, checkOnly: true })
       });
       const data = await response.json();
+      preflightMs = Math.round(performance.now() - startedAt);
       if (response.status === 409 && data.status === "duplicate_booking_confirmation_required") {
         setPendingCreate({ report: payload, requestId: data.requestId || requestId });
         setDuplicatePrompt(data as BookingDuplicatePrompt);
@@ -674,12 +679,23 @@ export default function BookingReportsPage() {
         return;
       }
       if (!response.ok) throw new Error(data.error || "ตรวจสอบรายงานจองเดิมไม่สำเร็จ");
+      phase = "write";
+      const writeStartedAt = performance.now();
       await createBookingReport(payload, requestId);
+      writeMs = Math.round(performance.now() - writeStartedAt);
     } catch (err) {
       const payload = currentCreatePayload();
       window.localStorage.setItem("bigcar-booking-draft-fallback", JSON.stringify(payload));
       setError(err instanceof Error ? `${err.message} - บันทึก draft สำรองในเครื่องนี้แล้ว` : "บันทึกไม่สำเร็จ");
     } finally {
+      // Timing only: no report contents, names, plates, or other customer data.
+      console.info("[draft-save-timing]", {
+        reportType: "booking",
+        phase,
+        preflightMs,
+        writeMs,
+        totalMs: Math.round(performance.now() - startedAt)
+      });
       setUploading(false);
       setSaving(false);
     }
