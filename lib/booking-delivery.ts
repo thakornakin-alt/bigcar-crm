@@ -384,6 +384,29 @@ export async function syncBookingDeliveryForSalesReport(bookingReportId: string,
   const linkedSales = reports.filter((item) =>
     item.type === "sales" && text(item.bookingReportId) === linkedBookingId && item.status !== "deleted"
   );
+  // No active booking or linked sale exists in history. The full reconciliation
+  // cannot project this sale onto any booking either; avoid re-reading stock for
+  // every unrelated booking. Guard against an existing linked delivery record.
+  if (bookings.length === 0 && linkedSales.length === 0) {
+    const store = await readStore();
+    const existingMatches = store.records.filter((record) => record.bookingReportId === linkedBookingId);
+    if (existingMatches.length === 0) {
+      console.info("[sales-delivery-targeted-sync]", {
+        mode: "unmatched_noop",
+        bookingMatches: 0,
+        salesMatches: 0,
+        existingDeliveryMatches: 0
+      });
+      return store.records;
+    }
+    console.info("[sales-delivery-targeted-sync]", {
+      mode: "full_fallback_existing_delivery",
+      bookingMatches: 0,
+      salesMatches: 0,
+      existingDeliveryMatches: existingMatches.length
+    });
+    return upsertBookingDeliveryFromReportHistory(reports);
+  }
   if (bookings.length !== 1 || linkedSales.length !== 1 || linkedSales[0].id !== linkedSalesId) {
     console.info("[sales-delivery-targeted-sync]", { mode: "full_fallback", bookingMatches: bookings.length, salesMatches: linkedSales.length });
     return upsertBookingDeliveryFromReportHistory(reports);
