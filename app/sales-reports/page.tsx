@@ -538,12 +538,15 @@ export default function SalesReportsPage() {
 
     setUploading(true);
     setUploadProgress(`กำลังเตรียมไฟล์ ${pendingFiles.length} ไฟล์`);
-    const payloadFiles = [];
-
-    for (let index = 0; index < pendingFiles.length; index += 1) {
-      const file = pendingFiles[index];
-      setUploadProgress(`กำลังอ่านไฟล์ ${index + 1}/${pendingFiles.length}: ${salesAttachmentLabels[file.category]}`);
-      payloadFiles.push({
+    // Read attachments concurrently in small batches while preserving order.
+    const payloadFiles: Array<{
+      clientId: string; category: SalesAttachmentCategory; label: string;
+      name: string; type: string; size: number; base64: string;
+    }> = [];
+    for (let start = 0; start < pendingFiles.length; start += 3) {
+      const batch = pendingFiles.slice(start, start + 3);
+      setUploadProgress(`กำลังเตรียมไฟล์ ${Math.min(start + batch.length, pendingFiles.length)}/${pendingFiles.length}`);
+      const prepared = await Promise.all(batch.map(async (file) => ({
         clientId: file.id,
         category: file.category,
         label: salesAttachmentLabels[file.category],
@@ -551,7 +554,8 @@ export default function SalesReportsPage() {
         type: file.type,
         size: file.size,
         base64: await fileToBase64(file.file)
-      });
+      })));
+      payloadFiles.push(...prepared);
     }
 
     setUploadProgress("กำลังอัปโหลดเข้า Google Drive");
