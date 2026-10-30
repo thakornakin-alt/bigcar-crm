@@ -653,6 +653,10 @@ export default function BookingReportsPage() {
 
   async function saveDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const startedAt = performance.now();
+    let preflightMs = 0;
+    let writeMs = 0;
+    let phase = "preflight";
     setSaving(true);
     setError("");
     setMessage("");
@@ -667,6 +671,7 @@ export default function BookingReportsPage() {
         body: JSON.stringify({ report: payload, requestId, checkOnly: true })
       });
       const data = await response.json();
+      preflightMs = Math.round(performance.now() - startedAt);
       if (response.status === 409 && data.status === "duplicate_booking_confirmation_required") {
         setPendingCreate({ report: payload, requestId: data.requestId || requestId });
         setDuplicatePrompt(data as BookingDuplicatePrompt);
@@ -674,12 +679,23 @@ export default function BookingReportsPage() {
         return;
       }
       if (!response.ok) throw new Error(data.error || "ตรวจสอบรายงานจองเดิมไม่สำเร็จ");
+      phase = "write";
+      const writeStartedAt = performance.now();
       await createBookingReport(payload, requestId);
+      writeMs = Math.round(performance.now() - writeStartedAt);
     } catch (err) {
       const payload = currentCreatePayload();
       window.localStorage.setItem("bigcar-booking-draft-fallback", JSON.stringify(payload));
       setError(err instanceof Error ? `${err.message} - บันทึก draft สำรองในเครื่องนี้แล้ว` : "บันทึกไม่สำเร็จ");
     } finally {
+      // Timing only: no report contents, names, plates, or other customer data.
+      console.info("[draft-save-timing]", {
+        reportType: "booking",
+        phase,
+        preflightMs,
+        writeMs,
+        totalMs: Math.round(performance.now() - startedAt)
+      });
       setUploading(false);
       setSaving(false);
     }
@@ -736,6 +752,19 @@ export default function BookingReportsPage() {
     } finally {
       setDrafting(false);
       setUploading(false);
+    }
+  }
+
+  async function copyFinancePreview() {
+    setCopying(true);
+    setError("");
+    try {
+      await navigator.clipboard.writeText(financePreview);
+      setMessage("คัดลอกข้อความส่งงานเซ็นไฟแนนซ์แล้ว");
+    } catch {
+      setError("คัดลอกข้อความไฟแนนซ์ไม่สำเร็จ กรุณาเลือกข้อความใน Preview แล้วคัดลอกเอง");
+    } finally {
+      window.setTimeout(() => setCopying(false), 500);
     }
   }
 
@@ -1103,9 +1132,20 @@ export default function BookingReportsPage() {
             </pre>
             {paymentMode === "finance" && (
               <div className="mt-4 min-w-0">
-                <div className="mb-2">
-                  <h2 className="text-lg font-bold text-white">Preview ส่งงานเซ็นไฟแนนซ์</h2>
-                  <p className="text-xs text-soft">ข้อมูลส่วนนี้เพิ่มเติมจากรายงานการจอง และยังบันทึก Booking ได้แม้กรอกไม่ครบ</p>
+                <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h2 className="text-lg font-bold text-white">Preview ส่งงานเซ็นไฟแนนซ์</h2>
+                    <p className="text-xs text-soft">ข้อมูลส่วนนี้เพิ่มเติมจากรายงานการจอง และยังบันทึก Booking ได้แม้กรอกไม่ครบ</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={copyFinancePreview}
+                    disabled={copying}
+                    className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-brand/50 px-3 text-sm font-semibold text-brand transition hover:border-brand disabled:opacity-60"
+                  >
+                    {copying ? <Loader2 size={17} className="animate-spin" /> : <Clipboard size={17} />}
+                    คัดลอกข้อความไฟแนนซ์
+                  </button>
                 </div>
                 <pre className="max-h-[56vh] overflow-auto whitespace-pre-wrap rounded-lg border border-brand/30 bg-[#0b0d11] p-3 text-sm leading-7 text-white">
                   {financePreview}
