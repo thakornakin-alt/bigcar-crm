@@ -376,7 +376,9 @@ export async function syncBookingDeliveryForSalesReport(bookingReportId: string,
   const linkedBookingId = text(bookingReportId);
   const linkedSalesId = text(salesReportId);
   if (!linkedBookingId || !linkedSalesId) {
-    return syncBookingDeliveryFromReportHistory();
+    // A sales save without an exact relationship must not rewrite unrelated bookings.
+    console.info("[sales-delivery-targeted-sync]", { mode: "skipped_missing_identity" });
+    return [];
   }
 
   const reports = await listReportHistory("", "all", { includeExcluded: true });
@@ -384,8 +386,18 @@ export async function syncBookingDeliveryForSalesReport(bookingReportId: string,
   const linkedSales = reports.filter((item) =>
     item.type === "sales" && text(item.bookingReportId) === linkedBookingId && item.status !== "deleted"
   );
+  if (bookings.length === 0 || linkedSales.length === 0) {
+    // The report-history feed can lag a newly saved report. Do not run a costly
+    // full-history stock refresh or infer a booking from a plate/customer name.
+    console.info("[sales-delivery-targeted-sync]", {
+      mode: "skipped_unmatched",
+      bookingMatches: bookings.length,
+      salesMatches: linkedSales.length
+    });
+    return [];
+  }
   if (bookings.length !== 1 || linkedSales.length !== 1 || linkedSales[0].id !== linkedSalesId) {
-    console.info("[sales-delivery-targeted-sync]", { mode: "full_fallback", bookingMatches: bookings.length, salesMatches: linkedSales.length });
+    console.info("[sales-delivery-targeted-sync]", { mode: "full_fallback_ambiguous", bookingMatches: bookings.length, salesMatches: linkedSales.length });
     return upsertBookingDeliveryFromReportHistory(reports);
   }
   console.info("[sales-delivery-targeted-sync]", { mode: "targeted", bookingMatches: 1, salesMatches: 1 });
