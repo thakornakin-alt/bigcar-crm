@@ -669,6 +669,8 @@ export default function SalesReportsPage() {
 
   async function saveDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const draftSaveStartedAt = performance.now();
+    let draftPreflightMs = 0;
     setSaving(true);
     setError("");
     setMessage("");
@@ -682,6 +684,7 @@ export default function SalesReportsPage() {
         body: JSON.stringify({ report: payload, requestId, checkOnly: true })
       });
       const preflightData = await preflight.json();
+      draftPreflightMs = Math.round(performance.now() - draftSaveStartedAt);
       if (preflight.status === 409 && (preflightData.status === "duplicate_plate_customer_confirmation_required" || preflightData.status === "existing_sales_report_for_booking")) {
         setPendingCreate({ report: payload, requestId: preflightData.requestId || requestId });
         setDuplicatePrompt(preflightData as DuplicatePrompt);
@@ -694,6 +697,7 @@ export default function SalesReportsPage() {
       window.localStorage.setItem("bigcar-sales-draft-fallback", JSON.stringify({ ...form, paymentDetail: buildSalesPaymentDetail(form), reportText }));
       setError(err instanceof Error ? `${err.message} - บันทึกสำรองในเครื่องแล้ว` : "บันทึกไม่สำเร็จ");
     } finally {
+      console.info("[sales-draft-save-timing]", { preflightMs: draftPreflightMs, totalMs: Math.round(performance.now() - draftSaveStartedAt) });
       setUploading(false);
       setSaving(false);
     }
