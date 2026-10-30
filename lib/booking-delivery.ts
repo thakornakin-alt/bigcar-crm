@@ -622,13 +622,18 @@ export async function upsertBookingDeliveryFromReportHistory(reports: ReportHist
   // mutation order and all existing field-merging/status logic below.
   // A low limit avoids overwhelming the Apps Script stock endpoint.
   const stockSnapshots = new Map<string, Awaited<ReturnType<typeof resolveStockSnapshot>>>();
-  const stockPlates = [...new Set(bookings.map((booking) => normalizePlate(booking.plate)).filter(Boolean))];
+  const stockPlateByKey = new Map<string, string>();
+  for (const booking of bookings) {
+    const key = normalizePlate(booking.plate);
+    if (key && !stockPlateByKey.has(key)) stockPlateByKey.set(key, booking.plate);
+  }
+  const stockPlates = [...stockPlateByKey.entries()];
   const stockLookupStartedAt = performance.now();
   const stockConcurrency = 4;
   for (let offset = 0; offset < stockPlates.length; offset += stockConcurrency) {
     const batch = stockPlates.slice(offset, offset + stockConcurrency);
-    const results = await Promise.all(batch.map(async (plate) => {
-      return [plate, await resolveStockSnapshot(plate)] as const;
+    const results = await Promise.all(batch.map(async ([key, plate]) => {
+      return [key, await resolveStockSnapshot(plate)] as const;
     }));
     for (const [plate, snapshot] of results) stockSnapshots.set(plate, snapshot);
   }
