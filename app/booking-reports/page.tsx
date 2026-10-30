@@ -534,21 +534,27 @@ export default function BookingReportsPage() {
 
     setUploading(true);
     setUploadProgress(`กำลังเตรียมไฟล์ ${items.length} ไฟล์`);
-    const files = [];
-
-    for (let index = 0; index < items.length; index += 1) {
-      const item = items[index];
-      setUploadProgress(`กำลังอ่านไฟล์ ${index + 1}/${items.length}: ${item.label}`);
-      const compressedFile = await compressBookingImage(item.file);
-      files.push({
-        clientId: `${item.category}-${item.index}-${compressedFile.name}-${compressedFile.lastModified}`,
-        category: item.category,
-        label: item.label,
-        name: compressedFile.name,
-        type: compressedFile.type || "application/octet-stream",
-        size: compressedFile.size,
-        base64: await fileToBase64(compressedFile)
-      });
+    // Prepare a few images concurrently; preserve input order and bound memory use.
+    const files: Array<{
+      clientId: string; category: BookingAttachmentCategory; label: string;
+      name: string; type: string; size: number; base64: string;
+    }> = [];
+    for (let start = 0; start < items.length; start += 3) {
+      const batch = items.slice(start, start + 3);
+      setUploadProgress(`กำลังเตรียมไฟล์ ${Math.min(start + batch.length, items.length)}/${items.length}`);
+      const prepared = await Promise.all(batch.map(async (item) => {
+        const compressedFile = await compressBookingImage(item.file);
+        return {
+          clientId: `${item.category}-${item.index}-${compressedFile.name}-${compressedFile.lastModified}`,
+          category: item.category,
+          label: item.label,
+          name: compressedFile.name,
+          type: compressedFile.type || "application/octet-stream",
+          size: compressedFile.size,
+          base64: await fileToBase64(compressedFile)
+        };
+      }));
+      files.push(...prepared);
     }
 
     setUploadProgress("กำลังอัปโหลดรูปจองเข้า Google Drive");
