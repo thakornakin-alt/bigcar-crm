@@ -75,10 +75,20 @@ export async function POST(request: Request) {
   const startedAt = performance.now();
   let phase = "auth";
   let checkOnly = false;
+  // Server-only, aggregate timings: no report fields, names, plates, or request identifiers.
+  const stages: Record<string, number> = {};
+  const measure = async <T>(stage: string, operation: () => Promise<T>): Promise<T> => {
+    const started = performance.now();
+    try {
+      return await operation();
+    } finally {
+      stages[stage] = Math.round(performance.now() - started);
+    }
+  };
   try {
-    const actor = await requireWritableUser();
+    const actor = await measure("authMs", () => requireWritableUser());
     phase = "parse";
-    const payload = await request.json() as {
+    const payload = await measure("parseMs", () => request.json()) as {
       report?: Partial<SalesReportInput>;
       requestId?: string;
       confirmationToken?: string;
@@ -93,7 +103,9 @@ export async function POST(request: Request) {
     checkOnly = payload.checkOnly === true;
     const body = (payload.report && typeof payload.report === "object" ? payload.report : payload) as Partial<SalesReportInput>;
     const report = clean(body);
-    const bookingOwnership = report.bookingReportId ? await getCaseOwnership("booking", report.bookingReportId) : null;
+    const bookingOwnership = report.bookingReportId
+      ? await measure("bookingOwnershipLookupMs", () => getCaseOwnership("booking", report.bookingReportId))
+      : null;
     const salespersonCapture = bookingOwnership
       ? { salespersonUserId: bookingOwnership.ownerUserId, salespersonDisplayName: bookingOwnership.ownerDisplayName }
       : resolveAuthenticatedSalespersonCapture({ submittedSalespersonUserId: actor.id, submittedSaleName: actor.firstName, actor });
@@ -111,7 +123,7 @@ export async function POST(request: Request) {
     if (payload.checkOnly === true) {
       phase = "duplicate_check";
       if (report.bookingReportId) {
-        const relatedHistory = await listReportHistory(report.bookingReportId, "all");
+        const relatedHistory = await measure("duplicateHistoryLookupMs", () => listReportHistory(report.bookingReportId, "all"));
         const booking = relatedHistory.find((item) => item.type === "booking" && item.id === report.bookingReportId);
         const existingSales = salesReportsForExactBooking(relatedHistory, report.bookingReportId);
         if (existingSales.length) {
@@ -132,7 +144,7 @@ export async function POST(request: Request) {
           }, { status: 409 });
         }
         if (booking && requiresSalesDuplicateConfirmation(report, booking)) {
-          const duplicate = await checkSalesReportDuplicate(report, actor.id);
+          const duplicate = await measure("duplicateCheckMs", () => checkSalesReportDuplicate(report, actor.id));
           return NextResponse.json({
             status: "ok_to_create",
             requestId,
@@ -141,7 +153,7 @@ export async function POST(request: Request) {
           });
         }
       }
-      const duplicate = await checkSalesReportDuplicate(report, actor.id);
+      const duplicate = await measure("duplicateCheckMs", () => checkSalesReportDuplicate(report, actor.id));
       if (duplicate.requiresConfirmation) {
         return NextResponse.json({
           status: "duplicate_plate_customer_confirmation_required",
@@ -155,14 +167,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ status: "ok_to_create", requestId });
     }
     phase = "save_and_sync";
-    if (qaMetadata) await reserveSalesReportQaMetadata(qaMetadata);
+    if (qaMetadata) await measure("qaReservationMs", () => reserveSalesReportQaMetadata(qaMetadata));
     let saved;
     try {
-      saved = await saveSalesReport(report, {
+      saved = await measure("saveSalesReportMs", () => saveSalesReport(report, {
         requestId,
         confirmationToken: String(payload.confirmationToken || ""),
         actorId: actor.id
-      });
+      }));
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       const relationshipMarker = "SALES_REPORT_BOOKING_RELATIONSHIP_CONFLICT:";
@@ -205,7 +217,7 @@ export async function POST(request: Request) {
     }
     if (qaMetadata) {
       try {
-        await finalizeSalesReportQaMetadata(requestId, saved.id);
+        await measure("qaFinalizeMs", () => finalizeSalesReportQaMetadata(requestId, saved.id));
       } catch (error) {
         console.error("[sales-reports] QA sidecar finalization failed; downstream sync stopped", {
           requestId,
@@ -219,8 +231,8 @@ export async function POST(request: Request) {
     const salesOwnership = bookingOwnership
       ? salesOwnershipFromBooking(bookingOwnership, saved.id)
       : ownershipFromUser(actor, { caseType: "sales", caseId: saved.id, teamName: report.teamName });
-    await saveCaseOwnership(salesOwnership);
-    await recordActivity(actor, {
+    await measure("saveCaseOwnershipMs", () => saveCaseOwnership(salesOwnership));
+    await measure("activityCreateMs", () => recordActivity(actor, {
       action: "salesReport.create",
       targetType: "salesReport",
       targetId: saved.id,
@@ -229,20 +241,20 @@ export async function POST(request: Request) {
       metadata: payload.createdFromSalesReportId
         ? { createdFromSalesReportId: String(payload.createdFromSalesReportId) }
         : undefined
-    });
-    await syncBookingDeliveryFromReportHistory().catch(() => null);
+    }));
+    await measure("bookingDeliverySyncMs", () => syncBookingDeliveryFromReportHistory().catch(() => null));
     const identityResult = salespersonCapture && report.bookingReportId
-      ? await captureBookingDeliverySalespersonFromSalesReport({ bookingReportId: report.bookingReportId, salesperson: salespersonCapture })
+      ? await measure("salespersonCaptureMs", () => captureBookingDeliverySalespersonFromSalesReport({ bookingReportId: report.bookingReportId, salesperson: salespersonCapture }))
       : null;
     if (identityResult?.changedFields.length) {
-      await recordActivity(actor, {
+      await measure("activitySalespersonMs", () => recordActivity(actor, {
         action: "commission_salesperson_captured",
         targetType: "bookingDelivery",
         targetId: identityResult.record.id,
         source: "api",
         after: { changedFields: identityResult.changedFields },
         metadata: { source: "sales_report_authenticated_self_selection" }
-      });
+      }));
     }
     return NextResponse.json({ report: saved }, { status: 201 });
   } catch (error) {
@@ -258,7 +270,8 @@ export async function POST(request: Request) {
       reportType: "sales",
       checkOnly,
       phase,
-      totalMs: Math.round(performance.now() - startedAt)
+      totalMs: Math.round(performance.now() - startedAt),
+      stages
     });
   }
 }
