@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { checkSalesReportDuplicate, listReportHistory, saveSalesReport } from "@/lib/apps-script";
-import { captureBookingDeliverySalespersonFromSalesReport, syncBookingDeliveryFromReportHistory } from "@/lib/booking-delivery";
+import { captureBookingDeliverySalespersonFromSalesReport, syncBookingDeliveryForSalesReport } from "@/lib/booking-delivery";
 import { buildSalesPaymentDetail, renderSalesReport } from "@/lib/sales-report";
 import type { SalesReportInput } from "@/lib/types";
 import { recordActivity } from "@/lib/activity-log";
@@ -242,7 +242,7 @@ export async function POST(request: Request) {
         ? { createdFromSalesReportId: String(payload.createdFromSalesReportId) }
         : undefined
     }));
-    await measure("bookingDeliverySyncMs", () => syncBookingDeliveryFromReportHistory().catch(() => null));
+    await measure("bookingDeliverySyncMs", () => syncBookingDeliveryForSalesReport(saved.bookingReportId, saved.id).catch(() => null));
     const identityResult = salespersonCapture && report.bookingReportId
       ? await measure("salespersonCaptureMs", () => captureBookingDeliverySalespersonFromSalesReport({ bookingReportId: report.bookingReportId, salesperson: salespersonCapture }))
       : null;

@@ -367,6 +367,31 @@ export async function syncBookingDeliveryFromReportHistory() {
   }
 }
 
+/**
+ * A sales save changes only its linked booking's delivery projection.
+ * Keep the exact one-to-one relationship check and fall back to the original
+ * full sync when the history is incomplete or ambiguous.
+ */
+export async function syncBookingDeliveryForSalesReport(bookingReportId: string, salesReportId: string) {
+  const linkedBookingId = text(bookingReportId);
+  const linkedSalesId = text(salesReportId);
+  if (!linkedBookingId || !linkedSalesId) {
+    return syncBookingDeliveryFromReportHistory();
+  }
+
+  const reports = await listReportHistory("", "all", { includeExcluded: true });
+  const bookings = reports.filter((item) => item.type === "booking" && item.id === linkedBookingId && item.status !== "deleted");
+  const linkedSales = reports.filter((item) =>
+    item.type === "sales" && text(item.bookingReportId) === linkedBookingId && item.status !== "deleted"
+  );
+  if (bookings.length !== 1 || linkedSales.length !== 1 || linkedSales[0].id !== linkedSalesId) {
+    console.info("[sales-delivery-targeted-sync]", { mode: "full_fallback", bookingMatches: bookings.length, salesMatches: linkedSales.length });
+    return upsertBookingDeliveryFromReportHistory(reports);
+  }
+  console.info("[sales-delivery-targeted-sync]", { mode: "targeted", bookingMatches: 1, salesMatches: 1 });
+  return upsertBookingDeliveryFromReportHistory([bookings[0], linkedSales[0]]);
+}
+
 export async function upsertBookingDeliveryFromBookingReport(
   report: BookingReport,
   actor?: BookingDeliveryActor | null,
