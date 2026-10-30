@@ -618,6 +618,28 @@ export async function upsertBookingDeliveryFromReportHistory(reports: ReportHist
     salesByBookingReportId.set(bookingReportId, [...(salesByBookingReportId.get(bookingReportId) || []), sale]);
   }
 
+  // Resolve stock snapshots in bounded parallel batches. Preserve the booking
+  // mutation order and all existing field-merging/status logic below.
+  // A low limit avoids overwhelming the Apps Script stock endpoint.
+  const stockSnapshots = new Map<string, Awaited<ReturnType<typeof resolveStockSnapshot>>>();
+  const stockPlateByKey = new Map<string, string>();
+  for (const booking of bookings) {
+    const key = normalizePlate(booking.plate);
+    if (key && !stockPlateByKey.has(key)) stockPlateByKey.set(key, booking.plate);
+  }
+  const stockPlates = [...stockPlateByKey.entries()];
+  const stockLookupStartedAt = performance.now();
+  const stockConcurrency = 4;
+  for (let offset = 0; offset < stockPlates.length; offset += stockConcurrency) {
+    const batch = stockPlates.slice(offset, offset + stockConcurrency);
+    const results = await Promise.all(batch.map(async ([key, plate]) => {
+      return [key, await resolveStockSnapshot(plate)] as const;
+    }));
+    for (const [plate, snapshot] of results) stockSnapshots.set(plate, snapshot);
+  }
+  stockLookupMs = performance.now() - stockLookupStartedAt;
+  stockLookupCount = stockPlates.length;
+
   for (const booking of bookings) {
     const exactSales = salesByBookingReportId.get(booking.id) || [];
     const salesReport = exactSales.length === 1 ? exactSales[0] : null;
@@ -630,14 +652,7 @@ export async function upsertBookingDeliveryFromReportHistory(reports: ReportHist
       existing || undefined,
       existing?.bookingId || nextBookingId(workingRecords, booking.createdAt || new Date().toISOString())
     );
-    const stockLookupStartedAt = performance.now();
-    let stockSnapshot;
-    try {
-      stockSnapshot = await resolveStockSnapshot(next.plate);
-    } finally {
-      stockLookupMs += performance.now() - stockLookupStartedAt;
-      stockLookupCount += 1;
-    }
+    const stockSnapshot = stockSnapshots.get(normalizePlate(next.plate)) || null;
     if (stockSnapshot) {
       next.engineNo = next.engineNo || stockSnapshot.engineNo;
       next.chassisNo = next.chassisNo || stockSnapshot.chassisNo;
