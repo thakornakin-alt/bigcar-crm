@@ -739,6 +739,19 @@ export default function BookingReportsPage() {
     }
   }
 
+  async function copyFinancePreview() {
+    setCopying(true);
+    setError("");
+    try {
+      await navigator.clipboard.writeText(financePreview);
+      setMessage("คัดลอกข้อความส่งงานเซ็นไฟแนนซ์แล้ว");
+    } catch {
+      setError("คัดลอกข้อความไฟแนนซ์ไม่สำเร็จ กรุณาเลือกข้อความใน Preview แล้วคัดลอกเอง");
+    } finally {
+      window.setTimeout(() => setCopying(false), 500);
+    }
+  }
+
   async function copyReport() {
     setCopying(true);
     setError("");
@@ -1103,9 +1116,20 @@ export default function BookingReportsPage() {
             </pre>
             {paymentMode === "finance" && (
               <div className="mt-4 min-w-0">
-                <div className="mb-2">
-                  <h2 className="text-lg font-bold text-white">Preview ส่งงานเซ็นไฟแนนซ์</h2>
-                  <p className="text-xs text-soft">ข้อมูลส่วนนี้เพิ่มเติมจากรายงานการจอง และยังบันทึก Booking ได้แม้กรอกไม่ครบ</p>
+                <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h2 className="text-lg font-bold text-white">Preview ส่งงานเซ็นไฟแนนซ์</h2>
+                    <p className="text-xs text-soft">ข้อมูลส่วนนี้เพิ่มเติมจากรายงานการจอง และยังบันทึก Booking ได้แม้กรอกไม่ครบ</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={copyFinancePreview}
+                    disabled={copying}
+                    className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-brand/50 px-3 text-sm font-semibold text-brand transition hover:border-brand disabled:opacity-60"
+                  >
+                    {copying ? <Loader2 size={17} className="animate-spin" /> : <Clipboard size={17} />}
+                    คัดลอกข้อความไฟแนนซ์
+                  </button>
                 </div>
                 <pre className="max-h-[56vh] overflow-auto whitespace-pre-wrap rounded-lg border border-brand/30 bg-[#0b0d11] p-3 text-sm leading-7 text-white">
                   {financePreview}
