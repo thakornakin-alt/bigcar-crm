@@ -357,7 +357,11 @@ export async function upsertBookingDeliveryFromBookingReport(
     qaSynthetic?: QaSyntheticCreateMetadata;
   }
 ) {
-  const existingStore = await readStore();
+  // Independent reads can overlap; the transactional upsert still re-reads before writing.
+  const [existingStore, stockSnapshot] = await Promise.all([
+    readStore(),
+    resolveStockSnapshot(report.plate)
+  ]);
   const reportHistoryItem: ReportHistoryItem = {
     id: report.id,
     type: "booking",
@@ -415,7 +419,6 @@ export async function upsertBookingDeliveryFromBookingReport(
     next.status = "ยอดจอง";
     next.alertSummary = buildBookingDeliveryAlertSummary({ ...next, status: getDisplayStatus(next) || "ยอดจอง" });
   }
-  const stockSnapshot = await resolveStockSnapshot(next.plate);
   if (stockSnapshot) {
     next.engineNo = next.engineNo || stockSnapshot.engineNo;
     next.chassisNo = next.chassisNo || stockSnapshot.chassisNo;
