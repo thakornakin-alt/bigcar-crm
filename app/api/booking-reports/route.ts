@@ -59,8 +59,14 @@ export async function POST(request: Request) {
   const startedAt = performance.now();
   let phase = "auth";
   let checkOnly = false;
+  const stages: Record<string, number> = {};
+  async function measure<T>(name: string, operation: () => Promise<T>): Promise<T> {
+    const start = performance.now();
+    try { return await operation(); }
+    finally { stages[name] = Math.round(performance.now() - start); }
+  }
   try {
-    const actor = await requireWritableUser();
+    const actor = await measure("authMs", () => requireWritableUser());
     phase = "parse";
     const payload = await request.json() as Partial<BookingReportInput> & {
       report?: Partial<BookingReportInput>;
@@ -76,7 +82,7 @@ export async function POST(request: Request) {
     checkOnly = payload.checkOnly === true;
     const body = (payload.report && typeof payload.report === "object" ? payload.report : payload) as Partial<BookingReportInput>;
     const qaSynthetic = resolveQaSyntheticCreateMetadata(actor, { ...payload, ...body });
-    const canonicalUsers = actor.role === "admin" || actor.role === "super_admin" ? await listSalesUsers() : undefined;
+    const canonicalUsers = actor.role === "admin" || actor.role === "super_admin" ? await measure("listSalesUsersMs", () => listSalesUsers()) : undefined;
     const ownerSelection = resolveBookingOwnerSelection({
       actor,
       requestedOwnerUserId: body.salespersonUserId,
@@ -94,7 +100,7 @@ export async function POST(request: Request) {
     const requestId = String(payload.requestId || "").trim() || createBookingRequestId();
     if (payload.checkOnly === true) {
       phase = "duplicate_check";
-      const duplicate = await checkBookingReportDuplicate(input, actor.id);
+      const duplicate = await measure("duplicateCheckMs", () => checkBookingReportDuplicate(input, actor.id));
       if (duplicate.requiresConfirmation) {
         return NextResponse.json({
           status: "duplicate_booking_confirmation_required",
@@ -113,16 +119,16 @@ export async function POST(request: Request) {
     const result = await saveBookingReportAndMaster(input, {
       saveReport: async (report) => {
         try {
-          const savedReport = await saveBookingReport(report, {
+          const savedReport = await measure("saveBookingReportMs", () => saveBookingReport(report, {
             requestId,
             confirmationToken: String(payload.confirmationToken || ""),
             actorId: actor.id
-          });
-          await saveCaseOwnership(ownershipFromUser(ownerSelection.owner, {
+          }));
+          await measure("saveCaseOwnershipMs", () => saveCaseOwnership(ownershipFromUser(ownerSelection.owner, {
             caseType: "booking",
             caseId: savedReport.id,
             teamName: input.teamName
-          }));
+          })));
           return savedReport;
         } catch (error) {
           const message = error instanceof Error ? error.message : "";
@@ -139,10 +145,10 @@ export async function POST(request: Request) {
       },
       upsertMaster: async (report) => {
         try {
-          commissionLookupState.result = await lookupBookingListCommissionGroup({
+          commissionLookupState.result = await measure("commissionLookupMs", () => lookupBookingListCommissionGroup({
             bookingReportId: report.id,
             plate: report.plate
-          });
+          }));
         } catch (lookupError) {
           console.warn("[booking-reports] Booking List Commission Group lookup failed", {
             reportId: report.id,
@@ -152,41 +158,41 @@ export async function POST(request: Request) {
         const group = commissionLookupState.result
           ? commissionGroupCaptureFromLookup(commissionLookupState.result, new Date().toISOString())
           : undefined;
-        return upsertBookingDeliveryFromBookingReport(
+        return measure("bookingDeliveryMs", () => upsertBookingDeliveryFromBookingReport(
           report,
           ownerSelection.owner,
           { salesperson: salespersonCapture, group, qaSynthetic }
-        );
+        ));
       }
     });
-    await recordActivity(actor, {
+    await measure("activityCreateMs", () => recordActivity(actor, {
       action: "bookingReport.create",
       targetType: "bookingReport",
       targetId: result.report.id,
       source: "api",
       after: { status: result.report.status, bookingDate: result.report.bookingDate },
       metadata: { partialSuccess: result.partialSuccess }
-    });
+    }));
     if (salespersonCapture && result.bookingDelivery) {
-      await recordActivity(actor, {
+      await measure("activitySalespersonMs", () => recordActivity(actor, {
         action: "commission_salesperson_captured",
         targetType: "bookingDelivery",
         targetId: result.bookingDelivery.id,
         source: "api",
         after: { changedFields: ["salespersonUserId", "salespersonDisplayName"] },
         metadata: { source: actor.id === ownerSelection.owner.id ? "authenticated_self_selection" : "admin_selected_owner" }
-      });
+      }));
     }
     const commissionGroupLookup = commissionLookupState.result;
     if (result.bookingDelivery && commissionGroupLookup?.status === "resolved" && result.bookingDelivery.commissionGroupSource === commissionGroupLookup.sourceReference) {
-      await recordActivity(actor, {
+      await measure("activityCommissionMs", () => recordActivity(actor, {
         action: "commission_group_captured",
         targetType: "bookingDelivery",
         targetId: result.bookingDelivery.id,
         source: "api",
         after: { changedFields: ["commissionGroup", "commissionGroupSource", "commissionGroupCapturedAt"] },
         metadata: { sourceReference: commissionGroupLookup.sourceReference, source: "booking_list_read_only" }
-      });
+      }));
     }
     if (result.partialSuccess) {
       console.error("[booking-reports] report saved but Booking Delivery Master failed", {
@@ -219,7 +225,8 @@ export async function POST(request: Request) {
       reportType: "booking",
       checkOnly,
       phase,
-      totalMs: Math.round(performance.now() - startedAt)
+      totalMs: Math.round(performance.now() - startedAt),
+      stages
     });
   }
 }
