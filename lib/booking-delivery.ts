@@ -387,6 +387,21 @@ export async function syncBookingDeliveryForSalesReport(bookingReportId: string,
     item.type === "sales" && text(item.bookingReportId) === linkedBookingId && item.status !== "deleted"
   );
   if (bookings.length === 0 || linkedSales.length === 0) {
+    // Aggregate diagnostics only; never emit report IDs, plates or customer details.
+    const activeReports = reports.filter((item) => item.status !== "deleted");
+    const bookingHistory = activeReports.filter((item) => item.type === "booking");
+    const salesHistory = activeReports.filter((item) => item.type === "sales");
+    const bookingIds = new Set(bookingHistory.map((item) => text(item.id)));
+    console.info("[sales-delivery-link-diagnostics]", {
+      historyCount: reports.length,
+      activeBookingCount: bookingHistory.length,
+      activeSalesCount: salesHistory.length,
+      salesWithBookingIdCount: salesHistory.filter((item) => Boolean(text(item.bookingReportId))).length,
+      salesWithKnownBookingIdCount: salesHistory.filter((item) => bookingIds.has(text(item.bookingReportId))).length,
+      savedBookingIdPresentInHistory: bookingIds.has(linkedBookingId),
+      savedSaleIdPresentInHistory: salesHistory.some((item) => text(item.id) === linkedSalesId),
+      linkedSalesCount: linkedSales.length
+    });
     // The report-history feed can lag a newly saved report. Do not run a costly
     // full-history stock refresh or infer a booking from a plate/customer name.
     console.info("[sales-delivery-targeted-sync]", {
