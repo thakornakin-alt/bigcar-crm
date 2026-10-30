@@ -72,8 +72,12 @@ function clean(body: Partial<SalesReportInput>): SalesReportInput {
 }
 
 export async function POST(request: Request) {
+  const startedAt = performance.now();
+  let phase = "auth";
+  let checkOnly = false;
   try {
     const actor = await requireWritableUser();
+    phase = "parse";
     const payload = await request.json() as {
       report?: Partial<SalesReportInput>;
       requestId?: string;
@@ -86,6 +90,7 @@ export async function POST(request: Request) {
       excludeFromMetrics?: unknown;
       isCounted?: unknown;
     } & Partial<SalesReportInput>;
+    checkOnly = payload.checkOnly === true;
     const body = (payload.report && typeof payload.report === "object" ? payload.report : payload) as Partial<SalesReportInput>;
     const report = clean(body);
     const bookingOwnership = report.bookingReportId ? await getCaseOwnership("booking", report.bookingReportId) : null;
@@ -104,6 +109,7 @@ export async function POST(request: Request) {
       requestId
     });
     if (payload.checkOnly === true) {
+      phase = "duplicate_check";
       if (report.bookingReportId) {
         const relatedHistory = await listReportHistory(report.bookingReportId, "all");
         const booking = relatedHistory.find((item) => item.type === "booking" && item.id === report.bookingReportId);
@@ -148,6 +154,7 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ status: "ok_to_create", requestId });
     }
+    phase = "save_and_sync";
     if (qaMetadata) await reserveSalesReportQaMetadata(qaMetadata);
     let saved;
     try {
@@ -245,5 +252,13 @@ export async function POST(request: Request) {
       { error: error instanceof Error ? error.message : "Unable to save sales report" },
       { status: 500 }
     );
+  } finally {
+    // Server-only timings; never log request payloads or customer identifiers.
+    console.info("[report-save-server-timing]", {
+      reportType: "sales",
+      checkOnly,
+      phase,
+      totalMs: Math.round(performance.now() - startedAt)
+    });
   }
 }
