@@ -344,8 +344,27 @@ async function resolveStockSnapshot(plate: string) {
 }
 
 export async function syncBookingDeliveryFromReportHistory() {
-  const reports = await listReportHistory("", "all", { includeExcluded: true });
-  return upsertBookingDeliveryFromReportHistory(reports);
+  const startedAt = performance.now();
+  let reportHistoryMs = 0;
+  let reportCount = 0;
+  try {
+    const historyStartedAt = performance.now();
+    let reports;
+    try {
+      reports = await listReportHistory("", "all", { includeExcluded: true });
+    } finally {
+      reportHistoryMs = Math.round(performance.now() - historyStartedAt);
+    }
+    reportCount = reports.length;
+    return await upsertBookingDeliveryFromReportHistory(reports);
+  } finally {
+    // Aggregate performance diagnostics only: no customer, plate, or report identifiers.
+    console.info("[booking-delivery-history-sync-timing]", {
+      totalMs: Math.round(performance.now() - startedAt),
+      reportHistoryMs,
+      reportCount
+    });
+  }
 }
 
 export async function upsertBookingDeliveryFromBookingReport(
@@ -557,7 +576,12 @@ export async function captureBookingDeliverySalespersonFromSalesReport(input: { 
 }
 
 export async function upsertBookingDeliveryFromReportHistory(reports: ReportHistoryItem[]) {
+  const startedAt = performance.now();
+  const storeReadStartedAt = performance.now();
   const store = await readStore();
+  const storeReadMs = Math.round(performance.now() - storeReadStartedAt);
+  let stockLookupMs = 0;
+  let stockLookupCount = 0;
   const activeReports = reports.filter((report) => report.status !== "deleted");
   const bookings = activeReports.filter((report) => report.type === "booking");
   const sales = activeReports.filter((report) => report.type === "sales");
@@ -581,7 +605,14 @@ export async function upsertBookingDeliveryFromReportHistory(reports: ReportHist
       existing || undefined,
       existing?.bookingId || nextBookingId(workingRecords, booking.createdAt || new Date().toISOString())
     );
-    const stockSnapshot = await resolveStockSnapshot(next.plate);
+    const stockLookupStartedAt = performance.now();
+    let stockSnapshot;
+    try {
+      stockSnapshot = await resolveStockSnapshot(next.plate);
+    } finally {
+      stockLookupMs += performance.now() - stockLookupStartedAt;
+      stockLookupCount += 1;
+    }
     if (stockSnapshot) {
       next.engineNo = next.engineNo || stockSnapshot.engineNo;
       next.chassisNo = next.chassisNo || stockSnapshot.chassisNo;
@@ -604,7 +635,17 @@ export async function upsertBookingDeliveryFromReportHistory(reports: ReportHist
   }
 
   store.records = workingRecords;
+  const storeWriteStartedAt = performance.now();
   await writeStore(store);
+  const storeWriteMs = Math.round(performance.now() - storeWriteStartedAt);
+  console.info("[booking-delivery-history-upsert-timing]", {
+    totalMs: Math.round(performance.now() - startedAt),
+    storeReadMs,
+    bookingCount: bookings.length,
+    stockLookupCount,
+    stockLookupMs: Math.round(stockLookupMs),
+    storeWriteMs
+  });
   return store.records;
 }
 
