@@ -56,8 +56,12 @@ function cleanReport(body: Partial<BookingReportInput>): BookingReportInput {
 }
 
 export async function POST(request: Request) {
+  const startedAt = performance.now();
+  let phase = "auth";
+  let checkOnly = false;
   try {
     const actor = await requireWritableUser();
+    phase = "parse";
     const payload = await request.json() as Partial<BookingReportInput> & {
       report?: Partial<BookingReportInput>;
       requestId?: unknown;
@@ -69,6 +73,7 @@ export async function POST(request: Request) {
       excludeFromMetrics?: unknown;
       isCounted?: unknown;
     };
+    checkOnly = payload.checkOnly === true;
     const body = (payload.report && typeof payload.report === "object" ? payload.report : payload) as Partial<BookingReportInput>;
     const qaSynthetic = resolveQaSyntheticCreateMetadata(actor, { ...payload, ...body });
     const canonicalUsers = actor.role === "admin" || actor.role === "super_admin" ? await listSalesUsers() : undefined;
@@ -88,6 +93,7 @@ export async function POST(request: Request) {
 
     const requestId = String(payload.requestId || "").trim() || createBookingRequestId();
     if (payload.checkOnly === true) {
+      phase = "duplicate_check";
       const duplicate = await checkBookingReportDuplicate(input, actor.id);
       if (duplicate.requiresConfirmation) {
         return NextResponse.json({
@@ -102,6 +108,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ status: "ok_to_create", requestId });
     }
 
+    phase = "save_and_master";
     const commissionLookupState: { result: CommissionGroupLookupResult | null } = { result: null };
     const result = await saveBookingReportAndMaster(input, {
       saveReport: async (report) => {
@@ -206,6 +213,14 @@ export async function POST(request: Request) {
       { error: error instanceof Error ? error.message : "Unable to save booking report" },
       { status: 500 }
     );
+  } finally {
+    // Server-only timings; never log request payloads or customer identifiers.
+    console.info("[report-save-server-timing]", {
+      reportType: "booking",
+      checkOnly,
+      phase,
+      totalMs: Math.round(performance.now() - startedAt)
+    });
   }
 }
 
