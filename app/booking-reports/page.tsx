@@ -48,7 +48,7 @@ type BookingDuplicatePrompt = {
   requestId: string;
 };
 
-const defaultEmailTo = "RDDUsedcarBooked@segroup.co.th";
+const defaultEmailTo = "RDDUsedcarBooked@segroup.co.th, RDDSalesmanager@segroup.co.th";
 const defaultEmailCc = "rongsarit.s@tgh.co.th";
 const defaultTeamName = "พี่ลีฟ";
 const financeDraftStorageKey = "bigcar-booking-finance-signing-draft-v1";
@@ -1066,7 +1066,7 @@ export default function BookingReportsPage() {
             </p>
             <Field label="หัวข้ออีเมล" value={buildDefaultBookingSubject(form)} onChange={() => undefined} />
             <div className="grid min-w-0 gap-2 rounded-lg border border-line bg-[#0b0d11] px-3 py-3 text-sm leading-6 text-[#dce2eb]">
-              <p><span className="text-soft">To:</span> RDDUsedcarBooked@segroup.co.th</p>
+              <p><span className="text-soft">To:</span> {defaultEmailTo}</p>
               <p><span className="text-soft">CC:</span> rongsarit.s@tgh.co.th</p>
               <p><span className="text-soft">Draft owner:</span> thakornakin@gmail.com</p>
             </div>
