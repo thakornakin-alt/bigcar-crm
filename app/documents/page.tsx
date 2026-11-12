@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { FileText, Download } from "lucide-react";
 import { DocumentCenter } from "@/components/documents/DocumentCenter";
+import { DocumentLibrary } from "@/components/documents/DocumentLibrary";
 import { DocumentGeneratorV2 } from "@/components/documents/DocumentGeneratorV2";
 
 export default function DocumentsPage() {
@@ -39,7 +40,8 @@ export default function DocumentsPage() {
       </div>
 
       <div className={view === "download" ? "block lg:max-w-6xl lg:mx-auto" : "hidden"}>
-        <DocumentCenter />
+        <DocumentLibrary />
+        <div className="mt-6"><DocumentCenter /></div>
       </div>
       <div className={view === "generate" ? "block lg:max-w-6xl lg:mx-auto" : "hidden"}>
         <DocumentGeneratorV2 />
