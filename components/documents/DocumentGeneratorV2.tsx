@@ -515,7 +515,7 @@ function thaiNumberToWords(input: number) {
   return `${integerText}บาท${satangText}สตางค์`;
 }
 
-export function DocumentGeneratorV2() {
+export function DocumentGeneratorV2({ isActive = true }: { isActive?: boolean } = {}) {
   const templates = getDocumentV2Templates();
   const [fields, setFields] = useState<FieldItem[]>([]);
   const [reports, setReports] = useState<ReportHistoryItem[]>([]);
@@ -1059,11 +1059,16 @@ export function DocumentGeneratorV2() {
     if (!fields.length && templates.length) {
       loadFields();
     }
-    if (!reportsLoaded) {
-      loadReports();
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templateId]);
+
+  // Fetch fresh sales records when the user opens the create-documents tab.
+  // Do not replace an unsaved document draft when switching tabs.
+  useEffect(() => {
+    if (!isActive || overrideState === "dirty") return;
+    void loadReports();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive]);
 
   // Search the backing sales sheet when a record falls outside the initial 80 most recent rows.
   useEffect(() => {
