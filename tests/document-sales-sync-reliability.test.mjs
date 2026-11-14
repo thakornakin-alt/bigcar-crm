@@ -20,3 +20,13 @@ test("document sales search reaches server for records outside the latest 80", a
   assert.match(source, /knownIds = new Set/);
   assert.match(source, /controller\.abort\(\)/);
 });
+
+test("the create-documents tab refreshes reports when opened", async () => {
+  const [page, generator] = await Promise.all([
+    readFile(new URL("../app/documents/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/documents/DocumentGeneratorV2.tsx", import.meta.url), "utf8")
+  ]);
+  assert.match(page, /<DocumentGeneratorV2 isActive=/);
+  assert.match(generator, /if \(!isActive \|\| overrideState === "dirty"\) return;/);
+  assert.match(generator, /void loadReports\(\);/);
+});
