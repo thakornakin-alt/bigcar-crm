@@ -544,6 +544,10 @@ export function DocumentGeneratorV2() {
   const [saveState, setSaveState] = useState<"idle" | "dirty" | "saving" | "saved" | "error">("idle");
   const [lastSavedAt, setLastSavedAt] = useState("");
   const [reportsLoaded, setReportsLoaded] = useState(false);
+  const [reportListLoading, setReportListLoading] = useState(false);
+  const [reportListError, setReportListError] = useState("");
+  const [serverSearchBusy, setServerSearchBusy] = useState(false);
+  const [serverSearchError, setServerSearchError] = useState("");
   const [resolvedData, setResolvedData] = useState<ResolvedDocumentV2Data | null>(null);
   const [editableData, setEditableData] = useState<ResolvedDocumentV2Data | null>(null);
   const [editableTouched, setEditableTouched] = useState(false);
@@ -1004,26 +1008,32 @@ export function DocumentGeneratorV2() {
 
   async function loadReports() {
     setError("");
+    setReportListError("");
+    setReportListLoading(true);
     setReportsLoaded(false);
-    const res = await api<{ reports: ReportHistoryItem[] }>(`/api/reports/history?type=${reportSource}`);
-    const all = res.reports || [];
-    const filtered = all.filter((r) => {
-      const typeOk = String(r.type || "").toLowerCase() === reportSource;
-      const hasCore = Boolean(String(r.customerName || "").trim() || String(r.plate || "").trim());
-      return typeOk || hasCore;
-    });
-    setReports(filtered);
-    resolvedReportSnapshotRef.current = null;
-    setSelectedReportId(filtered[0]?.id || "");
-    setPreviewUrl("");
-    setPngUrl("");
-    setPngBlob(null);
-    setReportsLoaded(true);
-    if (!filtered.length) {
-      setError("ไม่พบรายงานขายในระบบ");
+    try {
+      const res = await api<{ reports: ReportHistoryItem[] }>(`/api/reports/history?type=${reportSource}`);
+      const all = Array.isArray(res.reports) ? res.reports : [];
+      const filtered = all.filter((r) => {
+        const typeOk = String(r.type || "").toLowerCase() === reportSource;
+        const hasCore = Boolean(String(r.customerName || "").trim() || String(r.plate || "").trim());
+        return typeOk || hasCore;
+      });
+      setReports(filtered);
+      resolvedReportSnapshotRef.current = null;
+      setSelectedReportId((current) => filtered.some((report) => report.id === current) ? current : (filtered[0]?.id || ""));
+      setPreviewUrl("");
+      setPngUrl("");
+      setPngBlob(null);
+      setReportsLoaded(true);
+      if (!filtered.length) setReportListError("ไม่พบรายงานขายในระบบ กรุณาลองรีเฟรชรายการขาย");
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "ไม่สามารถเชื่อมต่อระบบรายงานขาย";
+      setReportListError(`โหลดรายการขายไม่สำเร็จ: ${message}`);
+    } finally {
+      setReportListLoading(false);
     }
   }
-
   async function fetchResolvedData(report: ReportHistoryItem, signal: AbortSignal) {
     return api<{ ok: boolean; data: ResolvedDocumentV2Data; debug: DocumentV2ResolveDebug }>("/api/documents-v2/resolve-data", {
       method: "POST",
@@ -1055,6 +1065,43 @@ export function DocumentGeneratorV2() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templateId]);
 
+  // Search the backing sales sheet when a record falls outside the initial 80 most recent rows.
+  useEffect(() => {
+    const query = reportSearch.trim();
+    if (!reportsLoaded || query.length < 2) {
+      setServerSearchBusy(false);
+      setServerSearchError("");
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setServerSearchBusy(true);
+      setServerSearchError("");
+      api<{ reports: ReportHistoryItem[] }>(`/api/reports/history?type=sales&q=${encodeURIComponent(query)}`, { signal: controller.signal })
+        .then((result) => {
+          if (controller.signal.aborted) return;
+          setReports((current) => {
+            const knownIds = new Set(current.map((report) => report.id));
+            const extra = (result.reports || []).filter((report) =>
+              report.type === "sales" && report.status !== "deleted" && !knownIds.has(report.id)
+            );
+            return extra.length ? [...extra, ...current] : current;
+          });
+        })
+        .catch((cause) => {
+          if (controller.signal.aborted) return;
+          const message = cause instanceof Error ? cause.message : "กรุณาลองใหม่";
+          setServerSearchError(`ค้นหารายงานขายย้อนหลังไม่สำเร็จ: ${message}`);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setServerSearchBusy(false);
+        });
+    }, 300);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [reportSearch, reportsLoaded]);
   useEffect(() => {
     if (!settingsMode || Object.keys(mapping).length) return;
     loadMapping();
@@ -1694,6 +1741,18 @@ export function DocumentGeneratorV2() {
             </button>
           ) : null}
         </div>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-white/55">ค้นหาจากรายการล่าสุดและค้นย้อนหลังจากระบบได้</p>
+          <button type="button" disabled={reportListLoading} onClick={() => {
+            if (overrideState === "dirty" && !window.confirm("มีข้อมูลเอกสารที่ยังไม่บันทึก ต้องการรีเฟรชรายงานขายหรือไม่")) return;
+            void loadReports();
+          }} className="rounded-lg border border-white/25 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
+            {reportListLoading ? "กำลังโหลด..." : "รีเฟรชรายการขาย"}
+          </button>
+        </div>
+        {reportListError ? <p role="alert" className="mb-2 rounded border border-amber-400/30 bg-amber-950/20 p-2 text-xs text-amber-100">{reportListError}</p> : null}
+        {serverSearchBusy ? <p className="mb-2 text-xs text-white/65">กำลังค้นหาจากรายการขายทั้งหมด...</p> : null}
+        {serverSearchError ? <p role="alert" className="mb-2 text-xs text-red-200">{serverSearchError}</p> : null}
         <select data-testid="documents-report-selector" value={selectedReportId} onChange={(e) => {
           if (e.target.value === selectedReportId) return;
           if (overrideState === "dirty" && !window.confirm("มีการแก้ไขที่ยังไม่บันทึก ต้องการเปลี่ยนรายงานและละทิ้งการแก้ไขหรือไม่")) return;
@@ -1711,7 +1770,7 @@ export function DocumentGeneratorV2() {
             </option>
           ))}
         </select>
-        {reportSearch.trim() && filteredReports.length === 0 ? (
+        {reportSearch.trim() && filteredReports.length === 0 && !serverSearchBusy ? (
           <p data-testid="documents-report-search-empty" className="mt-2 text-xs text-white/55">ไม่พบรายงานขายที่ตรงกับคำค้นหา</p>
         ) : null}
         {reportLoadState === "loading-data" ? <p className="mt-2 text-xs font-medium text-amber-200">● กำลังโหลดข้อมูลรายงานขาย...</p> : null}
