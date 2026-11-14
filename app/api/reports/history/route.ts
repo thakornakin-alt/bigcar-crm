@@ -33,7 +33,7 @@ export async function GET(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { reports: [], error: error instanceof Error ? error.message : "Unable to load report history" },
-      { status: 200 }
+      { status: 502 }
     );
   }
 }

@@ -44,7 +44,7 @@ export default function DocumentsPage() {
         <div className="mt-6"><DocumentCenter /></div>
       </div>
       <div className={view === "generate" ? "block lg:max-w-6xl lg:mx-auto" : "hidden"}>
-        <DocumentGeneratorV2 />
+        <DocumentGeneratorV2 isActive={view === "generate"} />
       </div>
     </div>
   );
