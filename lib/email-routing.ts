@@ -17,7 +17,7 @@ export type EmailRouteResolution = {
 };
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const DEFAULT_REPORT_TO = "RDDUsedcarBooked@segroup.co.th";
+const DEFAULT_REPORT_TO = "RDDUsedcarBooked@segroup.co.th, RDDSalesmanager@segroup.co.th";
 const BOOKING_REPORT_CC = "rongsarit.s@tgh.co.th";
 
 function caseTypeForEvent(eventType: OperationalEmailEvent): CaseOwnershipType {

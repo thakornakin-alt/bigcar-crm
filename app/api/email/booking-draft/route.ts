@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     payload.to = route.recipient.to;
     payload.cc = route.recipient.cc;
     payload.bcc = "";
-    const key = notificationKey(route.eventType, payload.reportId, payload.to);
+    const key = notificationKey(route.eventType, payload.reportId, payload.to, "booking-recipients-v2");
     const fingerprint = notificationFingerprint(payload);
     const reservation = await reserveNotification(key, fingerprint);
     if (!reservation.created && reservation.record.status === "sent") {
